@@ -13,6 +13,9 @@ import { Route as SiteRouteImport } from './routes/_site'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AppAdminRouteImport } from './routes/app-admin'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as SiteIndexRouteImport } from './routes/_site/index'
 import { Route as SiteAboutRouteImport } from './routes/_site/about'
 import { Route as SiteContactRouteImport } from './routes/_site/contact'
@@ -33,9 +36,12 @@ import { Route as AppAdminTenancyRouteImport } from './routes/app-admin/tenancy'
 import { Route as AppAdminTicketsRouteImport } from './routes/app-admin/tickets'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
+import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdModuleIdRouteImport } from './routes/app/w.$workspaceId.$moduleId'
 import { Route as AppWWorkspaceIdBillingRouteImport } from './routes/app/w.$workspaceId.billing'
@@ -65,6 +71,23 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const SiteIndexRoute = SiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -165,6 +188,17 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const SiteProductsIndexRoute = SiteProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
@@ -180,6 +214,12 @@ const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
   path: '/w/$workspaceId',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiPublicWebhooksMidtransRoute =
+  ApiPublicWebhooksMidtransRouteImport.update({
+    id: '/api/public/webhooks/midtrans',
+    path: '/api/public/webhooks/midtrans',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppWWorkspaceIdIndexRoute = AppWWorkspaceIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -235,6 +275,9 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/about': typeof SiteAboutRoute
   '/contact': typeof SiteContactRoute
   '/industries': typeof SiteIndustriesRoute
@@ -254,9 +297,12 @@ export interface FileRoutesByFullPath {
   '/app/onboarding': typeof AppOnboardingRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/products/': typeof SiteProductsIndexRoute
+  '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
@@ -269,6 +315,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/about': typeof SiteAboutRoute
   '/contact': typeof SiteContactRoute
   '/industries': typeof SiteIndustriesRoute
@@ -289,8 +338,11 @@ export interface FileRoutesByTo {
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
   '/app': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/products': typeof SiteProductsIndexRoute
+  '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
@@ -306,6 +358,9 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_site/about': typeof SiteAboutRoute
   '/_site/contact': typeof SiteContactRoute
   '/_site/industries': typeof SiteIndustriesRoute
@@ -326,9 +381,12 @@ export interface FileRoutesById {
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/_site/products/': typeof SiteProductsIndexRoute
+  '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
@@ -346,6 +404,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/app-admin'
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/about'
     | '/contact'
     | '/industries'
@@ -365,9 +426,12 @@ export interface FileRouteTypes {
     | '/app/onboarding'
     | '/app-admin/'
     | '/app/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/app/w/$workspaceId'
     | '/products/'
+    | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
     | '/app/w/$workspaceId/maintenance'
@@ -380,6 +444,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/about'
     | '/contact'
     | '/industries'
@@ -400,8 +467,11 @@ export interface FileRouteTypes {
     | '/'
     | '/app-admin'
     | '/app'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/products'
+    | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/billing'
     | '/app/w/$workspaceId/maintenance'
     | '/app/w/$workspaceId/settings'
@@ -416,6 +486,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/app-admin'
     | '/auth'
+    | '/mcp'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/_site/about'
     | '/_site/contact'
     | '/_site/industries'
@@ -436,9 +509,12 @@ export interface FileRouteTypes {
     | '/_site/'
     | '/app-admin/'
     | '/app/'
+    | '/.lovable/oauth/consent'
+    | '/.mcp/invoke-tool/$tool'
     | '/_site/products/$slug'
     | '/app/w/$workspaceId'
     | '/_site/products/'
+    | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
     | '/app/w/$workspaceId/maintenance'
@@ -455,6 +531,12 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AuthRoute: typeof AuthRoute
+  McpRoute: typeof McpRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -485,6 +567,27 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_site/': {
@@ -627,6 +730,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_site/products/': {
       id: '/_site/products/'
       path: '/products'
@@ -647,6 +764,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/w/$workspaceId'
       preLoaderRoute: typeof AppWWorkspaceIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/public/webhooks/midtrans': {
+      id: '/api/public/webhooks/midtrans'
+      path: '/api/public/webhooks/midtrans'
+      fullPath: '/api/public/webhooks/midtrans'
+      preLoaderRoute: typeof ApiPublicWebhooksMidtransRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app/w/$workspaceId/': {
       id: '/app/w/$workspaceId/'
@@ -833,6 +957,13 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AppAdminRoute: AppAdminRouteWithChildren,
   AuthRoute: AuthRoute,
+  McpRoute: McpRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

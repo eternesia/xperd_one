@@ -29,6 +29,8 @@ export const provisionRegistration = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { seedWorkspaceDefaults, randomPassword } = await import("@/lib/provisioning.server");
+    const { hashPassword } = await import("@/lib/auth-jwt.server");
+
 
     const { data: reg, error: regErr } = await supabaseAdmin
       .from("registrations")
@@ -82,6 +84,24 @@ export const provisionRegistration = createServerFn({ method: "POST" })
     await supabaseAdmin
       .from("user_roles")
       .upsert({ user_id: ownerId, role: "customer" }, { onConflict: "user_id,role" });
+
+    // Keep the local JWT user table in sync so the owner can sign in at /auth
+    // with the generated password (and legacy backfill still works as fallback).
+    if (generatedPassword) {
+      const { error: appUserErr } = await supabaseAdmin.from("app_users").upsert(
+        {
+          id: ownerId,
+          email,
+          full_name: reg.contact_name,
+          password_hash: await hashPassword(generatedPassword),
+          auth_user_id: ownerId,
+          is_active: true,
+        },
+        { onConflict: "id" },
+      );
+      if (appUserErr) throw new Error(appUserErr.message);
+    }
+
 
     // 2. Package + tenant
     const { data: pkg } = await supabaseAdmin
@@ -224,4 +244,26 @@ export const resetRegistrationOwnerPassword = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.auth.admin.updateUserById(profile.id, { password });
     if (error) throw new Error(error.message);
     return { email, password };
+  });
+
+/** Seed a freshly created workspace with default Indonesian master data. */
+export const seedWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { workspaceId: string }) => {
+    if (!data?.workspaceId) throw new Error("Workspace is required");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const ctx = context as any;
+    const { data: allowed, error: permErr } = await ctx.supabase.rpc("can_write_workspace", {
+      _workspace_id: data.workspaceId,
+      _user_id: ctx.userId,
+    });
+    if (permErr) throw new Error(permErr.message);
+    if (!allowed) throw new Error("Forbidden");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { seedWorkspaceDefaults } = await import("@/lib/provisioning.server");
+    await seedWorkspaceDefaults(supabaseAdmin as any, data.workspaceId);
+    return { ok: true };
   });

@@ -28,7 +28,9 @@ function Launcher() {
         height={1080}
         className="pointer-events-none absolute inset-0 h-full w-full object-cover"
       />
-      <div className="pointer-events-none absolute inset-0 bg-background/35 dark:bg-background/65" />
+      <div className="pointer-events-none absolute inset-0 bg-white/25 dark:bg-background/75" />
+      <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-sky-300/30 blur-3xl dark:bg-sky-500/10" />
+      <div className="pointer-events-none absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-gold/20 blur-3xl" />
 
       <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col justify-center px-5 py-8">
         <div className="mb-4">

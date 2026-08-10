@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { slugify, useApp } from "@/lib/app-context";
+import { seedWorkspace } from "@/lib/provisioning.functions";
 import { INDUSTRIES } from "@/lib/xperd";
 
 export const Route = createFileRoute("/app/onboarding")({
@@ -225,8 +226,14 @@ function WorkspaceStep({ onDone }: { onDone: () => Promise<void> }) {
         .insert({ workspace_id: data.id, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
 
+      try {
+        await seedWorkspace({ data: { workspaceId: data.id } });
+      } catch {
+        toast.warning("Workspace created, but default master data could not be seeded.");
+      }
+
       await onDone();
-      toast.success("Workspace ready");
+      toast.success("Workspace ready — default chart of accounts and master data are loaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create workspace");
     } finally {

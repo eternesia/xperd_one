@@ -33,7 +33,7 @@ export function SiteHeader() {
         <div className="hidden items-center gap-2 lg:flex">
           <LanguageSwitcher />
           <Button asChild variant="ghost" size="sm">
-            <Link to="/auth">{t("cta.signIn")}</Link>
+            <Link to="/auth" search={{ next: undefined }}>{t("cta.signIn")}</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link to="/contact">{t("cta.contactSales")}</Link>

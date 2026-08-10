@@ -31,7 +31,7 @@ function AppShell() {
   useEffect(() => {
     if (loading) return;
     if (!userId) {
-      navigate({ to: "/auth", replace: true });
+      navigate({ to: "/auth", search: { next: undefined }, replace: true });
       return;
     }
     const needsSetup = !tenant || workspaces.length === 0;

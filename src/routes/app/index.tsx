@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { slugify, useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
+import { seedWorkspace } from "@/lib/provisioning.functions";
 
 export const Route = createFileRoute("/app/")({
   component: WorkspacePicker,
@@ -66,7 +67,20 @@ function WorkspacePicker() {
         .from("workspace_members")
         .insert({ workspace_id: data.id, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
-      toast.success(lang === "id" ? "Workspace dibuat" : "Workspace created");
+      try {
+        await seedWorkspace({ data: { workspaceId: data.id } });
+      } catch {
+        toast.warning(
+          lang === "id"
+            ? "Workspace dibuat, tetapi data master default gagal dimuat."
+            : "Workspace created, but default master data could not be seeded.",
+        );
+      }
+      toast.success(
+        lang === "id"
+          ? "Workspace siap pakai — COA & data master default sudah dimuat"
+          : "Workspace ready — default COA and master data loaded",
+      );
       setOpen(false);
       setName("");
       await refresh();
@@ -150,7 +164,7 @@ function WorkspacePicker() {
             variant="outline"
             onClick={async () => {
               await supabase.auth.signOut();
-              navigate({ to: "/auth", replace: true });
+              navigate({ to: "/auth", search: { next: undefined }, replace: true });
             }}
           >
             <LogOut /> {lang === "id" ? "Keluar" : "Sign out"}

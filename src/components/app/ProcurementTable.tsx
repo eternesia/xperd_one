@@ -566,6 +566,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                         submoduleId: entity.submoduleId,
                         docId: row.id,
                       }}
+                      search={{ print: undefined }}
                     >
                       <Eye className="h-4 w-4" />
                     </Link>

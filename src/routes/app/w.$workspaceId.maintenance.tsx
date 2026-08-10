@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, Download, Loader2, Upload } from "lucide-react";
+import { ChevronLeft, Download, Loader2, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
+import { seedWorkspace } from "@/lib/provisioning.functions";
 
 export const Route = createFileRoute("/app/w/$workspaceId/maintenance")({
   component: MaintenancePage,
@@ -60,8 +61,20 @@ function MaintenancePage() {
   const { activeWorkspace } = useApp();
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
-  const [busy, setBusy] = useState<"backup" | "restore" | null>(null);
+  const [busy, setBusy] = useState<"backup" | "restore" | "seed" | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function seedDefaults() {
+    setBusy("seed");
+    try {
+      await seedWorkspace({ data: { workspaceId } });
+      toast.success(t("Default master data loaded.", "Data master default berhasil dimuat."));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function backup() {
     setBusy("backup");
@@ -174,6 +187,24 @@ function MaintenancePage() {
             <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={busy !== null}>
               {busy === "restore" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {t("Upload snapshot", "Unggah cadangan")}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="sm:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">{t("Default master data", "Data master default")}</CardTitle>
+            <CardDescription>
+              {t(
+                "Load the standard Indonesian chart of accounts, units, categories, taxes, warehouse and cash/bank accounts. Existing records with the same code are kept up to date.",
+                "Muat bagan akun standar Indonesia, satuan, kategori, pajak, gudang, serta akun kas & bank. Data dengan kode sama akan diperbarui.",
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="gold" onClick={seedDefaults} disabled={busy !== null}>
+              {busy === "seed" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {t("Load defaults", "Muat data default")}
             </Button>
           </CardContent>
         </Card>

@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminField, AdminSelect, fmtIDR, todayISO, addDaysISO } from "@/components/app/admin-ui";
+import { confirmInvoicePayment } from "@/lib/billing.functions";
 
 export const Route = createFileRoute("/app-admin/invoices")({
   component: InvoicesPage,
@@ -142,6 +143,16 @@ function InvoicesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const confirmPaid = useMutation({
+    mutationFn: async (id: string) => confirmInvoicePayment({ data: { invoiceId: id, method: "manual_transfer" } }),
+    onSuccess: () => {
+      toast.success("Payment confirmed — tenant activated & period extended");
+      qc.invalidateQueries({ queryKey: ["admin-invoices"] });
+      qc.invalidateQueries({ queryKey: ["admin-tenants-mini"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const generate = useMutation({
     mutationFn: async () => {
       if (dueSoon.length === 0) throw new Error("No tenant renews within 7 days");
@@ -256,7 +267,12 @@ function InvoicesPage() {
                       </Button>
                     )}
                     {inv.status !== "paid" && inv.status !== "void" && (
-                      <Button size="sm" variant="gold" onClick={() => setStatus.mutate({ id: inv.id, status: "paid" })}>
+                      <Button
+                        size="sm"
+                        variant="gold"
+                        disabled={confirmPaid.isPending}
+                        onClick={() => confirmPaid.mutate(inv.id)}
+                      >
                         <Wallet className="h-3.5 w-3.5" /> Mark paid
                       </Button>
                     )}

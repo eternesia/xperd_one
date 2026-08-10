@@ -12,6 +12,13 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: {
+    // Build for a plain Node.js server (VPS) instead of Lovable's default
+    // Cloudflare Workers target (cloudflare-module). Without this, the preset
+    // only falls back to node-server due to a nitro version quirk, which is
+    // fragile. Output: .output/server/index.mjs — run with `node .output/server/index.mjs`.
+    preset: "node-server",
+  },
   vite: {
     server: {
       host: "0.0.0.0",

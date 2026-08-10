@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, Loader2, Rocket } from "lucide-react";
+import { ChevronLeft, CreditCard, Loader2, Rocket } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { listPaymentMethods, startInvoiceCheckout } from "@/lib/billing.functions";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/lib/procurement";
@@ -31,6 +33,30 @@ function BillingPage() {
 
   const [target, setTarget] = useState("");
   const [notes, setNotes] = useState("");
+  const [payInvoice, setPayInvoice] = useState<{ id: string; number: string; total: number } | null>(null);
+  const [manual, setManual] = useState<{ displayName: string; instructions: string; reference: string } | null>(null);
+
+  const { data: methods = [] } = useQuery({
+    queryKey: ["payment-methods"],
+    queryFn: () => listPaymentMethods(),
+  });
+
+  const checkout = useMutation({
+    mutationFn: async (gatewayId: string) => {
+      if (!payInvoice) throw new Error("No invoice selected");
+      return startInvoiceCheckout({ data: { invoiceId: payInvoice.id, gatewayId } });
+    },
+    onSuccess: (res) => {
+      if (res.kind === "redirect") {
+        setPayInvoice(null);
+        window.location.href = res.url;
+        return;
+      }
+      setManual({ displayName: res.displayName, instructions: res.instructions, reference: res.reference });
+      setPayInvoice(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const { data: subscription } = useQuery({
     queryKey: ["subscription", tenantId],
@@ -174,18 +200,19 @@ function BillingPage() {
                 <TableHead>{t("Due", "Jatuh tempo")}</TableHead>
                 <TableHead className="text-right">{t("Total", "Total")}</TableHead>
                 <TableHead>{t("Status", "Status")}</TableHead>
+                <TableHead className="text-right">{t("Action", "Aksi")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center">
+                  <TableCell colSpan={6} className="py-10 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : invoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                     {t("No invoice yet.", "Belum ada tagihan.")}
                   </TableCell>
                 </TableRow>
@@ -198,6 +225,19 @@ function BillingPage() {
                     <TableCell className="text-right">{money(Number(inv.total))}</TableCell>
                     <TableCell>
                       <Badge variant={inv.status === "paid" ? "default" : "secondary"}>{inv.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {inv.status !== "paid" && inv.status !== "void" && (
+                        <Button
+                          size="sm"
+                          variant="gold"
+                          onClick={() =>
+                            setPayInvoice({ id: inv.id, number: inv.invoice_number, total: Number(inv.total) })
+                          }
+                        >
+                          <CreditCard className="h-3.5 w-3.5" /> {t("Pay", "Bayar")}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -259,6 +299,58 @@ function BillingPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!payInvoice} onOpenChange={(o) => !o && setPayInvoice(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t("Pay invoice", "Bayar tagihan")} {payInvoice?.number}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t("Amount due", "Jumlah tagihan")}: <span className="font-semibold text-navy dark:text-primary-foreground">{money(payInvoice?.total ?? 0)}</span>
+          </p>
+          <div className="space-y-2">
+            {methods.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t("No payment method is active yet. Please contact our team.", "Belum ada metode pembayaran aktif. Silakan hubungi tim kami.")}
+              </p>
+            )}
+            {methods.map((m) => (
+              <Button
+                key={m.id}
+                variant="outline"
+                className="w-full justify-between"
+                disabled={checkout.isPending}
+                onClick={() => checkout.mutate(m.id)}
+              >
+                <span>{m.display_name}</span>
+                {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!manual} onOpenChange={(o) => !o && setManual(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{manual?.displayName}</DialogTitle>
+          </DialogHeader>
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+            {manual?.instructions || t("Transfer instructions will be sent by our team.", "Instruksi transfer akan dikirim tim kami.")}
+          </p>
+          <p className="text-sm">
+            {t("Payment reference", "Referensi pembayaran")}: <span className="font-medium">{manual?.reference}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Your package activates automatically once our team confirms the transfer.",
+              "Paket aktif otomatis setelah tim kami mengonfirmasi transfer.",
+            )}
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

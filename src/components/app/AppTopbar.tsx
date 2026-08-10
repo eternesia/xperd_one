@@ -40,10 +40,11 @@ import {
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/app-context";
+import { logoutAppUser } from "@/lib/auth.functions";
 import { useI18n } from "@/lib/i18n";
 import { APP_MODULES, LAUNCHER_UTILITIES } from "@/lib/modules";
 import { useTheme } from "@/lib/theme";
-import appLogo from "@/assets/xperd-one-app-logo.png.asset.json";
+import appLogo from "@/assets/xperd.png";
 
 export function AppTopbar({ workspaceId }: { workspaceId: string }) {
   const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId } = useApp();
@@ -86,7 +87,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
     <header className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b border-border bg-background/90 px-4 backdrop-blur lg:px-6">
       <Link to="/app/w/$workspaceId" params={{ workspaceId }} className="flex shrink-0 items-center">
         <img
-          src={appLogo.url}
+          src={appLogo}
           alt="XPERD One — Smart ERP Solution"
           className="h-8 w-auto dark:brightness-0 dark:invert"
           loading="eager"
@@ -206,9 +207,10 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={async () => {
+                await logoutAppUser();
                 await supabase.auth.signOut();
                 toast.success(lang === "id" ? "Berhasil keluar" : "Signed out");
-                navigate({ to: "/auth", replace: true });
+                navigate({ to: "/auth", search: { next: undefined }, replace: true });
               }}
             >
               <LogOut className="h-4 w-4" /> {lang === "id" ? "Keluar" : "Sign out"}

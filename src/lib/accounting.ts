@@ -42,6 +42,8 @@ export type AccViewKind =
   | "trial-balance"
   | "balance-sheet"
   | "profit-loss"
+  | "cash-flow"
+  | "equity-changes"
   | "period-closing";
 
 export interface AccEntity {
@@ -57,6 +59,8 @@ export const ACC_ENTITIES: AccEntity[] = [
   { submoduleId: "trial-balance", en: "Trial Balance", id_: "Neraca Saldo" },
   { submoduleId: "balance-sheet", en: "Balance Sheet", id_: "Neraca" },
   { submoduleId: "profit-loss", en: "Profit & Loss", id_: "Laba Rugi" },
+  { submoduleId: "cash-flow", en: "Cash Flow Statement", id_: "Laporan Arus Kas" },
+  { submoduleId: "equity-changes", en: "Changes in Equity", id_: "Perubahan Ekuitas" },
   { submoduleId: "period-closing", en: "Period Closing", id_: "Tutup Periode" },
 ];
 
@@ -388,4 +392,183 @@ export async function rollbackOpeningBalance(workspaceId: string, entryId: strin
     .eq("workspace_id", workspaceId)
     .eq("id", entryId);
   if (entryError) throw entryError;
+}
+
+/* ------------------------------- cash flow -------------------------------- */
+
+export type CashFlowGroup = "operating" | "investing" | "financing";
+
+export const CASH_FLOW_GROUP_LABEL: Record<CashFlowGroup, { en: string; id_: string }> = {
+  operating: { en: "Operating activities", id_: "Aktivitas operasi" },
+  investing: { en: "Investing activities", id_: "Aktivitas investasi" },
+  financing: { en: "Financing activities", id_: "Aktivitas pendanaan" },
+};
+
+export interface CashFlowRow {
+  group: CashFlowGroup;
+  code: string;
+  name: string;
+  inflow: number;
+  outflow: number;
+  net: number;
+}
+
+export interface CashFlowResult {
+  rows: CashFlowRow[];
+  totals: Record<CashFlowGroup, number>;
+  opening: number;
+  netChange: number;
+  closing: number;
+}
+
+/** Classify the counterpart account of a cash movement into a cash-flow activity. */
+export function classifyCashFlow(code: string, type: AccAccountType): CashFlowGroup {
+  const c = code.trim();
+  if (c.startsWith("17") || c.startsWith("18")) return "investing";
+  if (type === "equity") return "financing";
+  // long-term / loan liabilities (23xx–26xx) are financing; payables and taxes stay operating
+  if (type === "liability" && /^2[3-6]/.test(c)) return "financing";
+  return "operating";
+}
+
+/** Fetch the GL account codes that represent cash & bank for this workspace. */
+export async function fetchCashAccountCodes(workspaceId: string) {
+  const { data, error } = await supabase
+    .from("cb_accounts")
+    .select("gl_account_code")
+    .eq("workspace_id", workspaceId);
+  if (error) throw new Error(error.message);
+  const codes = (data ?? []).map((r) => (r.gl_account_code ?? "").trim()).filter(Boolean);
+  return [...new Set(codes.length ? codes : ["1000", "1010"])];
+}
+
+/** Direct-method cash flow built from journal postings that touch a cash account. */
+export function buildCashFlow(
+  entries: AccEntry[],
+  lines: AccLine[],
+  accounts: AccAccount[],
+  cashCodes: string[],
+  openingCash: number,
+): CashFlowResult {
+  const cash = new Set(cashCodes);
+  const meta = new Map(accounts.map((a) => [a.code, a]));
+  const byEntry = new Map<string, AccLine[]>();
+  for (const l of lines) {
+    const list = byEntry.get(l.entry_id) ?? [];
+    list.push(l);
+    byEntry.set(l.entry_id, list);
+  }
+
+  const map = new Map<string, CashFlowRow>();
+  const totals: Record<CashFlowGroup, number> = { operating: 0, investing: 0, financing: 0 };
+
+  for (const entry of entries) {
+    const group = byEntry.get(entry.id) ?? [];
+    const cashLines = group.filter((l) => cash.has(l.account_code));
+    if (!cashLines.length) continue;
+    const cashDelta = cashLines.reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+    if (Math.abs(cashDelta) < 0.005) continue;
+
+    const others = group.filter((l) => !cash.has(l.account_code));
+    const weights = others.map((l) => Math.abs((Number(l.debit) || 0) - (Number(l.credit) || 0)));
+    const weightSum = weights.reduce((s, w) => s + w, 0);
+    const targets = others.length && weightSum > 0
+      ? others.map((l, i) => ({ line: l, share: (weights[i] / weightSum) * cashDelta }))
+      : [{ line: { account_code: "—", account_name: entry.memo ?? "Unclassified" } as AccLine, share: cashDelta }];
+
+    for (const { line, share } of targets) {
+      const account = meta.get(line.account_code);
+      const type = (account?.account_type ?? guessType(line.account_code)) as AccAccountType;
+      const g = classifyCashFlow(line.account_code, type);
+      const key = `${g}:${line.account_code}`;
+      const row =
+        map.get(key) ??
+        ({
+          group: g,
+          code: line.account_code,
+          name: account?.name ?? line.account_name ?? line.account_code,
+          inflow: 0,
+          outflow: 0,
+          net: 0,
+        } satisfies CashFlowRow);
+      if (share >= 0) row.inflow += share;
+      else row.outflow += -share;
+      row.net += share;
+      map.set(key, row);
+      totals[g] += share;
+    }
+  }
+
+  const rows = [...map.values()].sort((a, b) => (a.group === b.group ? a.code.localeCompare(b.code) : a.group.localeCompare(b.group)));
+  const netChange = totals.operating + totals.investing + totals.financing;
+  return { rows, totals, opening: openingCash, netChange, closing: openingCash + netChange };
+}
+
+export function cashBalanceOf(lines: AccLine[], cashCodes: string[]) {
+  const cash = new Set(cashCodes);
+  return lines
+    .filter((l) => cash.has(l.account_code))
+    .reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+}
+
+/* --------------------------- changes in equity ---------------------------- */
+
+export interface EquityMovementRow {
+  code: string;
+  name: string;
+  opening: number;
+  movement: number;
+  closing: number;
+}
+
+export interface EquityStatement {
+  rows: EquityMovementRow[];
+  openingTotal: number;
+  netIncome: number;
+  movementTotal: number;
+  closingTotal: number;
+}
+
+/** Statement of changes in equity: opening equity + period result + equity movements. */
+export function buildEquityStatement(
+  openingLines: AccLine[],
+  periodLines: AccLine[],
+  accounts: AccAccount[],
+): EquityStatement {
+  const opening = buildTrialBalance(openingLines, accounts);
+  const period = buildTrialBalance(periodLines, accounts);
+
+  const openingEquity = opening.filter((r) => r.type === "equity");
+  const periodEquity = period.filter((r) => r.type === "equity");
+  const openingResult =
+    opening.filter((r) => r.type === "revenue").reduce((s, r) => s + r.balance, 0) -
+    opening.filter((r) => r.type === "expense").reduce((s, r) => s + r.balance, 0);
+  const netIncome =
+    period.filter((r) => r.type === "revenue").reduce((s, r) => s + r.balance, 0) -
+    period.filter((r) => r.type === "expense").reduce((s, r) => s + r.balance, 0);
+
+  const codes = [...new Set([...openingEquity.map((r) => r.code), ...periodEquity.map((r) => r.code)])].sort();
+  const rows: EquityMovementRow[] = codes.map((code) => {
+    const o = openingEquity.find((r) => r.code === code);
+    const p = periodEquity.find((r) => r.code === code);
+    const openingValue = o?.balance ?? 0;
+    const movement = p?.balance ?? 0;
+    return {
+      code,
+      name: o?.name ?? p?.name ?? code,
+      opening: openingValue,
+      movement,
+      closing: openingValue + movement,
+    };
+  });
+
+  const openingTotal = openingEquity.reduce((s, r) => s + r.balance, 0) + openingResult;
+  const movementTotal = periodEquity.reduce((s, r) => s + r.balance, 0);
+  return {
+    rows,
+    openingTotal,
+    netIncome,
+    movementTotal,
+    closingTotal: openingTotal + movementTotal + netIncome,
+  };
 }

@@ -149,6 +149,8 @@ const MODULE_DEFS: AppModule[] = [
       s("trial-balance", "Trial Balance", "Neraca Saldo"),
       s("balance-sheet", "Balance Sheet", "Neraca"),
       s("profit-loss", "Profit & Loss", "Laba Rugi"),
+      s("cash-flow", "Cash Flow Statement", "Laporan Arus Kas"),
+      s("equity-changes", "Changes in Equity", "Perubahan Ekuitas"),
       s("period-closing", "Period Closing", "Tutup Periode"),
     ],
   },

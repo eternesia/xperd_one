@@ -22,7 +22,12 @@ import { useI18n } from "@/lib/i18n";
 import { formatMoney, nextDocNumber } from "@/lib/procurement";
 import {
   ACCOUNT_TYPE_LABEL,
+  buildCashFlow,
+  buildEquityStatement,
   buildTrialBalance,
+  CASH_FLOW_GROUP_LABEL,
+  cashBalanceOf,
+  fetchCashAccountCodes,
   fetchAccounts,
   fetchEntries,
   fetchOpeningBalances,
@@ -40,6 +45,7 @@ import {
   type AccEntry,
   type AccLine,
   type ManualLineInput,
+  type CashFlowGroup,
 } from "@/lib/accounting";
 import { cn } from "@/lib/utils";
 
@@ -736,6 +742,206 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
 
 /* ----------------------------- period closing ----------------------------- */
 
+function previousDay(date: string) {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function CashFlowView({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(today());
+
+  const { data: accounts = [] } = useAccounts(workspaceId);
+  const { data: cashCodes = [] } = useQuery({
+    queryKey: ["acc-cash-codes", workspaceId],
+    queryFn: () => fetchCashAccountCodes(workspaceId),
+  });
+  const { data, isLoading } = useLedger(workspaceId, from, to);
+  const { data: before } = useLedger(workspaceId, "", previousDay(from));
+
+  const result = useMemo(
+    () =>
+      buildCashFlow(
+        data?.entries ?? [],
+        data?.lines ?? [],
+        accounts as AccAccount[],
+        cashCodes,
+        cashBalanceOf(before?.lines ?? [], cashCodes),
+      ),
+    [data?.entries, data?.lines, before?.lines, accounts, cashCodes],
+  );
+
+  const groups: CashFlowGroup[] = ["operating", "investing", "financing"];
+
+  return (
+    <div className="space-y-5">
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("Cash Flow Statement", "Laporan Arus Kas")}
+        action={<PrintButton />}
+      />
+      <div className="flex flex-wrap items-end gap-2 no-print">
+        <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label={t("Opening cash", "Kas awal")} value={formatMoney(result.opening, lang)} />
+        <StatCard
+          label={t("Net change", "Perubahan bersih")}
+          value={formatMoney(result.netChange, lang)}
+          tone={result.netChange >= 0 ? "text-emerald-600" : "text-destructive"}
+        />
+        <StatCard label={t("Closing cash", "Kas akhir")} value={formatMoney(result.closing, lang)} />
+      </div>
+
+      {isLoading && (
+        <div className="py-10 text-center">
+          <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+        </div>
+      )}
+
+      {!isLoading &&
+        groups.map((g) => {
+          const rows = result.rows.filter((r) => r.group === g);
+          return (
+            <div key={g} className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3 text-sm font-semibold text-navy dark:text-primary-foreground">
+                <span>{lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en}</span>
+                <span className={cn(result.totals[g] >= 0 ? "text-emerald-600" : "text-destructive")}>
+                  {formatMoney(result.totals[g], lang)}
+                </span>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24">{t("Code", "Kode")}</TableHead>
+                    <TableHead>{t("Account", "Akun")}</TableHead>
+                    <TableHead className="text-right">{t("Cash in", "Kas masuk")}</TableHead>
+                    <TableHead className="text-right">{t("Cash out", "Kas keluar")}</TableHead>
+                    <TableHead className="text-right">{t("Net", "Bersih")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!rows.length && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                        {t("No cash movement.", "Tidak ada mutasi kas.")}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {rows.map((r) => (
+                    <TableRow key={`${r.group}-${r.code}`}>
+                      <TableCell className="text-muted-foreground">{r.code}</TableCell>
+                      <TableCell>{r.name}</TableCell>
+                      <TableCell className="text-right">{r.inflow ? formatMoney(r.inflow, lang) : "—"}</TableCell>
+                      <TableCell className="text-right">{r.outflow ? formatMoney(r.outflow, lang) : "—"}</TableCell>
+                      <TableCell className="text-right font-medium">{formatMoney(r.net, lang)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+function EquityChangesView({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(today());
+
+  const { data: accounts = [] } = useAccounts(workspaceId);
+  const { data, isLoading } = useLedger(workspaceId, from, to);
+  const { data: before } = useLedger(workspaceId, "", previousDay(from));
+
+  const statement = useMemo(
+    () => buildEquityStatement(before?.lines ?? [], data?.lines ?? [], accounts as AccAccount[]),
+    [before?.lines, data?.lines, accounts],
+  );
+
+  return (
+    <div className="space-y-5">
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("Changes in Equity", "Perubahan Ekuitas")}
+        action={<PrintButton />}
+      />
+      <div className="flex flex-wrap items-end gap-2 no-print">
+        <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label={t("Opening equity", "Ekuitas awal")} value={formatMoney(statement.openingTotal, lang)} />
+        <StatCard
+          label={t("Result for the period", "Laba periode berjalan")}
+          value={formatMoney(statement.netIncome, lang)}
+          tone={statement.netIncome >= 0 ? "text-emerald-600" : "text-destructive"}
+        />
+        <StatCard label={t("Closing equity", "Ekuitas akhir")} value={formatMoney(statement.closingTotal, lang)} />
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-24">{t("Code", "Kode")}</TableHead>
+              <TableHead>{t("Equity account", "Akun ekuitas")}</TableHead>
+              <TableHead className="text-right">{t("Opening", "Saldo awal")}</TableHead>
+              <TableHead className="text-right">{t("Movement", "Mutasi")}</TableHead>
+              <TableHead className="text-right">{t("Closing", "Saldo akhir")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!isLoading && !statement.rows.length && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  {t("No equity accounts posted yet.", "Belum ada pencatatan pada akun ekuitas.")}
+                </TableCell>
+              </TableRow>
+            )}
+            {statement.rows.map((r) => (
+              <TableRow key={r.code}>
+                <TableCell className="text-muted-foreground">{r.code}</TableCell>
+                <TableCell>{r.name}</TableCell>
+                <TableCell className="text-right">{formatMoney(r.opening, lang)}</TableCell>
+                <TableCell className="text-right">{formatMoney(r.movement, lang)}</TableCell>
+                <TableCell className="text-right font-medium">{formatMoney(r.closing, lang)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell colSpan={2}>{t("Result for the period", "Laba periode berjalan")}</TableCell>
+              <TableCell className="text-right">—</TableCell>
+              <TableCell className="text-right">{formatMoney(statement.netIncome, lang)}</TableCell>
+              <TableCell className="text-right font-medium">{formatMoney(statement.netIncome, lang)}</TableCell>
+            </TableRow>
+            <TableRow className="bg-muted/50 font-semibold">
+              <TableCell colSpan={2}>{t("Total equity", "Total ekuitas")}</TableCell>
+              <TableCell className="text-right">{formatMoney(statement.openingTotal, lang)}</TableCell>
+              <TableCell className="text-right">{formatMoney(statement.movementTotal + statement.netIncome, lang)}</TableCell>
+              <TableCell className="text-right">{formatMoney(statement.closingTotal, lang)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- period closing ----------------------------- */
+
 function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
@@ -1177,6 +1383,10 @@ export function AccountingView({ entity, workspaceId }: { entity: AccEntity; wor
       return <BalanceSheetView workspaceId={workspaceId} />;
     case "profit-loss":
       return <ProfitLossView workspaceId={workspaceId} />;
+    case "cash-flow":
+      return <CashFlowView workspaceId={workspaceId} />;
+    case "equity-changes":
+      return <EquityChangesView workspaceId={workspaceId} />;
     case "period-closing":
       return <PeriodClosingView workspaceId={workspaceId} />;
     default:

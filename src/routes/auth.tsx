@@ -10,9 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Logo } from "@/components/site/Logo";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
+import { loginAppUser, registerAppUser } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in to XPERD One — ERP Workspace Access" },
@@ -38,31 +42,28 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const { session, loading } = useSession();
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
 
   useEffect(() => {
-    if (!loading && session) navigate({ to: "/app", replace: true });
-  }, [loading, session, navigate]);
+    if (!loading && session) navigate({ to: next ?? "/app", replace: true });
+  }, [loading, session, navigate, next]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/app`,
-            data: { full_name: fullName },
-          },
-        });
-        if (error) throw error;
-        toast.success("Account created. Check your email to confirm, then sign in.");
+        await registerAppUser({ data: { email, password, fullName } });
+        toast.success("Account created. You can sign in now.");
         setMode("signin");
       } else {
+        // Credentials are verified against our own app_users table; the server
+        // issues a signed JWT (httpOnly cookie). The platform session is then
+        // hydrated so row-level security keeps scoping data per user.
+        await loginAppUser({ data: { email, password } });
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/app", replace: true });
+        navigate({ to: next ?? "/app", replace: true });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
