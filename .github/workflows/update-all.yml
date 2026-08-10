@@ -1,0 +1,45 @@
+name: Update All Services
+
+on:
+  workflow_dispatch:
+    inputs:
+      remote_dir:
+        description: 'Direktori target di VPS'
+        required: false
+        default: '/opt/vectra'
+        type: string
+
+jobs:
+  update-all:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Update over SSH to manager
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+          envs: GITHUB_PAT
+          script: |
+            set -euo pipefail
+
+            REMOTE_DIR="${{ inputs.remote_dir }}"
+            echo "=== Update all services (VECTRA) ==="
+            cd "$REMOTE_DIR"
+            [ -f .env.prod ] || { echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"; exit 1; }
+
+            echo ">>> Logging in to GHCR..."
+            echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo ">>> Pulling all images..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+
+            echo ">>> Updating services (recreate bila ada image/config baru)..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+            echo "=== Update all complete ==="
+            docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+        env:
+          GITHUB_PAT: ${{ secrets.GHCR_PAT }}

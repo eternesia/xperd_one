@@ -1,0 +1,72 @@
+name: Repull Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag image untuk di-repull'
+        required: true
+        type: string
+      image_name:
+        description: 'Nama image (default: nama repository)'
+        required: false
+        default: ''
+        type: string
+      remote_dir:
+        description: 'Direktori target di VPS'
+        required: false
+        default: '/opt/vectra'
+        type: string
+      recreate_app:
+        description: 'Recreate container app setelah repull'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  repull:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repull over SSH to manager
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+          envs: GITHUB_PAT
+          script: |
+            set -euo pipefail
+
+            REMOTE_DIR="${{ inputs.remote_dir }}"
+            APP_NAME="${{ inputs.image_name || github.event.repository.name }}"
+            TAG="${{ inputs.image_tag }}"
+            REGISTRY="ghcr.io/${{ github.repository_owner }}"
+            FULL_IMAGE="${REGISTRY}/${APP_NAME}:${TAG}"
+
+            echo "=== Repull ${FULL_IMAGE} (VECTRA) ==="
+            cd "$REMOTE_DIR"
+            [ -f .env.prod ] || { echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"; exit 1; }
+
+            echo ">>> Logging in to GHCR..."
+            echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo ">>> Pulling (force, platform linux/amd64)..."
+            docker pull --platform linux/amd64 "$FULL_IMAGE"
+
+            echo ">>> Set APP_IMAGE di .env.prod"
+            if grep -q "^APP_IMAGE=" .env.prod; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${FULL_IMAGE}|" .env.prod
+            else
+              echo "APP_IMAGE=${FULL_IMAGE}" >> .env.prod
+            fi
+
+            if [ "${{ inputs.recreate_app }}" = "true" ]; then
+              echo ">>> Recreating app service..."
+              docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate app
+            fi
+
+            echo "=== Repull complete ==="
+        env:
+          GITHUB_PAT: ${{ secrets.GHCR_PAT }}

@@ -1,0 +1,69 @@
+name: Initial Deploy Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      remote_dir:
+        description: 'Direktori target di VPS'
+        required: false
+        default: '/opt/vectra'
+        type: string
+      run_db_setup:
+        description: 'Jalankan migrasi & seed setelah deploy (opsional, default OFF)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  initial-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH to manager
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+          envs: GITHUB_PAT
+          script: |
+            set -euo pipefail
+
+            REMOTE_DIR="${{ inputs.remote_dir }}"
+
+            echo "=== Initial deploy (VECTRA) ==="
+            mkdir -p "$REMOTE_DIR"
+            cd "$REMOTE_DIR"
+
+            # .env.prod wajib sudah ada di server (isi MYSQL_*, GEMINI_API_KEY, APP_IMAGE, dll)
+            if [ ! -f .env.prod ]; then
+              echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"
+              echo "Buat dulu: cp .env.example .env.prod lalu isi semua nilai."
+              exit 1
+            fi
+
+            echo ">>> Logging in to GHCR..."
+            echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo ">>> Pulling images..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+
+            echo ">>> Starting services..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+            # Migrasi & seed TIDAK otomatis — hanya jalan bila input diaktifkan
+            if [ "${{ inputs.run_db_setup }}" = "true" ]; then
+              echo ">>> Running db migrate & seed..."
+              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/db.mjs migrate
+              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/db.mjs seed
+            else
+              echo ">>> db migrate/seed dilewati (manual). Jalankan via:"
+              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/db.mjs migrate"
+              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/db.mjs seed"
+            fi
+
+            echo "=== Initial deploy complete ==="
+            docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+        env:
+          GITHUB_PAT: ${{ secrets.GHCR_PAT }}

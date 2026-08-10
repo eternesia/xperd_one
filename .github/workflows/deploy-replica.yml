@@ -1,0 +1,65 @@
+name: Deploy Docker Image (Replica)
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag image untuk di-deploy'
+        required: true
+        type: string
+      image_name:
+        description: 'Nama image (default: nama repository)'
+        required: false
+        default: ''
+        type: string
+      remote_dir:
+        description: 'Direktori target di VPS (replica)'
+        required: false
+        default: '/opt/vectra'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH to replica
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_REPLICA_HOST }}
+          username: ${{ secrets.SSH_REPLICA_USER }}
+          port: ${{ secrets.SSH_REPLICA_PORT || 22 }}
+          key: ${{ secrets.SSH_REPLICA_PRIVATE_KEY }}
+          envs: GITHUB_PAT
+          script: |
+            set -euo pipefail
+
+            REMOTE_DIR="${{ inputs.remote_dir }}"
+            APP_NAME="${{ inputs.image_name || github.event.repository.name }}"
+            TAG="${{ inputs.image_tag }}"
+            REGISTRY="ghcr.io/${{ github.repository_owner }}"
+            FULL_IMAGE="${REGISTRY}/${APP_NAME}:${TAG}"
+
+            echo "=== Deploying ${FULL_IMAGE} (VECTRA) ke replica ==="
+            cd "$REMOTE_DIR"
+            [ -f .env.prod ] || { echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"; exit 1; }
+
+            echo ">>> Updating .env.prod: APP_IMAGE=${FULL_IMAGE}"
+            if grep -q "^APP_IMAGE=" .env.prod; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${FULL_IMAGE}|" .env.prod
+            else
+              echo "APP_IMAGE=${FULL_IMAGE}" >> .env.prod
+            fi
+
+            echo ">>> Logging in to GHCR..."
+            echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo ">>> Pulling app image..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull app
+
+            echo ">>> Recreating app service..."
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate app
+
+            echo "=== Deploy complete ==="
+        env:
+          GITHUB_PAT: ${{ secrets.GHCR_PAT }}
