@@ -24,6 +24,11 @@ COPY package.json package-lock.json ./
 # Cache npm's download dir across builds (BuildKit) -> much faster rebuilds.
 RUN --mount=type=cache,target=/root/.npm npm ci
 
+# A minimal node_modules (just mysql2 + its pure-JS deps) so the migrate/seed
+# scripts can run inside the runtime image without shipping the whole bundle.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefix /app/runtime-deps --omit=dev --ignore-scripts mysql2@3.23.2
+
 # Copy source (respects .dockerignore) and compile the app.
 COPY . .
 RUN npm run build
@@ -43,6 +48,11 @@ RUN addgroup -S app && adduser -S -G app app \
 # The Nitro build is self-contained — ship only what's needed to run.
 COPY --from=build --chown=app:app /app/.output ./.output
 COPY --from=build --chown=app:app /app/package.json ./package.json
+
+# DB tooling for in-container migrate/seed (mysql2 + scripts + SQL files).
+COPY --from=build --chown=app:app /app/runtime-deps/node_modules ./node_modules
+COPY --from=build --chown=app:app /app/scripts ./scripts
+COPY --from=build --chown=app:app /app/db ./db
 
 USER app
 EXPOSE 3000

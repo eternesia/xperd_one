@@ -9,7 +9,12 @@
 #   docker push  ${APP_IMAGE:-yourorg/xperd-one:latest}
 #
 #   # 2) on the server, with a production .env in place
-#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml up -d     # web runs migrate+seed on start
+#
+#   # 3) one-shot DB jobs (run on demand, idempotent):
+#   docker compose -f docker-compose.prod.yml run --rm migrate   # apply schema only
+#   docker compose -f docker-compose.prod.yml run --rm seed      # apply seeds only
+#   docker compose -f docker-compose.prod.yml run --rm db        # migrate + seed
 #
 # Connection details (prod):
 #   MySQL     mysql://<user>:<pass>@mysql:3306/xperd   (internal network hostname `mysql`)
@@ -52,10 +57,15 @@ services:
     container_name: xperd-web-prod
     restart: unless-stopped
     working_dir: /app
+    # Apply pending migrations + seeds (idempotent) on every start, then boot.
+    command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs && node --env-file-if-exists=.env .output/server/index.mjs"]
     environment:
       NODE_ENV: production
       PORT: "3000" # keep deterministic; must match the `ports` mapping
       NITRO_PORT: "3000"
+      # Reach the compose `mysql` service over the internal network (overrides .env)
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
     env_file:
       - .env # server env: SUPABASE_*, APP_JWT_SECRET, etc. (gitignored)
     ports:
@@ -71,6 +81,52 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # --- one-shot DB jobs (run on demand) ------------------------------------
+  #   docker compose -f docker-compose.prod.yml run --rm migrate
+  #   docker compose -f docker-compose.prod.yml run --rm seed
+  #   docker compose -f docker-compose.prod.yml run --rm db   # migrate + seed
+  migrate:
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    container_name: xperd-migrate-prod
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["node", "scripts/migrate.mjs"]
+
+  seed:
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    container_name: xperd-seed-prod
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["node", "scripts/seed.mjs"]
+
+  db:
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    container_name: xperd-db-prod
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs"]
 
 volumes:
   xperd-mysql-data:
