@@ -1,0 +1,25 @@
+# Keep the build context small and never bake secrets into the image.
+node_modules
+.output
+dist
+dist-ssr
+.nitro
+.vinxi
+.tanstack
+.wrangler
+.lovable
+
+.git
+.gitignore
+.gitattributes
+
+*.log
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+Dockerfile
+.dockerignore
+docker-compose*.yml

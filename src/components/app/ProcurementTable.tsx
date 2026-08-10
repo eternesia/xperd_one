@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   assertFundsMapping,
@@ -125,24 +125,23 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     queryKey,
     queryFn: async () => {
       const start = (page - 1) * pageSize;
-      let q = supabase
-        .from("prc_documents")
-        .select("*", { count: "exact" })
-        .eq("workspace_id", workspaceId)
-        .eq("doc_type", entity.docType)
-        .order("doc_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .range(start, start + pageSize - 1);
-      if (search.trim()) {
-        const s = `%${search.trim()}%`;
-        q = q.or(`doc_number.ilike.${s},supplier_name.ilike.${s},supplier_code.ilike.${s},reference.ilike.${s}`);
-      }
-      if (status !== "all") q = q.eq("status", status);
-      if (from) q = q.gte("doc_date", from);
-      if (to) q = q.lte("doc_date", to);
-      const { data: rows, error, count } = await q;
-      if (error) throw error;
-      return { rows: (rows ?? []) as unknown as PrcDoc[], count: count ?? 0 };
+      const data = await listWorkspaceRows({
+        data: {
+          table: "prc_documents",
+          workspaceId,
+          search: search.trim() || undefined,
+          filters: {
+            doc_type: entity.docType,
+            ...(status !== "all" ? { status } : {}),
+          },
+          ranges: { doc_date: { gte: from || undefined, lte: to || undefined } },
+          orderBy: "doc_date",
+          orderDir: "desc",
+          limit: pageSize,
+          offset: start,
+        },
+      });
+      return { rows: (data?.rows ?? []) as unknown as PrcDoc[], count: data?.count ?? 0 };
     },
   });
 
@@ -156,32 +155,28 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     enabled: open && Boolean(entity.source),
     queryFn: async () => {
       const src = entity.source!;
-      const { data: docs, error } = await supabase
-        .from("prc_documents")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .eq("doc_type", src.docType)
-        .in("status", src.fromStatuses)
-        .order("doc_date", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return (docs ?? []) as unknown as PrcDoc[];
+      const data = await listWorkspaceRows({
+        data: {
+          table: "prc_documents",
+          workspaceId,
+          filters: { doc_type: src.docType },
+          inFilters: { status: src.fromStatuses },
+          orderBy: "doc_date",
+          orderDir: "desc",
+          limit: 50,
+        },
+      });
+      return (data?.rows ?? []) as unknown as PrcDoc[];
     },
   });
 
   const pullSource = async (id: string) => {
     const doc = sourceDocs.find((d) => d.id === id);
     if (!doc) return;
-    const { data: srcLines, error } = await supabase
-      .from("prc_document_lines")
-      .select("*")
-      .eq("document_id", id)
-      .order("line_no");
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    const list = (srcLines ?? []) as unknown as PrcLine[];
+    const srcLinesData = await listWorkspaceRows({
+      data: { table: "prc_document_lines", workspaceId, filters: { document_id: id }, orderBy: "line_no", orderDir: "asc", limit: 500 },
+    });
+    const list = (srcLinesData?.rows ?? []) as unknown as PrcLine[];
     const openLines = list.filter((l) => remainingQty(l) > 0.0001);
     if (!openLines.length) {
       toast.error(t("Nothing left to pull from this document.", "Tidak ada sisa yang bisa ditarik."));
@@ -266,33 +261,33 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         );
       }
 
-      const { data: created, error } = await supabase
-        .from("prc_documents")
-        .insert({
-          workspace_id: workspaceId,
-          doc_type: entity.docType,
-          doc_number,
-          doc_date: header.doc_date,
-          due_date: entity.showDueDate && header.due_date ? header.due_date : null,
-          supplier_code: header.supplier_code || null,
-          supplier_name: header.supplier_name || null,
-          warehouse_code: entity.showWarehouse ? header.warehouse_code || null : null,
-          bank_account_code: entity.showBank ? header.bank_account_code || null : null,
-          bank_account_name: entity.showBank ? header.bank_account_name || null : null,
-          reference: header.reference || null,
-          status: docStatus,
-          subtotal: totals.subtotal,
-          discount_amount: totals.discount,
-          tax_amount: totals.tax,
-          total: totals.total,
-          notes: header.notes || null,
-          source_document_id: sourceDoc?.id ?? null,
-          source_doc_number: sourceDoc?.doc_number ?? null,
-        } as never)
-        .select("id")
-        .single();
-      if (error) throw error;
-      const docId = (created as { id: string }).id;
+      const created = await saveWorkspaceRow({
+        data: {
+          table: "prc_documents",
+          workspaceId,
+          data: {
+            doc_type: entity.docType,
+            doc_number,
+            doc_date: header.doc_date,
+            due_date: entity.showDueDate && header.due_date ? header.due_date : null,
+            supplier_code: header.supplier_code || null,
+            supplier_name: header.supplier_name || null,
+            warehouse_code: entity.showWarehouse ? header.warehouse_code || null : null,
+            bank_account_code: entity.showBank ? header.bank_account_code || null : null,
+            bank_account_name: entity.showBank ? header.bank_account_name || null : null,
+            reference: header.reference || null,
+            status: docStatus,
+            subtotal: totals.subtotal,
+            discount_amount: totals.discount,
+            tax_amount: totals.tax,
+            total: totals.total,
+            notes: header.notes || null,
+            source_document_id: sourceDoc?.id ?? null,
+            source_doc_number: sourceDoc?.doc_number ?? null,
+          },
+        },
+      });
+      const docId = created.id;
 
       const usable = lines.filter((l) => l.item_code || l.description);
       const payload = usable.map((l, i) => {
@@ -318,8 +313,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         };
       });
       if (payload.length) {
-        const { error: lineError } = await supabase.from("prc_document_lines").insert(payload as never);
-        if (lineError) throw lineError;
+        await upsertWorkspaceRows({ data: { table: "prc_document_lines", workspaceId, rows: payload } });
       }
 
       // consume the source document (supports partial fulfilment)
@@ -335,18 +329,24 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         }));
         for (const sl of nextLines) {
           if (!consumed.has(sl.id)) continue;
-          const { error: upErr } = await supabase
-            .from("prc_document_lines")
-            .update({ qty_fulfilled: Math.min(Number(sl.qty), sl.qty_fulfilled ?? 0) } as never)
-            .eq("id", sl.id);
-          if (upErr) throw upErr;
+          await saveWorkspaceRow({
+            data: {
+              table: "prc_document_lines",
+              workspaceId,
+              id: sl.id,
+              data: { qty_fulfilled: Math.min(Number(sl.qty), sl.qty_fulfilled ?? 0) },
+            },
+          });
         }
         const stillOpen = nextLines.some((l) => Number(l.qty) - Number(l.qty_fulfilled ?? 0) > 0.0001);
-        const { error: docErr } = await supabase
-          .from("prc_documents")
-          .update({ status: (stillOpen ? "partial" : "closed") as PrcStatus } as never)
-          .eq("id", sourceDoc.id);
-        if (docErr) throw docErr;
+        await saveWorkspaceRow({
+          data: {
+            table: "prc_documents",
+            workspaceId,
+            id: sourceDoc.id,
+            data: { status: (stillOpen ? "partial" : "closed") as PrcStatus },
+          },
+        });
       }
 
       // automatic journal entry
@@ -406,8 +406,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("prc_documents").delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: "prc_documents", workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Deleted", "Terhapus"));

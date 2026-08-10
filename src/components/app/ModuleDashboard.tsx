@@ -17,7 +17,7 @@ import {
 import { ArrowUpRight, FileText, PackageCheck, Receipt, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { countWorkspaceRows, listWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { MASTER_DATA_ENTITIES } from "@/lib/master-data";
 import type { AppModule } from "@/lib/modules";
@@ -144,14 +144,10 @@ function ProcurementDashboard({ workspaceId }: { workspaceId: string }) {
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["prc-dashboard", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("prc_documents")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("doc_date", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as unknown as PrcDoc[];
+      const data = await listWorkspaceRows({
+        data: { table: "prc_documents", workspaceId, orderBy: "doc_date", orderDir: "desc", limit: 500 },
+      });
+      return (data?.rows ?? []) as unknown as PrcDoc[];
     },
   });
 
@@ -305,11 +301,8 @@ function MasterDataDashboard({ workspaceId }: { workspaceId: string }) {
     queryFn: async () => {
       const results = await Promise.all(
         MASTER_DATA_ENTITIES.map(async (e) => {
-          const { count } = await supabase
-            .from(e.table)
-            .select("id", { count: "exact", head: true })
-            .eq("workspace_id", workspaceId);
-          return { entity: e, count: count ?? 0 };
+          const data = await countWorkspaceRows({ data: { table: e.table, workspaceId } });
+          return { entity: e, count: data?.count ?? 0 };
         }),
       );
       return results;
@@ -364,14 +357,10 @@ function InventoryDashboard({ workspaceId }: { workspaceId: string }) {
   const { data: movements = [], isLoading } = useQuery({
     queryKey: ["inv-dashboard", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inv_movements")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("movement_date", { ascending: false })
-        .limit(2000);
-      if (error) throw error;
-      return (data ?? []) as unknown as InvMovement[];
+      const data = await listWorkspaceRows({
+        data: { table: "inv_movements", workspaceId, orderBy: "movement_date", orderDir: "desc", limit: 2000 },
+      });
+      return (data?.rows ?? []) as unknown as InvMovement[];
     },
   });
 
@@ -506,14 +495,10 @@ function SalesDashboard({ workspaceId }: { workspaceId: string }) {
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["sls-dashboard", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sls_documents")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("doc_date", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as unknown as (Omit<PrcDoc, "doc_type"> & { doc_type: string; customer_name: string | null; customer_code: string | null })[];
+      const data = await listWorkspaceRows({
+        data: { table: "sls_documents", workspaceId, orderBy: "doc_date", orderDir: "desc", limit: 500 },
+      });
+      return (data?.rows ?? []) as unknown as (Omit<PrcDoc, "doc_type"> & { doc_type: string; customer_name: string | null; customer_code: string | null })[];
     },
   });
 

@@ -1,0 +1,79 @@
+# Xperd One — Production Infrastructure (VPS)
+# ---------------------------------------------------------------------------
+# Uses a pre-built image from a registry (set APP_IMAGE) — no source bind-mounts.
+# MySQL persists in a named volume; local storage lives in the `local-storage`
+# volume (bound into the app at /app/storage, per requirement).
+#
+#   # 1) build & push the app image (from this repo)
+#   docker build -t ${APP_IMAGE:-yourorg/xperd-one:latest} .
+#   docker push  ${APP_IMAGE:-yourorg/xperd-one:latest}
+#
+#   # 2) on the server, with a production .env in place
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Connection details (prod):
+#   MySQL     mysql://<user>:<pass>@mysql:3306/xperd   (internal network hostname `mysql`)
+#   App       http://127.0.0.1:3000  (put nginx in front: proxy_pass http://127.0.0.1:3000)
+# ---------------------------------------------------------------------------
+
+name: xperd-one-prod
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: xperd-mysql-prod
+    restart: unless-stopped
+    environment:
+      # Override these in your shell / server env (never leave CHANGE_ME).
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-xperd}
+      MYSQL_USER: ${MYSQL_USER:-xperd}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - xperd-mysql-data:/var/lib/mysql # named volume -> data survives restarts
+    # Not exposed to the host by default — the app reaches MySQL on the internal
+    # docker network via hostname `mysql`. Uncomment only for admin tooling:
+    # ports:
+    #   - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    # App image pulled from your registry — set APP_IMAGE (repo + tag).
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    container_name: xperd-web-prod
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      NODE_ENV: production
+      PORT: "3000" # keep deterministic; must match the `ports` mapping
+      NITRO_PORT: "3000"
+    env_file:
+      - .env # server env: SUPABASE_*, APP_JWT_SECRET, etc. (gitignored)
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000" # host:container — bind to localhost (nginx proxies in front); host port from .env (WEB_PORT)
+    volumes:
+      - local-storage:/app/storage # local file storage (named volume binding)
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  xperd-mysql-data:
+    name: xperd-mysql-data-prod
+  local-storage:
+    name: local-storage

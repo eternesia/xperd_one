@@ -12,7 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
+import { listWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -135,20 +135,18 @@ export function PartyPicker({
     queryKey: ["party-picker", table, workspaceId, term],
     enabled: open,
     queryFn: async () => {
-      let q = supabase
-        .from(table)
-        .select("code,name,city,phone")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("name")
-        .limit(30);
-      if (term.trim()) {
-        const s = `%${term.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s},city.ilike.${s}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []).map((r) => {
+      const data = await listWorkspaceRows({
+        data: {
+          table,
+          workspaceId,
+          search: term.trim() || undefined,
+          orderBy: "name",
+          orderDir: "asc",
+          limit: 30,
+          filters: { is_active: 1 },
+        },
+      });
+      return (data?.rows ?? []).map((r) => {
         const row = r as { code: string; name: string; city: string | null; phone: string | null };
         return { code: row.code, name: row.name, hint: row.city || row.phone } satisfies Option;
       });
@@ -196,20 +194,18 @@ export function WarehousePicker({
     queryKey: ["warehouse-picker", workspaceId, term],
     enabled: open,
     queryFn: async () => {
-      let q = supabase
-        .from("md_warehouses")
-        .select("code,name,city")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("code")
-        .limit(30);
-      if (term.trim()) {
-        const s = `%${term.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s},city.ilike.${s}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []).map((r) => {
+      const data = await listWorkspaceRows({
+        data: {
+          table: "md_warehouses",
+          workspaceId,
+          search: term.trim() || undefined,
+          filters: { is_active: 1 },
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 30,
+        },
+      });
+      return (data?.rows ?? []).map((r) => {
         const row = r as { code: string; name: string; city: string | null };
         return { code: row.code, name: row.name, hint: row.city } satisfies Option;
       });
@@ -264,20 +260,18 @@ export function CashBankPicker({
     queryKey: ["cashbank-picker", workspaceId, term],
     enabled: open,
     queryFn: async () => {
-      let q = supabase
-        .from("cb_accounts")
-        .select("code,name,gl_account_code,account_kind,bank_name,account_number")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("code")
-        .limit(30);
-      if (term.trim()) {
-        const s = `%${term.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s},bank_name.ilike.${s}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as PickedCashAccount[];
+      const data = await listWorkspaceRows({
+        data: {
+          table: "cb_accounts",
+          workspaceId,
+          search: term.trim() || undefined,
+          filters: { is_active: 1 },
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 30,
+        },
+      });
+      return (data?.rows ?? []) as unknown as PickedCashAccount[];
     },
   });
 

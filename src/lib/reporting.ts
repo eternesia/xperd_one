@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { listRowsByIds, listWorkspaceRows } from "@/lib/data.functions";
 import type { PrcDoc } from "@/lib/procurement";
 import type { SlsDoc } from "@/lib/sales";
 import type { InvMovement } from "@/lib/inventory";
@@ -86,31 +86,31 @@ export function byMonth<T>(rows: T[], date: (r: T) => string, value: (r: T) => n
 }
 
 export async function fetchSalesDocs(workspaceId: string, from: string, to: string) {
-  let q = supabase
-    .from("sls_documents")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("doc_date", { ascending: false })
-    .limit(5000);
-  if (from) q = q.gte("doc_date", from);
-  if (to) q = q.lte("doc_date", to);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as SlsDoc[];
+  const data = await listWorkspaceRows({
+    data: {
+      table: "sls_documents",
+      workspaceId,
+      orderBy: "doc_date",
+      orderDir: "desc",
+      limit: 5000,
+      ranges: { doc_date: { gte: from || undefined, lte: to || undefined } },
+    },
+  });
+  return (data?.rows ?? []) as unknown as SlsDoc[];
 }
 
 export async function fetchPurchaseDocs(workspaceId: string, from: string, to: string) {
-  let q = supabase
-    .from("prc_documents")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("doc_date", { ascending: false })
-    .limit(5000);
-  if (from) q = q.gte("doc_date", from);
-  if (to) q = q.lte("doc_date", to);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as PrcDoc[];
+  const data = await listWorkspaceRows({
+    data: {
+      table: "prc_documents",
+      workspaceId,
+      orderBy: "doc_date",
+      orderDir: "desc",
+      limit: 5000,
+      ranges: { doc_date: { gte: from || undefined, lte: to || undefined } },
+    },
+  });
+  return (data?.rows ?? []) as unknown as PrcDoc[];
 }
 
 export interface RptDocLine {
@@ -123,52 +123,46 @@ export interface RptDocLine {
 
 export async function fetchSalesLines(workspaceId: string, documentIds: string[]) {
   if (!documentIds.length) return [] as RptDocLine[];
-  const { data, error } = await supabase
-    .from("sls_document_lines")
-    .select("document_id,item_code,description,qty,line_total")
-    .eq("workspace_id", workspaceId)
-    .in("document_id", documentIds.slice(0, 800));
-  if (error) throw error;
+  const data = await listRowsByIds({
+    data: { table: "sls_document_lines", workspaceId, ids: documentIds.slice(0, 800), idColumn: "document_id" },
+  });
   return (data ?? []) as unknown as RptDocLine[];
 }
 
 export async function fetchPurchaseLines(workspaceId: string, documentIds: string[]) {
   if (!documentIds.length) return [] as RptDocLine[];
-  const { data, error } = await supabase
-    .from("prc_document_lines")
-    .select("document_id,item_code,description,qty,line_total")
-    .eq("workspace_id", workspaceId)
-    .in("document_id", documentIds.slice(0, 800));
-  if (error) throw error;
+  const data = await listRowsByIds({
+    data: { table: "prc_document_lines", workspaceId, ids: documentIds.slice(0, 800), idColumn: "document_id" },
+  });
   return (data ?? []) as unknown as RptDocLine[];
 }
 
 export async function fetchMovements(workspaceId: string, from: string, to: string) {
-  let q = supabase
-    .from("inv_movements")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("movement_date", { ascending: false })
-    .limit(5000);
-  if (from) q = q.gte("movement_date", from);
-  if (to) q = q.lte("movement_date", to);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as InvMovement[];
+  const data = await listWorkspaceRows({
+    data: {
+      table: "inv_movements",
+      workspaceId,
+      orderBy: "movement_date",
+      orderDir: "desc",
+      limit: 5000,
+      ranges: { movement_date: { gte: from || undefined, lte: to || undefined } },
+    },
+  });
+  return (data?.rows ?? []) as unknown as InvMovement[];
 }
 
 export async function fetchCashFlow(workspaceId: string, from: string, to: string) {
-  let q = supabase
-    .from("cb_transactions")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("trx_date", { ascending: false })
-    .limit(5000);
-  if (from) q = q.gte("trx_date", from);
-  if (to) q = q.lte("trx_date", to);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as CbTransaction[];
+  const data = await listWorkspaceRows({
+    data: {
+      table: "cb_transactions",
+      workspaceId,
+      orderBy: "trx_date",
+      orderDir: "desc",
+      limit: 5000,
+      ranges: { trx_date: { gte: from || undefined, lte: to || undefined } },
+    },
+  });
+  return (data?.rows ?? []) as unknown as CbTransaction[];
 }
 
 const POSTED = (status: string) => !["cancelled", "draft"].includes(status);

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AdminSelect } from "@/components/app/admin-ui";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 
 interface ScanRow {
@@ -48,14 +48,17 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("sls_shipment_scans")
-      .select("id,scan_date,tracking_no,marketplace,courier,order_no,doc_number,buyer_name,item_summary,status,created_at")
-      .eq("workspace_id", workspaceId)
-      .eq("scan_date", date)
-      .order("created_at", { ascending: false });
-    if (error) toast.error(error.message);
-    setRows((data ?? []) as ScanRow[]);
+    const data = await listWorkspaceRows({
+      data: {
+        table: "sls_shipment_scans",
+        workspaceId,
+        orderBy: "created_at",
+        orderDir: "desc",
+        limit: 500,
+        filters: { scan_date: date },
+      },
+    });
+    setRows((data?.rows ?? []) as ScanRow[]);
     setLoading(false);
   }, [workspaceId, date]);
 
@@ -82,42 +85,64 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
     }
 
     // Try to match an existing delivery order by number or reference.
-    const { data: doc } = await supabase
-      .from("sls_documents")
-      .select("id,doc_number,customer_name")
-      .eq("workspace_id", workspaceId)
-      .eq("doc_type", "delivery_order")
-      .or(`doc_number.eq.${tracking},reference.eq.${tracking}`)
-      .maybeSingle();
-
-    const { error } = await supabase.from("sls_shipment_scans").insert({
-      workspace_id: workspaceId,
-      scan_date: date,
-      tracking_no: tracking,
-      marketplace,
-      courier,
-      status: "scanned",
-      document_id: doc?.id ?? null,
-      doc_number: doc?.doc_number ?? null,
-      buyer_name: doc?.customer_name ?? null,
+    const docRows = await listWorkspaceRows({
+      data: {
+        table: "sls_documents",
+        workspaceId,
+        limit: 1,
+        filters: { doc_type: "delivery_order" },
+        search: tracking,
+      },
     });
-    setBusy(false);
-    inputRef.current?.focus();
-    if (error) {
-      toast.error(error.message);
+    const doc = (docRows?.rows?.[0] ?? null) as {
+      id: string;
+      doc_number: string;
+      customer_name: string | null;
+    } | null;
+
+    try {
+      await saveWorkspaceRow({
+        data: {
+          table: "sls_shipment_scans",
+          workspaceId,
+          data: {
+            scan_date: date,
+            tracking_no: tracking,
+            marketplace,
+            courier,
+            status: "scanned",
+            document_id: doc?.id ?? null,
+            doc_number: doc?.doc_number ?? null,
+            buyer_name: doc?.customer_name ?? null,
+          },
+        },
+      });
+    } catch (e) {
+      setBusy(false);
+      toast.error(e instanceof Error ? e.message : "Failed");
+      inputRef.current?.focus();
       return;
     }
+    setBusy(false);
+    inputRef.current?.focus();
     await load();
   }
 
   async function markShipped(ids: string[]) {
     if (!ids.length) return;
-    const { error } = await supabase
-      .from("sls_shipment_scans")
-      .update({ status: "shipped", shipped_at: new Date().toISOString() })
-      .in("id", ids);
-    if (error) {
-      toast.error(error.message);
+    try {
+      for (const id of ids) {
+        await saveWorkspaceRow({
+          data: {
+            table: "sls_shipment_scans",
+            workspaceId,
+            id,
+            data: { status: "shipped", shipped_at: new Date().toISOString() },
+          },
+        });
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
       return;
     }
     toast.success(t("Marked as shipped", "Ditandai terkirim"));
@@ -125,9 +150,10 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
   }
 
   async function remove(id: string) {
-    const { error } = await supabase.from("sls_shipment_scans").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
+    try {
+      await deleteWorkspaceRow({ data: { table: "sls_shipment_scans", workspaceId, id } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
       return;
     }
     await load();

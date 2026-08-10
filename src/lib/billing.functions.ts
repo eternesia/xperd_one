@@ -1,44 +1,55 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 
 /** Payment methods that tenants can use at checkout (no secrets returned). */
 export const listPaymentMethods = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("payment_gateways")
-      .select("id,provider,display_name,mode,instructions,sort_order")
-      .eq("is_active", true)
-      .order("sort_order");
-    if (error) throw new Error(error.message);
-    return data ?? [];
+  .middleware([requireAppAuth])
+  .handler(async () => {
+    const { execute } = await import("@/integrations/mysql/pool");
+    return execute(
+      "SELECT id, provider, display_name, mode, instructions, sort_order FROM payment_gateways WHERE is_active = 1 ORDER BY sort_order ASC",
+    );
   });
 
 /** Start checkout for one subscription invoice. */
 export const startInvoiceCheckout = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAppAuth])
   .inputValidator((data: { invoiceId: string; gatewayId: string }) => {
     if (!data?.invoiceId) throw new Error("Invoice is required");
     if (!data?.gatewayId) throw new Error("Payment method is required");
     return data;
   })
   .handler(async ({ data, context }) => {
-    // RLS scopes this read to invoices the caller may see.
-    const { data: invoice, error } = await context.supabase
-      .from("invoices")
-      .select("id,invoice_number,tenant_id,total,status,payment_url")
-      .eq("id", data.invoiceId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+    const { userCanAccessTenant } = await import("@/lib/auth-context.server");
+
+    const invoice = await executeOne<{
+      id: string;
+      invoice_number: string;
+      tenant_id: string;
+      total: number | string;
+      status: string;
+      payment_url: string | null;
+    }>(
+      "SELECT id, invoice_number, tenant_id, total, status, payment_url FROM invoices WHERE id = ? LIMIT 1",
+      [data.invoiceId],
+    );
     if (!invoice) throw new Error("Invoice not found");
+    if (!(await userCanAccessTenant(invoice.tenant_id, context.userId))) throw new Error("Forbidden");
     if (invoice.status === "paid") throw new Error("This invoice is already paid");
 
-    const { data: gateway, error: gwErr } = await context.supabase
-      .from("payment_gateways")
-      .select("id,provider,display_name,mode,instructions,server_key_secret_name,is_active")
-      .eq("id", data.gatewayId)
-      .maybeSingle();
-    if (gwErr) throw new Error(gwErr.message);
+    const gateway = await executeOne<{
+      id: string;
+      provider: string;
+      display_name: string;
+      mode: string;
+      instructions: string | null;
+      server_key_secret_name: string | null;
+      is_active: number;
+    }>(
+      "SELECT id, provider, display_name, mode, instructions, server_key_secret_name, is_active FROM payment_gateways WHERE id = ? LIMIT 1",
+      [data.gatewayId],
+    );
     if (!gateway || !gateway.is_active) throw new Error("Payment method is not available");
 
     if (gateway.provider === "manual_transfer") {
@@ -61,14 +72,12 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
       throw new Error(`Server key "${secretName}" is not configured yet. Ask the administrator to add it.`);
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { createMidtransSnap } = await import("@/lib/billing.server");
 
-    const { data: tenant } = await supabaseAdmin
-      .from("tenants")
-      .select("pic_name,pic_email")
-      .eq("id", invoice.tenant_id)
-      .maybeSingle();
+    const tenant = await executeOne<{ pic_name: string | null; pic_email: string | null }>(
+      "SELECT pic_name, pic_email FROM tenants WHERE id = ? LIMIT 1",
+      [invoice.tenant_id],
+    );
 
     const url = await createMidtransSnap({
       serverKey,
@@ -79,41 +88,38 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
       customerEmail: tenant?.pic_email ?? null,
     });
 
-    await supabaseAdmin
-      .from("invoices")
-      .update({ payment_url: url, payment_method: gateway.display_name })
-      .eq("id", invoice.id);
+    await execute("UPDATE invoices SET payment_url = ?, payment_method = ? WHERE id = ?", [
+      url,
+      gateway.display_name,
+      invoice.id,
+    ]);
 
     return { kind: "redirect" as const, url, displayName: gateway.display_name };
   });
 
 /** Admin: confirm a payment received outside the gateway and activate the tenant. */
 export const confirmInvoicePayment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAppAuth])
   .inputValidator((data: { invoiceId: string; method?: string; reference?: string }) => {
     if (!data?.invoiceId) throw new Error("Invoice is required");
     return data;
   })
   .handler(async ({ data, context }) => {
-    const { data: isAdmin, error: roleErr } = await context.supabase.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (roleErr) throw new Error(roleErr.message);
-    if (!isAdmin) throw new Error("Forbidden");
+    const { hasRole } = await import("@/lib/auth-context.server");
+    if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { executeOne } = await import("@/integrations/mysql/pool");
     const { activateInvoice } = await import("@/lib/billing.server");
 
-    const { data: invoice, error } = await supabaseAdmin
-      .from("invoices")
-      .select("id,tenant_id,subscription_id,status")
-      .eq("id", data.invoiceId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const invoice = await executeOne<{
+      id: string;
+      tenant_id: string;
+      subscription_id: string | null;
+      status: string;
+    }>("SELECT id, tenant_id, subscription_id, status FROM invoices WHERE id = ? LIMIT 1", [data.invoiceId]);
     if (!invoice) throw new Error("Invoice not found");
 
-    await activateInvoice(supabaseAdmin as never, invoice as never, {
+    await activateInvoice(invoice, {
       paymentMethod: data.method ?? "manual_transfer",
       reference: data.reference ?? null,
     });

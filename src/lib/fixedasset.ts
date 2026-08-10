@@ -1,4 +1,10 @@
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchFaAssets,
+  fetchFaDepreciations,
+  postDepreciationRows,
+  postJournalEntry,
+  updateFaAsset,
+} from "@/lib/ledger.functions";
 
 export type FaMethod = "straight_line" | "declining";
 export type FaStatus = "active" | "disposed" | "written_off";
@@ -110,26 +116,14 @@ export function monthlyCharge(asset: FaAsset) {
 }
 
 export async function fetchAssets(workspaceId: string) {
-  const { data, error } = await supabase
-    .from("fa_assets")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("code");
-  if (error) throw error;
+  const data = await fetchFaAssets({ data: { workspaceId } });
   return (data ?? []) as unknown as FaAsset[];
 }
 
 export async function fetchDepreciations(workspaceId: string, filters: { from?: string; to?: string } = {}) {
-  let q = supabase
-    .from("fa_depreciations")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("period_date", { ascending: false })
-    .limit(2000);
-  if (filters.from) q = q.gte("period_date", filters.from);
-  if (filters.to) q = q.lte("period_date", filters.to);
-  const { data, error } = await q;
-  if (error) throw error;
+  const data = await fetchFaDepreciations({
+    data: { workspaceId, from: filters.from || undefined, to: filters.to || undefined },
+  });
   return (data ?? []) as unknown as FaDepreciation[];
 }
 
@@ -150,41 +144,37 @@ async function postJournal(
   if (clean.length < 2) return null;
   const totalDebit = clean.reduce((s, l) => s + l.debit, 0);
   const totalCredit = clean.reduce((s, l) => s + l.credit, 0);
-  const { data: entry, error } = await supabase
-    .from("acc_journal_entries")
-    .insert({
-      workspace_id: workspaceId,
-      entry_no: meta.entry_no,
-      entry_date: meta.entry_date,
-      source_type: meta.source_type,
-      source_doc_number: meta.source_doc_number,
-      memo: meta.memo,
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-      is_auto: true,
-    } as never)
-    .select("id")
-    .single();
-  if (error) throw error;
-  const entryId = (entry as { id: string }).id;
-  const { error: lineError } = await supabase.from("acc_journal_lines").insert(
-    clean.map((l, i) => ({ entry_id: entryId, workspace_id: workspaceId, line_no: i + 1, ...l })) as never,
-  );
-  if (lineError) throw lineError;
-  return entryId;
+  const data = await postJournalEntry({
+    data: {
+      workspaceId,
+      entry: {
+        entry_no: meta.entry_no,
+        entry_date: meta.entry_date,
+        source_type: meta.source_type,
+        source_doc_number: meta.source_doc_number,
+        memo: meta.memo,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        is_auto: true,
+      },
+      lines: clean.map((l) => ({
+        account_code: l.account_code,
+        account_name: l.account_name ?? null,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    },
+  });
+  return data.entryId;
 }
 
 /** Posts monthly depreciation for every active asset that still has book value. */
 export async function runDepreciation(workspaceId: string, period: string) {
   const periodDate = monthEnd(period);
   const assets = await fetchAssets(workspaceId);
-  const { data: existing, error: exErr } = await supabase
-    .from("fa_depreciations")
-    .select("asset_id")
-    .eq("workspace_id", workspaceId)
-    .eq("period_date", periodDate);
-  if (exErr) throw exErr;
-  const done = new Set(((existing ?? []) as { asset_id: string }[]).map((r) => r.asset_id));
+  const existing = (await fetchFaDepreciations({ data: { workspaceId, from: periodDate, to: periodDate } })).data ?? [];
+  const done = new Set((existing as { asset_id: string }[]).map((r) => r.asset_id));
   const eligible = assets.filter(
     (a) => a.status === "active" && !done.has(a.id) && a.acquisition_date <= periodDate && monthlyCharge(a) > 0,
   );
@@ -234,19 +224,16 @@ export async function runDepreciation(workspaceId: string, period: string) {
     lines,
   );
 
-  const { error } = await supabase
-    .from("fa_depreciations")
-    .insert(rows.map((r) => ({ ...r, journal_entry_id: entryId })) as never);
-  if (error) throw error;
-
-  for (const asset of eligible) {
-    const amount = monthlyCharge(asset);
-    const { error: upErr } = await supabase
-      .from("fa_assets")
-      .update({ accumulated_depreciation: Number(asset.accumulated_depreciation || 0) + amount } as never)
-      .eq("id", asset.id);
-    if (upErr) throw upErr;
-  }
+  await postDepreciationRows({
+    data: {
+      workspaceId,
+      rows: rows.map((r) => ({ ...r, journal_entry_id: entryId })),
+      accumulatedUpdates: eligible.map((a) => ({
+        id: a.id,
+        accumulated_depreciation: Number(a.accumulated_depreciation || 0) + monthlyCharge(a),
+      })),
+    },
+  });
   return { posted: eligible.length, total };
 }
 
@@ -323,15 +310,17 @@ export async function disposeAsset(workspaceId: string, input: DisposalInput) {
     lines,
   );
 
-  const { error } = await supabase
-    .from("fa_assets")
-    .update({
-      status: input.write_off ? "written_off" : "disposed",
-      disposal_date: input.disposal_date,
-      disposal_amount: proceeds,
-      notes: input.notes || asset.notes,
-    } as never)
-    .eq("id", asset.id);
-  if (error) throw error;
+  await updateFaAsset({
+    data: {
+      workspaceId,
+      id: asset.id,
+      data: {
+        status: input.write_off ? "written_off" : "disposed",
+        disposal_date: input.disposal_date,
+        disposal_amount: proceeds,
+        notes: input.notes || asset.notes,
+      },
+    },
+  });
   return { gainLoss: result };
 }

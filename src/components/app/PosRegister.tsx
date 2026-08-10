@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { countWorkspaceRows, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { postSalesMovements } from "@/lib/inventory";
 import { postArInvoiceJournal, postDeliveryJournal, postReceiptJournal } from "@/lib/journal";
@@ -53,49 +53,38 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["pos-items", workspaceId, term],
     queryFn: async () => {
-      let q = supabase
-        .from("md_items")
-        .select("code,name,uom_code,sell_price,cost_price")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("name")
-        .limit(48);
-      if (term.trim()) {
-        const s = `%${term.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s},barcode.ilike.${s}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as PosItem[];
+      const data = await listWorkspaceRows({
+        data: {
+          table: "md_items",
+          workspaceId,
+          search: term.trim() || undefined,
+          filters: { is_active: 1 },
+          orderBy: "name",
+          orderDir: "asc",
+          limit: 48,
+        },
+      });
+      return (data?.rows ?? []) as unknown as PosItem[];
     },
   });
 
   const { data: customers = [] } = useQuery({
     queryKey: ["pos-customers", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("md_customers")
-        .select("code,name")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("name")
-        .limit(100);
-      if (error) throw error;
-      return (data ?? []) as unknown as { code: string; name: string }[];
+      const data = await listWorkspaceRows({
+        data: { table: "md_customers", workspaceId, filters: { is_active: 1 }, orderBy: "name", orderDir: "asc", limit: 100 },
+      });
+      return (data?.rows ?? []) as unknown as { code: string; name: string }[];
     },
   });
 
   const { data: warehouses = [] } = useQuery({
     queryKey: ["pos-warehouses", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("md_warehouses")
-        .select("code,name")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("code");
-      if (error) throw error;
-      return (data ?? []) as unknown as { code: string; name: string }[];
+      const data = await listWorkspaceRows({
+        data: { table: "md_warehouses", workspaceId, filters: { is_active: 1 }, orderBy: "code", orderDir: "asc", limit: 100 },
+      });
+      return (data?.rows ?? []) as unknown as { code: string; name: string }[];
     },
   });
 
@@ -140,12 +129,10 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
       const code = customerCode === "walk-in" ? null : customerCode;
 
       const seqFor = async (docType: SlsDocType) => {
-        const { count } = await supabase
-          .from("sls_documents")
-          .select("id", { count: "exact", head: true })
-          .eq("workspace_id", workspaceId)
-          .eq("doc_type", docType);
-        return (count ?? 0) + 1;
+        const data = await countWorkspaceRows({
+          data: { table: "sls_documents", workspaceId, filters: { doc_type: docType } },
+        });
+        return (data?.count ?? 0) + 1;
       };
 
       const createDoc = async (
@@ -155,31 +142,31 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
         source?: { id: string; doc_number: string },
       ) => {
         const doc_number = nextDocNumber(prefix, await seqFor(docType));
-        const { data: created, error } = await supabase
-          .from("sls_documents")
-          .insert({
-            workspace_id: workspaceId,
-            doc_type: docType,
-            doc_number,
-            doc_date: today,
-            due_date: docType === "ar_invoice" ? today : null,
-            customer_code: code,
-            customer_name: customerName,
-            warehouse_code: docType === "delivery_order" ? warehouse || null : null,
-            reference: source?.doc_number ?? `POS ${method}`,
-            status,
-            subtotal: totals.gross,
-            discount_amount: totals.discount,
-            tax_amount: totals.tax,
-            total: totals.total,
-            notes: `POS · ${method}`,
-            source_document_id: source?.id ?? null,
-            source_doc_number: source?.doc_number ?? null,
-          } as never)
-          .select("id")
-          .single();
-        if (error) throw error;
-        const id = (created as { id: string }).id;
+        const created = await saveWorkspaceRow({
+          data: {
+            table: "sls_documents",
+            workspaceId,
+            data: {
+              doc_type: docType,
+              doc_number,
+              doc_date: today,
+              due_date: docType === "ar_invoice" ? today : null,
+              customer_code: code,
+              customer_name: customerName,
+              warehouse_code: docType === "delivery_order" ? warehouse || null : null,
+              reference: source?.doc_number ?? `POS ${method}`,
+              status,
+              subtotal: totals.gross,
+              discount_amount: totals.discount,
+              tax_amount: totals.tax,
+              total: totals.total,
+              notes: `POS · ${method}`,
+              source_document_id: source?.id ?? null,
+              source_doc_number: source?.doc_number ?? null,
+            },
+          },
+        });
+        const id = created.id;
 
         const payload = cart.map((l, i) => {
           const grossLine = l.qty * Number(l.sell_price || 0);
@@ -199,8 +186,7 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
             qty_fulfilled: l.qty,
           };
         });
-        const { error: lineError } = await supabase.from("sls_document_lines").insert(payload as never);
-        if (lineError) throw lineError;
+        await upsertWorkspaceRows({ data: { table: "sls_document_lines", workspaceId, rows: payload } });
 
         return { id, doc_number, doc_date: today, doc_type: docType };
       };

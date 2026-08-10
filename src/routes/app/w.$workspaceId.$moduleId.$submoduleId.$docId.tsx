@@ -5,7 +5,7 @@ import { ChevronLeft, Download, Printer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { getWorkspaceRow, listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
 import { downloadDocPdf } from "@/lib/doc-pdf";
 import { useI18n } from "@/lib/i18n";
@@ -42,13 +42,13 @@ function DocumentDetail() {
     queryFn: async () => {
       const docTable = isSales ? "sls_documents" : "prc_documents";
       const lineTable = isSales ? "sls_document_lines" : "prc_document_lines";
-      const [{ data: doc, error }, { data: lines, error: lineError }] = await Promise.all([
-        supabase.from(docTable).select("*").eq("id", docId).maybeSingle(),
-        supabase.from(lineTable).select("*").eq("document_id", docId).order("line_no"),
+      const [doc, lines] = await Promise.all([
+        getWorkspaceRow({ data: { table: docTable, workspaceId, id: docId } }),
+        listWorkspaceRows({
+          data: { table: lineTable, workspaceId, filters: { document_id: docId }, orderBy: "line_no", orderDir: "asc", limit: 500 },
+        }),
       ]);
-      if (error) throw error;
-      if (lineError) throw lineError;
-      const raw = doc as unknown as (PrcDoc & { customer_name?: string | null; customer_code?: string | null }) | null;
+      const raw = (doc ?? null) as unknown as (PrcDoc & { customer_name?: string | null; customer_code?: string | null }) | null;
       return {
         doc: raw
           ? ({
@@ -57,7 +57,7 @@ function DocumentDetail() {
               supplier_code: isSales ? (raw.customer_code ?? null) : raw.supplier_code,
             } as PrcDoc)
           : null,
-        lines: (lines ?? []) as unknown as PrcLine[],
+        lines: (lines?.rows ?? []) as unknown as PrcLine[],
       };
     },
   });

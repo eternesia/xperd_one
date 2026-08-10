@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminList, adminSave } from "@/lib/platform.functions";
 import { AdminSelect } from "@/components/app/admin-ui";
+import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/app-admin/tickets")({
   component: TicketsPage,
@@ -21,6 +22,7 @@ const STATUSES = ["open", "in_progress", "waiting_customer", "resolved", "closed
 
 function TicketsPage() {
   const qc = useQueryClient();
+  const { user } = useSession();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [internal, setInternal] = useState(false);
@@ -28,12 +30,8 @@ function TicketsPage() {
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ["admin-tickets"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("support_tickets")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "support_tickets", orderBy: "created_at", orderDir: "desc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -41,23 +39,20 @@ function TicketsPage() {
     queryKey: ["admin-ticket-messages", activeId],
     enabled: Boolean(activeId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("support_ticket_messages")
-        .select("*")
-        .eq("ticket_id", activeId!)
-        .order("created_at");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "support_ticket_messages", filters: { ticket_id: activeId! }, orderBy: "created_at", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from("support_tickets")
-        .update({ status, resolved_at: status === "resolved" || status === "closed" ? new Date().toISOString() : null })
-        .eq("id", id);
-      if (error) throw error;
+      await adminSave({
+        data: {
+          table: "support_tickets",
+          id,
+          data: { status, resolved_at: status === "resolved" || status === "closed" ? new Date().toISOString() : null },
+        },
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-tickets"] }),
     onError: (e: Error) => toast.error(e.message),
@@ -66,14 +61,17 @@ function TicketsPage() {
   const send = useMutation({
     mutationFn: async () => {
       if (!activeId || !reply.trim()) throw new Error("Write a reply first");
-      const { data: userRes } = await supabase.auth.getUser();
-      const { error } = await supabase.from("support_ticket_messages").insert({
-        ticket_id: activeId,
-        author_id: userRes.user!.id,
-        body: reply.trim(),
-        is_internal: internal,
+      await adminSave({
+        data: {
+          table: "support_ticket_messages",
+          data: {
+            ticket_id: activeId,
+            author_id: user?.id ?? "",
+            body: reply.trim(),
+            is_internal: internal,
+          },
+        },
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       setReply("");

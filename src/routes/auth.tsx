@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/site/Logo";
-import { supabase } from "@/integrations/supabase/client";
-import { useSession } from "@/hooks/use-session";
+import { useSession, emitAuthChange } from "@/hooks/use-session";
 import { loginAppUser, registerAppUser } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/auth")({
@@ -58,11 +57,10 @@ function AuthPage() {
         setMode("signin");
       } else {
         // Credentials are verified against our own app_users table; the server
-        // issues a signed JWT (httpOnly cookie). The platform session is then
-        // hydrated so row-level security keeps scoping data per user.
+        // issues a signed JWT in an httpOnly cookie (sent automatically on
+        // serverFn RPCs). No Supabase session is created anymore.
         await loginAppUser({ data: { email, password } });
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        emitAuthChange();
         navigate({ to: next ?? "/app", replace: true });
       }
     } catch (err) {

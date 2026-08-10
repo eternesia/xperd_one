@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionHeading } from "@/components/site/Section";
-import { supabase } from "@/integrations/supabase/client";
+import { getPublicSignupPackages, submitRegistration } from "@/lib/setup.functions";
 import { formatIDR, INDUSTRIES } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -167,16 +167,7 @@ function RegisterPage() {
 
   const { data: packages } = useQuery({
     queryKey: ["signup-packages"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("code,name,tagline,monthly_price,features")
-        .eq("is_public_signup", true)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => getPublicSignupPackages(),
   });
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -196,23 +187,26 @@ function RegisterPage() {
     setErrors({});
     setSubmitting(true);
     const values = parsed.data;
-    const { error } = await supabase.from("registrations").insert({
-      company_name: values.company_name,
-      contact_name: values.contact_name,
-      email: values.email,
-      phone: values.phone,
-      subdomain: values.subdomain,
-      city: values.city || null,
-      industry: values.industry || null,
-      notes: values.notes || null,
-      package_code: packageCode,
-      billing_cycle: billing,
-    });
-    setSubmitting(false);
-
-    if (error) {
+    try {
+      await submitRegistration({
+        data: {
+          company_name: values.company_name,
+          contact_name: values.contact_name,
+          email: values.email,
+          phone: values.phone,
+          subdomain: values.subdomain,
+          city: values.city || undefined,
+          industry: values.industry || undefined,
+          notes: values.notes || undefined,
+          package_code: packageCode,
+          billing_cycle: billing,
+        },
+      });
+      setSubmitting(false);
+    } catch (err) {
+      setSubmitting(false);
       toast.error(
-        error.message.includes("duplicate") ? c.toastSubdomainTaken : c.toastSubmitFailed,
+        err instanceof Error && err.message.includes("duplicate") ? c.toastSubdomainTaken : c.toastSubmitFailed,
       );
       return;
     }

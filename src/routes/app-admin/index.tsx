@@ -4,7 +4,7 @@ import { Building2, CreditCard, FileText, Users } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminDashboardStats } from "@/lib/platform.functions";
 import { formatDate, formatIDR } from "@/lib/xperd";
 
 export const Route = createFileRoute("/app-admin/")({
@@ -15,27 +15,14 @@ function AdminDashboard() {
   const { data } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: async () => {
-      const [tenants, subs, invoices, leads, recent] = await Promise.all([
-        supabase.from("tenants").select("id,status", { count: "exact" }),
-        supabase.from("subscriptions").select("id", { count: "exact", head: true }),
-        supabase.from("invoices").select("total,status"),
-        supabase.from("leads").select("id", { count: "exact", head: true }),
-        supabase
-          .from("tenants")
-          .select("id,name,subdomain,status,created_at")
-          .order("created_at", { ascending: false })
-          .limit(6),
-      ]);
-      const rows = invoices.data ?? [];
+      const res = await getAdminDashboardStats({ data: {} });
       return {
-        tenantCount: tenants.count ?? 0,
-        activeTenants: (tenants.data ?? []).filter((t) => t.status === "active").length,
-        subCount: subs.count ?? 0,
-        leadCount: leads.count ?? 0,
-        outstanding: rows
-          .filter((i) => i.status !== "paid")
-          .reduce((sum, i) => sum + Number(i.total ?? 0), 0),
-        recent: recent.data ?? [],
+        tenantCount: res.tenantCount,
+        activeTenants: res.activeTenants,
+        subCount: res.subCount,
+        leadCount: res.leadCount,
+        outstanding: res.outstanding,
+        recent: res.recent ?? [],
       };
     },
   });

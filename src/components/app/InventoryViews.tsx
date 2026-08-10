@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, listWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   buildBalances,
@@ -40,14 +40,10 @@ function useWarehouses(workspaceId: string) {
   return useQuery({
     queryKey: ["inv-warehouses", workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("md_warehouses")
-        .select("code,name")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("code");
-      if (error) throw error;
-      return (data ?? []) as { code: string; name: string }[];
+      const data = await listWorkspaceRows({
+        data: { table: "md_warehouses", workspaceId, orderBy: "code", orderDir: "asc", limit: 100, filters: { is_active: 1 } },
+      });
+      return (data?.rows ?? []) as { code: string; name: string }[];
     },
   });
 }
@@ -56,19 +52,18 @@ function useMovements(workspaceId: string, filters: { from: string; to: string; 
   return useQuery({
     queryKey: ["inv-movements", workspaceId, filters.from, filters.to, filters.type ?? "all"],
     queryFn: async () => {
-      let q = supabase
-        .from("inv_movements")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .order("movement_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (filters.from) q = q.gte("movement_date", filters.from);
-      if (filters.to) q = q.lte("movement_date", filters.to);
-      if (filters.type) q = q.eq("movement_type", filters.type);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as InvMovement[];
+      const data = await listWorkspaceRows({
+        data: {
+          table: "inv_movements",
+          workspaceId,
+          orderBy: "movement_date",
+          orderDir: "desc",
+          limit: 2000,
+          filters: filters.type ? { movement_type: filters.type } : undefined,
+          ranges: { movement_date: { gte: filters.from || undefined, lte: filters.to || undefined } },
+        },
+      });
+      return (data?.rows ?? []) as unknown as InvMovement[];
     },
   });
 }
@@ -399,8 +394,7 @@ export function StockMovementView({ entity, workspaceId }: { entity: InvEntity; 
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("inv_movements").delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: "inv_movements", workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Deleted", "Terhapus"));

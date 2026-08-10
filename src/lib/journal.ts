@@ -1,4 +1,8 @@
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchMdAccounts as fetchMdAccountsFn,
+  fetchMdItems,
+  postJournalEntry,
+} from "@/lib/ledger.functions";
 import type { PrcDoc } from "@/lib/procurement";
 
 export const JOURNAL_ACCOUNTS = {
@@ -40,34 +44,29 @@ async function postJournal(
     throw new Error(`Journal for ${doc.doc_number} has a line without a GL account mapping.`);
   }
 
-  const { data: entry, error } = await supabase
-    .from("acc_journal_entries")
-    .insert({
-      workspace_id: workspaceId,
-      entry_no: `JV/${doc.doc_number}`,
-      entry_date: doc.doc_date,
-      source_type: doc.doc_type,
-      source_id: doc.id,
-      source_doc_number: doc.doc_number,
-      memo,
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-      is_auto: true,
-    } as never)
-    .select("id")
-    .single();
-  if (error) throw error;
-
-  const entryId = (entry as { id: string }).id;
-  const { error: lineError } = await supabase.from("acc_journal_lines").insert(
-    clean.map((l, i) => ({
-      entry_id: entryId,
-      workspace_id: workspaceId,
-      line_no: i + 1,
-      ...l,
-    })) as never,
-  );
-  if (lineError) throw lineError;
+  await postJournalEntry({
+    data: {
+      workspaceId,
+      entry: {
+        entry_no: `JV/${doc.doc_number}`,
+        entry_date: doc.doc_date,
+        source_type: doc.doc_type,
+        source_id: doc.id,
+        source_doc_number: doc.doc_number,
+        memo,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        is_auto: true,
+      },
+      lines: clean.map((l) => ({
+        account_code: l.account_code,
+        account_name: l.account_name,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    },
+  });
 }
 
 /** Goods receipt: Dr Inventory + Dr Input VAT / Cr Accounts Payable */
@@ -116,14 +115,10 @@ export async function assertFundsMapping(workspaceId: string, funds: FundsAccoun
       "Select a cash/bank account with a GL mapping first — the settlement account cannot be determined.",
     );
   }
-  const { data, error } = await supabase
-    .from("md_accounts")
-    .select("code,name,account_type,is_active")
-    .eq("workspace_id", workspaceId)
-    .eq("code", code)
-    .maybeSingle();
-  if (error) throw error;
-  const row = data as unknown as { code: string; name: string; account_type: string; is_active: boolean } | null;
+  const accounts = (await fetchMdAccountsFn({ data: { workspaceId } })).data ?? [];
+  const row = (
+    accounts as unknown as { code: string; name: string; account_type: string; is_active: boolean }[]
+  ).find((a) => a.code === code) ?? null;
   if (!row) throw new Error(`GL account ${code} is not found in the chart of accounts.`);
   if (!row.is_active) throw new Error(`GL account ${code} — ${row.name} is inactive.`);
   if (row.account_type !== "asset") {
@@ -188,12 +183,7 @@ export interface SalesJournalLineInput {
 export async function costOfLines(workspaceId: string, lines: SalesJournalLineInput[]) {
   const codes = [...new Set(lines.map((l) => l.item_code).filter(Boolean))] as string[];
   if (!codes.length) return 0;
-  const { data, error } = await supabase
-    .from("md_items")
-    .select("code,cost_price")
-    .eq("workspace_id", workspaceId)
-    .in("code", codes);
-  if (error) throw error;
+  const data = await fetchMdItems({ data: { workspaceId, codes } });
   const map = new Map((data ?? []).map((r) => [(r as { code: string }).code, Number((r as { cost_price: number }).cost_price) || 0]));
   return lines.reduce((s, l) => s + (l.item_code ? (map.get(l.item_code) ?? 0) * (Number(l.qty) || 0) : 0), 0);
 }

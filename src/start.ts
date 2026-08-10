@@ -1,7 +1,6 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
-import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -25,7 +24,10 @@ const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === "serverFn",
 });
 
+// Auth now relies on the httpOnly `xperd_token` cookie, which the browser sends
+// automatically on same-origin serverFn RPCs — no global function middleware
+// (like the old Supabase bearer attacher) is needed.
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  functionMiddleware: [],
   requestMiddleware: [errorMiddleware, csrfMiddleware],
 }));

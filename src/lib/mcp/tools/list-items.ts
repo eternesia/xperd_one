@@ -1,6 +1,6 @@
 import { defineTool, ToolError } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { requireAuth, supabaseForUser } from "../supabase";
+import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 
 export default defineTool({
   name: "list_items",
@@ -14,19 +14,21 @@ export default defineTool({
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ workspace_id, limit, offset }, ctx) => {
     requireAuth(ctx);
-    const supabase = supabaseForUser(ctx);
-    const { data, error, count } = await supabase
-      .from("md_items")
-      .select("code,name,item_type,uom_code,category_code,sell_price,cost_price,min_stock,barcode,is_active", {
-        count: "exact",
-      })
-      .eq("workspace_id", workspace_id)
-      .order("code", { ascending: true })
-      .range(offset, offset + limit - 1);
-    if (error) throw new ToolError(error.message);
+    const { userId } = await getTokenUser(ctx);
+    await assertWorkspaceMember(workspace_id, userId);
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+    const countRow = await executeOne<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM md_items WHERE workspace_id = ?",
+      [workspace_id],
+    );
+    const rows = await execute(
+      `SELECT code,name,item_type,uom_code,category_code,sell_price,cost_price,min_stock,barcode,is_active
+       FROM md_items WHERE workspace_id = ? ORDER BY code ASC LIMIT ? OFFSET ?`,
+      [workspace_id, String(limit), String(offset)],
+    );
     return {
-      content: [{ type: "text", text: JSON.stringify({ items: data ?? [], total: count ?? 0 }, null, 2) }],
-      structuredContent: { items: data ?? [], total: count ?? 0 },
+      content: [{ type: "text", text: JSON.stringify({ items: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2) }],
+      structuredContent: { items: rows ?? [], total: Number(countRow?.c ?? 0) },
     };
   },
 });

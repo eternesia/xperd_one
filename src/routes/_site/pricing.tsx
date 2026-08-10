@@ -4,7 +4,7 @@ import { ArrowRight, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeading } from "@/components/site/Section";
-import { supabase } from "@/integrations/supabase/client";
+import { getPublicPackages } from "@/lib/setup.functions";
 import { formatIDR } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -68,15 +68,7 @@ function PricingPage() {
 
   const { data: packages } = useQuery({
     queryKey: ["public-packages"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("code,name,tagline,monthly_price,description,is_public_signup,features")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => getPublicPackages(),
   });
 
   return (

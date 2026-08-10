@@ -1,1 +1,0 @@
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS workspace_count integer NOT NULL DEFAULT 1;

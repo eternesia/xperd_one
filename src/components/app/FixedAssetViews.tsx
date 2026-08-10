@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { fetchAccounts } from "@/lib/accounting";
 import { fetchCbAccounts } from "@/lib/cashbank";
@@ -175,11 +175,9 @@ function AssetRegisterView({ workspaceId }: { workspaceId: string }) {
         notes: form.notes || null,
       };
       if (editId) {
-        const { error } = await supabase.from("fa_assets").update(payload as never).eq("id", editId);
-        if (error) throw error;
+        await saveWorkspaceRow({ data: { table: "fa_assets", workspaceId, id: editId, data: payload } });
       } else {
-        const { error } = await supabase.from("fa_assets").insert(payload as never);
-        if (error) throw error;
+        await saveWorkspaceRow({ data: { table: "fa_assets", workspaceId, data: payload } });
       }
     },
     onSuccess: () => {
@@ -194,8 +192,7 @@ function AssetRegisterView({ workspaceId }: { workspaceId: string }) {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("fa_assets").delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: "fa_assets", workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Asset removed.", "Aset dihapus."));

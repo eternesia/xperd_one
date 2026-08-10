@@ -38,9 +38,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/app-context";
 import { logoutAppUser } from "@/lib/auth.functions";
+import { emitAuthChange } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { APP_MODULES, LAUNCHER_UTILITIES } from "@/lib/modules";
 import { useTheme } from "@/lib/theme";
@@ -208,7 +208,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
             <DropdownMenuItem
               onSelect={async () => {
                 await logoutAppUser();
-                await supabase.auth.signOut();
+                emitAuthChange();
                 toast.success(lang === "id" ? "Berhasil keluar" : "Signed out");
                 navigate({ to: "/auth", search: { next: undefined }, replace: true });
               }}

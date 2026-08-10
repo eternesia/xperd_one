@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionHeading } from "@/components/site/Section";
-import { supabase } from "@/integrations/supabase/client";
+import { submitLead } from "@/lib/setup.functions";
 import { BRAND, INDUSTRIES } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -164,21 +164,23 @@ function ContactPage() {
     setErrors({});
     setSubmitting(true);
     const v = parsed.data;
-    const { error } = await supabase.from("leads").insert({
-      company_name: v.company_name,
-      contact_name: v.contact_name,
-      job_title: v.job_title || null,
-      email: v.email,
-      phone: v.phone || null,
-      industry: v.industry || null,
-      employee_range: v.employee_range || null,
-      message: v.message || null,
-      interested_product: product,
-      source: "website",
-    });
-    setSubmitting(false);
-
-    if (error) {
+    try {
+      await submitLead({
+        data: {
+          company_name: v.company_name,
+          contact_name: v.contact_name,
+          job_title: v.job_title || undefined,
+          email: v.email,
+          phone: v.phone || undefined,
+          industry: v.industry || undefined,
+          employee_range: v.employee_range || undefined,
+          message: v.message || undefined,
+          interested_product: product,
+        },
+      });
+      setSubmitting(false);
+    } catch {
+      setSubmitting(false);
       toast.error(c.toastSubmitFailed);
       return;
     }

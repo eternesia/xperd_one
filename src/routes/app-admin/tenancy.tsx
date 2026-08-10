@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminDelete, adminList, adminListTenantsWithPackages, adminSave } from "@/lib/platform.functions";
 import { formatDate } from "@/lib/xperd";
 
 export const Route = createFileRoute("/app-admin/tenancy")({
@@ -89,12 +89,8 @@ function TenancyPage() {
   const { data: packages = [] } = useQuery({
     queryKey: ["admin-packages"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("id,name,code,max_workspace,max_users")
-        .order("sort_order");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "packages", orderBy: "sort_order", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -114,12 +110,8 @@ function TenancyPage() {
   const { data: tenants = [], isLoading } = useQuery({
     queryKey: ["admin-tenants"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*, packages(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      const rows = await adminListTenantsWithPackages({ data: {} });
+      return (rows ?? []) as never[];
     },
   });
 
@@ -149,10 +141,7 @@ function TenancyPage() {
         ends_at: values.ends_at || null,
         notes: values.notes || null,
       };
-      const { error } = values.id
-        ? await supabase.from("tenants").update(payload).eq("id", values.id)
-        : await supabase.from("tenants").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "tenants", id: values.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Tenant saved");
@@ -164,8 +153,7 @@ function TenancyPage() {
 
   const changeStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: TenantStatus }) => {
-      const { error } = await supabase.from("tenants").update({ status }).eq("id", id);
-      if (error) throw error;
+      await adminSave({ data: { table: "tenants", id, data: { status } } });
     },
     onSuccess: () => {
       toast.success("Status updated");
@@ -176,8 +164,7 @@ function TenancyPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tenants").delete().eq("id", id);
-      if (error) throw error;
+      await adminDelete({ data: { table: "tenants", id } });
     },
     onSuccess: () => {
       toast.success("Tenant deleted");

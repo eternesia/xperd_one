@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 
 export const Route = createFileRoute("/app-admin/announcements")({
@@ -55,9 +55,8 @@ function AnnouncementsPage() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["admin-announcements"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("announcements").select("*").order("starts_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "announcements", orderBy: "starts_at", orderDir: "desc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -74,10 +73,7 @@ function AnnouncementsPage() {
         ends_at: v.ends_at ? new Date(v.ends_at).toISOString() : null,
         is_published: v.is_published,
       };
-      const { error } = v.id
-        ? await supabase.from("announcements").update(payload).eq("id", v.id)
-        : await supabase.from("announcements").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "announcements", id: v.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Announcement saved");
@@ -90,8 +86,7 @@ function AnnouncementsPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("announcements").delete().eq("id", id);
-      if (error) throw error;
+      await adminDelete({ data: { table: "announcements", id } });
     },
     onSuccess: () => {
       toast.success("Announcement deleted");

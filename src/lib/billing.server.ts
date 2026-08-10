@@ -1,37 +1,35 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { execute, executeOne } from "@/integrations/mysql/pool";
 
-type AnyClient = SupabaseClient<any, any, any>;
+interface SubscriptionRow {
+  id: string;
+  billing_cycle: string;
+  current_period_end: string | null;
+}
 
 /** Activate the tenant + subscription tied to a paid invoice. Idempotent. */
 export async function activateInvoice(
-  admin: AnyClient,
   invoice: { id: string; tenant_id: string; subscription_id: string | null; status: string },
   opts: { paymentMethod?: string | null; reference?: string | null } = {},
 ) {
   if (invoice.status !== "paid") {
-    await admin
-      .from("invoices")
-      .update({
-        status: "paid",
-        paid_at: new Date().toISOString(),
-        payment_method: opts.paymentMethod ?? null,
-        gateway_reference: opts.reference ?? null,
-      })
-      .eq("id", invoice.id);
+    await execute(
+      "UPDATE invoices SET status = 'paid', paid_at = CURRENT_TIMESTAMP(6), payment_method = ?, gateway_reference = ? WHERE id = ?",
+      [opts.paymentMethod ?? null, opts.reference ?? null, invoice.id],
+    );
   }
 
   const today = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-  const { data: sub } = invoice.subscription_id
-    ? await admin.from("subscriptions").select("*").eq("id", invoice.subscription_id).maybeSingle()
-    : await admin
-        .from("subscriptions")
-        .select("*")
-        .eq("tenant_id", invoice.tenant_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  const sub = invoice.subscription_id
+    ? await executeOne<SubscriptionRow>(
+        "SELECT id, billing_cycle, current_period_end FROM subscriptions WHERE id = ? LIMIT 1",
+        [invoice.subscription_id],
+      )
+    : await executeOne<SubscriptionRow>(
+        "SELECT id, billing_cycle, current_period_end FROM subscriptions WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1",
+        [invoice.tenant_id],
+      );
 
   if (sub) {
     const base = new Date(sub.current_period_end ?? iso(today));
@@ -40,14 +38,13 @@ export async function activateInvoice(
     if (sub.billing_cycle === "yearly") end.setFullYear(end.getFullYear() + 1);
     else end.setMonth(end.getMonth() + 1);
 
-    await admin
-      .from("subscriptions")
-      .update({ status: "active", current_period_start: iso(start), current_period_end: iso(end) })
-      .eq("id", sub.id);
-
-    await admin.from("tenants").update({ status: "active", ends_at: iso(end) }).eq("id", invoice.tenant_id);
+    await execute(
+      "UPDATE subscriptions SET status = 'active', current_period_start = ?, current_period_end = ? WHERE id = ?",
+      [iso(start), iso(end), sub.id],
+    );
+    await execute("UPDATE tenants SET status = 'active', ends_at = ? WHERE id = ?", [iso(end), invoice.tenant_id]);
   } else {
-    await admin.from("tenants").update({ status: "active" }).eq("id", invoice.tenant_id);
+    await execute("UPDATE tenants SET status = 'active' WHERE id = ?", [invoice.tenant_id]);
   }
 
   return { activated: true };

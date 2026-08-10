@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { insertInvMovements } from "@/lib/ledger.functions";
 
 export type InvMovementType = "in" | "out" | "transfer" | "adjustment";
 
@@ -183,8 +183,7 @@ export async function insertMovements(workspaceId: string, rows: MovementInput[]
       notes: r.notes ?? null,
     }));
   if (!payload.length) return;
-  const { error } = await supabase.from("inv_movements").insert(payload as never);
-  if (error) throw error;
+  await insertInvMovements({ data: { workspaceId, rows: payload } });
 }
 
 /** Stock movements created by a submitted procurement document (GR adds, return removes). */

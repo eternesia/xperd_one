@@ -12,7 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { supabase } from "@/integrations/supabase/client";
+import { listWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -44,20 +44,18 @@ export function ItemPicker({
     queryKey: ["item-picker", workspaceId, term],
     enabled: open,
     queryFn: async () => {
-      let q = supabase
-        .from("md_items")
-        .select("code,name,uom_code,cost_price,sell_price")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("code")
-        .limit(30);
-      if (term.trim()) {
-        const s = `%${term.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s},barcode.ilike.${s}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as PickedItem[];
+      const data = await listWorkspaceRows({
+        data: {
+          table: "md_items",
+          workspaceId,
+          search: term.trim() || undefined,
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 30,
+          filters: { is_active: 1 },
+        },
+      });
+      return (data?.rows ?? []) as unknown as PickedItem[];
     },
   });
 

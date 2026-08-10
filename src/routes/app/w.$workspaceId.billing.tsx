@@ -12,8 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
 import { listPaymentMethods, startInvoiceCheckout } from "@/lib/billing.functions";
+import {
+  createUpgradeRequest,
+  getTenantSubscription,
+  listPublicPackages,
+  listTenantInvoices,
+  listTenantUpgradeRequests,
+} from "@/lib/platform.functions";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/lib/procurement";
@@ -62,15 +68,7 @@ function BillingPage() {
     queryKey: ["subscription", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("tenant_id", tenantId!)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      return getTenantSubscription({ data: { tenantId: tenantId! } });
     },
   });
 
@@ -78,26 +76,16 @@ function BillingPage() {
     queryKey: ["invoices", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .eq("tenant_id", tenantId!)
-        .order("issue_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const rows = await listTenantInvoices({ data: { tenantId: tenantId! } });
+      return (rows ?? []) as never[];
     },
   });
 
   const { data: packages = [] } = useQuery({
     queryKey: ["packages-public"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("id,code,name,monthly_price,max_users,max_workspace,product_line")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
+      const rows = await listPublicPackages({ data: {} });
+      return (rows ?? []) as never[];
     },
   });
 
@@ -105,13 +93,8 @@ function BillingPage() {
     queryKey: ["upgrade-requests", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("upgrade_requests")
-        .select("*")
-        .eq("tenant_id", tenantId!)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const rows = await listTenantUpgradeRequests({ data: { tenantId: tenantId! } });
+      return (rows ?? []) as never[];
     },
   });
 
@@ -119,13 +102,9 @@ function BillingPage() {
     mutationFn: async () => {
       if (!tenantId) throw new Error("Tenant not found");
       if (!target) throw new Error(t("Choose a package first.", "Pilih paket terlebih dahulu."));
-      const { error } = await supabase.from("upgrade_requests").insert({
-        tenant_id: tenantId,
-        workspace_id: workspaceId,
-        requested_package_id: target,
-        notes: notes || null,
-      } as never);
-      if (error) throw error;
+      await createUpgradeRequest({
+        data: { tenantId, workspaceId, requestedPackageId: target, notes: notes || null },
+      });
     },
     onSuccess: () => {
       toast.success(t("Upgrade request sent to our team.", "Permintaan upgrade terkirim ke tim kami."));

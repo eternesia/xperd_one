@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 
 export const Route = createFileRoute("/app-admin/content")({
   component: ContentPage,
@@ -60,13 +60,8 @@ function ContentPage() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["admin-site-content"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("site_content")
-        .select("*")
-        .order("section")
-        .order("sort_order");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "site_content", orderBy: "section", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -84,10 +79,7 @@ function ContentPage() {
         sort_order: Number(values.sort_order) || 0,
         is_published: values.is_published,
       };
-      const { error } = values.id
-        ? await supabase.from("site_content").update(payload).eq("id", values.id)
-        : await supabase.from("site_content").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "site_content", id: values.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Content saved");
@@ -100,8 +92,7 @@ function ContentPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("site_content").delete().eq("id", id);
-      if (error) throw error;
+      await adminDelete({ data: { table: "site_content", id } });
     },
     onSuccess: () => {
       toast.success("Content deleted");

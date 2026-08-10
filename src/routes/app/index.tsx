@@ -17,10 +17,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { slugify, useApp } from "@/lib/app-context";
+import { logoutAppUser } from "@/lib/auth.functions";
+import { createWorkspace } from "@/lib/setup.functions";
 import { useI18n } from "@/lib/i18n";
 import { seedWorkspace } from "@/lib/provisioning.functions";
+import { emitAuthChange } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/app/")({
   component: WorkspacePicker,
@@ -49,26 +51,15 @@ function WorkspacePicker() {
     if (!tenant || !userId) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from("workspaces")
-        .insert({
-          tenant_id: tenant.id,
+      const created = await createWorkspace({
+        data: {
           name: name.trim(),
-          slug: slugify(name),
           currency,
-          default_costing_method: costing,
-          status: "active",
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      const { error: memberError } = await supabase
-        .from("workspace_members")
-        .insert({ workspace_id: data.id, user_id: userId, role: "owner" });
-      if (memberError) throw memberError;
+          costing,
+        },
+      });
       try {
-        await seedWorkspace({ data: { workspaceId: data.id } });
+        await seedWorkspace({ data: { workspaceId: created.workspaceId } });
       } catch {
         toast.warning(
           lang === "id"
@@ -163,7 +154,8 @@ function WorkspacePicker() {
           <Button
             variant="outline"
             onClick={async () => {
-              await supabase.auth.signOut();
+              await logoutAppUser();
+              emitAuthChange();
               navigate({ to: "/auth", search: { next: undefined }, replace: true });
             }}
           >

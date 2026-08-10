@@ -13,9 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
 import { AdminField, AdminSelect, fmtIDR, todayISO, addDaysISO } from "@/components/app/admin-ui";
 import { confirmInvoicePayment } from "@/lib/billing.functions";
+import { adminList, adminSave } from "@/lib/platform.functions";
 
 export const Route = createFileRoute("/app-admin/invoices")({
   component: InvoicesPage,
@@ -56,33 +56,24 @@ function InvoicesPage() {
   const { data: tenants = [] } = useQuery({
     queryKey: ["admin-tenants-mini"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("id,name,subdomain,ends_at,status,package_id")
-        .order("name");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "tenants", orderBy: "name", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
   const { data: packages = [] } = useQuery({
     queryKey: ["admin-packages-mini"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("packages").select("id,name,monthly_price");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "packages", orderBy: "name", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["admin-invoices"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
-        .order("issue_date", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "invoices", orderBy: "issue_date", orderDir: "desc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -115,10 +106,7 @@ function InvoicesPage() {
         payment_url: v.payment_url || null,
         auto_reminder: v.auto_reminder,
       };
-      const { error } = v.id
-        ? await supabase.from("invoices").update(payload).eq("id", v.id)
-        : await supabase.from("invoices").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "invoices", id: v.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Invoice saved");
@@ -130,14 +118,16 @@ function InvoicesPage() {
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase
-        .from("invoices")
-        .update({
-          status: status as "sent",
-          paid_at: status === "paid" ? new Date().toISOString() : null,
-        })
-        .eq("id", id);
-      if (error) throw error;
+      await adminSave({
+        data: {
+          table: "invoices",
+          id,
+          data: {
+            status: status as "sent",
+            paid_at: status === "paid" ? new Date().toISOString() : null,
+          },
+        },
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-invoices"] }),
     onError: (e: Error) => toast.error(e.message),
@@ -173,8 +163,9 @@ function InvoicesPage() {
           auto_reminder: true,
         };
       });
-      const { error } = await supabase.from("invoices").insert(rows);
-      if (error) throw error;
+      for (const row of rows) {
+        await adminSave({ data: { table: "invoices", data: row as Record<string, unknown> } });
+      }
 
       const reminders = dueSoon.map((t) => ({
         tenant_id: t.id,
@@ -184,7 +175,9 @@ function InvoicesPage() {
         scheduled_at: new Date().toISOString(),
         message: "Renewal invoice sent automatically 7 days before package end.",
       }));
-      await supabase.from("reminders").insert(reminders);
+      for (const r of reminders) {
+        await adminSave({ data: { table: "reminders", data: r as Record<string, unknown> } });
+      }
       return rows.length;
     },
     onSuccess: (n) => {

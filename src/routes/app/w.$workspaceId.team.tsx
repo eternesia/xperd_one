@@ -18,9 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/app-context";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { APP_MODULES } from "@/lib/modules";
+import { listProfilesByIds } from "@/lib/platform.functions";
 import { createWorkspaceUser, updateWorkspaceUser } from "@/lib/team.functions";
 
 export const Route = createFileRoute("/app/w/$workspaceId/team")({
@@ -60,17 +61,14 @@ function TeamPage() {
   async function load() {
     if (!activeWorkspace) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("workspace_members")
-      .select("id,user_id,role,created_at")
-      .eq("workspace_id", activeWorkspace.id)
-      .order("created_at");
-    const rows = (data ?? []) as MemberRow[];
+    const data = await listWorkspaceRows({
+      data: { table: "workspace_members", workspaceId: activeWorkspace.id, orderBy: "created_at", orderDir: "asc", limit: 500 },
+    });
+    const rows = (data?.rows ?? []) as MemberRow[];
     if (rows.length) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id,full_name,email")
-        .in("id", rows.map((r) => r.user_id));
+      const profiles = await listProfilesByIds({
+        data: { workspaceId: activeWorkspace.id, ids: rows.map((r) => r.user_id) },
+      });
       const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
       rows.forEach((r) => {
         const p = byId.get(r.user_id);
@@ -137,12 +135,18 @@ function TeamPage() {
   }
 
   async function changeRole(id: string, next: string) {
-    const { error } = await supabase
-      .from("workspace_members")
-      .update({ role: next as "owner" | "admin" | "staff" | "viewer" })
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
+    if (!activeWorkspace) return;
+    try {
+      await saveWorkspaceRow({
+        data: {
+          table: "workspace_members",
+          workspaceId: activeWorkspace.id,
+          id,
+          data: { role: next as "owner" | "admin" | "staff" | "viewer" },
+        },
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update role");
       return;
     }
     toast.success("Role updated");
@@ -150,9 +154,11 @@ function TeamPage() {
   }
 
   async function removeMember(id: string) {
-    const { error } = await supabase.from("workspace_members").delete().eq("id", id);
-    if (error) {
-      toast.error(error.message);
+    if (!activeWorkspace) return;
+    try {
+      await deleteWorkspaceRow({ data: { table: "workspace_members", workspaceId: activeWorkspace.id, id } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove member");
       return;
     }
     toast.success("Member removed");
@@ -362,11 +368,10 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
   const load = useCallback(async () => {
     if (!workspaceId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("workspace_role_access")
-      .select("role,module_id,can_view,can_edit")
-      .eq("workspace_id", workspaceId);
-    const existing = new Map((data ?? []).map((r) => [`${r.role}:${r.module_id}`, r as AccessRow]));
+    const data = await listWorkspaceRows({
+      data: { table: "workspace_role_access", workspaceId, limit: 500 },
+    });
+    const existing = new Map((data?.rows ?? []).map((r) => [`${r.role}:${r.module_id}`, r as AccessRow]));
     const next: AccessRow[] = [];
     for (const role of ACCESS_ROLES) {
       for (const m of APP_MODULES.filter((mod) => !mod.disabled)) {
@@ -402,19 +407,17 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
   async function save() {
     if (!workspaceId) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("workspace_role_access")
-      .upsert(
-        rows.map((r) => ({ ...r, workspace_id: workspaceId })),
-        { onConflict: "workspace_id,role,module_id" },
-      );
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await upsertWorkspaceRows({
+        data: { table: "workspace_role_access", workspaceId, rows: rows.map((r) => ({ ...r })) },
+      });
+      toast.success("Role access saved");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save role access");
+    } finally {
+      setSaving(false);
     }
-    toast.success("Role access saved");
-    await load();
   }
 
   const modules = APP_MODULES.filter((m) => !m.disabled);

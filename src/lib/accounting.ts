@@ -1,4 +1,12 @@
-import { supabase } from "@/integrations/supabase/client";
+import {
+  deleteJournalEntry,
+  fetchCashAccountCodes as fetchCashAccountCodesFn,
+  fetchJournalEntries,
+  fetchJournalLines,
+  fetchMdAccounts,
+  fetchOpeningBalances as fetchOpeningBalancesFn,
+  postJournalEntry,
+} from "@/lib/ledger.functions";
 
 export type AccAccountType = "asset" | "liability" | "equity" | "revenue" | "expense";
 
@@ -141,39 +149,19 @@ export const RETAINED_EARNINGS = { code: "3900", name: "Laba Ditahan" };
 export const INCOME_SUMMARY_MEMO = "Period closing";
 
 export async function fetchAccounts(workspaceId: string) {
-  const { data, error } = await supabase
-    .from("md_accounts")
-    .select("code,name,account_type,parent_code")
-    .eq("workspace_id", workspaceId)
-    .order("code");
-  if (error) throw error;
+  const data = await fetchMdAccounts({ data: { workspaceId } });
   return (data ?? []) as unknown as AccAccount[];
 }
 
 export async function fetchEntries(workspaceId: string, from: string, to: string) {
-  let q = supabase
-    .from("acc_journal_entries")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("entry_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(2000);
-  if (from) q = q.gte("entry_date", from);
-  if (to) q = q.lte("entry_date", to);
-  const { data, error } = await q;
-  if (error) throw error;
+  const data = await fetchJournalEntries({
+    data: { workspaceId, from: from || undefined, to: to || undefined },
+  });
   return (data ?? []) as unknown as AccEntry[];
 }
 
 export async function fetchLines(workspaceId: string, entryIds: string[]) {
-  if (!entryIds.length) return [] as AccLine[];
-  const { data, error } = await supabase
-    .from("acc_journal_lines")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .in("entry_id", entryIds)
-    .order("line_no");
-  if (error) throw error;
+  const data = await fetchJournalLines({ data: { workspaceId, entryIds } });
   return (data ?? []) as unknown as AccLine[];
 }
 
@@ -195,50 +183,35 @@ export async function postManualEntry(
   const totalCredit = clean.reduce((s, l) => s + Number(l.credit || 0), 0);
   if (Math.abs(totalDebit - totalCredit) > 0.5) throw new Error("Debit and credit must balance.");
 
-  const { data: entry, error } = await supabase
-    .from("acc_journal_entries")
-    .insert({
-      workspace_id: workspaceId,
-      entry_no: input.entry_no,
-      entry_date: input.entry_date,
-      memo: input.memo || null,
-      source_type: input.source_type ?? "manual",
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-      is_auto: input.source_type ? true : false,
-    } as never)
-    .select("id")
-    .single();
-  if (error) throw error;
-
-  const entryId = (entry as { id: string }).id;
-  const { error: lineError } = await supabase.from("acc_journal_lines").insert(
-    clean.map((l, i) => ({
-      entry_id: entryId,
-      workspace_id: workspaceId,
-      line_no: i + 1,
-      account_code: l.account_code,
-      account_name: l.account_name || null,
-      description: l.description || null,
-      debit: Number(l.debit) || 0,
-      credit: Number(l.credit) || 0,
-    })) as never,
-  );
-  if (lineError) throw lineError;
-  return entryId;
+  const data = await postJournalEntry({
+    data: {
+      workspaceId,
+      entry: {
+        entry_no: input.entry_no,
+        entry_date: input.entry_date,
+        memo: input.memo || null,
+        source_type: input.source_type ?? "manual",
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        is_auto: input.source_type ? true : false,
+      },
+      lines: clean.map((l) => ({
+        account_code: l.account_code,
+        account_name: l.account_name || null,
+        description: l.description || null,
+        debit: Number(l.debit) || 0,
+        credit: Number(l.credit) || 0,
+      })),
+    },
+  });
+  return data.entryId;
 }
 
 export const OPENING_BALANCE_SOURCE = "opening_balance";
 
 /** existing opening balance entries for the workspace */
 export async function fetchOpeningBalances(workspaceId: string) {
-  const { data, error } = await supabase
-    .from("acc_journal_entries")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("source_type", OPENING_BALANCE_SOURCE)
-    .order("entry_date", { ascending: false });
-  if (error) throw error;
+  const data = await fetchOpeningBalancesFn({ data: { workspaceId } });
   return (data ?? []) as unknown as AccEntry[];
 }
 
@@ -277,14 +250,8 @@ export async function verifyOpeningBalance(
   entryId: string,
   expected: ManualLineInput[] = [],
 ): Promise<OpeningBalanceCheck> {
-  const { data: entryData, error: entryError } = await supabase
-    .from("acc_journal_entries")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("id", entryId)
-    .maybeSingle();
-  if (entryError) throw entryError;
-  const entry = entryData as unknown as AccEntry | null;
+  const entries = (await fetchEntries(workspaceId, "", "")) as AccEntry[];
+  const entry = entries.find((e) => e.id === entryId) ?? null;
   if (!entry) {
     return {
       ok: false,
@@ -366,32 +333,13 @@ export async function verifyOpeningBalance(
 
 /** Undo a posted opening balance: removes its journal lines and the entry itself. */
 export async function rollbackOpeningBalance(workspaceId: string, entryId: string) {
-  const { data, error } = await supabase
-    .from("acc_journal_entries")
-    .select("id,source_type")
-    .eq("workspace_id", workspaceId)
-    .eq("id", entryId)
-    .maybeSingle();
-  if (error) throw error;
-  const row = data as unknown as { id: string; source_type: string | null } | null;
+  const entries = (await fetchEntries(workspaceId, "", "")) as AccEntry[];
+  const row = entries.find((e) => e.id === entryId);
   if (!row) throw new Error("Opening balance entry not found.");
   if (row.source_type !== OPENING_BALANCE_SOURCE) {
     throw new Error("Only opening balance entries can be rolled back here.");
   }
-
-  const { error: lineError } = await supabase
-    .from("acc_journal_lines")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("entry_id", entryId);
-  if (lineError) throw lineError;
-
-  const { error: entryError } = await supabase
-    .from("acc_journal_entries")
-    .delete()
-    .eq("workspace_id", workspaceId)
-    .eq("id", entryId);
-  if (entryError) throw entryError;
+  await deleteJournalEntry({ data: { workspaceId, entryId } });
 }
 
 /* ------------------------------- cash flow -------------------------------- */
@@ -433,13 +381,8 @@ export function classifyCashFlow(code: string, type: AccAccountType): CashFlowGr
 
 /** Fetch the GL account codes that represent cash & bank for this workspace. */
 export async function fetchCashAccountCodes(workspaceId: string) {
-  const { data, error } = await supabase
-    .from("cb_accounts")
-    .select("gl_account_code")
-    .eq("workspace_id", workspaceId);
-  if (error) throw new Error(error.message);
-  const codes = (data ?? []).map((r) => (r.gl_account_code ?? "").trim()).filter(Boolean);
-  return [...new Set(codes.length ? codes : ["1000", "1010"])];
+  const data = await fetchCashAccountCodesFn({ data: { workspaceId } });
+  return (data ?? []) as string[];
 }
 
 /** Direct-method cash flow built from journal postings that touch a cash account. */

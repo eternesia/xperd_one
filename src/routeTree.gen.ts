@@ -36,7 +36,6 @@ import { Route as AppAdminTenancyRouteImport } from './routes/app-admin/tenancy'
 import { Route as AppAdminTicketsRouteImport } from './routes/app-admin/tickets'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
-import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
@@ -188,11 +187,6 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
@@ -297,7 +291,6 @@ export interface FileRoutesByFullPath {
   '/app/onboarding': typeof AppOnboardingRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
@@ -338,7 +331,6 @@ export interface FileRoutesByTo {
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
   '/app': typeof AppIndexRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/products': typeof SiteProductsIndexRoute
@@ -381,7 +373,6 @@ export interface FileRoutesById {
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
@@ -426,7 +417,6 @@ export interface FileRouteTypes {
     | '/app/onboarding'
     | '/app-admin/'
     | '/app/'
-    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/app/w/$workspaceId'
@@ -467,7 +457,6 @@ export interface FileRouteTypes {
     | '/'
     | '/app-admin'
     | '/app'
-    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/products'
@@ -509,7 +498,6 @@ export interface FileRouteTypes {
     | '/_site/'
     | '/app-admin/'
     | '/app/'
-    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/_site/products/$slug'
     | '/app/w/$workspaceId'
@@ -534,7 +522,6 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
-  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
 }
@@ -729,13 +716,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/onboarding'
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
-    }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/.mcp/invoke-tool/$tool': {
       id: '/.mcp/invoke-tool/$tool'
@@ -961,7 +941,6 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
-  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
 }

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { supabase } from "@/integrations/supabase/client";
+import { listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { fetchTaxableDocuments as fetchTaxableDocumentsFn } from "@/lib/ledger.functions";
 
 export type TaxType = "vat_in" | "vat_out" | "withholding";
 export type TaxStatus = "draft" | "reported" | "paid";
@@ -99,17 +100,20 @@ export function useLineTaxOptions(workspaceId: string, lang: "en" | "id") {
   return useQuery({
     queryKey: ["md_taxes", workspaceId],
     queryFn: async (): Promise<TaxRateOption[]> => {
-      const { data, error } = await supabase
-        .from("md_taxes")
-        .select("code,name,rate,is_active")
-        .eq("workspace_id", workspaceId)
-        .eq("is_active", true)
-        .order("rate", { ascending: true });
-      if (error) throw error;
-      const rows = (data ?? []).map((r) => ({
-        value: Number(r.rate) || 0,
-        label: `${r.name} (${Number(r.rate) || 0}%)`,
-      }));
+      const data = await listWorkspaceRows({
+        data: {
+          table: "md_taxes",
+          workspaceId,
+          orderBy: "rate",
+          orderDir: "asc",
+          limit: 100,
+          filters: { is_active: 1 },
+        },
+      });
+      const rows = (data?.rows ?? []).map((r) => {
+        const row = r as { name: string; rate: number };
+        return { value: Number(row.rate) || 0, label: `${row.name} (${Number(row.rate) || 0}%)` };
+      });
       const unique = rows.filter((r, i) => rows.findIndex((x) => x.value === r.value) === i);
       if (unique.length) return unique;
       return LINE_TAX_RATES.map((r) => ({ value: r.value, label: lang === "id" ? r.id_ : r.en }));
@@ -135,19 +139,18 @@ export async function fetchTaxRecords(
   workspaceId: string,
   filters: { type?: TaxType; from?: string; to?: string } = {},
 ) {
-  let q = supabase
-    .from("tax_records")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("tax_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(2000);
-  if (filters.type) q = q.eq("tax_type", filters.type);
-  if (filters.from) q = q.gte("tax_date", filters.from);
-  if (filters.to) q = q.lte("tax_date", filters.to);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []) as unknown as TaxRecord[];
+  const data = await listWorkspaceRows({
+    data: {
+      table: "tax_records",
+      workspaceId,
+      orderBy: "tax_date",
+      orderDir: "desc",
+      limit: 2000,
+      filters: filters.type ? { tax_type: filters.type } : undefined,
+      ranges: { tax_date: { gte: filters.from || undefined, lte: filters.to || undefined } },
+    },
+  });
+  return (data?.rows ?? []) as unknown as TaxRecord[];
 }
 
 export interface TaxInput {
@@ -192,11 +195,9 @@ export async function saveTaxRecord(workspaceId: string, input: TaxInput, id?: s
     ref_id: input.ref_id || null,
   };
   if (id) {
-    const { error } = await supabase.from("tax_records").update(payload as never).eq("id", id);
-    if (error) throw error;
+    await saveWorkspaceRow({ data: { table: "tax_records", workspaceId, id, data: payload } });
   } else {
-    const { error } = await supabase.from("tax_records").insert(payload as never);
-    if (error) throw error;
+    await saveWorkspaceRow({ data: { table: "tax_records", workspaceId, data: payload } });
   }
 }
 
@@ -212,39 +213,15 @@ interface SourceDoc {
 /** Pulls taxable invoices (AP for input VAT, AR for output VAT) that are not recorded yet. */
 export async function fetchTaxableDocuments(workspaceId: string, type: TaxType): Promise<SourceDoc[]> {
   if (type === "withholding") return [];
-  if (type === "vat_in") {
-    const { data, error } = await supabase
-      .from("prc_documents")
-      .select("id,doc_number,doc_date,supplier_name,subtotal,tax_amount")
-      .eq("workspace_id", workspaceId)
-      .eq("doc_type", "ap_invoice")
-      .gt("tax_amount", 0)
-      .order("doc_date", { ascending: false })
-      .limit(200);
-    if (error) throw error;
-    return ((data ?? []) as never as Record<string, never>[]).map((d) => ({
-      id: d.id as unknown as string,
-      doc_number: d.doc_number as unknown as string,
-      doc_date: d.doc_date as unknown as string,
-      partner: (d.supplier_name ?? null) as unknown as string | null,
-      subtotal: Number(d.subtotal ?? 0),
-      tax_amount: Number(d.tax_amount ?? 0),
-    }));
-  }
-  const { data, error } = await supabase
-    .from("sls_documents")
-    .select("id,doc_number,doc_date,customer_name,subtotal,tax_amount")
-    .eq("workspace_id", workspaceId)
-    .eq("doc_type", "ar_invoice")
-    .gt("tax_amount", 0)
-    .order("doc_date", { ascending: false })
-    .limit(200);
-  if (error) throw error;
-  return ((data ?? []) as never as Record<string, never>[]).map((d) => ({
-    id: d.id as unknown as string,
-    doc_number: d.doc_number as unknown as string,
-    doc_date: d.doc_date as unknown as string,
-    partner: (d.customer_name ?? null) as unknown as string | null,
+  const data = await fetchTaxableDocumentsFn({
+    data: { workspaceId, type: type as "vat_in" | "vat_out" },
+  });
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return rows.map((d) => ({
+    id: String(d.id ?? ""),
+    doc_number: String(d.doc_number ?? ""),
+    doc_date: String(d.doc_date ?? ""),
+    partner: (type === "vat_in" ? d.supplier_name : d.customer_name) as string | null ?? null,
     subtotal: Number(d.subtotal ?? 0),
     tax_amount: Number(d.tax_amount ?? 0),
   }));
@@ -278,8 +255,7 @@ export async function importTaxFromDocuments(workspaceId: string, type: TaxType)
       ref_id: d.id,
     };
   });
-  const { error } = await supabase.from("tax_records").insert(rows as never);
-  if (error) throw error;
+  await upsertWorkspaceRows({ data: { table: "tax_records", workspaceId, rows } });
   return rows.length;
 }
 

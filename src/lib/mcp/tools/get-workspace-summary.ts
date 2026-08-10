@@ -1,6 +1,6 @@
 import { defineTool, ToolError } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { requireAuth, supabaseForUser } from "../supabase";
+import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 
 export default defineTool({
   name: "get_workspace_summary",
@@ -12,26 +12,28 @@ export default defineTool({
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ workspace_id }, ctx) => {
     requireAuth(ctx);
-    const supabase = supabaseForUser(ctx);
-    const { data: ws, error: wsError } = await supabase
-      .from("workspaces")
-      .select("id,name,slug,legal_name,currency,status,default_costing_method,tenant_id")
-      .eq("id", workspace_id)
-      .maybeSingle();
-    if (wsError) throw new ToolError(wsError.message);
+    const { userId } = await getTokenUser(ctx);
+    await assertWorkspaceMember(workspace_id, userId);
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const ws = await executeOne(
+      "SELECT id,name,slug,legal_name,currency,status,default_costing_method,tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+      [workspace_id],
+    );
     if (!ws) throw new ToolError("Workspace not found or access denied.");
 
-    const { data: tenant } = await supabase
-      .from("tenants")
-      .select("name,subdomain,status,trial_ends_at,workspace_count,user_count,package_id")
-      .eq("id", ws.tenant_id)
-      .maybeSingle();
+    const tenant = ws.tenant_id
+      ? await executeOne(
+          "SELECT name,subdomain,status,trial_ends_at,workspace_count,user_count,package_id FROM tenants WHERE id = ? LIMIT 1",
+          [ws.tenant_id],
+        )
+      : null;
 
-    const { data: pkg } = await supabase
-      .from("packages")
-      .select("name,max_workspace,max_users,monthly_price")
-      .eq("id", tenant?.package_id ?? "")
-      .maybeSingle();
+    const pkg = tenant?.package_id
+      ? await executeOne(
+          "SELECT name,max_workspace,max_users,monthly_price FROM packages WHERE id = ? LIMIT 1",
+          [tenant.package_id],
+        )
+      : null;
 
     const summary = {
       workspace: ws,

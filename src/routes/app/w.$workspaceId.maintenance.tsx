@@ -5,8 +5,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { useApp } from "@/lib/app-context";
+import { listWorkspaceRows, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { seedWorkspace } from "@/lib/provisioning.functions";
 
@@ -47,13 +47,6 @@ const RESTORE_TABLES = [
   "md_items",
 ] as const;
 
-const db = supabase as unknown as {
-  from: (table: string) => {
-    select: (cols: string) => { eq: (col: string, val: string) => Promise<{ data: unknown; error: { message: string } | null }> };
-    upsert: (rows: unknown, opts: { onConflict: string }) => Promise<{ error: { message: string } | null }>;
-  };
-};
-
 type Snapshot = { workspace_id: string; created_at: string; tables: Record<string, Record<string, unknown>[]> };
 
 function MaintenancePage() {
@@ -81,9 +74,10 @@ function MaintenancePage() {
     try {
       const tables: Snapshot["tables"] = {};
       for (const table of BACKUP_TABLES) {
-        const { data, error } = await db.from(table).select("*").eq("workspace_id", workspaceId);
-        if (error) throw error;
-        tables[table] = ((data ?? []) as Record<string, unknown>[]);
+        const data = await listWorkspaceRows({
+          data: { table, workspaceId, limit: 5000 },
+        });
+        tables[table] = ((data?.rows ?? []) as Record<string, unknown>[]);
       }
       const snapshot: Snapshot = { workspace_id: workspaceId, created_at: new Date().toISOString(), tables };
       const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
@@ -111,8 +105,7 @@ function MaintenancePage() {
         const rows = snapshot.tables[table];
         if (!rows?.length) continue;
         const payload = rows.map((r) => ({ ...r, workspace_id: workspaceId }));
-        const { error } = await db.from(table).upsert(payload, { onConflict: "id" });
-        if (error) throw error;
+        await upsertWorkspaceRows({ data: { table, workspaceId, rows: payload } });
         total += payload.length;
       }
       toast.success(t(`${total} master record(s) restored.`, `${total} data master dipulihkan.`));

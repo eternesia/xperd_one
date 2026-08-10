@@ -1,0 +1,90 @@
+# Xperd One — Development Infrastructure
+# ---------------------------------------------------------------------------
+# Services:
+#   - mysql : local database (MySQL 8.4) backed by a named volume
+#   - web   : the Nitro/TanStack dev server running as a compose service
+#
+# Local file storage is NOT a separate service — it's a plain named volume
+# (`local-storage`) bound into the `web` service at /app/storage.
+#
+# The MySQL schema + seed data are applied from the app (not Docker init):
+#   docker compose up -d          # start MySQL + web (dev server)
+#   npm run migrate               # apply db/migrations/*.sql (idempotent)
+#   npm run seed                  # apply db/seeds/*.sql (idempotent)
+#   # shortcut:  npm run db:setup # migrate + seed
+#
+#   docker compose ps             # status
+#   docker compose logs -f web    # tail app logs
+#   docker compose down           # stop (keeps volumes)
+#   docker compose down -v        # stop AND delete volumes (fresh start)
+#
+# Connection details (dev) — host ports come from .env:
+#   MySQL     mysql://xperd:xperd@127.0.0.1:${MYSQL_PORT:-3307}/xperd
+#   App       http://localhost:${WEB_PORT:-3000}/
+#   Storage   volume `local-storage` -> mounted at /app/storage in the web container
+# ---------------------------------------------------------------------------
+
+name: xperd-one-dev
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: xperd-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: xperd
+      MYSQL_USER: xperd
+      MYSQL_PASSWORD: xperd
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3307}:3306" # host:container — host port from .env (MYSQL_PORT)
+    volumes:
+      - xperd-mysql-data:/var/lib/mysql # named volume -> data survives restarts
+      # NOTE: schema + seeds are applied via `npm run migrate` / `npm run seed`
+      # (db/migrations + db/seeds). No /docker-entrypoint-initdb.d mount here.
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  web:
+    # Runs the Nitro/TanStack dev server as a service.
+    # Reuses the host's node_modules (no install step) and bind-mounts the
+    # source so edits hot-reload. `node:22` (debian/glibc) so the host-installed
+    # native binaries (esbuild etc.) run unchanged.
+    image: node:22
+    container_name: xperd-web-dev
+    restart: unless-stopped
+    working_dir: /app
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+    volumes:
+      - .:/app # source, mounted read-write for HMR
+      - ./node_modules:/app/node_modules # reuse host deps -> no npm install needed
+      - local-storage:/app/storage # local file storage (named volume binding)
+    ports:
+      - "${WEB_PORT:-3000}:3000" # host:container — host port from .env (WEB_PORT)
+    environment:
+      NODE_ENV: development
+      PORT: "3000" # override .env's PORT for the dev server inside the container
+      NITRO_PORT: "3000"
+      # Reach the compose `mysql` service over the internal network (overrides .env)
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  xperd-mysql-data:
+    name: xperd-mysql-data
+  local-storage:
+    name: local-storage
+

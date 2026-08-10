@@ -1,4 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchCbAccounts as fetchCbAccountsFn,
+  fetchCbTransactions as fetchCbTransactionsFn,
+  insertCbTransaction,
+  postJournalEntry,
+} from "@/lib/ledger.functions";
 
 export type CbAccountKind = "cash" | "bank";
 export type CbTrxType = "in" | "out" | "transfer";
@@ -84,12 +89,7 @@ export function nextTrxNumber(prefix: string, seq: number) {
 }
 
 export async function fetchCbAccounts(workspaceId: string) {
-  const { data, error } = await supabase
-    .from("cb_accounts")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("code");
-  if (error) throw error;
+  const data = await fetchCbAccountsFn({ data: { workspaceId } });
   return (data ?? []) as unknown as CbAccount[];
 }
 
@@ -97,18 +97,14 @@ export async function fetchCbTransactions(
   workspaceId: string,
   filters: { from?: string; to?: string; type?: CbTrxType } = {},
 ) {
-  let q = supabase
-    .from("cb_transactions")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("trx_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(2000);
-  if (filters.from) q = q.gte("trx_date", filters.from);
-  if (filters.to) q = q.lte("trx_date", filters.to);
-  if (filters.type) q = q.eq("trx_type", filters.type);
-  const { data, error } = await q;
-  if (error) throw error;
+  const data = await fetchCbTransactionsFn({
+    data: {
+      workspaceId,
+      from: filters.from || undefined,
+      to: filters.to || undefined,
+      type: filters.type || undefined,
+    },
+  });
   return (data ?? []) as unknown as CbTransaction[];
 }
 
@@ -167,34 +163,29 @@ async function postCbJournal(
   const totalDebit = clean.reduce((s, l) => s + l.debit, 0);
   const totalCredit = clean.reduce((s, l) => s + l.credit, 0);
 
-  const { data: entry, error } = await supabase
-    .from("acc_journal_entries")
-    .insert({
-      workspace_id: workspaceId,
-      entry_no: `JV/${trx.trx_no}`,
-      entry_date: trx.trx_date,
-      source_type: `cash_${trx.trx_type}`,
-      source_doc_number: trx.trx_no,
-      memo,
-      total_debit: totalDebit,
-      total_credit: totalCredit,
-      is_auto: true,
-    } as never)
-    .select("id")
-    .single();
-  if (error) throw error;
-  const entryId = (entry as { id: string }).id;
-
-  const { error: lineError } = await supabase.from("acc_journal_lines").insert(
-    clean.map((l, i) => ({
-      entry_id: entryId,
-      workspace_id: workspaceId,
-      line_no: i + 1,
-      ...l,
-    })) as never,
-  );
-  if (lineError) throw lineError;
-  return entryId;
+  const data = await postJournalEntry({
+    data: {
+      workspaceId,
+      entry: {
+        entry_no: `JV/${trx.trx_no}`,
+        entry_date: trx.trx_date,
+        source_type: `cash_${trx.trx_type}`,
+        source_doc_number: trx.trx_no,
+        memo,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        is_auto: true,
+      },
+      lines: clean.map((l) => ({
+        account_code: l.account_code,
+        account_name: l.account_name ?? null,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+      })),
+    },
+  });
+  return data.entryId;
 }
 
 export interface CbTrxInput {
@@ -263,23 +254,26 @@ export async function createCbTransaction(workspaceId: string, input: CbTrxInput
     lines,
   );
 
-  const { error } = await supabase.from("cb_transactions").insert({
-    workspace_id: workspaceId,
-    trx_no: input.trx_no,
-    trx_date: input.trx_date,
-    trx_type: input.trx_type,
-    account_code: input.account.code,
-    account_name: input.account.name,
-    counterpart_account_code: input.counterpart?.code ?? null,
-    counterpart_account_name: input.counterpart?.name ?? null,
-    category_account_code: input.category_account_code ?? null,
-    category_account_name: input.category_account_name ?? null,
-    contact_name: input.contact_name || null,
-    method: input.method,
-    reference: input.reference || null,
-    memo,
-    amount,
-    journal_entry_id: journalEntryId,
-  } as never);
-  if (error) throw error;
+  await insertCbTransaction({
+    data: {
+      workspaceId,
+      trx: {
+        trx_no: input.trx_no,
+        trx_date: input.trx_date,
+        trx_type: input.trx_type,
+        account_code: input.account.code,
+        account_name: input.account.name,
+        counterpart_account_code: input.counterpart?.code ?? null,
+        counterpart_account_name: input.counterpart?.name ?? null,
+        category_account_code: input.category_account_code ?? null,
+        category_account_name: input.category_account_name ?? null,
+        contact_name: input.contact_name || null,
+        method: input.method,
+        reference: input.reference || null,
+        memo,
+        amount,
+        journal_entry_id: journalEntryId,
+      },
+    },
+  });
 }

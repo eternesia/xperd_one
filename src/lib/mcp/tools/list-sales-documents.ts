@@ -1,6 +1,6 @@
 import { defineTool, ToolError } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { requireAuth, supabaseForUser } from "../supabase";
+import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 
 export default defineTool({
   name: "list_sales_documents",
@@ -17,18 +17,21 @@ export default defineTool({
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ workspace_id, doc_type, limit, offset }, ctx) => {
     requireAuth(ctx);
-    const supabase = supabaseForUser(ctx);
-    const { data, error, count } = await supabase
-      .from("sls_documents")
-      .select("id,doc_number,doc_date,status,partner_name,subtotal,tax_amount,total", { count: "exact" })
-      .eq("workspace_id", workspace_id)
-      .eq("doc_type", doc_type)
-      .order("doc_date", { ascending: false })
-      .range(offset, offset + limit - 1);
-    if (error) throw new ToolError(error.message);
+    const { userId } = await getTokenUser(ctx);
+    await assertWorkspaceMember(workspace_id, userId);
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+    const countRow = await executeOne<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM sls_documents WHERE workspace_id = ? AND doc_type = ?",
+      [workspace_id, doc_type],
+    );
+    const rows = await execute(
+      `SELECT id,doc_number,doc_date,status,customer_name,subtotal,tax_amount,total
+       FROM sls_documents WHERE workspace_id = ? AND doc_type = ? ORDER BY doc_date DESC LIMIT ? OFFSET ?`,
+      [workspace_id, doc_type, String(limit), String(offset)],
+    );
     return {
-      content: [{ type: "text", text: JSON.stringify({ documents: data ?? [], total: count ?? 0 }, null, 2) }],
-      structuredContent: { documents: data ?? [], total: count ?? 0 },
+      content: [{ type: "text", text: JSON.stringify({ documents: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2) }],
+      structuredContent: { documents: rows ?? [], total: Number(countRow?.c ?? 0) },
     };
   },
 });

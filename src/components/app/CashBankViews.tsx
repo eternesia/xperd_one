@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { countWorkspaceRows, deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { fetchAccounts } from "@/lib/accounting";
 import {
@@ -134,11 +134,9 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
         is_active: form.is_active,
       };
       if (editId) {
-        const { error } = await supabase.from("cb_accounts").update(payload as never).eq("id", editId);
-        if (error) throw error;
+        await saveWorkspaceRow({ data: { table: "cb_accounts", workspaceId, id: editId, data: payload } });
       } else {
-        const { error } = await supabase.from("cb_accounts").insert(payload as never);
-        if (error) throw error;
+        await saveWorkspaceRow({ data: { table: "cb_accounts", workspaceId, data: payload } });
       }
     },
     onSuccess: () => {
@@ -153,8 +151,7 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("cb_accounts").delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: "cb_accounts", workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Account removed.", "Akun dihapus."));
@@ -446,12 +443,10 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
       const gl = glAccounts.find((a) => a.code === form.category_code);
       const seq =
         (
-          await supabase
-            .from("cb_transactions")
-            .select("id", { count: "exact", head: true })
-            .eq("workspace_id", workspaceId)
-            .eq("trx_type", type)
-        ).count ?? 0;
+          await countWorkspaceRows({
+            data: { table: "cb_transactions", workspaceId, filters: { trx_type: type } },
+          })
+        ).data?.count ?? 0;
       const prefix = type === "in" ? "CI" : type === "out" ? "CO" : "CTR";
       await createCbTransaction(workspaceId, {
         trx_no: nextTrxNumber(prefix, seq + 1),
@@ -773,11 +768,14 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
 
   const toggle = useMutation({
     mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
-      const { error } = await supabase
-        .from("cb_transactions")
-        .update({ is_reconciled: value, reconciled_at: value ? new Date().toISOString() : null } as never)
-        .eq("id", id);
-      if (error) throw error;
+      await saveWorkspaceRow({
+        data: {
+          table: "cb_transactions",
+          workspaceId,
+          id,
+          data: { is_reconciled: value ? 1 : 0, reconciled_at: value ? new Date().toISOString() : null },
+        },
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cb-trx"] }),
     onError: (e: Error) => toast.error(e.message),

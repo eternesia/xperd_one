@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
+import { getAppShellData } from "@/lib/app-shell.functions";
 
 export interface Workspace {
   id: string;
@@ -69,41 +69,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setLoading(true);
-    const { data: tenantRows } = await supabase
-      .from("tenants")
-      .select("id,name,subdomain,package_id,status,trial_ends_at,workspace_count,user_count")
-      .eq("owner_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1);
+    try {
+      const shell = await getAppShellData();
+      setTenant(shell?.tenant ?? null);
+      setPkg(shell?.pkg ?? null);
+      const list = shell?.workspaces ?? [];
+      setWorkspaces(list);
 
-    const t = (tenantRows?.[0] as TenantRecord | undefined) ?? null;
-    setTenant(t);
-
-    if (t?.package_id) {
-      const { data: p } = await supabase
-        .from("packages")
-        .select("id,code,name,max_workspace,max_users,monthly_price")
-        .eq("id", t.package_id)
-        .maybeSingle();
-      setPkg((p as PackageRecord | null) ?? null);
-    } else {
+      const stored = typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_KEY) : null;
+      const next = list.find((w) => w.id === stored) ?? list[0] ?? null;
+      setActiveId(next?.id ?? null);
+    } catch {
+      // Transient server-fn failure — don't leave the app stuck. Treat as
+      // "no shell data yet" so the UI can render (e.g. onboarding step 1).
+      setTenant(null);
       setPkg(null);
+      setWorkspaces([]);
+      setActiveId(null);
+    } finally {
+      setLoading(false);
     }
-
-    const { data: ws } = await supabase
-      .from("workspaces")
-      .select(
-        "id,tenant_id,name,legal_name,slug,currency,timezone,fiscal_year_start_month,default_costing_method,status",
-      )
-      .order("created_at", { ascending: true });
-
-    const list = (ws ?? []) as Workspace[];
-    setWorkspaces(list);
-
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem(ACTIVE_KEY) : null;
-    const next = list.find((w) => w.id === stored) ?? list[0] ?? null;
-    setActiveId(next?.id ?? null);
-    setLoading(false);
   }, [userId]);
 
   useEffect(() => {

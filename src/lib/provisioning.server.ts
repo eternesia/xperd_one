@@ -1,6 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-type AnyClient = SupabaseClient<any, any, any>;
+import { execute, uuid } from "@/integrations/mysql/pool";
 
 export const DEFAULT_COA: { code: string; name: string; account_type: string }[] = [
   { code: "1000", name: "Kas", account_type: "asset" },
@@ -47,54 +45,75 @@ const DEFAULT_TAXES = [
 ];
 
 /** Seed a brand-new workspace with the default Indonesian master data set. */
-export async function seedWorkspaceDefaults(admin: AnyClient, workspaceId: string) {
-  const base = { workspace_id: workspaceId, is_active: true };
+export async function seedWorkspaceDefaults(workspaceId: string) {
+  const upsert = async (table: string, rows: Record<string, unknown>[], conflictCols: string[]) => {
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const placeholders = cols.map(() => "?").join(", ");
+      const updates = cols
+        .filter((c) => !conflictCols.includes(c))
+        .map((c) => `${c} = VALUES(${c})`)
+        .join(", ");
+      await execute(
+        `INSERT INTO ${table} (id, ${cols.join(", ")})
+         VALUES (?, ${placeholders})
+         ON DUPLICATE KEY UPDATE ${updates}`,
+        [uuid(), ...cols.map((c) => row[c] as never)],
+      );
+    }
+  };
 
-  const steps = [
-    admin
-      .from("md_accounts")
-      .upsert(DEFAULT_COA.map((a) => ({ ...base, ...a })), { onConflict: "workspace_id,code" }),
-    admin
-      .from("md_uoms")
-      .upsert(DEFAULT_UOMS.map((u) => ({ ...base, ...u })), { onConflict: "workspace_id,code" }),
-    admin
-      .from("md_categories")
-      .upsert(DEFAULT_CATEGORIES.map((c) => ({ ...base, ...c })), { onConflict: "workspace_id,code" }),
-    admin
-      .from("md_taxes")
-      .upsert(DEFAULT_TAXES.map((t) => ({ ...base, ...t })), { onConflict: "workspace_id,code" }),
-    admin
-      .from("md_warehouses")
-      .upsert([{ ...base, code: "WH-01", name: "Gudang Pusat" }], { onConflict: "workspace_id,code" }),
-    admin.from("cb_accounts").upsert(
-      [
-        {
-          ...base,
-          code: "CASH",
-          name: "Kas Kecil",
-          account_kind: "cash",
-          gl_account_code: "1000",
-          currency: "IDR",
-          opening_balance: 0,
-        },
-        {
-          ...base,
-          code: "BANK",
-          name: "Bank Operasional",
-          account_kind: "bank",
-          gl_account_code: "1010",
-          currency: "IDR",
-          opening_balance: 0,
-        },
-      ],
-      { onConflict: "workspace_id,code" },
-    ),
-  ];
-
-  for (const step of steps) {
-    const { error } = await step;
-    if (error) throw new Error(error.message);
-  }
+  await upsert(
+    "md_accounts",
+    DEFAULT_COA.map((a) => ({ workspace_id: workspaceId, ...a, is_active: 1 })),
+    ["workspace_id", "code"],
+  );
+  await upsert(
+    "md_uoms",
+    DEFAULT_UOMS.map((u) => ({ workspace_id: workspaceId, ...u, is_active: 1 })),
+    ["workspace_id", "code"],
+  );
+  await upsert(
+    "md_categories",
+    DEFAULT_CATEGORIES.map((c) => ({ workspace_id: workspaceId, ...c, is_active: 1 })),
+    ["workspace_id", "code"],
+  );
+  await upsert(
+    "md_taxes",
+    DEFAULT_TAXES.map((t) => ({ workspace_id: workspaceId, ...t, is_active: 1 })),
+    ["workspace_id", "code"],
+  );
+  await upsert(
+    "md_warehouses",
+    [{ workspace_id: workspaceId, code: "WH-01", name: "Gudang Pusat", is_active: 1 }],
+    ["workspace_id", "code"],
+  );
+  await upsert(
+    "cb_accounts",
+    [
+      {
+        workspace_id: workspaceId,
+        code: "CASH",
+        name: "Kas Kecil",
+        account_kind: "cash",
+        gl_account_code: "1000",
+        currency: "IDR",
+        opening_balance: 0,
+        is_active: 1,
+      },
+      {
+        workspace_id: workspaceId,
+        code: "BANK",
+        name: "Bank Operasional",
+        account_kind: "bank",
+        gl_account_code: "1010",
+        currency: "IDR",
+        opening_balance: 0,
+        is_active: 1,
+      },
+    ],
+    ["workspace_id", "code"],
+  );
 }
 
 export function randomPassword() {

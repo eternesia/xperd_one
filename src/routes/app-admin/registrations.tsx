@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { adminList, adminSave } from "@/lib/platform.functions";
 import { provisionRegistration } from "@/lib/provisioning.functions";
 
 export const Route = createFileRoute("/app-admin/registrations")({
@@ -65,19 +65,14 @@ function RegistrationsPage() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["admin-registrations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("registrations")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
+      const data = await adminList({ data: { table: "registrations", orderBy: "created_at", orderDir: "desc" } });
+      return data?.rows ?? [];
     },
   });
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: RegStatus }) => {
-      const { error } = await supabase.from("registrations").update({ status }).eq("id", id);
-      if (error) throw error;
+      await adminSave({ data: { table: "registrations", id, data: { status } } });
     },
     onSuccess: () => {
       toast.success("Registration updated");

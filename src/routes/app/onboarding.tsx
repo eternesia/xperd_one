@@ -15,8 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { slugify, useApp } from "@/lib/app-context";
+import { createOrganisation, createWorkspace, getPublicSignupPackages } from "@/lib/setup.functions";
 import { seedWorkspace } from "@/lib/provisioning.functions";
 import { INDUSTRIES } from "@/lib/xperd";
 
@@ -66,15 +66,7 @@ function OrganisationStep({ userId, onDone }: { userId?: string; onDone: () => P
 
   const { data: packages } = useQuery({
     queryKey: ["signup-packages"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("packages")
-        .select("id,code,name,max_workspace,max_users,monthly_price")
-        .eq("is_public_signup", true)
-        .order("sort_order");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => getPublicSignupPackages(),
   });
 
   async function submit(e: React.FormEvent) {
@@ -87,21 +79,15 @@ function OrganisationStep({ userId, onDone }: { userId?: string; onDone: () => P
     }
     setBusy(true);
     try {
-      const pkg = packages?.find((p) => p.code === packageCode);
-      const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + 14);
-      const { error } = await supabase.from("tenants").insert({
-        name: name.trim(),
-        subdomain: slug,
-        owner_id: userId,
-        package_id: pkg?.id ?? null,
-        status: "trial",
-        industry: industry || null,
-        city: city || null,
-        trial_ends_at: trialEnds.toISOString().slice(0, 10),
-        workspace_count: 0,
+      await createOrganisation({
+        data: {
+          name: name.trim(),
+          subdomain: slug,
+          industry: industry || undefined,
+          city: city || undefined,
+          packageCode,
+        },
       });
-      if (error) throw error;
       await onDone();
       toast.success("Organisation created");
     } catch (err) {
@@ -203,31 +189,19 @@ function WorkspaceStep({ onDone }: { onDone: () => Promise<void> }) {
     if (!tenant || !userId) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from("workspaces")
-        .insert({
-          tenant_id: tenant.id,
+      const created = await createWorkspace({
+        data: {
           name: name.trim(),
-          legal_name: legalName.trim() || null,
-          slug: slugify(name),
+          legalName: legalName.trim() || undefined,
           currency,
           timezone,
-          fiscal_year_start_month: Number(fiscalMonth),
-          default_costing_method: costing,
-          status: "active",
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      const { error: memberError } = await supabase
-        .from("workspace_members")
-        .insert({ workspace_id: data.id, user_id: userId, role: "owner" });
-      if (memberError) throw memberError;
+          fiscalYearStartMonth: Number(fiscalMonth),
+          costing,
+        },
+      });
 
       try {
-        await seedWorkspace({ data: { workspaceId: data.id } });
+        await seedWorkspace({ data: { workspaceId: created.workspaceId } });
       } catch {
         toast.warning("Workspace created, but default master data could not be seeded.");
       }

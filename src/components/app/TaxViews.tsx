@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney as fmtMoney } from "@/lib/procurement";
 import {
@@ -191,8 +191,7 @@ function TaxLedgerView({ entity, workspaceId }: { entity: TaxEntity; workspaceId
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tax_records").delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: "tax_records", workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Record removed.", "Data dihapus."));
@@ -203,8 +202,7 @@ function TaxLedgerView({ entity, workspaceId }: { entity: TaxEntity; workspaceId
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: TaxStatus }) => {
-      const { error } = await supabase.from("tax_records").update({ status } as never).eq("id", id);
-      if (error) throw error;
+      await saveWorkspaceRow({ data: { table: "tax_records", workspaceId, id, data: { status } } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tax", workspaceId] }),
     onError: (e: Error) => toast.error(e.message),

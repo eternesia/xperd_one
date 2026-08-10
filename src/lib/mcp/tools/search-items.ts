@@ -1,6 +1,6 @@
 import { defineTool, ToolError } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { requireAuth, supabaseForUser } from "../supabase";
+import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 
 export default defineTool({
   name: "search_items",
@@ -14,18 +14,20 @@ export default defineTool({
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ workspace_id, query, limit }, ctx) => {
     requireAuth(ctx);
-    const supabase = supabaseForUser(ctx);
-    const { data, error } = await supabase
-      .from("md_items")
-      .select("code,name,item_type,uom_code,sell_price,cost_price,barcode,is_active")
-      .eq("workspace_id", workspace_id)
-      .or(`name.ilike.%${query}%,code.ilike.%${query}%,barcode.ilike.%${query}%`)
-      .order("name", { ascending: true })
-      .limit(limit);
-    if (error) throw new ToolError(error.message);
+    const { userId } = await getTokenUser(ctx);
+    await assertWorkspaceMember(workspace_id, userId);
+    const { execute } = await import("@/integrations/mysql/pool");
+    const like = `%${query}%`;
+    const rows = await execute(
+      `SELECT code,name,item_type,uom_code,sell_price,cost_price,barcode,is_active
+       FROM md_items
+       WHERE workspace_id = ? AND (name LIKE ? OR code LIKE ? OR barcode LIKE ?)
+       ORDER BY name ASC LIMIT ?`,
+      [workspace_id, like, like, like, String(limit)],
+    );
     return {
-      content: [{ type: "text", text: JSON.stringify({ items: data ?? [] }, null, 2) }],
-      structuredContent: { items: data ?? [] },
+      content: [{ type: "text", text: JSON.stringify({ items: rows ?? [] }, null, 2) }],
+      structuredContent: { items: rows ?? [] },
     };
   },
 });

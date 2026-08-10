@@ -1,21 +1,46 @@
 import { useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+
+import { currentAppUser, getIsAdmin } from "@/lib/auth.functions";
+
+export type SessionUser = { id: string; email: string; fullName: string | null };
+// Shape mirrors the old supabase Session (session.user.id / session.user.email)
+// so consumers keep working.
+export type AppSession = { user: SessionUser } | null;
+
+const AUTH_EVENT = "xperd:auth-change";
+
+// Call after login/logout so open tabs re-read the cookie session.
+export function emitAuthChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_EVENT));
+  }
+}
 
 export function useSession() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<AppSession>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      setLoading(false);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
+    let active = true;
+    async function load() {
+      try {
+        const user = await currentAppUser();
+        if (!active) return;
+        setSession(user ? { user } : null);
+      } catch {
+        // A rejected server-fn call must not leave loading=true forever.
+        if (!active) return;
+        setSession(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    window.addEventListener(AUTH_EVENT, load);
+    return () => {
+      active = false;
+      window.removeEventListener(AUTH_EVENT, load);
+    };
   }, []);
 
   return { session, loading };
@@ -30,22 +55,9 @@ export function useIsAdmin(userId?: string) {
       setIsAdmin(null);
       return;
     }
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (data) {
-          if (active) setIsAdmin(true);
-          return;
-        }
-        // First-time bootstrap: grants admin only to the designated email
-        // and only while no admin exists yet.
-        const { data: claimed } = await supabase.rpc("claim_superadmin");
-        if (active) setIsAdmin(Boolean(claimed));
-      });
+    getIsAdmin({ data: userId }).then((value) => {
+      if (active) setIsAdmin(Boolean(value));
+    });
     return () => {
       active = false;
     };

@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 
 export const Route = createFileRoute("/app-admin/packages")({
@@ -61,9 +61,8 @@ function PackagesPage() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["admin-packages"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("packages").select("*").order("product_line").order("sort_order");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "packages", orderBy: "sort_order", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -88,10 +87,7 @@ function PackagesPage() {
         is_public_signup: v.is_public_signup,
         is_active: v.is_active,
       };
-      const { error } = v.id
-        ? await supabase.from("packages").update(payload).eq("id", v.id)
-        : await supabase.from("packages").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "packages", id: v.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Plan saved");

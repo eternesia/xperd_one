@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import type { MDEntity, MDField } from "@/lib/master-data";
 
@@ -73,19 +73,18 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
     queryKey,
     queryFn: async () => {
       const from = (page - 1) * pageSize;
-      let q = supabase
-        .from(entity.table)
-        .select("*", { count: "exact" })
-        .eq("workspace_id", workspaceId)
-        .order("code", { ascending: true })
-        .range(from, from + pageSize - 1);
-      if (search.trim()) {
-        const s = `%${search.trim()}%`;
-        q = q.or(`code.ilike.${s},name.ilike.${s}`);
-      }
-      const { data: rows, error, count } = await q;
-      if (error) throw error;
-      return { rows: (rows ?? []) as Row[], count: count ?? 0 };
+      const data = await listWorkspaceRows({
+        data: {
+          table: entity.table,
+          workspaceId,
+          search: search.trim() || undefined,
+          orderBy: "code",
+          orderDir: "asc",
+          limit: pageSize,
+          offset: from,
+        },
+      });
+      return { rows: (data?.rows ?? []) as Row[], count: data?.count ?? 0 };
     },
   });
 
@@ -102,10 +101,9 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
         else if (f.type === "boolean") payload[f.key] = Boolean(v);
         else payload[f.key] = v === "" || v === undefined ? null : v;
       });
-      const { error } = editingId
-        ? await supabase.from(entity.table).update(payload as never).eq("id", editingId)
-        : await supabase.from(entity.table).insert(payload as never);
-      if (error) throw error;
+      await saveWorkspaceRow({
+        data: { table: entity.table, workspaceId, id: editingId ?? undefined, data: payload },
+      });
     },
     onSuccess: () => {
       toast.success(t("Saved", "Tersimpan"));
@@ -117,8 +115,7 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(entity.table).delete().eq("id", id);
-      if (error) throw error;
+      await deleteWorkspaceRow({ data: { table: entity.table, workspaceId, id } });
     },
     onSuccess: () => {
       toast.success(t("Deleted", "Terhapus"));
@@ -171,10 +168,7 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
       if (!payloads.length)
         throw new Error(t("No valid rows: code and name are required.", "Tidak ada baris valid: kolom code dan name wajib diisi."));
 
-      const { error } = await supabase
-        .from(entity.table)
-        .upsert(payloads as never, { onConflict: "workspace_id,code" });
-      if (error) throw error;
+      await upsertWorkspaceRows({ data: { table: entity.table, workspaceId, rows: payloads } });
       toast.success(t(`${payloads.length} rows imported`, `${payloads.length} baris diimpor`));
       setPage(1);
       void qc.invalidateQueries({ queryKey: ["md", entity.table] });

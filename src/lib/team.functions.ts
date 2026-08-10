@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 
 export interface CreateUserInput {
   workspaceId: string;
@@ -11,7 +11,7 @@ export interface CreateUserInput {
 }
 
 export const createWorkspaceUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAppAuth])
   .inputValidator((data: CreateUserInput) => {
     if (!data?.workspaceId) throw new Error("Workspace is required");
     if (!data.email?.includes("@")) throw new Error("Valid email is required");
@@ -20,58 +20,44 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-
-    const { data: me, error: meErr } = await supabase
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (meErr) throw new Error(meErr.message);
-    if (!me || !["owner", "admin"].includes(me.role)) throw new Error("Forbidden");
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const email = data.email.trim().toLowerCase();
-
-    let newUserId: string | null = null;
-    const created = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: data.password,
-      email_confirm: true,
-      user_metadata: { full_name: data.fullName, phone: data.phone ?? null },
-    });
-
-    if (created.error) {
-      const { data: existing } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .ilike("email", email)
-        .maybeSingle();
-      if (!existing) throw new Error(created.error.message);
-      newUserId = existing.id;
-    } else {
-      newUserId = created.data.user?.id ?? null;
+    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+      throw new Error("Forbidden");
     }
-    if (!newUserId) throw new Error("Could not create the user account");
 
-    await supabaseAdmin.from("profiles").upsert({
-      id: newUserId,
-      email,
-      full_name: data.fullName,
-      phone: data.phone ?? null,
+    const { execute, executeOne, transaction, uuid } = await import("@/integrations/mysql/pool");
+    const { hashPassword } = await import("@/lib/auth-jwt.server");
+
+    const email = data.email.trim().toLowerCase();
+    const existing = await executeOne<{ id: string }>("SELECT id FROM app_users WHERE email = ? LIMIT 1", [email]);
+    const newUserId = existing?.id ?? uuid();
+
+    await transaction(async (conn) => {
+      if (!existing) {
+        await conn.execute(
+          "INSERT INTO app_users (id, email, full_name, password_hash, is_active) VALUES (?, ?, ?, ?, 1)",
+          [newUserId, email, data.fullName, await hashPassword(data.password)],
+        );
+      }
+      await conn.execute(
+        "INSERT INTO profiles (id, email, full_name, phone) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone)",
+        [newUserId, email, data.fullName, data.phone ?? null],
+      );
+      await conn.execute(
+        "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'customer') ON DUPLICATE KEY UPDATE role = VALUES(role)",
+        [uuid(), newUserId],
+      );
+      await conn.execute(
+        "INSERT INTO workspace_members (id, workspace_id, user_id, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE role = VALUES(role)",
+        [uuid(), data.workspaceId, newUserId, data.role],
+      );
     });
-
-    const { error: memberErr } = await supabaseAdmin
-      .from("workspace_members")
-      .upsert({ workspace_id: data.workspaceId, user_id: newUserId, role: data.role }, { onConflict: "workspace_id,user_id" });
-    if (memberErr) throw new Error(memberErr.message);
 
     return { userId: newUserId, email };
   });
 
 export const updateWorkspaceUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireAppAuth])
   .inputValidator((data: {
     workspaceId: string;
     targetUserId: string;
@@ -84,38 +70,35 @@ export const updateWorkspaceUser = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: me } = await supabase
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!me || !["owner", "admin"].includes(me.role)) throw new Error("Forbidden");
+    const { hasWorkspaceRole, isWorkspaceMember } = await import("@/lib/auth-context.server");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) throw new Error("Forbidden");
+    if (!(await isWorkspaceMember(data.workspaceId, data.targetUserId))) {
+      throw new Error("User is not a member of this workspace");
+    }
 
-    const { data: target } = await supabase
-      .from("workspace_members")
-      .select("id")
-      .eq("workspace_id", data.workspaceId)
-      .eq("user_id", data.targetUserId)
-      .maybeSingle();
-    if (!target) throw new Error("User is not a member of this workspace");
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+    const { hashPassword } = await import("@/lib/auth-jwt.server");
 
     if (data.password) {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(data.targetUserId, {
-        password: data.password,
-      });
-      if (error) throw new Error(error.message);
+      await execute("UPDATE app_users SET password_hash = ? WHERE id = ?", [
+        await hashPassword(data.password),
+        data.targetUserId,
+      ]);
     }
 
     if (data.fullName !== undefined || data.phone !== undefined) {
-      const patch: { full_name?: string | null; phone?: string | null } = {};
-      if (data.fullName !== undefined) patch.full_name = data.fullName;
-      if (data.phone !== undefined) patch.phone = data.phone;
-      const { error } = await supabaseAdmin.from("profiles").update(patch).eq("id", data.targetUserId);
-      if (error) throw new Error(error.message);
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (data.fullName !== undefined) {
+        sets.push("full_name = ?");
+        params.push(data.fullName);
+      }
+      if (data.phone !== undefined) {
+        sets.push("phone = ?");
+        params.push(data.phone);
+      }
+      params.push(data.targetUserId);
+      await execute(`UPDATE profiles SET ${sets.join(", ")} WHERE id = ?`, params);
     }
 
     return { ok: true };

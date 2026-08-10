@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
+import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 
 export const Route = createFileRoute("/app-admin/payments")({
@@ -57,9 +57,8 @@ function PaymentsPage() {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["admin-payment-gateways"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("payment_gateways").select("*").order("sort_order");
-      if (error) throw error;
-      return data;
+      const data = await adminList({ data: { table: "payment_gateways", orderBy: "sort_order", orderDir: "asc" } });
+      return data?.rows ?? [];
     },
   });
 
@@ -77,10 +76,7 @@ function PaymentsPage() {
         instructions: v.instructions || null,
         sort_order: Number(v.sort_order) || 0,
       };
-      const { error } = v.id
-        ? await supabase.from("payment_gateways").update(payload).eq("id", v.id)
-        : await supabase.from("payment_gateways").insert(payload);
-      if (error) throw error;
+      await adminSave({ data: { table: "payment_gateways", id: v.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
       toast.success("Gateway saved");
@@ -92,8 +88,7 @@ function PaymentsPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("payment_gateways").delete().eq("id", id);
-      if (error) throw error;
+      await adminDelete({ data: { table: "payment_gateways", id } });
     },
     onSuccess: () => {
       toast.success("Gateway removed");

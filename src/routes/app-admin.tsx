@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
-import { useIsAdmin, useSession } from "@/hooks/use-session";
+import { useIsAdmin, useSession, emitAuthChange } from "@/hooks/use-session";
+import { loginAppUser, logoutAppUser, registerAppUser } from "@/lib/auth.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app-admin")({
@@ -61,7 +61,8 @@ function AdminLayout() {
             <Button
               variant="outline"
               onClick={async () => {
-                await supabase.auth.signOut();
+                await logoutAppUser();
+                emitAuthChange();
                 navigate({ to: "/" });
               }}
             >
@@ -115,7 +116,8 @@ function AdminLayout() {
             size="sm"
             className="w-full"
             onClick={async () => {
-              await supabase.auth.signOut();
+              await logoutAppUser();
+              emitAuthChange();
               toast.success("Signed out");
             }}
           >
@@ -181,20 +183,19 @@ function AdminLogin() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/app-admin` },
-      });
+    try {
+      if (mode === "signup") {
+        await registerAppUser({ data: { email, password } });
+        toast.success("Account created. Sign in to continue.");
+      } else {
+        await loginAppUser({ data: { email, password } });
+        emitAuthChange();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
       setBusy(false);
-      if (error) toast.error(error.message);
-      else toast.success("Account created. Sign in to continue.");
-      return;
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) toast.error(error.message);
   };
 
   return (

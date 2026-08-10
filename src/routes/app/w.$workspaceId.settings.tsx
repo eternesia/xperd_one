@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { updateWorkspaceSettings } from "@/lib/platform.functions";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 
@@ -51,18 +51,19 @@ function SettingsPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("workspaces")
-        .update({
-          name: form.name.trim(),
-          legal_name: form.legal_name.trim() || null,
-          currency: form.currency,
-          timezone: form.timezone,
-          fiscal_year_start_month: Number(form.fiscal),
-          default_costing_method: form.costing,
-        })
-        .eq("id", workspaceId);
-      if (error) throw error;
+      await updateWorkspaceSettings({
+        data: {
+          workspaceId,
+          data: {
+            name: form.name.trim(),
+            legal_name: form.legal_name.trim() || null,
+            currency: form.currency,
+            timezone: form.timezone,
+            fiscal_year_start_month: Number(form.fiscal),
+            default_costing_method: form.costing,
+          },
+        },
+      });
       toast.success(lang === "id" ? "Pengaturan disimpan" : "Settings saved");
       await refresh();
     } catch (err) {

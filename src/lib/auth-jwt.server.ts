@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { executeOne } from "@/integrations/mysql/pool";
 
 export const APP_JWT_COOKIE = "xperd_token";
 const ITERATIONS = 100_000;
@@ -101,10 +101,16 @@ export interface AppUserRow {
 }
 
 export async function findAppUserByEmail(email: string) {
-  const { data } = await supabaseAdmin
-    .from("app_users")
-    .select("id, email, full_name, is_active, auth_user_id, password_hash")
-    .ilike("email", email.trim())
-    .maybeSingle();
-  return data ?? null;
+  // utf8mb4_unicode_ci is case-insensitive, so no LOWER() needed.
+  return executeOne<AppUserRow>(
+    "SELECT id, email, full_name, is_active, auth_user_id, password_hash FROM app_users WHERE email = ? LIMIT 1",
+    [email.trim()],
+  );
+}
+
+export async function findAppUserById(id: string) {
+  return executeOne<AppUserRow>(
+    "SELECT id, email, full_name, is_active, auth_user_id FROM app_users WHERE id = ? LIMIT 1",
+    [id],
+  );
 }

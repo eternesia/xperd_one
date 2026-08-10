@@ -25,14 +25,11 @@ export const Route = createFileRoute("/api/public/webhooks/midtrans")({
           return new Response("Missing fields", { status: 400 });
         }
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { execute, executeOne } = await import("@/integrations/mysql/pool");
 
-        const { data: gateway } = await supabaseAdmin
-          .from("payment_gateways")
-          .select("server_key_secret_name,display_name")
-          .eq("provider", "midtrans")
-          .eq("is_active", true)
-          .maybeSingle();
+        const gateway = await executeOne<{ server_key_secret_name: string | null; display_name: string | null }>(
+          "SELECT server_key_secret_name, display_name FROM payment_gateways WHERE provider = 'midtrans' AND is_active = 1 LIMIT 1",
+        );
 
         const serverKey = process.env[gateway?.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
         if (!serverKey) return new Response("Gateway not configured", { status: 503 });
@@ -42,21 +39,22 @@ export const Route = createFileRoute("/api/public/webhooks/midtrans")({
           .digest("hex");
         if (expected !== signature_key) return new Response("Invalid signature", { status: 401 });
 
-        const { data: invoice } = await supabaseAdmin
-          .from("invoices")
-          .select("id,tenant_id,subscription_id,status")
-          .eq("invoice_number", order_id)
-          .maybeSingle();
+        const invoice = await executeOne<{
+          id: string;
+          tenant_id: string;
+          subscription_id: string | null;
+          status: string;
+        }>("SELECT id, tenant_id, subscription_id, status FROM invoices WHERE invoice_number = ? LIMIT 1", [order_id]);
         if (!invoice) return new Response("Invoice not found", { status: 404 });
 
         if (transaction_status === "settlement" || transaction_status === "capture") {
           const { activateInvoice } = await import("@/lib/billing.server");
-          await activateInvoice(supabaseAdmin as never, invoice as never, {
+          await activateInvoice(invoice, {
             paymentMethod: payload.payment_type ?? gateway?.display_name ?? "midtrans",
             reference: payload.transaction_id ?? order_id,
           });
         } else if (transaction_status === "expire" || transaction_status === "cancel" || transaction_status === "deny") {
-          await supabaseAdmin.from("invoices").update({ payment_url: null }).eq("id", invoice.id);
+          await execute("UPDATE invoices SET payment_url = NULL WHERE id = ?", [invoice.id]);
         }
 
         return Response.json({ ok: true });
