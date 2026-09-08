@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { ChevronLeft, LayoutDashboard } from "lucide-react";
+import { ChevronLeft, LayoutDashboard, Lock } from "lucide-react";
 
+import { useTenantAddons } from "@/lib/addons";
 import { useI18n } from "@/lib/i18n";
 import { findModule } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ function ModuleShell() {
   const { lang } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const mod = findModule(moduleId);
+  const { hasAddon, loading: addonsLoading } = useTenantAddons();
 
   if (!mod) {
     return (
@@ -21,6 +23,31 @@ function ModuleShell() {
         <h1 className="text-xl font-semibold text-navy dark:text-primary-foreground">
           {lang === "id" ? "Modul tidak ditemukan" : "Module not found"}
         </h1>
+        <Link
+          to="/app/w/$workspaceId"
+          params={{ workspaceId }}
+          className="mt-4 inline-block text-sm text-gold underline"
+        >
+          {lang === "id" ? "Kembali ke peluncur" : "Back to launcher"}
+        </Link>
+      </div>
+    );
+  }
+
+  if (mod.addon && !addonsLoading && !hasAddon(mod.addon)) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-16 text-center">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-secondary/70">
+          <Lock className="h-6 w-6 text-gold" />
+        </div>
+        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
+          {lang === "id" ? "Modul add-on terkunci" : "Add-on module locked"}
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+          {lang === "id"
+            ? `${mod.en} butuh add-on "${mod.addon}" agar bisa diakses. Hubungi admin untuk mengaktifkannya.`
+            : `${mod.en} requires the "${mod.addon}" add-on. Contact an admin to activate it.`}
+        </p>
         <Link
           to="/app/w/$workspaceId"
           params={{ workspaceId }}

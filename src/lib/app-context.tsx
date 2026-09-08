@@ -12,6 +12,11 @@ export interface Workspace {
   timezone: string;
   fiscal_year_start_month: number;
   default_costing_method: "FIFO" | "LIFO" | "AVERAGE";
+  address: string | null;
+  tax_id: string | null;
+  doc_template: string;
+  bank_info: string | null;
+  doc_footer_note: string | null;
   status: "setup" | "active" | "suspended";
 }
 

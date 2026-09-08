@@ -34,6 +34,8 @@ export interface AppModule {
   tone: "navy" | "gold" | "emerald" | "sky" | "violet" | "rose";
   phase: 1 | 2 | 3 | 4;
   disabled?: boolean;
+  /** Add-on code required to unlock this module (see public.addons / tenant_addons). */
+  addon?: string;
   submodules: SubModule[];
 }
 
@@ -228,6 +230,7 @@ const MODULE_DEFS: AppModule[] = [
     icon: HandCoins,
     tone: "gold",
     phase: 4,
+    addon: "qalling",
     submodules: [
       s("leads", "Leads", "Prospek"),
       s("pipeline", "Pipeline", "Pipeline"),

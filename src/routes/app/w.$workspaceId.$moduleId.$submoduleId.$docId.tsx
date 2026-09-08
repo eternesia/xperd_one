@@ -69,21 +69,22 @@ function DocumentDetail() {
 
   const doc = data?.doc ?? null;
   const lines = data?.lines ?? [];
-  const template: DocTemplate = "classic";
-  const ws = activeWorkspace as unknown as
-    | { name?: string | null; legal_name?: string | null; address?: string | null; tax_id?: string | null }
-    | null
-    | undefined;
+  const template: DocTemplate =
+    activeWorkspace?.doc_template === "modern" || activeWorkspace?.doc_template === "minimal"
+      ? activeWorkspace.doc_template
+      : "classic";
 
   const printMeta = (): DocPrintMeta => ({
     title: lang === "id" ? (entity?.id_ ?? "") : (entity?.en ?? ""),
     lang,
     template,
     company: {
-      name: ws?.name ?? "XPERD",
-      legalName: ws?.legal_name ?? null,
-      address: ws?.address ?? null,
-      taxId: ws?.tax_id ?? null,
+      name: activeWorkspace?.name ?? "XPERD",
+      legalName: activeWorkspace?.legal_name ?? null,
+      address: activeWorkspace?.address ?? null,
+      taxId: activeWorkspace?.tax_id ?? null,
+      bankInfo: activeWorkspace?.bank_info ?? null,
+      footerNote: activeWorkspace?.doc_footer_note ?? null,
     },
     labels,
     statusLabel: doc ? String(doc.status) : "",

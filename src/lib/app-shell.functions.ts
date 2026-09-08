@@ -35,6 +35,11 @@ export interface ShellWorkspace {
   timezone: string;
   fiscal_year_start_month: number;
   default_costing_method: "FIFO" | "LIFO" | "AVERAGE";
+  address: string | null;
+  tax_id: string | null;
+  doc_template: string;
+  bank_info: string | null;
+  doc_footer_note: string | null;
   status: "setup" | "active" | "suspended";
 }
 
@@ -71,7 +76,9 @@ export const getAppShellData = createServerFn({ method: "GET" }).handler(async (
   const workspaces = tenant
     ? await execute<ShellWorkspace>(
         `SELECT w.id, w.tenant_id, w.name, w.legal_name, w.slug, w.currency, w.timezone,
-                w.fiscal_year_start_month, w.default_costing_method, w.status
+                w.fiscal_year_start_month, w.default_costing_method,
+                w.address, w.tax_id, w.doc_template, w.bank_info, w.doc_footer_note,
+                w.status
            FROM workspaces w
           WHERE w.tenant_id = ?
           ORDER BY w.created_at ASC`,

@@ -40,7 +40,7 @@ const PCOLS: Record<string, string[]> = {
   profiles: ["id", "full_name", "email", "company_name", "phone", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
   app_users: ["id", "email", "full_name", "password_hash", "is_active", "auth_user_id", "last_login_at", "created_at", "updated_at"],
-  workspaces: ["id", "tenant_id", "name", "legal_name", "slug", "currency", "timezone", "fiscal_year_start_month", "default_costing_method", "address", "tax_id", "status", "created_by", "created_at", "updated_at"],
+  workspaces: ["id", "tenant_id", "name", "legal_name", "slug", "currency", "timezone", "fiscal_year_start_month", "default_costing_method", "address", "tax_id", "doc_template", "bank_info", "doc_footer_note", "status", "created_by", "created_at", "updated_at"],
   workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
   addons: ["id", "code", "name", "tagline", "description", "monthly_price", "module_id", "is_active", "sort_order", "created_at", "updated_at"],
   tenant_addons: ["id", "tenant_id", "addon_id", "status", "starts_at", "ends_at", "monthly_price", "notes", "created_at", "updated_at"],

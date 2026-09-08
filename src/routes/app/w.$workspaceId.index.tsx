@@ -4,6 +4,7 @@ import { ArrowUpRight, Lock } from "lucide-react";
 import launcherBg from "@/assets/launcher-vector-bg.jpg";
 import { Badge } from "@/components/ui/badge";
 import { TrialBanner } from "@/components/app/TrialBanner";
+import { useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { APP_MODULES, LAUNCHER_UTILITIES, TONE_CLASS } from "@/lib/modules";
@@ -17,6 +18,7 @@ function Launcher() {
   const { workspaceId } = Route.useParams();
   const { activeWorkspace } = useApp();
   const { lang } = useI18n();
+  const { hasAddon, loading: addonsLoading } = useTenantAddons();
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden">
@@ -47,15 +49,24 @@ function Launcher() {
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {APP_MODULES.map((m) => {
+            const addonLocked = Boolean(m.addon) && !addonsLoading && !hasAddon(m.addon);
+            const locked = m.disabled || addonLocked;
             const inner = (
               <>
                 <div className="flex items-start justify-between">
                   <span className={`grid h-11 w-11 place-items-center rounded-xl ${TONE_CLASS[m.tone]}`}>
                     <m.icon className="h-5 w-5" />
                   </span>
-                  {m.disabled && (
+                  {(m.disabled || addonLocked) && (
                     <Badge variant="secondary" className="gap-1 text-[10px]">
-                      <Lock className="h-3 w-3" /> {lang === "id" ? "Segera" : "Soon"}
+                      <Lock className="h-3 w-3" />
+                      {m.disabled
+                        ? lang === "id"
+                          ? "Segera"
+                          : "Soon"
+                        : lang === "id"
+                          ? "Add-on"
+                          : "Add-on"}
                     </Badge>
                   )}
                 </div>
@@ -73,7 +84,7 @@ function Launcher() {
             );
             const base =
               "group relative overflow-hidden rounded-2xl border border-border bg-card/90 p-4 shadow-sm backdrop-blur transition-all";
-            if (m.disabled) {
+            if (locked) {
               return (
                 <div key={m.id} className={cn(base, "cursor-not-allowed opacity-50")} aria-disabled>
                   {inner}

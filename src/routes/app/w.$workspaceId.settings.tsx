@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateWorkspaceSettings } from "@/lib/platform.functions";
+import { DOC_TEMPLATES, type DocTemplate } from "@/lib/doc-print";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 
@@ -32,6 +34,11 @@ function SettingsPage() {
     timezone: "Asia/Jakarta",
     fiscal: "1",
     costing: "AVERAGE" as "FIFO" | "LIFO" | "AVERAGE",
+    address: "",
+    tax_id: "",
+    doc_template: "classic" as DocTemplate,
+    bank_info: "",
+    doc_footer_note: "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -44,6 +51,11 @@ function SettingsPage() {
       timezone: activeWorkspace.timezone,
       fiscal: String(activeWorkspace.fiscal_year_start_month),
       costing: activeWorkspace.default_costing_method,
+      address: activeWorkspace.address ?? "",
+      tax_id: activeWorkspace.tax_id ?? "",
+      doc_template: activeWorkspace.doc_template === "modern" || activeWorkspace.doc_template === "minimal" ? activeWorkspace.doc_template : "classic",
+      bank_info: activeWorkspace.bank_info ?? "",
+      doc_footer_note: activeWorkspace.doc_footer_note ?? "",
     });
   }, [activeWorkspace]);
 
@@ -61,6 +73,11 @@ function SettingsPage() {
             timezone: form.timezone,
             fiscal_year_start_month: Number(form.fiscal),
             default_costing_method: form.costing,
+            address: form.address.trim() || null,
+            tax_id: form.tax_id.trim() || null,
+            doc_template: form.doc_template,
+            bank_info: form.bank_info.trim() || null,
+            doc_footer_note: form.doc_footer_note.trim() || null,
           },
         },
       });
@@ -178,6 +195,50 @@ function SettingsPage() {
                     <SelectItem value="LIFO">LIFO</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="addr">{lang === "id" ? "Alamat" : "Address"}</Label>
+                <Input id="addr" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tax">{lang === "id" ? "NPWP" : "Tax ID"}</Label>
+                <Input id="tax" value={form.tax_id} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
+                {lang === "id" ? "Branding dokumen" : "Document branding"}
+              </p>
+              <div className="mt-3">
+                <Label>{lang === "id" ? "Template dokumen" : "Document template"}</Label>
+                <Select value={form.doc_template} onValueChange={(v) => setForm({ ...form, doc_template: v as DocTemplate })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOC_TEMPLATES.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {lang === "id" ? t.id_ : t.en}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="bank">
+                    {lang === "id" ? "Info bank (muncul di dokumen)" : "Bank info (shown on documents)"}
+                  </Label>
+                  <Textarea id="bank" rows={3} value={form.bank_info} onChange={(e) => setForm({ ...form, bank_info: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="foot">{lang === "id" ? "Catatan kaki dokumen" : "Document footer note"}</Label>
+                  <Textarea id="foot" rows={3} value={form.doc_footer_note} onChange={(e) => setForm({ ...form, doc_footer_note: e.target.value })} />
+                </div>
               </div>
             </div>
 
