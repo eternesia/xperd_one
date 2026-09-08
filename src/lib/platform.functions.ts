@@ -71,7 +71,7 @@ export interface AdminListInput {
 
 export const adminList = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as AdminListInput)
+  .validator((input: unknown) => input as AdminListInput)
   .handler(async ({ data, context }) => {
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
@@ -97,7 +97,7 @@ export const adminList = createServerFn({ method: "POST" })
       `SELECT * FROM \`${table}\`${wsql} ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`,
       [...params, String(limit), String(offset)],
     );
-    return { rows: rows as Record<string, unknown>[], count: Number(row?.c ?? 0) };
+    return { rows: rows as Record<string, any>[], count: Number(row?.c ?? 0) };
   });
 
 export interface AdminSaveInput {
@@ -108,7 +108,7 @@ export interface AdminSaveInput {
 
 export const adminSave = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as AdminSaveInput)
+  .validator((input: unknown) => input as AdminSaveInput)
   .handler(async ({ data, context }) => {
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -143,7 +143,7 @@ export interface AdminDeleteInput {
 
 export const adminDelete = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as AdminDeleteInput)
+  .validator((input: unknown) => input as AdminDeleteInput)
   .handler(async ({ data, context }) => {
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
@@ -159,7 +159,7 @@ export const adminDelete = createServerFn({ method: "POST" })
 
 export const getAdminDashboardStats = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as {})
+  .validator((input: unknown) => input as {})
   .handler(async ({ context }) => {
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
@@ -185,7 +185,7 @@ export const getAdminDashboardStats = createServerFn({ method: "POST" })
 // Tenants joined with package name (tenancy page).
 export const adminListTenantsWithPackages = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as {})
+  .validator((input: unknown) => input as {})
   .handler(async ({ context }) => {
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
@@ -206,7 +206,7 @@ async function tenantGate(tenantId: string, userId: string): Promise<void> {
 
 export const getTenantSubscription = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as { tenantId: string })
+  .validator((input: unknown) => input as { tenantId: string })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { executeOne } = await import("@/integrations/mysql/pool");
@@ -218,7 +218,7 @@ export const getTenantSubscription = createServerFn({ method: "POST" })
 
 export const listTenantInvoices = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as { tenantId: string })
+  .validator((input: unknown) => input as { tenantId: string })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -227,7 +227,7 @@ export const listTenantInvoices = createServerFn({ method: "POST" })
 
 export const listTenantUpgradeRequests = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as { tenantId: string })
+  .validator((input: unknown) => input as { tenantId: string })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -243,7 +243,7 @@ export interface CreateUpgradeRequestInput {
 
 export const createUpgradeRequest = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as CreateUpgradeRequestInput)
+  .validator((input: unknown) => input as CreateUpgradeRequestInput)
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -258,7 +258,7 @@ export const createUpgradeRequest = createServerFn({ method: "POST" })
 // Public package list for the upgrade picker (billing page).
 export const listPublicPackages = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as {})
+  .validator((input: unknown) => input as {})
   .handler(async () => {
     const { execute } = await import("@/integrations/mysql/pool");
     return execute(
@@ -278,7 +278,7 @@ export interface UpdateWorkspaceInput {
 
 export const updateWorkspaceSettings = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as UpdateWorkspaceInput)
+  .validator((input: unknown) => input as UpdateWorkspaceInput)
   .handler(async ({ data, context }) => {
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
@@ -307,7 +307,7 @@ export interface ListProfilesByIdsInput {
 
 export const listProfilesByIds = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as ListProfilesByIdsInput)
+  .validator((input: unknown) => input as ListProfilesByIdsInput)
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");

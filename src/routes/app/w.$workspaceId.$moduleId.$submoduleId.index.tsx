@@ -12,6 +12,7 @@ import { ProcurementTable } from "@/components/app/ProcurementTable";
 import { ShipmentScan } from "@/components/app/ShipmentScan";
 import { PosRegister } from "@/components/app/PosRegister";
 import { SalesTable } from "@/components/app/SalesTable";
+import { CrmView } from "@/components/app/CrmViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
@@ -89,6 +90,10 @@ function SubModulePage() {
   if (moduleId === "reporting") {
     const entity = findRptEntity(submoduleId);
     if (entity) return <ReportingView entity={entity} workspaceId={workspaceId} />;
+  }
+
+  if (moduleId === "crm") {
+    return <CrmView submoduleId={submoduleId} workspaceId={workspaceId} />;
   }
 
   return (

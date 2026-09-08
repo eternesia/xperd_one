@@ -446,7 +446,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
           await countWorkspaceRows({
             data: { table: "cb_transactions", workspaceId, filters: { trx_type: type } },
           })
-        ).data?.count ?? 0;
+        ).count ?? 0;
       const prefix = type === "in" ? "CI" : type === "out" ? "CO" : "CTR";
       await createCbTransaction(workspaceId, {
         trx_no: nextTrxNumber(prefix, seq + 1),

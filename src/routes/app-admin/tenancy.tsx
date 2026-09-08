@@ -111,7 +111,7 @@ function TenancyPage() {
     queryKey: ["admin-tenants"],
     queryFn: async () => {
       const rows = await adminListTenantsWithPackages({ data: {} });
-      return (rows ?? []) as never[];
+      return (rows ?? []) as any[];
     },
   });
 

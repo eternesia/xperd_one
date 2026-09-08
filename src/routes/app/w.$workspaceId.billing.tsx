@@ -77,7 +77,7 @@ function BillingPage() {
     enabled: !!tenantId,
     queryFn: async () => {
       const rows = await listTenantInvoices({ data: { tenantId: tenantId! } });
-      return (rows ?? []) as never[];
+      return (rows ?? []) as any[];
     },
   });
 
@@ -85,7 +85,7 @@ function BillingPage() {
     queryKey: ["packages-public"],
     queryFn: async () => {
       const rows = await listPublicPackages({ data: {} });
-      return (rows ?? []) as never[];
+      return (rows ?? []) as any[];
     },
   });
 
@@ -94,7 +94,7 @@ function BillingPage() {
     enabled: !!tenantId,
     queryFn: async () => {
       const rows = await listTenantUpgradeRequests({ data: { tenantId: tenantId! } });
-      return (rows ?? []) as never[];
+      return (rows ?? []) as any[];
     },
   });
 

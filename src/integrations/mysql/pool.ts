@@ -41,21 +41,21 @@ export async function getPool(): Promise<MysqlPool> {
 }
 
 // query: generic SELECT/DML — safe when you control the SQL.
-export async function query<T = unknown>(sql: string, params?: unknown[]): Promise<T[]> {
+export async function query<T = any>(sql: string, params?: unknown[]): Promise<T[]> {
   const pool = await getPool();
   const [rows] = await pool.query(sql, params as never[]);
   return rows as T[];
 }
 
 // execute: prepared statement — use for anything with user input.
-export async function execute<T = unknown>(sql: string, params?: unknown[]): Promise<T[]> {
+export async function execute<T = any>(sql: string, params?: unknown[]): Promise<T[]> {
   const pool = await getPool();
   const [rows] = await pool.execute(sql, params as never[]);
   return rows as T[];
 }
 
 // executeOne: prepared statement returning a single row or null.
-export async function executeOne<T = unknown>(sql: string, params?: unknown[]): Promise<T | null> {
+export async function executeOne<T = any>(sql: string, params?: unknown[]): Promise<T | null> {
   const rows = await execute<T>(sql, params);
   return (rows[0] as T | undefined) ?? null;
 }

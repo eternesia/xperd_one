@@ -115,10 +115,13 @@ export async function assertFundsMapping(workspaceId: string, funds: FundsAccoun
       "Select a cash/bank account with a GL mapping first — the settlement account cannot be determined.",
     );
   }
-  const accounts = (await fetchMdAccountsFn({ data: { workspaceId } })).data ?? [];
-  const row = (
-    accounts as unknown as { code: string; name: string; account_type: string; is_active: boolean }[]
-  ).find((a) => a.code === code) ?? null;
+  const accounts = ((await fetchMdAccountsFn({ data: { workspaceId } })) ?? []) as unknown as {
+    code: string;
+    name: string;
+    account_type: string;
+    is_active: boolean;
+  }[];
+  const row = accounts.find((a) => a.code === code) ?? null;
   if (!row) throw new Error(`GL account ${code} is not found in the chart of accounts.`);
   if (!row.is_active) throw new Error(`GL account ${code} — ${row.name} is inactive.`);
   if (row.account_type !== "asset") {

@@ -22,7 +22,7 @@ const STATUSES = ["open", "in_progress", "waiting_customer", "resolved", "closed
 
 function TicketsPage() {
   const qc = useQueryClient();
-  const { user } = useSession();
+  const { session } = useSession();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [internal, setInternal] = useState(false);
@@ -66,7 +66,7 @@ function TicketsPage() {
           table: "support_ticket_messages",
           data: {
             ticket_id: activeId,
-            author_id: user?.id ?? "",
+            author_id: session?.user?.id ?? "",
             body: reply.trim(),
             is_internal: internal,
           },

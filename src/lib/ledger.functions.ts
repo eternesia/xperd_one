@@ -38,7 +38,7 @@ const withWriter = async (workspaceId: string, userId: string) => {
 
 export const fetchMdAccounts = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string })
+  .validator((i: unknown) => i as { workspaceId: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -50,7 +50,7 @@ export const fetchMdAccounts = createServerFn({ method: "POST" })
 
 export const fetchJournalEntries = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; from?: string; to?: string })
+  .validator((i: unknown) => i as { workspaceId: string; from?: string; to?: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -70,7 +70,7 @@ export const fetchJournalEntries = createServerFn({ method: "POST" })
 
 export const fetchJournalLines = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; entryIds: string[] })
+  .validator((i: unknown) => i as { workspaceId: string; entryIds: string[] })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -84,7 +84,7 @@ export const fetchJournalLines = createServerFn({ method: "POST" })
 
 export const fetchOpeningBalances = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string })
+  .validator((i: unknown) => i as { workspaceId: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -96,7 +96,7 @@ export const fetchOpeningBalances = createServerFn({ method: "POST" })
 
 export const postJournalEntry = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; entry: JournalEntryInput; lines: JournalLineInput[] })
+  .validator((i: unknown) => i as { workspaceId: string; entry: JournalEntryInput; lines: JournalLineInput[] })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
     const { transaction, uuid } = await import("@/integrations/mysql/pool");
@@ -148,7 +148,7 @@ export const postJournalEntry = createServerFn({ method: "POST" })
 /** Delete a journal entry together with its lines (used by opening-balance rollback). */
 export const deleteJournalEntry = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; entryId: string })
+  .validator((i: unknown) => i as { workspaceId: string; entryId: string })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
     const { transaction } = await import("@/integrations/mysql/pool");
@@ -167,7 +167,7 @@ export const deleteJournalEntry = createServerFn({ method: "POST" })
 
 export const fetchCashAccountCodes = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string })
+  .validator((i: unknown) => i as { workspaceId: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -181,7 +181,7 @@ export const fetchCashAccountCodes = createServerFn({ method: "POST" })
 
 export const fetchCbAccounts = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string })
+  .validator((i: unknown) => i as { workspaceId: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -190,7 +190,7 @@ export const fetchCbAccounts = createServerFn({ method: "POST" })
 
 export const fetchCbTransactions = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; from?: string; to?: string; type?: string })
+  .validator((i: unknown) => i as { workspaceId: string; from?: string; to?: string; type?: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -221,7 +221,7 @@ const CB_ALLOWED = new Set([
 
 export const insertCbTransaction = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; trx: Record<string, unknown> })
+  .validator((i: unknown) => i as { workspaceId: string; trx: Record<string, unknown> })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -245,7 +245,7 @@ const INV_ALLOWED = new Set([
 
 export const insertInvMovements = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; rows: Record<string, unknown>[] })
+  .validator((i: unknown) => i as { workspaceId: string; rows: Record<string, unknown>[] })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -265,7 +265,7 @@ export const insertInvMovements = createServerFn({ method: "POST" })
 
 export const fetchMdItems = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; codes?: string[] })
+  .validator((i: unknown) => i as { workspaceId: string; codes?: string[] })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -281,7 +281,7 @@ export const fetchMdItems = createServerFn({ method: "POST" })
 
 export const fetchFaAssets = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string })
+  .validator((i: unknown) => i as { workspaceId: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -290,7 +290,7 @@ export const fetchFaAssets = createServerFn({ method: "POST" })
 
 export const fetchFaDepreciations = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; from?: string; to?: string })
+  .validator((i: unknown) => i as { workspaceId: string; from?: string; to?: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -317,7 +317,7 @@ const FA_UPDATE_ALLOWED = new Set([
 
 export const updateFaAsset = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; id: string; data: Record<string, unknown> })
+  .validator((i: unknown) => i as { workspaceId: string; id: string; data: Record<string, unknown> })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
@@ -332,7 +332,7 @@ export const updateFaAsset = createServerFn({ method: "POST" })
 
 export const postDepreciationRows = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) =>
+  .validator((i: unknown) =>
     i as {
       workspaceId: string;
       rows: Record<string, unknown>[];
@@ -343,7 +343,7 @@ export const postDepreciationRows = createServerFn({ method: "POST" })
     await withWriter(data.workspaceId, context.userId);
     const { execute, transaction, uuid } = await import("@/integrations/mysql/pool");
     await transaction(async (conn) => {
-      for (const r of data.rows ?? []) {
+      for (const r of (data.rows ?? []) as any[]) {
         await conn.execute(
           `INSERT INTO fa_depreciations
              (id, workspace_id, asset_id, asset_code, asset_name, period_date, amount, book_value_after, journal_entry_id, notes, created_by)
@@ -375,7 +375,7 @@ export const postDepreciationRows = createServerFn({ method: "POST" })
 
 export const fetchTaxableDocuments = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((i: unknown) => i as { workspaceId: string; type: "vat_in" | "vat_out" })
+  .validator((i: unknown) => i as { workspaceId: string; type: "vat_in" | "vat_out" })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");

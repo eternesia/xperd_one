@@ -173,8 +173,10 @@ async function postJournal(
 export async function runDepreciation(workspaceId: string, period: string) {
   const periodDate = monthEnd(period);
   const assets = await fetchAssets(workspaceId);
-  const existing = (await fetchFaDepreciations({ data: { workspaceId, from: periodDate, to: periodDate } })).data ?? [];
-  const done = new Set((existing as { asset_id: string }[]).map((r) => r.asset_id));
+  const existing = ((await fetchFaDepreciations({ data: { workspaceId, from: periodDate, to: periodDate } })) ?? []) as {
+    asset_id: string;
+  }[];
+  const done = new Set(existing.map((r) => r.asset_id));
   const eligible = assets.filter(
     (a) => a.status === "active" && !done.has(a.id) && a.acquisition_date <= periodDate && monthlyCharge(a) > 0,
   );

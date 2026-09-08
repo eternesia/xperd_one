@@ -9,7 +9,7 @@ const credentialsSchema = z.object({
 });
 
 export const registerAppUser = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => credentialsSchema.parse(input))
+  .validator((input: unknown) => credentialsSchema.parse(input))
   .handler(async ({ data }) => {
     const { hashPassword, findAppUserByEmail } = await import("@/lib/auth-jwt.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -28,7 +28,7 @@ export const registerAppUser = createServerFn({ method: "POST" })
   });
 
 export const loginAppUser = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => credentialsSchema.omit({ fullName: true }).parse(input))
+  .validator((input: unknown) => credentialsSchema.omit({ fullName: true }).parse(input))
   .handler(async ({ data }) => {
     const { findAppUserByEmail, verifyPassword, signAppJwt, APP_JWT_COOKIE } = await import(
       "@/lib/auth-jwt.server"
@@ -40,7 +40,7 @@ export const loginAppUser = createServerFn({ method: "POST" })
     // Same generic message for unknown email and wrong password.
     const invalid = new Error("Invalid email or password");
 
-    if (!user || !user.is_active) throw invalid;
+    if (!user || !user.is_active || !user.password_hash) throw invalid;
     if (!(await verifyPassword(data.password, user.password_hash))) throw invalid;
 
     const token = await signAppJwt({
@@ -84,7 +84,7 @@ export const logoutAppUser = createServerFn({ method: "POST" }).handler(async ()
 });
 
 export const getIsAdmin = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => String(input))
+  .validator((input: unknown) => String(input))
   .handler(async ({ data }) => {
     const { hasRole, claimSuperadminIfAllowed } = await import("@/lib/auth-context.server");
     if (await hasRole(data, "admin")) return true;

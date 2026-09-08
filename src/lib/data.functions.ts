@@ -18,6 +18,10 @@ const WORKSPACE_TABLES = new Set([
   "acc_journal_entries", "acc_journal_lines", "inv_movements",
   "prc_documents", "prc_document_lines", "sls_documents", "sls_document_lines",
   "sls_shipment_scans", "workspace_role_access", "workspace_members",
+  // Qalling CRM (migration 002_crm.sql) — crm_wa_settings stays out of this
+  // generic layer: it is secrets-bearing and goes through dedicated server fns.
+  "crm_leads", "crm_activities", "crm_broadcasts", "crm_broadcast_recipients",
+  "crm_campaigns",
 ]);
 
 // Per-table column whitelist (used to build SQL identifiers safely).
@@ -45,6 +49,11 @@ const COLS: Record<string, string[]> = {
   sls_shipment_scans: ["id", "workspace_id", "scan_date", "tracking_no", "marketplace", "courier", "order_no", "buyer_name", "item_summary", "status", "document_id", "doc_number", "notes", "scanned_by", "shipped_at", "created_at", "updated_at"],
   workspace_role_access: ["id", "workspace_id", "role", "module_id", "can_view", "can_edit", "created_at", "updated_at"],
   workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
+  crm_leads: ["id", "workspace_id", "code", "name", "company_name", "email", "phone", "source", "stage", "status", "estimated_value", "probability", "currency", "owner_user_id", "owner_name", "customer_code", "converted_customer_code", "quotation_id", "next_follow_up_at", "last_activity_at", "lost_reason", "stage_changed_at", "notes", "created_by", "created_at", "updated_at"],
+  crm_activities: ["id", "workspace_id", "lead_id", "activity_type", "subject", "body", "due_at", "done_at", "outcome", "owner_user_id", "owner_name", "created_by", "created_at", "updated_at"],
+  crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
+  crm_broadcast_recipients: ["id", "broadcast_id", "workspace_id", "lead_id", "name", "phone", "email", "status", "error", "sent_at", "created_at", "updated_at"],
+  crm_campaigns: ["id", "workspace_id", "name", "objective", "platforms", "content", "media_url", "budget", "start_date", "end_date", "status", "reach", "clicks", "leads_generated", "owner_name", "created_by", "created_at", "updated_at"],
 };
 
 const SEARCHABLE = new Set([
@@ -82,7 +91,7 @@ export interface ListRowsInput {
 
 export const listWorkspaceRows = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as ListRowsInput)
+  .validator((input: unknown) => input as ListRowsInput)
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
@@ -141,7 +150,7 @@ export const listWorkspaceRows = createServerFn({ method: "POST" })
       `SELECT * FROM \`${table}\` WHERE ${where.join(" AND ")} ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`,
       [...params, String(limit), String(offset)],
     );
-    return { rows: rows as Record<string, unknown>[], count: Number(countRow?.c ?? 0) };
+    return { rows: rows as Record<string, any>[], count: Number(countRow?.c ?? 0) };
   });
 
 export interface ListByIdsInput {
@@ -153,7 +162,7 @@ export interface ListByIdsInput {
 
 export const listRowsByIds = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as ListByIdsInput)
+  .validator((input: unknown) => input as ListByIdsInput)
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
@@ -162,10 +171,10 @@ export const listRowsByIds = createServerFn({ method: "POST" })
     if (!data.ids?.length) return [];
     const idColumn = data.idColumn && COLS[table].includes(data.idColumn) ? `\`${data.idColumn}\`` : "`id`";
     const ph = data.ids.map(() => "?").join(", ");
-    return execute(
+    return (await execute(
       `SELECT * FROM \`${table}\` WHERE \`workspace_id\` = ? AND ${idColumn} IN (${ph})`,
       [data.workspaceId, ...data.ids],
-    );
+    )) as Record<string, any>[];
   });
 
 export interface CountRowsInput {
@@ -177,7 +186,7 @@ export interface CountRowsInput {
 
 export const countWorkspaceRows = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as CountRowsInput)
+  .validator((input: unknown) => input as CountRowsInput)
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { executeOne } = await import("@/integrations/mysql/pool");
@@ -216,16 +225,16 @@ export interface GetRowInput {
 }
 export const getWorkspaceRow = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as GetRowInput)
+  .validator((input: unknown) => input as GetRowInput)
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { executeOne } = await import("@/integrations/mysql/pool");
     const table = assertTable(data.table);
     if (!(await isWorkspaceMember(data.workspaceId, context.userId))) throw new Error("Forbidden");
-    return executeOne(
+    return (await executeOne(
       `SELECT * FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ? LIMIT 1`,
       [data.id, data.workspaceId],
-    );
+    )) as Record<string, any> | null;
   });
 
 export interface SaveRowInput {
@@ -237,7 +246,7 @@ export interface SaveRowInput {
 
 export const saveWorkspaceRow = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as SaveRowInput)
+  .validator((input: unknown) => input as SaveRowInput)
   .handler(async ({ data, context }) => {
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");
@@ -274,7 +283,7 @@ export interface DeleteRowInput {
 
 export const deleteWorkspaceRow = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as DeleteRowInput)
+  .validator((input: unknown) => input as DeleteRowInput)
   .handler(async ({ data, context }) => {
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
@@ -292,7 +301,7 @@ export interface UpsertRowsInput {
 
 export const upsertWorkspaceRows = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((input: unknown) => input as UpsertRowsInput)
+  .validator((input: unknown) => input as UpsertRowsInput)
   .handler(async ({ data, context }) => {
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");

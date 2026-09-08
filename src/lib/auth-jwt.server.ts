@@ -98,6 +98,7 @@ export interface AppUserRow {
   full_name: string | null;
   is_active: boolean;
   auth_user_id: string | null;
+  password_hash?: string | null;
 }
 
 export async function findAppUserByEmail(email: string) {
