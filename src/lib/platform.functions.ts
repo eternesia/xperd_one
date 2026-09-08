@@ -18,6 +18,8 @@ const ADMIN_TABLES = new Set([
   "leads", "site_content", "announcements", "support_tickets", "support_ticket_messages",
   "payment_gateways", "upgrade_requests", "profiles", "user_roles", "app_users",
   "workspaces", "workspace_members",
+  // Add-on catalog + tenant assignments (003_addons.sql)
+  "addons", "tenant_addons",
 ]);
 
 // Per-table column whitelist (mirrors 001-schema.sql).
@@ -40,6 +42,8 @@ const PCOLS: Record<string, string[]> = {
   app_users: ["id", "email", "full_name", "password_hash", "is_active", "auth_user_id", "last_login_at", "created_at", "updated_at"],
   workspaces: ["id", "tenant_id", "name", "legal_name", "slug", "currency", "timezone", "fiscal_year_start_month", "default_costing_method", "address", "tax_id", "status", "created_by", "created_at", "updated_at"],
   workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
+  addons: ["id", "code", "name", "tagline", "description", "monthly_price", "module_id", "is_active", "sort_order", "created_at", "updated_at"],
+  tenant_addons: ["id", "tenant_id", "addon_id", "status", "starts_at", "ends_at", "monthly_price", "notes", "created_at", "updated_at"],
 };
 
 function assertAdminTable(table: string): string {

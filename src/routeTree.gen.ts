@@ -26,6 +26,7 @@ import { Route as SiteResourcesRouteImport } from './routes/_site/resources'
 import { Route as SiteSolutionsRouteImport } from './routes/_site/solutions'
 import { Route as SiteTechnologyRouteImport } from './routes/_site/technology'
 import { Route as AppAdminIndexRouteImport } from './routes/app-admin/index'
+import { Route as AppAdminAddonsRouteImport } from './routes/app-admin/addons'
 import { Route as AppAdminAnnouncementsRouteImport } from './routes/app-admin/announcements'
 import { Route as AppAdminContentRouteImport } from './routes/app-admin/content'
 import { Route as AppAdminInvoicesRouteImport } from './routes/app-admin/invoices'
@@ -34,6 +35,7 @@ import { Route as AppAdminPaymentsRouteImport } from './routes/app-admin/payment
 import { Route as AppAdminRegistrationsRouteImport } from './routes/app-admin/registrations'
 import { Route as AppAdminTenancyRouteImport } from './routes/app-admin/tenancy'
 import { Route as AppAdminTicketsRouteImport } from './routes/app-admin/tickets'
+import { Route as AppAdminUsersRouteImport } from './routes/app-admin/users'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
@@ -137,6 +139,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminRoute,
 } as any)
+const AppAdminAddonsRoute = AppAdminAddonsRouteImport.update({
+  id: '/addons',
+  path: '/addons',
+  getParentRoute: () => AppAdminRoute,
+} as any)
 const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
   id: '/announcements',
   path: '/announcements',
@@ -175,6 +182,11 @@ const AppAdminTenancyRoute = AppAdminTenancyRouteImport.update({
 const AppAdminTicketsRoute = AppAdminTicketsRouteImport.update({
   id: '/tickets',
   path: '/tickets',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -280,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
@@ -288,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
+  '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
@@ -319,6 +333,7 @@ export interface FileRoutesByTo {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
@@ -327,6 +342,7 @@ export interface FileRoutesByTo {
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
+  '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
@@ -361,6 +377,7 @@ export interface FileRoutesById {
   '/_site/resources': typeof SiteResourcesRoute
   '/_site/solutions': typeof SiteSolutionsRoute
   '/_site/technology': typeof SiteTechnologyRoute
+  '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
@@ -369,6 +386,7 @@ export interface FileRoutesById {
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
+  '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
@@ -406,6 +424,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
     | '/app-admin/invoices'
@@ -414,6 +433,7 @@ export interface FileRouteTypes {
     | '/app-admin/registrations'
     | '/app-admin/tenancy'
     | '/app-admin/tickets'
+    | '/app-admin/users'
     | '/app/onboarding'
     | '/app-admin/'
     | '/app/'
@@ -445,6 +465,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
     | '/app-admin/invoices'
@@ -453,6 +474,7 @@ export interface FileRouteTypes {
     | '/app-admin/registrations'
     | '/app-admin/tenancy'
     | '/app-admin/tickets'
+    | '/app-admin/users'
     | '/app/onboarding'
     | '/'
     | '/app-admin'
@@ -486,6 +508,7 @@ export interface FileRouteTypes {
     | '/_site/resources'
     | '/_site/solutions'
     | '/_site/technology'
+    | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
     | '/app-admin/invoices'
@@ -494,6 +517,7 @@ export interface FileRouteTypes {
     | '/app-admin/registrations'
     | '/app-admin/tenancy'
     | '/app-admin/tickets'
+    | '/app-admin/users'
     | '/app/onboarding'
     | '/_site/'
     | '/app-admin/'
@@ -647,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminIndexRouteImport
       parentRoute: typeof AppAdminRoute
     }
+    '/app-admin/addons': {
+      id: '/app-admin/addons'
+      path: '/addons'
+      fullPath: '/app-admin/addons'
+      preLoaderRoute: typeof AppAdminAddonsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/app-admin/announcements': {
       id: '/app-admin/announcements'
       path: '/announcements'
@@ -701,6 +732,13 @@ declare module '@tanstack/react-router' {
       path: '/tickets'
       fullPath: '/app-admin/tickets'
       preLoaderRoute: typeof AppAdminTicketsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/app-admin/users': {
+      id: '/app-admin/users'
+      path: '/users'
+      fullPath: '/app-admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/app/': {
@@ -905,6 +943,7 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface AppAdminRouteChildren {
+  AppAdminAddonsRoute: typeof AppAdminAddonsRoute
   AppAdminAnnouncementsRoute: typeof AppAdminAnnouncementsRoute
   AppAdminContentRoute: typeof AppAdminContentRoute
   AppAdminInvoicesRoute: typeof AppAdminInvoicesRoute
@@ -913,10 +952,12 @@ interface AppAdminRouteChildren {
   AppAdminRegistrationsRoute: typeof AppAdminRegistrationsRoute
   AppAdminTenancyRoute: typeof AppAdminTenancyRoute
   AppAdminTicketsRoute: typeof AppAdminTicketsRoute
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
 
 const AppAdminRouteChildren: AppAdminRouteChildren = {
+  AppAdminAddonsRoute: AppAdminAddonsRoute,
   AppAdminAnnouncementsRoute: AppAdminAnnouncementsRoute,
   AppAdminContentRoute: AppAdminContentRoute,
   AppAdminInvoicesRoute: AppAdminInvoicesRoute,
@@ -925,6 +966,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminRegistrationsRoute: AppAdminRegistrationsRoute,
   AppAdminTenancyRoute: AppAdminTenancyRoute,
   AppAdminTicketsRoute: AppAdminTicketsRoute,
+  AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }
 

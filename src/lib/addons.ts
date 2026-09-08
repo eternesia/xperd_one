@@ -1,0 +1,53 @@
+// Add-ons — client hooks (ported from Business Suite lib/addons.ts). Now backed
+// by the MySQL server functions in @/lib/addons.functions instead of Supabase.
+import { useQuery } from "@tanstack/react-query";
+
+import { useApp } from "@/lib/app-context";
+import { listAddonCatalog, listTenantAddons } from "@/lib/addons.functions";
+import type { AddonRow, TenantAddonRow } from "@/lib/addons.functions";
+
+export type AddonRecord = AddonRow;
+export type TenantAddonRecord = TenantAddonRow;
+
+function isLive(row: TenantAddonRow) {
+  if (row.status !== "active" && row.status !== "trial") return false;
+  if (!row.ends_at) return true;
+  return row.ends_at >= new Date().toISOString().slice(0, 10);
+}
+
+/** Add-on codes currently unlocked for the signed-in user's tenant. */
+export function useTenantAddons() {
+  const { tenant } = useApp();
+  const tenantId = tenant?.id;
+
+  const query = useQuery({
+    queryKey: ["tenant-addons", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      if (!tenantId) return [] as TenantAddonRow[];
+      const data = await listTenantAddons({ data: { tenantId } });
+      return data ?? [];
+    },
+  });
+
+  const rows = query.data ?? [];
+  const activeCodes = rows.filter(isLive).map((r) => r.addons?.code).filter(Boolean) as string[];
+
+  return {
+    rows,
+    activeCodes,
+    loading: query.isLoading,
+    hasAddon: (code?: string) => (code ? activeCodes.includes(code) : true),
+  };
+}
+
+/** Catalog of purchasable add-ons. */
+export function useAddonCatalog() {
+  return useQuery({
+    queryKey: ["addon-catalog"],
+    queryFn: async () => {
+      const data = await listAddonCatalog();
+      return data ?? [];
+    },
+  });
+}
