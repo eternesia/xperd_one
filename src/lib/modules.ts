@@ -232,6 +232,7 @@ const MODULE_DEFS: AppModule[] = [
     phase: 4,
     addon: "qalling",
     submodules: [
+      s("dashboard", "Dashboard", "Dasbor"),
       s("leads", "Leads", "Prospek"),
       s("pipeline", "Pipeline", "Pipeline"),
       s("contacts", "Contacts", "Kontak"),
@@ -239,6 +240,8 @@ const MODULE_DEFS: AppModule[] = [
       s("broadcast", "Broadcast", "Broadcast Pesan"),
       s("wa-gateway", "WhatsApp Gateway", "WhatsApp Gateway"),
       s("campaigns", "Social Campaigns", "Kampanye Sosial"),
+      s("targets", "Sales Targets", "Target Sales"),
+      s("templates", "Message Templates", "Template Pesan"),
     ],
   },
   {

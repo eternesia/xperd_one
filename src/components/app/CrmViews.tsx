@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
+import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel } from "@/lib/crm";
@@ -93,6 +94,7 @@ function PageHeader({ title, kicker, children }: { title: string; kicker: string
 }
 
 export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; workspaceId: string }) {
+  if (submoduleId === "dashboard") return <CrmDashboardView workspaceId={workspaceId} />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;
   if (submoduleId === "pipeline") return <PipelineView workspaceId={workspaceId} />;
   if (submoduleId === "contacts") return <ContactsView workspaceId={workspaceId} />;
@@ -100,6 +102,8 @@ export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; wor
   if (submoduleId === "broadcast") return <BroadcastView workspaceId={workspaceId} />;
   if (submoduleId === "wa-gateway") return <WaGatewayView workspaceId={workspaceId} />;
   if (submoduleId === "campaigns") return <CampaignView workspaceId={workspaceId} />;
+  if (submoduleId === "targets") return <CrmTargetsView workspaceId={workspaceId} />;
+  if (submoduleId === "templates") return <CrmTemplatesView workspaceId={workspaceId} />;
   return <ComingSoon submoduleId={submoduleId} />;
 }
 

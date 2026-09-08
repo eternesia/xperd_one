@@ -22,6 +22,8 @@ const WORKSPACE_TABLES = new Set([
   // generic layer: it is secrets-bearing and goes through dedicated server fns.
   "crm_leads", "crm_activities", "crm_broadcasts", "crm_broadcast_recipients",
   "crm_campaigns",
+  // CRM insights (migration 005_crm_insights.sql)
+  "crm_targets", "crm_templates",
 ]);
 
 // Per-table column whitelist (used to build SQL identifiers safely).
@@ -54,6 +56,8 @@ const COLS: Record<string, string[]> = {
   crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
   crm_broadcast_recipients: ["id", "broadcast_id", "workspace_id", "lead_id", "name", "phone", "email", "status", "error", "sent_at", "created_at", "updated_at"],
   crm_campaigns: ["id", "workspace_id", "name", "objective", "platforms", "content", "media_url", "budget", "start_date", "end_date", "status", "reach", "clicks", "leads_generated", "owner_name", "created_by", "created_at", "updated_at"],
+  crm_targets: ["id", "workspace_id", "owner_user_id", "owner_name", "period_month", "target_amount", "notes", "created_by", "created_at", "updated_at"],
+  crm_templates: ["id", "workspace_id", "name", "channel", "body", "is_active", "created_by", "created_at", "updated_at"],
 };
 
 const SEARCHABLE = new Set([
