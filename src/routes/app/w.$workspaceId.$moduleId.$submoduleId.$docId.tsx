@@ -7,7 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceRow, listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
-import { downloadDocPdf } from "@/lib/doc-pdf";
+import {
+  downloadDocHtmlPdf,
+  printDocHtml,
+  type DocPrintMeta,
+  type DocTemplate,
+} from "@/lib/doc-print";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -64,10 +69,29 @@ function DocumentDetail() {
 
   const doc = data?.doc ?? null;
   const lines = data?.lines ?? [];
+  const template: DocTemplate = "classic";
+  const ws = activeWorkspace as unknown as
+    | { name?: string | null; legal_name?: string | null; address?: string | null; tax_id?: string | null }
+    | null
+    | undefined;
+
+  const printMeta = (): DocPrintMeta => ({
+    title: lang === "id" ? (entity?.id_ ?? "") : (entity?.en ?? ""),
+    lang,
+    template,
+    company: {
+      name: ws?.name ?? "XPERD",
+      legalName: ws?.legal_name ?? null,
+      address: ws?.address ?? null,
+      taxId: ws?.tax_id ?? null,
+    },
+    labels,
+    statusLabel: doc ? String(doc.status) : "",
+  });
 
   useEffect(() => {
-    if (print && doc) {
-      const id = window.setTimeout(() => window.print(), 400);
+    if (print && doc && entity) {
+      const id = window.setTimeout(() => printDocHtml(doc, lines, printMeta()), 400);
       return () => window.clearTimeout(id);
     }
   }, [print, doc]);
@@ -109,19 +133,12 @@ function DocumentDetail() {
           <ChevronLeft className="h-4 w-4" /> {lang === "id" ? entity.id_ : entity.en}
         </Link>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button variant="outline" onClick={() => doc && printDocHtml(doc, lines, printMeta())}>
             <Printer /> {t("Print", "Cetak")}
           </Button>
           <Button
             variant="gold"
-            onClick={() =>
-              void downloadDocPdf(doc, lines, {
-                title: lang === "id" ? entity.id_ : entity.en,
-                companyName: activeWorkspace?.name ?? "XPERD",
-                lang,
-                labels,
-              })
-            }
+            onClick={() => void downloadDocHtmlPdf(doc, lines, printMeta())}
           >
             <Download /> {t("Download PDF", "Unduh PDF")}
           </Button>
