@@ -53,7 +53,7 @@ export const getPublicSignupPackages = createServerFn({ method: "GET" }).handler
 });
 
 export const createOrganisation = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => organisationSchema.parse(input))
+  .validator((input: unknown) => organisationSchema.parse(input))
   .handler(async ({ data }) => {
     const { requireUser } = await import("@/lib/auth-context.server");
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
@@ -77,7 +77,7 @@ export const createOrganisation = createServerFn({ method: "POST" })
   });
 
 export const createWorkspace = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => workspaceSchema.parse(input))
+  .validator((input: unknown) => workspaceSchema.parse(input))
   .handler(async ({ data }) => {
     const { requireUser } = await import("@/lib/auth-context.server");
     const { execute, executeOne, transaction, uuid } = await import("@/integrations/mysql/pool");
@@ -137,7 +137,7 @@ export const createWorkspace = createServerFn({ method: "POST" })
   });
 
 export const submitRegistration = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => registrationSchema.parse(input))
+  .validator((input: unknown) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
 
@@ -178,7 +178,7 @@ export const getPublicPackages = createServerFn({ method: "GET" }).handler(async
 });
 
 export const submitLead = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     input as {
       company_name: string;
       contact_name: string;

@@ -14,7 +14,7 @@ export const listPaymentMethods = createServerFn({ method: "GET" })
 /** Start checkout for one subscription invoice. */
 export const startInvoiceCheckout = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: { invoiceId: string; gatewayId: string }) => {
+  .validator((data: { invoiceId: string; gatewayId: string }) => {
     if (!data?.invoiceId) throw new Error("Invoice is required");
     if (!data?.gatewayId) throw new Error("Payment method is required");
     return data;
@@ -100,7 +100,7 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
 /** Admin: confirm a payment received outside the gateway and activate the tenant. */
 export const confirmInvoicePayment = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: { invoiceId: string; method?: string; reference?: string }) => {
+  .validator((data: { invoiceId: string; method?: string; reference?: string }) => {
     if (!data?.invoiceId) throw new Error("Invoice is required");
     return data;
   })

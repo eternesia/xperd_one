@@ -12,7 +12,7 @@ export interface CreateUserInput {
 
 export const createWorkspaceUser = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: CreateUserInput) => {
+  .validator((data: CreateUserInput) => {
     if (!data?.workspaceId) throw new Error("Workspace is required");
     if (!data.email?.includes("@")) throw new Error("Valid email is required");
     if (!data.password || data.password.length < 8) throw new Error("Password must be at least 8 characters");
@@ -58,7 +58,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
 
 export const updateWorkspaceUser = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: {
+  .validator((data: {
     workspaceId: string;
     targetUserId: string;
     fullName?: string;

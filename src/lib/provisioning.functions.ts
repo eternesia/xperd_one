@@ -34,7 +34,7 @@ interface PackageRow {
 
 export const provisionRegistration = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: { registrationId: string }) => {
+  .validator((data: { registrationId: string }) => {
     if (!data?.registrationId) throw new Error("Registration is required");
     return data;
   })
@@ -143,7 +143,7 @@ export const provisionRegistration = createServerFn({ method: "POST" })
 
 export const resetRegistrationOwnerPassword = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: { email: string }) => {
+  .validator((data: { email: string }) => {
     if (!data?.email?.includes("@")) throw new Error("Valid email is required");
     return data;
   })
@@ -167,7 +167,7 @@ export const resetRegistrationOwnerPassword = createServerFn({ method: "POST" })
 /** Seed a freshly created workspace with default Indonesian master data. */
 export const seedWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .inputValidator((data: { workspaceId: string }) => {
+  .validator((data: { workspaceId: string }) => {
     if (!data?.workspaceId) throw new Error("Workspace is required");
     return data;
   })
