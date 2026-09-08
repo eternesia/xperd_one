@@ -20,6 +20,7 @@ import {
   listTenantInvoices,
   listTenantUpgradeRequests,
 } from "@/lib/platform.functions";
+import { useAddonCatalog, useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/lib/procurement";
@@ -36,6 +37,8 @@ function BillingPage() {
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const money = (v: number) => formatMoney(v, lang);
   const tenantId = tenant?.id;
+  const { data: addonCatalog = [] } = useAddonCatalog();
+  const { activeCodes } = useTenantAddons();
 
   const [target, setTarget] = useState("");
   const [notes, setNotes] = useState("");
@@ -275,6 +278,42 @@ function BillingPage() {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-base">{t("Add-on modules", "Modul add-on")}</CardTitle>
+          <CardDescription>
+            {t(
+              "Optional modules billed on top of your package. Contact our team to activate.",
+              "Modul opsional yang ditagih terpisah dari paket. Hubungi tim kami untuk mengaktifkan.",
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          {addonCatalog
+            .filter((a) => a.is_active)
+            .map((a) => {
+              const on = activeCodes.includes(a.code);
+              return (
+                <div key={a.id} className="rounded-xl border border-border p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-navy dark:text-primary-foreground">{a.name}</p>
+                    <Badge variant={on ? "secondary" : "outline"}>
+                      {on ? t("Active", "Aktif") : t("Not active", "Belum aktif")}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{a.tagline ?? a.description}</p>
+                  <p className="mt-2 text-sm font-medium">
+                    {money(Number(a.monthly_price))}/{t("mo", "bln")}
+                  </p>
+                </div>
+              );
+            })}
+          {addonCatalog.filter((a) => a.is_active).length === 0 && (
+            <p className="text-sm text-muted-foreground">{t("No add-on available yet.", "Belum ada add-on tersedia.")}</p>
           )}
         </CardContent>
       </Card>

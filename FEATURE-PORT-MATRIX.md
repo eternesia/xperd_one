@@ -71,7 +71,7 @@ Identik BS vs Old — 11 halaman: Home, Products(+detail), Solutions, Industries
 ## 6. Utilitas workspace
 Team, Settings, Billing & Package, Backup & Restore (maintenance) — ada di keduanya 🟢.
 - **Settings** sekarang = profil + alamat/NPWP + **Document branding** (🔵).
-- **Billing**: paket, invoice tenant, upgrade request (🟢 MySQL platform fns).
+- **Billing**: paket, invoice tenant, upgrade request + seksi **Add-on modules** (daftar katalog add-on aktif/tidak + harga, paritas BS) (🟢 MySQL platform fns).
 - **Team**: undang anggota + role (owner/admin/staff/viewer) (🟢).
 
 ## 7. AI / MCP / Asisten
