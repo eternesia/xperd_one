@@ -6,7 +6,9 @@ test("SETTINGS: choose Modern doc template and save", async ({ page }) => {
   await login(page);
   await page.goto(`/app/w/${WS}/settings`);
 
-  const trigger = page.locator('button:has-text("Classic Corporate")').first();
+  // The select shows the currently saved template, so it may already be
+  // "Modern Accent" from a previous run. Open whatever is set, then pick Modern.
+  const trigger = page.locator("#docTemplateSelect");
   await expect(trigger).toBeVisible({ timeout: 60_000 });
   await trigger.click();
   await page.getByRole("option", { name: "Modern Accent" }).click();

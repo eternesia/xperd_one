@@ -328,7 +328,6 @@ export function printDocHtml(doc: PrcDoc, lines: PrcLine[], meta: DocPrintMeta) 
 
 /** Render the same isolated HTML to a downloadable PDF. */
 export async function downloadDocHtmlPdf(doc: PrcDoc, lines: PrcLine[], meta: DocPrintMeta) {
-  const html2pdf = (await import("html2pdf.js")).default;
   const html = buildDocHtml(doc, lines, meta);
 
   // Render inside an isolated iframe so the app's stylesheet (which uses modern
@@ -354,23 +353,26 @@ export async function downloadDocHtmlPdf(doc: PrcDoc, lines: PrcLine[], meta: Do
     const sheet = fdoc.querySelector(".sheet") as HTMLElement | null;
     if (!sheet) throw new Error("Document content is not ready");
 
-    await html2pdf()
-      .set({
-        margin: 0,
-        filename: `${doc.doc_number.replace(/[/\\]/g, "-")}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          windowWidth: 794,
-          width: 794,
-        },
-        jsPDF: { unit: "px", format: [794, 1123], orientation: "portrait" },
-      })
-      .from(sheet)
-      .save();
+    // html2pdf re-hosts the source element inside the *main* document, whose
+    // Tailwind v4 stylesheet uses oklch()/color() html2canvas cannot parse.
+    // Instead render straight from the isolated iframe (hex-only CSS) by calling
+    // html2canvas on the element: it clones element.ownerDocument, i.e. the iframe.
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
+    const canvas = await html2canvas(sheet, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      windowWidth: 794,
+      width: 794,
+    });
+    const pdf = new jsPDF({ unit: "px", format: [794, 1123], orientation: "portrait" });
+    const img = canvas.toDataURL("image/jpeg", 0.98);
+    pdf.addImage(img, "JPEG", 0, 0, 794, 1123, undefined, "FAST");
+    pdf.save(`${doc.doc_number.replace(/[/\\]/g, "-")}.pdf`);
   } finally {
     frame.remove();
   }

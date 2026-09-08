@@ -59,7 +59,7 @@ Struktur modul **identik** BS vs Old (cek otomatis `modules.ts`); satu-satunya b
 ## 4. Dokumen: print & branding
 | Item | BS | Old | Status |
 |---|---|---|---|
-| `doc-print.ts` template classic/modern/minimal (html2pdf) | ✅ | ✅ `html2pdf.js@0.14` + `lib/doc-print.ts` | 🔵 |
+| `doc-print.ts` template classic/modern/minimal | ✅ | ✅ `html2canvas@1.4.1` + `jspdf` (`lib/doc-print.ts`) | 🔵 fix: html2pdf.js melempar `oklch` (Tailwind v4) → render langsung di iframe via html2canvas+jsPDF |
 | Halaman detail dokumen (Print/PDF via template) | ✅ | ✅ route `$docId` | 🔵 |
 | Kolom `workspaces.doc_template/bank_info/doc_footer_note` | ✅ | ✅ `004` | 🔵 |
 | Settings → Document branding (template, info bank, footer, alamat/NPWP) | ✅ | ✅ | 🔵 |
@@ -86,7 +86,7 @@ Ada di kedua repo (`assistant`, `ai-gateway.server`, MCP tools). UI serupa; back
 - **Semua modul/submodul inti**: struktur 100% sama; flow diimplementasikan di Old (MySQL) sejak sebelum sesi ini — UI kedua repo satu sumber.
 - **Fitur terbaru BS yang hilang di Old** (CRM views/broadcast, Admin Users, Add-ons+gating, Doc Print v2+branding, CRM insights) → **sudah di-port** sesi ini & terverifikasi tsc/build + route 200.
 - **Satu-satunya beda struktural yang disengaja**: CRM Old punya 3 submodul ekstra (Dashboard, Sales Targets, Message Templates) yang di BS ada file `CrmInsights` tapi tidak di-wire ke module.
-- **Belum diverifikasi browser**: klik penuh (login → buka modul → simpan dokumen → print html2pdf → broadcast WA). Siap dites di `http://127.0.0.1:3999/auth` → `dnicorp.id@gmail.com` / `@DNIIPO2032`.
+- **Terverifikasi e2e (Playwright, 9 spec)**: login → launcher/module shell → CRM (lead, dashboard/targets/templates) → settings (template Modern) → admin (users, add-ons) → billing (Add-on modules: Qalling Active) → **Download PDF** (`E2E-SO-0001.pdf`, valid `%PDF-`). Belum dites: klik penuh print-to-printer & broadcast WA ke gateway asli. Siap dites di `http://127.0.0.1:3999/auth` → `dnicorp.id@gmail.com` / `@DNIIPO2032`.
 
 ## Env runtime (untuk tes)
 - App: http://127.0.0.1:3999 · Login: `/auth`

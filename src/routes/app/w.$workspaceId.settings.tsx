@@ -214,9 +214,11 @@ function SettingsPage() {
                 {lang === "id" ? "Branding dokumen" : "Document branding"}
               </p>
               <div className="mt-3">
-                <Label>{lang === "id" ? "Template dokumen" : "Document template"}</Label>
+                <Label htmlFor="docTemplateSelect">
+                  {lang === "id" ? "Template dokumen" : "Document template"}
+                </Label>
                 <Select value={form.doc_template} onValueChange={(v) => setForm({ ...form, doc_template: v as DocTemplate })}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className="mt-1" id="docTemplateSelect">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
