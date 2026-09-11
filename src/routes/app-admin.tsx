@@ -9,9 +9,11 @@ import {
   ReceiptText,
   CreditCard,
   LayoutList,
+  Blocks,
   Megaphone,
   LifeBuoy,
   ClipboardCheck,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -90,6 +92,9 @@ function AdminLayout() {
           <NavItem to="/app-admin/registrations" icon={<ClipboardCheck className="h-4 w-4" />}>
             Registrations
           </NavItem>
+          <NavItem to="/app-admin/users" icon={<Users className="h-4 w-4" />}>
+            Users
+          </NavItem>
           <NavItem to="/app-admin/invoices" icon={<ReceiptText className="h-4 w-4" />}>
             Invoices
           </NavItem>
@@ -98,6 +103,9 @@ function AdminLayout() {
           </NavItem>
           <NavItem to="/app-admin/packages" icon={<LayoutList className="h-4 w-4" />}>
             Plan & Packages
+          </NavItem>
+          <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
+            Add-on Modules
           </NavItem>
           <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
             Announcements
@@ -132,9 +140,11 @@ function AdminLayout() {
           <div className="flex flex-wrap gap-2 text-xs">
             <Link to="/app-admin" className="text-muted-foreground">Dashboard</Link>
             <Link to="/app-admin/tenancy" className="text-muted-foreground">Tenancy</Link>
+            <Link to="/app-admin/users" className="text-muted-foreground">Users</Link>
             <Link to="/app-admin/invoices" className="text-muted-foreground">Invoices</Link>
             <Link to="/app-admin/payments" className="text-muted-foreground">Payments</Link>
             <Link to="/app-admin/packages" className="text-muted-foreground">Plans</Link>
+            <Link to="/app-admin/addons" className="text-muted-foreground">Add-ons</Link>
             <Link to="/app-admin/announcements" className="text-muted-foreground">News</Link>
             <Link to="/app-admin/tickets" className="text-muted-foreground">Help Desk</Link>
             <Link to="/app-admin/content" className="text-muted-foreground">Content</Link>

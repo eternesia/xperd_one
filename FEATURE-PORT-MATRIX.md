@@ -74,6 +74,11 @@ Team, Settings, Billing & Package, Backup & Restore (maintenance) — ada di ked
 - **Billing**: paket, invoice tenant, upgrade request + seksi **Add-on modules** (daftar katalog add-on aktif/tidak + harga, paritas BS) (🟢 MySQL platform fns).
 - **Team**: undang anggota + role (owner/admin/staff/viewer) (🟢).
 
+## 6b. Topbar & navigasi (paritas UI)
+- **App topbar** (`components/app/AppTopbar.tsx`): identik dengan BS — beda hanya 3 baris data-layer (`supabase.auth.signOut()` → `logoutAppUser()+emitAuthChange()`, import logo). Logo memakai gambar yang sama (asset_id `b2601f6f…`, 242823 B). Shell `routes/app/w.$workspaceId.tsx` juga identik.
+- **Admin nav/topbar** (`routes/app-admin.tsx`): Old dulu tidak punya menu **Users** & **Add-on Modules** (halaman ada tapi tak bisa diakses dari UI) → 🔵 ditambahkan (sidebar NavItem + link header mobile), mengikuti BS.
+- **`styles.css`**: aturan dark-mode BS `.dark .text-navy:not([class*="dark:text-"]){color:var(--foreground)}` → 🔵 di-port (kini `styles.css` 0 diff vs BS).
+
 ## 7. AI / MCP / Asisten
 Ada di kedua repo (`assistant`, `ai-gateway.server`, MCP tools). UI serupa; backend data layer beda (Old = MySQL tool, BS = Supabase tool). Status 🟢 (UI) — tool MySQL sudah menjadi bagian Old.
 

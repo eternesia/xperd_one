@@ -160,6 +160,12 @@
   color: oklch(0.97 0.01 250);
 }
 
+/* Dark mode: navy text is unreadable on dark surfaces. Elements that do not
+   already declare their own dark: text colour fall back to the light foreground. */
+.dark .text-navy:not([class*="dark:text-"]) {
+  color: var(--foreground);
+}
+
 @utility text-gradient-gold {
   background-image: var(--gradient-gold);
   background-clip: text;
