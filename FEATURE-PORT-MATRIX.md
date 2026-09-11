@@ -75,9 +75,12 @@ Team, Settings, Billing & Package, Backup & Restore (maintenance) — ada di ked
 - **Team**: undang anggota + role (owner/admin/staff/viewer) (🟢).
 
 ## 6b. Topbar & navigasi (paritas UI)
-- **App topbar** (`components/app/AppTopbar.tsx`): identik dengan BS — beda hanya 3 baris data-layer (`supabase.auth.signOut()` → `logoutAppUser()+emitAuthChange()`, import logo). Logo memakai gambar yang sama (asset_id `b2601f6f…`, 242823 B). Shell `routes/app/w.$workspaceId.tsx` juga identik.
+- **Topbar homepage** (`components/site/SiteHeader.tsx`): kini **0 diff** vs BS — CTA disamakan jadi **Contact Sales** (outline) + **Sign In / Sign Up Online** (gold → `/auth`); tombol "Sign In" terpisah & "Sign Up Online" terpisah dihapus (desktop maupun menu mobile). `_site.tsx`, `_site/index.tsx`, `LanguageSwitcher.tsx` juga 0 diff.
+- **Logo site** (`components/site/Logo.tsx`): memakai brand wordmark (`xperd.png` = byte identik dengan `xperd-logo.png` BS, asset `0d9cd24d…`, 337 615 B); varian light (`xperd-logo-light.png`) tidak tersedia lokal → dipakai filter CSS (`invert brightness-200`), ukuran mengikuti BS (`h-11` saat onDark / `h-9`).
+- **App topbar** (`components/app/AppTopbar.tsx`): struktur identik BS (beda hanya 3 baris data-layer: `supabase.auth.signOut()` → `logoutAppUser()+emitAuthChange()`). ⚠️ Beda logo: BS memakai **app logo** (`xperd-one-app-logo.png`, asset `b2601f6f…`, 242 823 B) sedangkan Old memakai **brand wordmark** (asset `0d9cd24d…`). Catatan: dua file aset di Old **tertukar namanya** vs BS (`src/assets/xperd.png` = brand wordmark; `src/assets/xperd-logo.png` = app logo).
 - **Admin nav/topbar** (`routes/app-admin.tsx`): Old dulu tidak punya menu **Users** & **Add-on Modules** (halaman ada tapi tak bisa diakses dari UI) → 🔵 ditambahkan (sidebar NavItem + link header mobile), mengikuti BS.
 - **`styles.css`**: aturan dark-mode BS `.dark .text-navy:not([class*="dark:text-"]){color:var(--foreground)}` → 🔵 di-port (kini `styles.css` 0 diff vs BS).
+
 
 ## 7. AI / MCP / Asisten
 Ada di kedua repo (`assistant`, `ai-gateway.server`, MCP tools). UI serupa; backend data layer beda (Old = MySQL tool, BS = Supabase tool). Status 🟢 (UI) — tool MySQL sudah menjadi bagian Old.

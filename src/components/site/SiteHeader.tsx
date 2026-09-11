@@ -32,15 +32,12 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-2 lg:flex">
           <LanguageSwitcher />
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/auth" search={{ next: undefined }}>{t("cta.signIn")}</Link>
-          </Button>
           <Button asChild variant="outline" size="sm">
             <Link to="/contact">{t("cta.contactSales")}</Link>
           </Button>
           <Button asChild variant="gold" size="sm">
-            <Link to="/register">
-              {t("cta.register")} <ArrowRight />
+            <Link to="/auth" search={{ next: undefined }}>
+              {t("cta.signIn")} / {t("cta.register")} <ArrowRight />
             </Link>
           </Button>
         </div>
@@ -67,7 +64,9 @@ export function SiteHeader() {
                 ))}
                 <div className="mt-6 flex flex-col gap-2">
                   <Button asChild variant="gold" size="lg" onClick={() => setOpen(false)}>
-                    <Link to="/register">{t("cta.register")}</Link>
+                    <Link to="/auth" search={{ next: undefined }}>
+                      {t("cta.signIn")} / {t("cta.register")}
+                    </Link>
                   </Button>
                   <Button asChild variant="outline" size="lg" onClick={() => setOpen(false)}>
                     <Link to="/contact">{t("cta.contactSales")}</Link>
