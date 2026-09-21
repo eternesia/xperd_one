@@ -81,6 +81,12 @@ Team, Settings, Billing & Package, Backup & Restore (maintenance) — ada di ked
 - **Admin nav/topbar** (`routes/app-admin.tsx`): Old dulu tidak punya menu **Users** & **Add-on Modules** (halaman ada tapi tak bisa diakses dari UI) → 🔵 ditambahkan (sidebar NavItem + link header mobile), mengikuti BS.
 - **`styles.css`**: aturan dark-mode BS `.dark .text-navy:not([class*="dark:text-"]){color:var(--foreground)}` → 🔵 di-port (kini `styles.css` 0 diff vs BS).
 
+## 6c. Registrasi & paket tenant (2026-09-21)
+- **`/auth`**: disamakan dengan BS — **Tabs** "Sign in" | "Register online"; tab register berisi penjelasan + tombol **Start online registration** (→ `/register`) dan **contact sales** (→ `/contact`). Beda dari BS hanya data-layer (`emitAuthChange()` alih-alih `supabase.auth.signInWithPassword`). Sebelumnya Old memakai satu form dengan toggle & `registerAppUser` langsung (tidak sesuai referensi Lovable).
+- **`/register`**: sudah sama dengan BS (form pendaftaran online: paket, siklus billing, data perusahaan) — beda hanya data-layer (`getPublicSignupPackages`/`submitRegistration` MySQL vs Supabase). Alur: `/auth` → tab Register online → `/register` → tersimpan di tabel `registrations` (`pending`) → tampil di **/app-admin/registrations**.
+- **Kolom Package di `/app-admin/tenancy`**: BUG — server fn mengembalikan `package_name` (flat) sementara UI membaca `t.packages?.name` (bentuk join Supabase) → kolom selalu “—”. Fix: server fn sekarang mengembalikan objek `packages: { name }` sehingga UI (identik BS) bekerja.
+
+
 
 ## 7. AI / MCP / Asisten
 Ada di kedua repo (`assistant`, `ai-gateway.server`, MCP tools). UI serupa; backend data layer beda (Old = MySQL tool, BS = Supabase tool). Status 🟢 (UI) — tool MySQL sudah menjadi bagian Old.

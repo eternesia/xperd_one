@@ -2,11 +2,10 @@ import { test, expect } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { login, WS } from "./helpers";
+import { login, resolveWorkspaceId } from "./helpers";
 
-// Seeded sales document for the PDF download flow (see repo memory note).
+// Seeded sales document used to exercise the PDF renderer (see repo memory).
 const DOC_ID = "aaaaaaaa-bbbb-0000-0000-00000000000d"; // E2E-SO-0001
-const DOC_URL = `/app/w/${WS}/sales/sales-orders/${DOC_ID}`;
 
 test("DOC PDF: download renders a valid %PDF file from the doc detail page", async ({ page }) => {
   test.setTimeout(180_000);
@@ -16,9 +15,19 @@ test("DOC PDF: download renders a valid %PDF file from the doc detail page", asy
   });
   page.on("pageerror", (e) => console.log(`  [pageerror] ${e.message}`));
   await login(page);
+  const ws = await resolveWorkspaceId(page);
 
-  await page.goto(DOC_URL);
-  await expect(page.getByText("E2E-SO-0001", { exact: true }).first()).toBeVisible({ timeout: 120_000 });
+  await page.goto(`/app/w/${ws}/sales/sales-orders/${DOC_ID}`);
+  // Wait until the detail route settled: either the document or the not-found
+  // state (the data may not be seeded in every environment).
+  const missing = page.getByText("Document not found.");
+  const docNumber = page.getByText("E2E-SO-0001", { exact: true }).first();
+  await expect(missing.or(docNumber).first()).toBeVisible({ timeout: 60_000 });
+  if (await missing.isVisible().catch(() => false)) {
+    test.skip(true, "seed the E2E-SO-0001 sales document to exercise the PDF download");
+    return;
+  }
+  await expect(docNumber).toBeVisible({ timeout: 30_000 });
   const dlBtn = page.getByRole("button", { name: /Download PDF|Unduh PDF/ });
   await expect(dlBtn).toBeVisible({ timeout: 30_000 });
 

@@ -1,10 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { login, WS } from "./helpers";
+import { login, resolveWorkspaceId, moduleSettled } from "./helpers";
 
 test("CRM: create a lead via the Leads dialog", async ({ page }) => {
   test.setTimeout(180_000);
   await login(page);
-  await page.goto(`/app/w/${WS}/crm/leads`);
+  const ws = await resolveWorkspaceId(page);
+  await page.goto(`/app/w/${ws}/crm/leads`);
+  if (await moduleSettled(page, "Leads")) {
+    test.skip(true, "CRM add-on (qalling) is not assigned to this tenant");
+    return;
+  }
 
   await expect(page.getByText("Leads", { exact: true }).first()).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "New" }).click();

@@ -1,7 +1,42 @@
 import { expect, type Page } from "@playwright/test";
 
 export const ADMIN = { email: "dnicorp.id@gmail.com", password: "@DNIIPO2032" };
+/** Fallback workspace id (seeded demo); prefer resolveWorkspaceId(). */
 export const WS = "aaaaaaaa-aaaa-aaaa-aaaa-000000000002";
+
+let cachedWorkspaceId: string | null = null;
+
+/**
+ * Resolve the first workspace the signed-in user can open, so tests do not
+ * depend on a hard-coded workspace id (the DB may be re-seeded/renamed).
+ * The picker renders one `Card role="button"` per workspace.
+ */
+export async function resolveWorkspaceId(page: Page): Promise<string> {
+  if (cachedWorkspaceId) return cachedWorkspaceId;
+  await page.goto("/app");
+  const card = page.locator('[role="button"]').first();
+  await expect(card).toBeVisible({ timeout: 45_000 });
+  await card.click();
+  await page.waitForURL(/\/app\/w\/[^/?#]+$/, { timeout: 30_000 });
+  const match = page.url().match(/\/app\/w\/([^/?#]+)/);
+  if (!match) throw new Error(`Could not resolve a workspace id from "${page.url()}"`);
+  cachedWorkspaceId = match[1];
+  return cachedWorkspaceId;
+}
+
+/**
+ * Wait until the module shell settled, then report whether it rendered the
+ * add-on lock panel (vs. the module content). `contentText` is the marker the
+ * unlocked module is expected to show.
+ */
+export async function moduleSettled(page: Page, contentText?: string): Promise<boolean> {
+  const locked = page.getByText("Add-on module locked");
+  const content = contentText
+    ? page.getByText(contentText, { exact: false }).first()
+    : page.locator("main").first();
+  await expect(locked.or(content).first()).toBeVisible({ timeout: 60_000 });
+  return locked.isVisible().catch(() => false);
+}
 
 export async function login(page: Page, creds: { email: string; password: string } = ADMIN) {
   await page.goto("/auth");
@@ -15,9 +50,10 @@ export async function login(page: Page, creds: { email: string; password: string
   await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 
-/** Go straight to the (single) workspace launcher for the demo tenant. */
+/** Go to the workspace launcher for the signed-in user. */
 export async function openLauncher(page: Page) {
-  await page.goto(`/app/w/${WS}`);
+  const ws = await resolveWorkspaceId(page);
+  await page.goto(`/app/w/${ws}`);
   await page.waitForLoadState("domcontentloaded").catch(() => {});
 }
 

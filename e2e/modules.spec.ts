@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, WS, expectNoAppCrash } from "./helpers";
+import { login, resolveWorkspaceId, moduleSettled, expectNoAppCrash } from "./helpers";
 
 // 1 feature = 1 route check: each module's live submodule opens inside its
 // module shell (sidebar shows the module name) without an app crash.
@@ -24,8 +24,14 @@ test.describe("MODULES", () => {
   test("each module/submodule route renders without crash", async ({ page }) => {
     test.setTimeout(600_000);
     await login(page);
+    const ws = await resolveWorkspaceId(page);
     for (const [sub, sidebar] of ROUTES) {
-      await page.goto(`/app/w/${WS}/${sub}`);
+      await page.goto(`/app/w/${ws}/${sub}`);
+      if (await moduleSettled(page, sidebar)) {
+        // eslint-disable-next-line no-console
+        console.log(`  SKIP /${sub} (add-on locked)`);
+        continue;
+      }
       await expect(page.getByText(sidebar, { exact: false }).first()).toBeVisible({ timeout: 60_000 });
       await expectNoAppCrash(page);
       // eslint-disable-next-line no-console

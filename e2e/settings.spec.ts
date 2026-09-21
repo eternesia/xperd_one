@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { login, WS } from "./helpers";
+import { login, resolveWorkspaceId } from "./helpers";
 
 test("SETTINGS: choose Modern doc template and save", async ({ page }) => {
   test.setTimeout(180_000);
   await login(page);
-  await page.goto(`/app/w/${WS}/settings`);
+  const ws = await resolveWorkspaceId(page);
+  await page.goto(`/app/w/${ws}/settings`);
 
   // The select shows the currently saved template, so it may already be
   // "Modern Accent" from a previous run. Open whatever is set, then pick Modern.
