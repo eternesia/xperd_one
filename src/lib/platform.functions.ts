@@ -194,9 +194,15 @@ export const adminListTenantsWithPackages = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
-    return execute(
+    const rows = await execute<Record<string, any>>(
       "SELECT t.*, p.name AS package_name FROM tenants t LEFT JOIN packages p ON p.id = t.package_id ORDER BY t.created_at DESC",
     );
+    // Mimic the Business Suite supabase join `select("*, packages(name)")` so
+    // the tenancy UI can keep reading `tenant.packages?.name`.
+    return (rows ?? []).map((r) => ({
+      ...r,
+      packages: r.package_name ? { name: r.package_name as string } : null,
+    }));
   });
 
 // ---------------------------------------------------------------------------

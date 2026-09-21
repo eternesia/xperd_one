@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Logo } from "@/components/site/Logo";
 import { useSession, emitAuthChange } from "@/hooks/use-session";
-import { loginAppUser, registerAppUser } from "@/lib/auth.functions";
+import { loginAppUser } from "@/lib/auth.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -34,10 +35,8 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
   const { session, loading } = useSession();
   const navigate = useNavigate();
@@ -51,18 +50,12 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
-        await registerAppUser({ data: { email, password, fullName } });
-        toast.success("Account created. You can sign in now.");
-        setMode("signin");
-      } else {
-        // Credentials are verified against our own app_users table; the server
-        // issues a signed JWT in an httpOnly cookie (sent automatically on
-        // serverFn RPCs). No Supabase session is created anymore.
-        await loginAppUser({ data: { email, password } });
-        emitAuthChange();
-        navigate({ to: next ?? "/app", replace: true });
-      }
+      // Credentials are verified against our own app_users table; the server
+      // issues a signed JWT in an httpOnly cookie (sent automatically on
+      // serverFn RPCs). No Supabase session is created anymore.
+      await loginAppUser({ data: { email, password } });
+      emitAuthChange();
+      navigate({ to: next ?? "/app", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
     } finally {
@@ -76,60 +69,72 @@ function AuthPage() {
         <div className="flex justify-center">
           <Logo />
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>{mode === "signin" ? "Sign in" : "Create your account"}</CardTitle>
-            <CardDescription>
-              {mode === "signin"
-                ? "Access your XPERD One workspace."
-                : "Register an account, then set up your company workspace."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={submit}>
-              {mode === "signup" && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full name</Label>
-                  <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="email">Work email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" variant="navy" className="w-full" disabled={busy}>
-                {busy && <Loader2 className="animate-spin" />}
-                {mode === "signin" ? "Sign in" : "Create account"}
-              </Button>
-            </form>
-            <button
-              type="button"
-              className="mt-4 w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-              onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-            >
-              {mode === "signin" ? "New to XPERD? Create an account" : "Already have an account? Sign in"}
-            </button>
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="signin">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="signin">Sign in</TabsTrigger>
+            <TabsTrigger value="register">Register online</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="signin" className="pt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Sign in</CardTitle>
+                <CardDescription>Access your XPERD One workspace.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={submit}>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Work email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="current-password"
+                      minLength={8}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" variant="navy" className="w-full" disabled={busy}>
+                    {busy && <Loader2 className="animate-spin" />}
+                    Sign in
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="register" className="pt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Register online</CardTitle>
+                <CardDescription>
+                  New to XPERD? Sign up for XPERD One (Starter or Professional). Our team activates your
+                  organisation and sends your login credentials.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button asChild variant="gold" className="w-full">
+                  <Link to="/register">Start online registration</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link to="/contact">Business / Enterprise — contact sales</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
         <p className="text-center text-sm text-muted-foreground">
           <Link to="/" className="underline-offset-4 hover:underline">
             Back to website

@@ -7,7 +7,9 @@ export async function login(page: Page, creds: { email: string; password: string
   await page.goto("/auth");
   await page.fill("#email", creds.email);
   await page.fill("#password", creds.password);
-  await page.click("button:has-text('Sign in')");
+  // NB: /auth now has a "Sign in" TAB plus a "Sign in" submit button, so match
+  // the submit control explicitly (pressing Enter in the form is equivalent).
+  await page.locator("#password").press("Enter");
   // Login redirects to /app (client-side). Give vite/SSR time to settle.
   await page.waitForURL(/\/app/, { timeout: 30_000 }).catch(() => {});
   await page.waitForLoadState("domcontentloaded").catch(() => {});
