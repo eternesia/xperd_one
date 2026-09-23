@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateWorkspaceSettings } from "@/lib/platform.functions";
-import { DOC_TEMPLATES, type DocTemplate } from "@/lib/doc-print";
+import { DOC_TEMPLATES, buildDocHtml, type DocTemplate } from "@/lib/doc-print";
+import type { PrcDoc, PrcLine } from "@/lib/procurement";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 
@@ -36,9 +37,11 @@ function SettingsPage() {
     costing: "AVERAGE" as "FIFO" | "LIFO" | "AVERAGE",
     address: "",
     tax_id: "",
-    doc_template: "classic" as DocTemplate,
+    phone: "",
+    email: "",
     bank_info: "",
     doc_footer_note: "",
+    doc_template: "classic" as DocTemplate,
   });
   const [busy, setBusy] = useState(false);
 
@@ -53,9 +56,11 @@ function SettingsPage() {
       costing: activeWorkspace.default_costing_method,
       address: activeWorkspace.address ?? "",
       tax_id: activeWorkspace.tax_id ?? "",
-      doc_template: activeWorkspace.doc_template === "modern" || activeWorkspace.doc_template === "minimal" ? activeWorkspace.doc_template : "classic",
+      phone: activeWorkspace.phone ?? "",
+      email: activeWorkspace.email ?? "",
       bank_info: activeWorkspace.bank_info ?? "",
       doc_footer_note: activeWorkspace.doc_footer_note ?? "",
+      doc_template: (activeWorkspace.doc_template as DocTemplate) ?? "classic",
     });
   }, [activeWorkspace]);
 
@@ -75,9 +80,11 @@ function SettingsPage() {
             default_costing_method: form.costing,
             address: form.address.trim() || null,
             tax_id: form.tax_id.trim() || null,
-            doc_template: form.doc_template,
+            phone: form.phone.trim() || null,
+            email: form.email.trim() || null,
             bank_info: form.bank_info.trim() || null,
             doc_footer_note: form.doc_footer_note.trim() || null,
+            doc_template: form.doc_template,
           },
         },
       });
@@ -198,58 +205,149 @@ function SettingsPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="addr">{lang === "id" ? "Alamat" : "Address"}</Label>
-                <Input id="addr" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tax">{lang === "id" ? "NPWP" : "Tax ID"}</Label>
-                <Input id="tax" value={form.tax_id} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
-                {lang === "id" ? "Branding dokumen" : "Document branding"}
-              </p>
-              <div className="mt-3">
-                <Label htmlFor="docTemplateSelect">
-                  {lang === "id" ? "Template dokumen" : "Document template"}
-                </Label>
-                <Select value={form.doc_template} onValueChange={(v) => setForm({ ...form, doc_template: v as DocTemplate })}>
-                  <SelectTrigger className="mt-1" id="docTemplateSelect">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DOC_TEMPLATES.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {lang === "id" ? t.id_ : t.en}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="bank">
-                    {lang === "id" ? "Info bank (muncul di dokumen)" : "Bank info (shown on documents)"}
-                  </Label>
-                  <Textarea id="bank" rows={3} value={form.bank_info} onChange={(e) => setForm({ ...form, bank_info: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="foot">{lang === "id" ? "Catatan kaki dokumen" : "Document footer note"}</Label>
-                  <Textarea id="foot" rows={3} value={form.doc_footer_note} onChange={(e) => setForm({ ...form, doc_footer_note: e.target.value })} />
-                </div>
-              </div>
-            </div>
-
             <Button type="submit" variant="navy" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : <Save />} {lang === "id" ? "Simpan" : "Save changes"}
             </Button>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="addr">{lang === "id" ? "Alamat" : "Address"}</Label>
+                <Textarea
+                  id="addr"
+                  rows={2}
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">{lang === "id" ? "Telepon" : "Phone"}</Label>
+                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="npwp">NPWP / Tax ID</Label>
+                <Input id="npwp" value={form.tax_id} onChange={(e) => setForm({ ...form, tax_id: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bank">{lang === "id" ? "Info rekening" : "Bank details"}</Label>
+                <Textarea
+                  id="bank"
+                  rows={2}
+                  value={form.bank_info}
+                  onChange={(e) => setForm({ ...form, bank_info: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="foot">{lang === "id" ? "Catatan kaki dokumen" : "Document footer note"}</Label>
+                <Input
+                  id="foot"
+                  value={form.doc_footer_note}
+                  onChange={(e) => setForm({ ...form, doc_footer_note: e.target.value })}
+                />
+              </div>
+            </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>{lang === "id" ? "Template dokumen & invoice" : "Document & invoice template"}</CardTitle>
+          <CardDescription>
+            {lang === "id"
+              ? "Dipakai untuk cetak dan unduh PDF di Quotation, SO, DO, PO, GR, AP, dan AR."
+              : "Applied to print and PDF download for Quotation, SO, DO, PO, GR, AP and AR."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-3">
+          {DOC_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => setForm({ ...form, doc_template: tpl.id })}
+              className={`overflow-hidden rounded-xl border text-left transition ${
+                form.doc_template === tpl.id ? "border-gold ring-2 ring-gold/40" : "border-border hover:border-gold/60"
+              }`}
+            >
+              <div className="h-44 overflow-hidden bg-white">
+                <iframe
+                  title={tpl.en}
+                  className="pointer-events-none h-[1123px] w-[794px] origin-top-left border-0"
+                  style={{ transform: "scale(0.32)" }}
+                  srcDoc={previewHtml(tpl.id, form.name || "XPERD", lang)}
+                />
+              </div>
+              <div className="border-t border-border p-3">
+                <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
+                  {lang === "id" ? tpl.id_ : tpl.en}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{lang === "id" ? tpl.hint_id : tpl.hint_en}</p>
+              </div>
+            </button>
+          ))}
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function previewHtml(template: DocTemplate, companyName: string, lang: string) {
+  const doc = {
+    doc_number: "INV/2026/0001",
+    doc_date: "2026-08-14",
+    due_date: "2026-08-28",
+    supplier_name: lang === "id" ? "PT Contoh Pelanggan" : "Sample Customer Ltd",
+    supplier_code: "C-0001",
+    reference: "SO/2026/0007",
+    status: "invoiced",
+    currency: "IDR",
+    subtotal: 2500000,
+    discount_amount: 0,
+    tax_amount: 275000,
+    total: 2775000,
+    notes: lang === "id" ? "Pembayaran maksimal 14 hari." : "Payment due within 14 days.",
+    warehouse_code: "WH-01",
+  } as unknown as PrcDoc;
+  const lines = [
+    { id: "1", item_code: "SRV-001", description: "Website & domain", qty: 1, uom_code: "PCS", unit_price: 2500000, tax_rate: 11, line_total: 2500000 },
+  ] as unknown as PrcLine[];
+  return buildDocHtml(doc, lines, {
+    title: lang === "id" ? "Faktur" : "Invoice",
+    lang,
+    template,
+    statusLabel: "UNPAID",
+    company: {
+      name: companyName,
+      address: "Asia Pacific Building, BSD Serpong",
+      phone: "0851 9504 1191",
+      email: "info@example.co.id",
+      bankInfo: "BCA 4974741191",
+    },
+    labels: {
+      number: lang === "id" ? "Nomor" : "Number",
+      date: lang === "id" ? "Tanggal" : "Date",
+      dueDate: lang === "id" ? "Jatuh tempo" : "Due date",
+      reference: lang === "id" ? "Referensi" : "Reference",
+      status: "Status",
+      warehouse: lang === "id" ? "Gudang" : "Warehouse",
+      description: lang === "id" ? "Deskripsi" : "Description",
+      qty: "Qty",
+      price: lang === "id" ? "Harga" : "Price",
+      tax: lang === "id" ? "Pajak" : "Tax",
+      lineTotal: "Total",
+      subtotal: "Subtotal",
+      discount: lang === "id" ? "Diskon" : "Discount",
+      total: "Total",
+      notes: lang === "id" ? "Catatan" : "Notes",
+      bank: lang === "id" ? "Rekening" : "Bank",
+      billedTo: lang === "id" ? "Ditagihkan kepada" : "Billed to",
+      from: lang === "id" ? "Dari" : "From",
+      signature: lang === "id" ? "Tanda tangan" : "Signature",
+      thanks: lang === "id" ? "Terima kasih." : "Thank you for your business.",
+      noLines: "-",
+    },
+  });
 }

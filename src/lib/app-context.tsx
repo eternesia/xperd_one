@@ -14,6 +14,8 @@ export interface Workspace {
   default_costing_method: "FIFO" | "LIFO" | "AVERAGE";
   address: string | null;
   tax_id: string | null;
+  phone: string | null;
+  email: string | null;
   doc_template: string;
   bank_info: string | null;
   doc_footer_note: string | null;

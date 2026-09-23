@@ -86,6 +86,14 @@ Team, Settings, Billing & Package, Backup & Restore (maintenance) — ada di ked
 - **`/register`**: sudah sama dengan BS (form pendaftaran online: paket, siklus billing, data perusahaan) — beda hanya data-layer (`getPublicSignupPackages`/`submitRegistration` MySQL vs Supabase). Alur: `/auth` → tab Register online → `/register` → tersimpan di tabel `registrations` (`pending`) → tampil di **/app-admin/registrations**.
 - **Kolom Package di `/app-admin/tenancy`**: BUG — server fn mengembalikan `package_name` (flat) sementara UI membaca `t.packages?.name` (bentuk join Supabase) → kolom selalu “—”. Fix: server fn sekarang mengembalikan objek `packages: { name }` sehingga UI (identik BS) bekerja.
 
+## 6d. Settings workspace (2026-09-23)
+Disamakan dengan BS (`app/w/$workspaceId.settings.tsx` — kini beda hanya di data-layer save: `updateWorkspaceSettings` MySQL vs `supabase.from("workspaces").update`):
+- **Field tambahan**: `phone` (Telepon) & `email` + label `NPWP / Tax ID` (sebelumnya `tax`/“NPWP” saja). Kolom DB baru: migration **`006_workspace_contact.sql`** (`workspaces.phone`, `workspaces.email` TEXT — paritas `public.workspaces` BS), didaftarkan di `PCOLS.workspaces`, SELECT `app-shell.functions.ts`, dan interface `Workspace`/`ShellWorkspace`.
+- **Kartu “Document & invoice template”** (kartu terpisah, menggantikan dropdown “Branding dokumen”): 3 **kartu preview live** (iframe `srcDoc` dari `buildDocHtml` template classic/modern/minimal, ring emas saat dipilih) + judul/hint; deskripsi “Applied to print and PDF download for Quotation, SO, DO, PO, GR, AP and AR.”
+- Tombol **Save changes** kini di atas blok alamat (urutan sama BS); bank info jadi “Bank details”, footer note jadi input (bukan textarea) — persis BS.
+- E2E `settings.spec.ts` diperbarui: pilih kartu “Modern Accent” (bukan lagi `#docTemplateSelect`), assert tersimpan + assert **isi iframe preview benar-benar ter-render** (`INV/2026/0001`).
+
+
 
 
 ## 7. AI / MCP / Asisten

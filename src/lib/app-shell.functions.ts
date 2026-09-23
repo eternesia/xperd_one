@@ -37,6 +37,8 @@ export interface ShellWorkspace {
   default_costing_method: "FIFO" | "LIFO" | "AVERAGE";
   address: string | null;
   tax_id: string | null;
+  phone: string | null;
+  email: string | null;
   doc_template: string;
   bank_info: string | null;
   doc_footer_note: string | null;
@@ -77,7 +79,7 @@ export const getAppShellData = createServerFn({ method: "GET" }).handler(async (
     ? await execute<ShellWorkspace>(
         `SELECT w.id, w.tenant_id, w.name, w.legal_name, w.slug, w.currency, w.timezone,
                 w.fiscal_year_start_month, w.default_costing_method,
-                w.address, w.tax_id, w.doc_template, w.bank_info, w.doc_footer_note,
+                w.address, w.tax_id, w.phone, w.email, w.doc_template, w.bank_info, w.doc_footer_note,
                 w.status
            FROM workspaces w
           WHERE w.tenant_id = ?
