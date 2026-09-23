@@ -22,6 +22,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ steps.meta.outputs.tag }}
 
     steps:
       - name: Checkout repository
@@ -39,6 +42,9 @@ jobs:
           # image name can never drift from the repo (xperd_one vs xperd-one).
           IMAGE_NAME="${{ inputs.image_name || github.repository }}"
           SHA="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          # Consumed by the `deploy` job below (exact image that was just built).
+          echo "image=${REGISTRY}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${SHA}" >> "$GITHUB_OUTPUT"
           # `latest` + the short sha are ALWAYS pushed (also for manual runs) so a
           # deploy can never pick up a stale image; manual runs add their tag too.
           if [ -n "${{ inputs.image_tag }}" ]; then
@@ -69,4 +75,141 @@ jobs:
             echo ">>> Pushing ${T}"
             docker push "$T"
           done
+
+  # ---------------------------------------------------------------------------
+  # Auto-deploy: after a successful build on master, pull that exact image on
+  # the VPS and recreate ONLY the app container. The target is discovered from
+  # the running container itself (compose labels), so no path/service name has
+  # to be hard-coded here. Skipped (with a warning) while the SSH secrets are
+  # not configured, and never runs for manual builds.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check deploy configuration
+        id: cfg
+        env:
+          SSH_HOST: ${{ secrets.SSH_MANAGER_HOST }}
+          SSH_KEY: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+        run: |
+          if [ -n "${SSH_HOST}" ] && [ -n "${SSH_KEY}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Auto-deploy dilewati::Set secrets SSH_MANAGER_HOST, SSH_MANAGER_USER, SSH_MANAGER_PRIVATE_KEY (dan opsional GHCR_PAT + SSH_MANAGER_PORT) agar image otomatis ter-deploy ke VPS."
+          fi
+
+      - name: Deploy over SSH (auto-discover compose project)
+        if: steps.cfg.outputs.enabled == 'true'
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+          envs: IMAGE,REPO,ACTOR,PAT
+          script: |
+            set -euo pipefail
+
+            TARGET="${IMAGE:?IMAGE tidak diset}"
+            REPO_NAME="${REPO##*/}"
+            IMAGE_REPO="${TARGET%:*}"
+
+            echo "=== Auto-deploy ${TARGET} ==="
+
+            # --- 1. find the running app container (any tag of this image) ----
+            CID=""
+            for c in $(docker ps -q); do
+              img="$(docker inspect -f '{{.Config.Image}}' "$c")"
+              case "$img" in
+                "${IMAGE_REPO}"|"${IMAGE_REPO}":*) CID="$c"; break ;;
+              esac
+            done
+            if [ -z "$CID" ]; then
+              for c in $(docker ps -q); do
+                img="$(docker inspect -f '{{.Config.Image}}' "$c")"
+                case "$img" in *"${REPO_NAME}"*) CID="$c"; break ;; esac
+              done
+            fi
+            if [ -z "$CID" ]; then
+              echo "ERROR: tidak ada container jalan yang memakai image '${REPO_NAME}'."
+              docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+              exit 1
+            fi
+            echo ">>> Container: $(docker inspect -f '{{.Name}}' "$CID") (image lama: $(docker inspect -f '{{.Config.Image}}' "$CID"))"
+
+            # --- 2. read the compose project metadata off that container ------
+            PROJ_DIR="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.working_dir"}}{{end}}' "$CID")"
+            CONFIG="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.config_files"}}{{end}}' "$CID")"
+            SVC="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.service"}}{{end}}' "$CID")"
+            PROJ="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project"}}{{end}}' "$CID")"
+            ENVFILE="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.environment_file"}}{{end}}' "$CID")"
+
+            if [ -z "$PROJ_DIR" ] || [ -z "$SVC" ]; then
+              echo "ERROR: container bukan hasil 'docker compose' (label compose kosong)."
+              echo "Manual: docker pull ${TARGET}; lalu di dir compose: docker compose pull && docker compose up -d --force-recreate"
+              exit 1
+            fi
+
+            [ -n "$CONFIG" ] || CONFIG="${PROJ_DIR}/docker-compose.prod.yml"
+            if [ -z "$ENVFILE" ]; then
+              ENVFILE="${PROJ_DIR}/.env.prod"
+              [ -f "$ENVFILE" ] || ENVFILE="${PROJ_DIR}/.env"
+            fi
+            echo ">>> project=${PROJ:-<default>} dir=${PROJ_DIR} service=${SVC} config=${CONFIG} env=${ENVFILE}"
+
+            cd "$PROJ_DIR"
+            COMPOSE=(docker compose --project-directory "$PROJ_DIR" -f "$CONFIG")
+            [ -n "$PROJ" ] && COMPOSE+=(-p "$PROJ")
+
+            # Pin APP_IMAGE to the image that was just built so a stale tag in the
+            # env file can never be redeployed by accident (backup is kept).
+            if [ -f "$ENVFILE" ]; then
+              COMPOSE+=(--env-file "$ENVFILE")
+              if grep -q '^APP_IMAGE=' "$ENVFILE"; then
+                cp -a "$ENVFILE" "${ENVFILE}.bak.$(date +%Y%m%d%H%M%S)"
+                sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${TARGET}|" "$ENVFILE"
+              else
+                echo "APP_IMAGE=${TARGET}" >> "$ENVFILE"
+              fi
+              echo ">>> ${ENVFILE}: APP_IMAGE=${TARGET}"
+            else
+              echo ">>> Peringatan: env file tidak ditemukan — compose dijalankan tanpa --env-file"
+            fi
+
+            # --- 3. login + pull ---------------------------------------------
+            if [ -n "${PAT:-}" ]; then
+              echo "$PAT" | docker login ghcr.io -u "${ACTOR:-github}" --password-stdin
+            else
+              echo ">>> GHCR_PAT tidak diset — memakai kredensial docker yang sudah ada di host"
+            fi
+
+            echo ">>> Pulling ${TARGET}"
+            docker pull "$TARGET"
+
+            # --- 4. recreate ONLY the app service ----------------------------
+            "${COMPOSE[@]}" up -d --force-recreate "$SVC"
+
+            # --- 5. verify ---------------------------------------------------
+            NEW_ID="$("${COMPOSE[@]}" ps -q "$SVC")"
+            echo ">>> image id container: $(docker inspect -f '{{.Image}}' "$NEW_ID")"
+            echo ">>> created: $(docker inspect -f '{{.Created}}' "$NEW_ID")"
+            docker image inspect --format '>>> RepoDigests: {{join .RepoDigests ", "}}' "$TARGET" || true
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              st="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$NEW_ID" 2>/dev/null || echo unknown)"
+              echo ">>> health=${st}"
+              [ "$st" = "healthy" ] && break
+              [ "$st" = "none" ] && break
+              [ "$st" = "unhealthy" ] && break
+              sleep 3
+            done
+            echo "=== Deploy selesai: ${TARGET} ==="
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}:${{ needs.build.outputs.tag }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          PAT: ${{ secrets.GHCR_PAT }}
 

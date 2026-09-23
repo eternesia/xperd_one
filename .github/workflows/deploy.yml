@@ -13,11 +13,8 @@ on:
         required: false
         default: ''
         type: string
-      remote_dir:
-        description: 'Direktori target di VPS'
-        required: false
-        default: '/opt/vectra'
-        type: string
+      # Tidak ada input remote_dir / nama service: dir, file compose, nama service
+      # dan env file di-discover otomatis dari label compose container yang jalan.
 
 jobs:
   deploy:
@@ -31,47 +28,94 @@ jobs:
           username: ${{ secrets.SSH_MANAGER_USER }}
           port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
           key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
-          envs: GITHUB_PAT
+          envs: IMAGE,REPO,ACTOR,PAT
           script: |
             set -euo pipefail
 
-            REMOTE_DIR="${{ inputs.remote_dir }}"
-            APP_NAME="${{ inputs.image_name || github.repository }}"
-            TAG="${{ inputs.image_tag || 'latest' }}"
-            REGISTRY="ghcr.io"
-            FULL_IMAGE="${REGISTRY}/${APP_NAME}:${TAG}"
+            TARGET="${IMAGE:?IMAGE tidak diset}"
+            REPO_NAME="${REPO##*/}"
+            IMAGE_REPO="${TARGET%:*}"
 
-            echo "=== Deploying ${FULL_IMAGE} (VECTRA) ==="
-            cd "$REMOTE_DIR"
-            if [ ! -f .env.prod ]; then
-              echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"
+            echo "=== Deploy ${TARGET} (manager) ==="
+
+            # --- 1. find the running app container (any tag of this image) ----
+            CID=""
+            for c in $(docker ps -q); do
+              img="$(docker inspect -f '{{.Config.Image}}' "$c")"
+              case "$img" in
+                "${IMAGE_REPO}"|"${IMAGE_REPO}":*) CID="$c"; break ;;
+              esac
+            done
+            if [ -z "$CID" ]; then
+              for c in $(docker ps -q); do
+                img="$(docker inspect -f '{{.Config.Image}}' "$c")"
+                case "$img" in *"${REPO_NAME}"*) CID="$c"; break ;; esac
+              done
+            fi
+            if [ -z "$CID" ]; then
+              echo "ERROR: tidak ada container jalan yang memakai image '${REPO_NAME}'."
+              docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+              exit 1
+            fi
+            echo ">>> Container: $(docker inspect -f '{{.Name}}' "$CID") (image lama: $(docker inspect -f '{{.Config.Image}}' "$CID"))"
+
+            # --- 2. read the compose project metadata off that container ------
+            PROJ_DIR="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.working_dir"}}{{end}}' "$CID")"
+            CONFIG="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.config_files"}}{{end}}' "$CID")"
+            SVC="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.service"}}{{end}}' "$CID")"
+            PROJ="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project"}}{{end}}' "$CID")"
+            ENVFILE="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.environment_file"}}{{end}}' "$CID")"
+
+            if [ -z "$PROJ_DIR" ] || [ -z "$SVC" ]; then
+              echo "ERROR: container bukan hasil 'docker compose' (label compose kosong)."
               exit 1
             fi
 
-            # Set APP_IMAGE di .env.prod agar compose memakai image dari GHCR
-            echo ">>> Updating .env.prod: APP_IMAGE=${FULL_IMAGE}"
-            if grep -q "^APP_IMAGE=" .env.prod; then
-              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${FULL_IMAGE}|" .env.prod
+            [ -n "$CONFIG" ] || CONFIG="${PROJ_DIR}/docker-compose.prod.yml"
+            if [ -z "$ENVFILE" ]; then
+              ENVFILE="${PROJ_DIR}/.env.prod"
+              [ -f "$ENVFILE" ] || ENVFILE="${PROJ_DIR}/.env"
+            fi
+            echo ">>> project=${PROJ:-<default>} dir=${PROJ_DIR} service=${SVC} config=${CONFIG} env=${ENVFILE}"
+
+            cd "$PROJ_DIR"
+            COMPOSE=(docker compose --project-directory "$PROJ_DIR" -f "$CONFIG")
+            [ -n "$PROJ" ] && COMPOSE+=(-p "$PROJ")
+
+            if [ -f "$ENVFILE" ]; then
+              COMPOSE+=(--env-file "$ENVFILE")
+              if grep -q '^APP_IMAGE=' "$ENVFILE"; then
+                cp -a "$ENVFILE" "${ENVFILE}.bak.$(date +%Y%m%d%H%M%S)"
+                sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${TARGET}|" "$ENVFILE"
+              else
+                echo "APP_IMAGE=${TARGET}" >> "$ENVFILE"
+              fi
+              echo ">>> ${ENVFILE}: APP_IMAGE=${TARGET}"
             else
-              echo "APP_IMAGE=${FULL_IMAGE}" >> .env.prod
+              echo ">>> Peringatan: env file tidak ditemukan — compose dijalankan tanpa --env-file"
             fi
 
-            echo ">>> Logging in to GHCR..."
-            echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # --- 3. login + pull ---------------------------------------------
+            if [ -n "${PAT:-}" ]; then
+              echo "$PAT" | docker login ghcr.io -u "${ACTOR:-github}" --password-stdin
+            else
+              echo ">>> GHCR_PAT tidak diset — memakai kredensial docker yang sudah ada di host"
+            fi
 
-            echo ">>> Pulling app image..."
-            docker compose -f docker-compose.prod.yml --env-file .env.prod pull app
+            echo ">>> Pulling ${TARGET}"
+            docker pull "$TARGET"
 
-            echo ">>> Registry digest for ${FULL_IMAGE}:"
-            docker image inspect --format '{{index .RepoDigests 0}}' "$FULL_IMAGE" || true
+            # --- 4. recreate ONLY the app service ----------------------------
+            "${COMPOSE[@]}" up -d --force-recreate "$SVC"
 
-            echo ">>> Recreating app service..."
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate app
-
-            echo ">>> Running container:"
-            docker compose -f docker-compose.prod.yml --env-file .env.prod images app || true
-            docker inspect --format 'app image id: {{.Image}}' "$(docker compose -f docker-compose.prod.yml --env-file .env.prod ps -q app)" || true
-
+            # --- 5. verify ---------------------------------------------------
+            NEW_ID="$("${COMPOSE[@]}" ps -q "$SVC")"
+            echo ">>> image id container: $(docker inspect -f '{{.Image}}' "$NEW_ID")"
+            echo ">>> created: $(docker inspect -f '{{.Created}}' "$NEW_ID")"
+            docker image inspect --format '>>> RepoDigests: {{join .RepoDigests ", "}}' "$TARGET" || true
             echo "=== Deploy complete ==="
         env:
-          GITHUB_PAT: ${{ secrets.GHCR_PAT }}
+          IMAGE: ghcr.io/${{ inputs.image_name || github.repository }}:${{ inputs.image_tag || 'latest' }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          PAT: ${{ secrets.GHCR_PAT }}
