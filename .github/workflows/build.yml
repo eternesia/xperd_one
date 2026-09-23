@@ -34,14 +34,16 @@ jobs:
         id: meta
         shell: bash
         run: |
-          REGISTRY="ghcr.io/${{ github.repository_owner }}"
-          IMAGE_NAME="${{ inputs.image_name || github.event.repository.name }}"
+          REGISTRY="ghcr.io"
+          # ${{ github.repository }} is the canonical owner/repo (lowercase) so the
+          # image name can never drift from the repo (xperd_one vs xperd-one).
+          IMAGE_NAME="${{ inputs.image_name || github.repository }}"
+          SHA="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
+          # `latest` + the short sha are ALWAYS pushed (also for manual runs) so a
+          # deploy can never pick up a stale image; manual runs add their tag too.
           if [ -n "${{ inputs.image_tag }}" ]; then
-            # Manual run: use the caller-provided tag.
-            echo "tags=${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "tags=${REGISTRY}/${IMAGE_NAME}:${{ inputs.image_tag }},${REGISTRY}/${IMAGE_NAME}:latest,${REGISTRY}/${IMAGE_NAME}:sha-${SHA}" >> "$GITHUB_OUTPUT"
           else
-            # Automatic run on push to master: tag latest + short sha.
-            SHA="$(printf '%s' "${GITHUB_SHA}" | cut -c1-7)"
             echo "tags=${REGISTRY}/${IMAGE_NAME}:latest,${REGISTRY}/${IMAGE_NAME}:sha-${SHA}" >> "$GITHUB_OUTPUT"
           fi
 

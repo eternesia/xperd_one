@@ -3,6 +3,16 @@ name: Deploy All Services
 on:
   workflow_dispatch:
     inputs:
+      image_tag:
+        description: 'Tag image (default: latest = image hasil build terbaru dari master)'
+        required: false
+        default: 'latest'
+        type: string
+      image_name:
+        description: 'Nama image (default: owner/repo, mis. eternesia/xperd_one)'
+        required: false
+        default: ''
+        type: string
       remote_dir:
         description: 'Direktori target di VPS'
         required: false
@@ -26,9 +36,20 @@ jobs:
             set -euo pipefail
 
             REMOTE_DIR="${{ inputs.remote_dir }}"
-            echo "=== Deploy all services (VECTRA) ==="
+            APP_NAME="${{ inputs.image_name || github.repository }}"
+            TAG="${{ inputs.image_tag || 'latest' }}"
+            FULL_IMAGE="ghcr.io/${APP_NAME}:${TAG}"
+            echo "=== Deploy all services (VECTRA) — ${FULL_IMAGE} ==="
             cd "$REMOTE_DIR"
             [ -f .env.prod ] || { echo "ERROR: .env.prod tidak ditemukan di $REMOTE_DIR"; exit 1; }
+
+            # Pin APP_IMAGE so `up -d` can never reuse a stale local image/tag.
+            echo ">>> Updating .env.prod: APP_IMAGE=${FULL_IMAGE}"
+            if grep -q "^APP_IMAGE=" .env.prod; then
+              sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${FULL_IMAGE}|" .env.prod
+            else
+              echo "APP_IMAGE=${FULL_IMAGE}" >> .env.prod
+            fi
 
             echo ">>> Logging in to GHCR..."
             echo "$GITHUB_PAT" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -36,10 +57,14 @@ jobs:
             echo ">>> Pulling all images..."
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
+            echo ">>> Registry digest for ${FULL_IMAGE}:"
+            docker image inspect --format '{{index .RepoDigests 0}}' "$FULL_IMAGE" || true
+
             echo ">>> Starting/recreating services..."
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
             echo "=== Deploy all complete ==="
             docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+            docker compose -f docker-compose.prod.yml --env-file .env.prod images app || true
         env:
           GITHUB_PAT: ${{ secrets.GHCR_PAT }}

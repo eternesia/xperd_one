@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Tag image untuk di-repull'
-        required: true
+        description: 'Tag image (default: latest)'
+        required: false
+        default: 'latest'
         type: string
       image_name:
-        description: 'Nama image (default: nama repository)'
+        description: 'Nama image (default: owner/repo, mis. eternesia/xperd_one)'
         required: false
         default: ''
         type: string

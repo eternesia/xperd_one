@@ -5,8 +5,8 @@
 # volume (bound into the app at /app/storage, per requirement).
 #
 #   # 1) build & push the app image (from this repo)
-#   docker build -t ${APP_IMAGE:-yourorg/xperd-one:latest} .
-#   docker push  ${APP_IMAGE:-yourorg/xperd-one:latest}
+#   docker build -t ${APP_IMAGE:-ghcr.io/eternesia/xperd_one:latest} .
+#   docker push  ${APP_IMAGE:-ghcr.io/eternesia/xperd_one:latest}
 #
 #   # 2) on the server, with a production .env in place
 #   docker compose -f docker-compose.prod.yml up -d     # web runs migrate+seed on start
@@ -53,7 +53,8 @@ services:
 
   web:
     # App image pulled from your registry — set APP_IMAGE (repo + tag).
-    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    # The build workflow publishes ghcr.io/eternesia/xperd_one:latest (+ sha-<short>).
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/eternesia/xperd_one:latest}
     container_name: xperd-web-prod
     restart: unless-stopped
     working_dir: /app
@@ -87,7 +88,7 @@ services:
   #   docker compose -f docker-compose.prod.yml run --rm seed
   #   docker compose -f docker-compose.prod.yml run --rm db   # migrate + seed
   migrate:
-    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/eternesia/xperd_one:latest}
     container_name: xperd-migrate-prod
     restart: "no"
     env_file:
@@ -101,7 +102,7 @@ services:
     command: ["node", "scripts/migrate.mjs"]
 
   seed:
-    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/eternesia/xperd_one:latest}
     container_name: xperd-seed-prod
     restart: "no"
     env_file:
@@ -115,7 +116,7 @@ services:
     command: ["node", "scripts/seed.mjs"]
 
   db:
-    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/your-org/xperd-one:latest}
+    image: ${APP_IMAGE:?set APP_IMAGE, e.g. ghcr.io/eternesia/xperd_one:latest}
     container_name: xperd-db-prod
     restart: "no"
     env_file:
