@@ -1,18 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Download, Printer } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceRow, listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
-import {
-  downloadDocHtmlPdf,
-  printDocHtml,
-  type DocPrintMeta,
-  type DocTemplate,
-} from "@/lib/doc-print";
+import { downloadDocHtmlPdf, printDocHtml, type DocPrintMeta, type DocTemplate } from "@/lib/doc-print";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +33,7 @@ function DocumentDetail() {
   const { print } = Route.useSearch();
   const { lang } = useI18n();
   const { activeWorkspace } = useApp();
+  const [pdfBusy, setPdfBusy] = useState(false);
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const isSales = moduleId === "sales";
   const salesEntity = findSlsEntity(submoduleId);
@@ -69,33 +66,6 @@ function DocumentDetail() {
 
   const doc = data?.doc ?? null;
   const lines = data?.lines ?? [];
-  const template: DocTemplate =
-    activeWorkspace?.doc_template === "modern" || activeWorkspace?.doc_template === "minimal"
-      ? activeWorkspace.doc_template
-      : "classic";
-
-  const printMeta = (): DocPrintMeta => ({
-    title: lang === "id" ? (entity?.id_ ?? "") : (entity?.en ?? ""),
-    lang,
-    template,
-    company: {
-      name: activeWorkspace?.name ?? "XPERD",
-      legalName: activeWorkspace?.legal_name ?? null,
-      address: activeWorkspace?.address ?? null,
-      taxId: activeWorkspace?.tax_id ?? null,
-      bankInfo: activeWorkspace?.bank_info ?? null,
-      footerNote: activeWorkspace?.doc_footer_note ?? null,
-    },
-    labels,
-    statusLabel: doc ? String(doc.status) : "",
-  });
-
-  useEffect(() => {
-    if (print && doc && entity) {
-      const id = window.setTimeout(() => printDocHtml(doc, lines, printMeta()), 400);
-      return () => window.clearTimeout(id);
-    }
-  }, [print, doc]);
 
   const labels = {
     number: t("Number", "Nomor"),
@@ -121,8 +91,34 @@ function DocumentDetail() {
     from: t("From", "Dari"),
     signature: t("Authorised signature", "Tanda tangan berwenang"),
     thanks: t("Thank you for your business.", "Terima kasih atas kerja samanya."),
-    noLines: "-",
+    noLines: t("No lines.", "Tidak ada rincian."),
   };
+
+  const printMeta = (): DocPrintMeta => ({
+    title: lang === "id" ? (entity?.id_ ?? "") : (entity?.en ?? ""),
+    lang,
+    template: ((activeWorkspace?.doc_template as DocTemplate | undefined) ?? "classic"),
+    statusLabel: doc ? (lang === "id" ? STATUS_LABEL[doc.status].id_ : STATUS_LABEL[doc.status].en) : "",
+    company: {
+      name: activeWorkspace?.name ?? "XPERD",
+      legalName: activeWorkspace?.legal_name ?? null,
+      address: activeWorkspace?.address ?? null,
+      phone: activeWorkspace?.phone ?? null,
+      email: activeWorkspace?.email ?? null,
+      taxId: activeWorkspace?.tax_id ?? null,
+      bankInfo: activeWorkspace?.bank_info ?? null,
+      footerNote: activeWorkspace?.doc_footer_note ?? null,
+    },
+    labels,
+  });
+
+  useEffect(() => {
+    if (print && doc && entity) {
+      const id = window.setTimeout(() => printDocHtml(doc, lines, printMeta()), 400);
+      return () => window.clearTimeout(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [print, doc, entity]);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…", "Memuat…")}</p>;
   if (!doc || !entity)
@@ -144,9 +140,22 @@ function DocumentDetail() {
           </Button>
           <Button
             variant="gold"
-            onClick={() => void downloadDocHtmlPdf(doc, lines, printMeta())}
+            disabled={pdfBusy}
+            onClick={async () => {
+              setPdfBusy(true);
+              try {
+                await downloadDocHtmlPdf(doc, lines, printMeta());
+              } catch (err) {
+                toast.error(
+                  t("Could not build the PDF. Use Print instead.", "Gagal membuat PDF. Gunakan Cetak sebagai alternatif."),
+                  { description: err instanceof Error ? err.message : undefined },
+                );
+              } finally {
+                setPdfBusy(false);
+              }
+            }}
           >
-            <Download /> {t("Download PDF", "Unduh PDF")}
+            <Download /> {pdfBusy ? t("Preparing…", "Menyiapkan…") : t("Download PDF", "Unduh PDF")}
           </Button>
         </div>
       </div>
