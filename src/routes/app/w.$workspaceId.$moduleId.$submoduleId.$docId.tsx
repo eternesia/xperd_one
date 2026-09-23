@@ -117,6 +117,11 @@ function DocumentDetail() {
     notes: t("Notes", "Catatan"),
     warehouse: t("Warehouse", "Gudang"),
     bank: t("Cash / Bank", "Kas / Bank"),
+    billedTo: isSales ? t("Billed to", "Ditagihkan kepada") : t("Supplier", "Pemasok"),
+    from: t("From", "Dari"),
+    signature: t("Authorised signature", "Tanda tangan berwenang"),
+    thanks: t("Thank you for your business.", "Terima kasih atas kerja samanya."),
+    noLines: "-",
   };
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…", "Memuat…")}</p>;

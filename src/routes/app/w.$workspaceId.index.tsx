@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, Lock } from "lucide-react";
+import { ArrowUpRight, Lock, Sparkles } from "lucide-react";
 
 import launcherBg from "@/assets/launcher-vector-bg.jpg";
 import { Badge } from "@/components/ui/badge";
@@ -57,16 +57,14 @@ function Launcher() {
                   <span className={`grid h-11 w-11 place-items-center rounded-xl ${TONE_CLASS[m.tone]}`}>
                     <m.icon className="h-5 w-5" />
                   </span>
-                  {(m.disabled || addonLocked) && (
+                  {m.disabled && (
                     <Badge variant="secondary" className="gap-1 text-[10px]">
-                      <Lock className="h-3 w-3" />
-                      {m.disabled
-                        ? lang === "id"
-                          ? "Segera"
-                          : "Soon"
-                        : lang === "id"
-                          ? "Add-on"
-                          : "Add-on"}
+                      <Lock className="h-3 w-3" /> {lang === "id" ? "Segera" : "Soon"}
+                    </Badge>
+                  )}
+                  {!m.disabled && m.addon && (
+                    <Badge variant={locked ? "outline" : "secondary"} className="gap-1 text-[10px]">
+                      {locked ? <Lock className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />} Add-on
                     </Badge>
                   )}
                 </div>
@@ -84,11 +82,24 @@ function Launcher() {
             );
             const base =
               "group relative overflow-hidden rounded-2xl border border-border bg-card/90 p-4 shadow-sm backdrop-blur transition-all";
-            if (locked) {
+            if (m.disabled) {
               return (
                 <div key={m.id} className={cn(base, "cursor-not-allowed opacity-50")} aria-disabled>
                   {inner}
                 </div>
+              );
+            }
+            if (locked) {
+              return (
+                <Link
+                  key={m.id}
+                  to="/app/w/$workspaceId/billing"
+                  params={{ workspaceId }}
+                  className={cn(base, "opacity-70 hover:border-gold hover:opacity-100")}
+                  title={lang === "id" ? "Aktifkan add-on di halaman Billing" : "Activate this add-on from Billing"}
+                >
+                  {inner}
+                </Link>
               );
             }
             return (

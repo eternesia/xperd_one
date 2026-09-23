@@ -30,7 +30,8 @@ export async function resolveWorkspaceId(page: Page): Promise<string> {
  * unlocked module is expected to show.
  */
 export async function moduleSettled(page: Page, contentText?: string): Promise<boolean> {
-  const locked = page.getByText("Add-on module locked");
+  // The add-on lock panel (BS parity) offers a link to Billing.
+  const locked = page.getByRole("link", { name: /Open Billing|Buka Billing/ });
   const content = contentText
     ? page.getByText(contentText, { exact: false }).first()
     : page.locator("main").first();

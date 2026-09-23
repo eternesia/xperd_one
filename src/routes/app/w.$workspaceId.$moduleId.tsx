@@ -36,24 +36,22 @@ function ModuleShell() {
 
   if (mod.addon && !addonsLoading && !hasAddon(mod.addon)) {
     return (
-      <div className="mx-auto max-w-3xl px-5 py-16 text-center">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-secondary/70">
-          <Lock className="h-6 w-6 text-gold" />
-        </div>
+      <div className="mx-auto max-w-lg px-5 py-20 text-center">
+        <Lock className="mx-auto h-8 w-8 text-gold" />
         <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
-          {lang === "id" ? "Modul add-on terkunci" : "Add-on module locked"}
+          {lang === "id" ? `${mod.id_} belum aktif` : `${mod.en} is not active`}
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-muted-foreground">
           {lang === "id"
-            ? `${mod.en} butuh add-on "${mod.addon}" agar bisa diakses. Hubungi admin untuk mengaktifkannya.`
-            : `${mod.en} requires the "${mod.addon}" add-on. Contact an admin to activate it.`}
+            ? "Modul ini tersedia sebagai add-on berbayar. Hubungi tim XPERD atau buka halaman Billing untuk mengaktifkannya."
+            : "This module is a paid add-on. Contact the XPERD team or open Billing to activate it."}
         </p>
         <Link
-          to="/app/w/$workspaceId"
+          to="/app/w/$workspaceId/billing"
           params={{ workspaceId }}
           className="mt-4 inline-block text-sm text-gold underline"
         >
-          {lang === "id" ? "Kembali ke peluncur" : "Back to launcher"}
+          {lang === "id" ? "Buka Billing" : "Open Billing"}
         </Link>
       </div>
     );
