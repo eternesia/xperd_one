@@ -9,11 +9,31 @@
 // Drops all tables in the configured database (MYSQL_DATABASE) using
 // SET FOREIGN_KEY_CHECKS=0 so drop order doesn't matter. The database/user
 // themselves are left intact — `npm run migrate` recreates the schema.
+//
+// SAFETY: refused in production (NODE_ENV/APP_ENV=production) and against
+// non-local hosts unless `--force` is also passed. Nothing in the Docker
+// images, compose files or CI workflows calls this script.
 import { connect } from "./lib/db.mjs";
 
 const confirmed = process.argv.includes("--yes");
+const forced = process.argv.includes("--force");
 
 const db = process.env.MYSQL_DATABASE ?? "xperd";
+const env = process.env.APP_ENV ?? process.env.NODE_ENV ?? "development";
+const host = process.env.MYSQL_HOST ?? "127.0.0.1";
+
+const isProd = env === "production" || env === "prod";
+const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "mysql", "xperd-mysql-dev"]);
+const isLocal = LOCAL_HOSTS.has(host);
+
+if ((isProd || !isLocal) && !forced) {
+  console.error(
+    `[wipe] REFUSED: ${isProd ? `environment "${env}"` : `remote host "${host}"`} looks like production.`,
+  );
+  console.error("[wipe] Nothing was changed. If this is really intended, re-run with:");
+  console.error("[wipe]   npm run db:wipe -- --force --yes");
+  process.exit(1);
+}
 
 if (!confirmed) {
   console.error(`[wipe] WARNING: this will DELETE all data in database "${db}".`);

@@ -55,12 +55,12 @@ jobs:
             # Migrasi & seed TIDAK otomatis — hanya jalan bila input diaktifkan
             if [ "${{ inputs.run_db_setup }}" = "true" ]; then
               echo ">>> Running db migrate & seed..."
-              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/db.mjs migrate
-              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/db.mjs seed
+              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/migrate.mjs
+              docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app node scripts/seed.mjs
             else
               echo ">>> db migrate/seed dilewati (manual). Jalankan via:"
-              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/db.mjs migrate"
-              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/db.mjs seed"
+              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/migrate.mjs"
+              echo "    docker compose -f docker-compose.prod.yml --env-file .env.prod exec app node scripts/seed.mjs"
             fi
 
             echo "=== Initial deploy complete ==="

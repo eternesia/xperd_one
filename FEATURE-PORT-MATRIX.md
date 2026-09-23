@@ -102,6 +102,14 @@ Ada di kedua repo (`assistant`, `ai-gateway.server`, MCP tools). UI serupa; back
 ## 8. Infra BS saja (tidak di-port — bukan flow produk)
 `integrations/supabase/*`, `lib/mcp/supabase.ts`, `[.]lovable.oauth.consent.tsx` → ⚪ N/A (Old memakai auth JWT cookie + MySQL, bukan Supabase).
 
+## 9. Keamanan data / script reset (audit 2026-09-23)
+- `npm run db:wipe` / `db:reset` **hanya manual** — tidak dipanggil oleh `Dockerfile*`, `docker-compose.yml`, `docker-compose.prod.yml`, maupun workflow CI.
+- `scripts/wipe.mjs` kini punya **guard**: menolak bila `NODE_ENV`/`APP_ENV` = production atau `MYSQL_HOST` bukan host lokal (127.0.0.1/localhost/::1/mysql/xperd-mysql-dev) kecuali `--force`; dan tetap wajib `--yes`. (`db:wipe` tanpa `--yes` = warning lalu exit 1, tanpa perubahan.)
+- Prod tetap aman: `docker-compose.prod.yml` menjalankan `node scripts/migrate.mjs && node scripts/seed.mjs` saat start — keduanya **idempotent** dan tercatat di `db_apply_log`; `db/migrations` + `db/seeds` **tidak mengandung** `DROP/TRUNCATE/DELETE FROM`.
+- Fitur user-facing juga non-destruktif: Maintenance “Restore” → `upsertWorkspaceRows` (upsert), “Seed master data” → `seedWorkspace` → `seedWorkspaceDefaults` (INSERT … ON DUPLICATE KEY UPDATE), keduanya butuh role penulis workspace.
+- 🔧 Fix: `.github/workflows/initial-deploy.yml` memanggil `node scripts/db.mjs migrate|seed` (file **tidak ada**) → diperbaiki ke `scripts/migrate.mjs` / `scripts/seed.mjs`.
+
+
 ---
 
 ## Ringkasan perbandingan alur
