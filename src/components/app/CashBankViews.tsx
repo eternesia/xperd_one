@@ -20,6 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { countWorkspaceRows, deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import { fetchAccounts } from "@/lib/accounting";
 import {
@@ -773,7 +774,7 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
           table: "cb_transactions",
           workspaceId,
           id,
-          data: { is_reconciled: value ? 1 : 0, reconciled_at: value ? new Date().toISOString() : null },
+          data: { is_reconciled: value ? 1 : 0, reconciled_at: value ? sqlDateTime() : null },
         },
       });
     },

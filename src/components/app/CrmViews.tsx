@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Construction, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { CalendarClock, Check, Construction, FileOutput, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +15,10 @@ import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
 import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel } from "@/lib/crm";
+import { convertLeadToQuotation } from "@/lib/crm.functions";
 
 interface LeadRow {
   id: string;
@@ -32,6 +35,9 @@ interface LeadRow {
   owner_name: string | null;
   next_follow_up_at: string | null;
   notes: string | null;
+  lost_reason: string | null;
+  stage_changed_at: string | null;
+  quotation_id: string | null;
 }
 
 interface ActivityRow {
@@ -61,6 +67,9 @@ const EMPTY_LEAD: LeadForm = {
   owner_name: "",
   next_follow_up_at: "",
   notes: "",
+  lost_reason: "",
+  stage_changed_at: null,
+  quotation_id: null,
 };
 
 function useLeads(workspaceId: string) {
@@ -114,6 +123,8 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>(EMPTY_LEAD);
+  const convert = useServerFn(convertLeadToQuotation);
+  const [converting, setConverting] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -122,6 +133,20 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
       [r.code, r.name, r.company_name, r.email, r.phone, r.owner_name].some((v) => (v ?? "").toLowerCase().includes(q)),
     );
   }, [rows, term]);
+
+  /** #18 (BS New): buat quotation dari lead langsung dari baris tabel. */
+  async function convertLead(id: string) {
+    setConverting(id);
+    try {
+      const res = await convert({ data: { workspaceId, leadId: id } });
+      toast.success(lang === "id" ? `Penawaran ${res.docNumber} dibuat` : `Quotation ${res.docNumber} created`);
+      qc.invalidateQueries({ queryKey: ["crm-leads", workspaceId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Convert failed");
+    } finally {
+      setConverting(null);
+    }
+  }
 
   const save = useMutation({
     mutationFn: async (v: LeadForm) => {
@@ -139,6 +164,8 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         owner_name: v.owner_name || null,
         next_follow_up_at: v.next_follow_up_at || null,
         notes: v.notes || null,
+        lost_reason: v.stage === "lost" ? v.lost_reason || null : null,
+        stage_changed_at: sqlDateTime(),
       };
       await saveWorkspaceRow({
         data: { table: "crm_leads", workspaceId, id: v.id || undefined, data: payload },
@@ -227,11 +254,22 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                   <TableCell>{r.owner_name ?? "—"}</TableCell>
                   <TableCell>{r.next_follow_up_at ?? "—"}</TableCell>
                   <TableCell className="text-right">
+                    {r.status === "open" && !r.quotation_id && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title={lang === "id" ? "Konversi ke penawaran" : "Convert to quotation"}
+                        disabled={converting === r.id}
+                        onClick={() => void convertLead(r.id)}
+                      >
+                        <FileOutput className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={() => {
-                        setForm({ ...r, company_name: r.company_name ?? "", email: r.email ?? "", phone: r.phone ?? "", source: r.source ?? "", owner_name: r.owner_name ?? "", next_follow_up_at: r.next_follow_up_at ?? "", notes: r.notes ?? "" });
+                        setForm({ ...r, company_name: r.company_name ?? "", email: r.email ?? "", phone: r.phone ?? "", source: r.source ?? "", owner_name: r.owner_name ?? "", next_follow_up_at: r.next_follow_up_at ?? "", notes: r.notes ?? "", lost_reason: r.lost_reason ?? "" });
                         setOpen(true);
                       }}
                     >
@@ -303,6 +341,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             <AdminField label={lang === "id" ? "Sales penanggung jawab" : "Assigned sales"}>
               <Input value={form.owner_name ?? ""} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
             </AdminField>
+            {form.stage === "lost" && (
+              <AdminField label={lang === "id" ? "Alasan kalah" : "Lost reason"}>
+                <Input value={form.lost_reason ?? ""} onChange={(e) => setForm({ ...form, lost_reason: e.target.value })} />
+              </AdminField>
+            )}
             <AdminField label={lang === "id" ? "Follow up berikutnya" : "Next follow up"}>
               <Input
                 type="date"
@@ -320,7 +363,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               {lang === "id" ? "Batal" : "Cancel"}
             </Button>
-            <Button variant="navy" disabled={!form.name.trim() || save.isPending} onClick={() => save.mutate(form)}>
+            <Button
+              variant="navy"
+              disabled={!form.name.trim() || save.isPending || (form.stage === "lost" && !(form.lost_reason ?? "").trim())}
+              onClick={() => save.mutate(form)}
+            >
               {lang === "id" ? "Simpan" : "Save"}
             </Button>
           </DialogFooter>
@@ -347,6 +394,7 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
             stage,
             probability: st?.probability ?? 0,
             status: stage === "won" ? "won" : stage === "lost" ? "lost" : "open",
+            stage_changed_at: sqlDateTime(),
           },
         },
       });
@@ -500,7 +548,7 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
             activity_type: form.activity_type,
             subject: form.subject.trim(),
             body: form.body || null,
-            due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
+            due_at: form.due_at ? sqlDateTime(new Date(form.due_at)) : null,
             owner_name: form.owner_name || null,
           },
         },
@@ -522,7 +570,7 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
           table: "crm_activities",
           workspaceId,
           id,
-          data: { done_at: new Date().toISOString() },
+          data: { done_at: sqlDateTime() },
         },
       });
     },

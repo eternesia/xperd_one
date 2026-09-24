@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR, todayISO, addDaysISO } from "@/components/app/admin-ui";
 import { confirmInvoicePayment } from "@/lib/billing.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { adminList, adminSave } from "@/lib/platform.functions";
 
 export const Route = createFileRoute("/app-admin/invoices")({
@@ -124,7 +125,7 @@ function InvoicesPage() {
           id,
           data: {
             status: status as "sent",
-            paid_at: status === "paid" ? new Date().toISOString() : null,
+            paid_at: status === "paid" ? sqlDateTime() : null,
           },
         },
       });
@@ -172,7 +173,7 @@ function InvoicesPage() {
         type: "renewal" as const,
         status: "scheduled" as const,
         channel: "email",
-        scheduled_at: new Date().toISOString(),
+        scheduled_at: sqlDateTime(),
         message: "Renewal invoice sent automatically 7 days before package end.",
       }));
       for (const r of reminders) {

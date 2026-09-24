@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AdminSelect } from "@/components/app/admin-ui";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 
 interface ScanRow {
@@ -137,7 +138,7 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
             table: "sls_shipment_scans",
             workspaceId,
             id,
-            data: { status: "shipped", shipped_at: new Date().toISOString() },
+            data: { status: "shipped", shipped_at: sqlDateTime() },
           },
         });
       }

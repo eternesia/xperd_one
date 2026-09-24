@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { sqlDateTime } from "@/lib/datetime";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 
@@ -69,8 +70,8 @@ function AnnouncementsPage() {
         body_id: v.body_id || null,
         severity: v.severity,
         audience: v.audience,
-        starts_at: new Date(v.starts_at).toISOString(),
-        ends_at: v.ends_at ? new Date(v.ends_at).toISOString() : null,
+        starts_at: sqlDateTime(new Date(v.starts_at)),
+        ends_at: v.ends_at ? sqlDateTime(new Date(v.ends_at)) : null,
         is_published: v.is_published,
       };
       await adminSave({ data: { table: "announcements", id: v.id ?? undefined, data: payload } });

@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import {
   CRM_BROADCAST_CHANNELS,
@@ -181,7 +182,7 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
             channel: form.channel,
             message: form.message,
             status: form.scheduled_at ? "scheduled" : "draft",
-            scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : null,
+            scheduled_at: form.scheduled_at ? sqlDateTime(new Date(form.scheduled_at)) : null,
             total_recipients: audience.length,
           },
         },
@@ -238,7 +239,7 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
           table: "crm_broadcast_recipients",
           workspaceId,
           id,
-          data: { status: "sent", sent_at: new Date().toISOString(), error: null },
+          data: { status: "sent", sent_at: sqlDateTime(), error: null },
         },
       });
     },

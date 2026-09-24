@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { sqlDateTime } from "@/lib/datetime";
 import { adminList, adminSave } from "@/lib/platform.functions";
 import { AdminSelect } from "@/components/app/admin-ui";
 import { useSession } from "@/hooks/use-session";
@@ -50,7 +51,7 @@ function TicketsPage() {
         data: {
           table: "support_tickets",
           id,
-          data: { status, resolved_at: status === "resolved" || status === "closed" ? new Date().toISOString() : null },
+          data: { status, resolved_at: status === "resolved" || status === "closed" ? sqlDateTime() : null },
         },
       });
     },
