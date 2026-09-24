@@ -39,6 +39,8 @@ export interface CbTransaction {
   method: string;
   reference: string | null;
   memo: string | null;
+  /** #12/#13 (BS New): gambar bukti transaksi (data URL di Old). */
+  attachment_url?: string | null;
   amount: number;
   is_reconciled: boolean;
   reconciled_at: string | null;
@@ -200,6 +202,7 @@ export interface CbTrxInput {
   method: string;
   reference?: string | null;
   memo?: string | null;
+  attachment_url?: string | null;
   amount: number;
 }
 
@@ -271,6 +274,7 @@ export async function createCbTransaction(workspaceId: string, input: CbTrxInput
         method: input.method,
         reference: input.reference || null,
         memo,
+        attachment_url: input.attachment_url ?? null,
         amount,
         journal_entry_id: journalEntryId,
       },

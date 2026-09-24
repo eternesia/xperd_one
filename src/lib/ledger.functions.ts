@@ -215,7 +215,10 @@ export const fetchCbTransactions = createServerFn({ method: "POST" })
 const CB_ALLOWED = new Set([
   "trx_no", "trx_date", "trx_type", "account_code", "account_name",
   "counterpart_account_code", "counterpart_account_name", "category_account_code",
-  "category_account_name", "contact_name", "method", "reference", "memo", "amount",
+  "category_account_name", "contact_name", "method", "reference", "memo",
+  // #12/#13 (BS New): gambar bukti transaksi kas/bank.
+  "attachment_url",
+  "amount",
   "is_reconciled", "reconciled_at", "journal_entry_id", "created_by",
 ]);
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Loader2, Paperclip, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -394,6 +394,8 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [open, setOpen] = useState(false);
+  const [attachment, setAttachment] = useState("");
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     trx_date: today(),
@@ -436,6 +438,33 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const current = filtered.slice((page - 1) * pageSize, page * pageSize);
 
+  /**
+   * #12 (BS New): Old tidak punya object storage seperti Supabase Storage, jadi
+   * gambar bukti di-resize di browser (maks 1000x1400) lalu disimpan sebagai data
+   * URL di `cb_transactions.attachment_url`.
+   */
+  function pickAttachment(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error(t("File must be an image", "File harus gambar"));
+      return;
+    }
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.onload = () => {
+        const scale = Math.min(1, 1000 / img.width, 1400 / img.height);
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+        setAttachment(c.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
   const create = useMutation({
     mutationFn: async () => {
       const account = accounts.find((a) => a.code === form.account_code);
@@ -461,6 +490,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
         method: form.method,
         reference: form.reference,
         memo: form.memo,
+        attachment_url: type === "out" ? attachment || null : null,
         amount: Number(form.amount) || 0,
       });
     },
@@ -468,6 +498,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
       toast.success(t("Transaction posted.", "Transaksi tercatat."));
       setOpen(false);
       setForm({ ...form, amount: "", memo: "", reference: "", contact_name: "" });
+      setAttachment("");
       qc.invalidateQueries({ queryKey: ["cb-trx"] });
       qc.invalidateQueries({ queryKey: ["acc"] });
     },
@@ -577,6 +608,16 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {[r.contact_name, r.reference].filter(Boolean).join(" · ") || "—"}
+                    {/* #12/#13 (BS New): link "Bukti" bila transaksi punya lampiran. */}
+                    {r.attachment_url && (
+                      <button
+                        type="button"
+                        className="ml-2 inline-flex items-center gap-1 text-xs text-gold hover:underline"
+                        onClick={() => setProofUrl(r.attachment_url ?? null)}
+                      >
+                        <Paperclip className="h-3 w-3" /> {t("Proof", "Bukti")}
+                      </button>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
                     <span className={cn("rounded-md px-2 py-1", TRX_TONE[r.trx_type])}>
@@ -708,12 +749,53 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
           <Field label={t("Memo", "Catatan")}>
             <Textarea rows={2} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
           </Field>
+          {/* #12 (BS New): upload gambar bukti khusus Kas Keluar. */}
+          {type === "out" && (
+            <Field label={t("Proof image (receipt / nota)", "Upload gambar bukti (nota / kuitansi)")}>
+              <Input type="file" accept="image/*" onChange={(e) => pickAttachment(e.target.files?.[0])} />
+              {attachment && (
+                <img
+                  src={attachment}
+                  alt="Proof"
+                  className="mt-2 max-h-32 rounded-md border border-border object-contain"
+                />
+              )}
+            </Field>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               {t("Cancel", "Batal")}
             </Button>
             <Button variant="navy" disabled={create.isPending} onClick={() => create.mutate()}>
               {create.isPending && <Loader2 className="animate-spin" />} {t("Save", "Simpan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* #13 (BS New): BS New membuka signed URL di tab baru; Old memakai dialog
+          karena data URL tidak bisa dibuka langsung sebagai tab di Chrome. */}
+      <Dialog open={Boolean(proofUrl)} onOpenChange={(v) => !v && setProofUrl(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{t("Payment proof", "Bukti transaksi")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "Image attached to this cash / bank transaction.",
+                "Gambar bukti yang dilampirkan pada transaksi kas / bank ini.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {proofUrl && (
+            <img
+              src={proofUrl}
+              alt="Proof"
+              className="max-h-[70vh] w-full rounded-md border border-border object-contain"
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProofUrl(null)}>
+              {t("Close", "Tutup")}
             </Button>
           </DialogFooter>
         </DialogContent>
