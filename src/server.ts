@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { handlePublicLeadRequest, handleReminderCronRequest } from "./lib/interop.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -46,6 +47,16 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // ---------------------------------------------------------------------
+    // Integrasi pihak ketiga — OPSIONAL / BOILERPLATE, bukan fitur wajib.
+    // Kedua handler mengembalikan 404 selama env flag belum diisi
+    // (PUBLIC_LEAD_API_ENABLED / CRON_API_ENABLED), jadi perilaku default
+    // aplikasi tidak berubah. Lihat INTEROP-BOILERPLATE.md.
+    // ---------------------------------------------------------------------
+    const path = new URL(request.url).pathname;
+    if (path === "/api/public/leads") return handlePublicLeadRequest(request);
+    if (path === "/api/cron/reminders") return handleReminderCronRequest(request);
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
