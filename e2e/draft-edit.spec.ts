@@ -29,7 +29,7 @@ test("DOCS: edit a draft document and save it again", async ({ page }) => {
     await expect(code).toHaveValue(/QUO\//);
     await code.fill(value);
     await dialog.getByRole("button", { name: "Save draft" }).click();
-    await expect(page.getByText(/Draft updated/)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/Draft updated/).first()).toBeVisible({ timeout: 60_000 });
     await expect(dialog).toBeHidden({ timeout: 30_000 });
   };
 
@@ -46,4 +46,36 @@ test("DOCS: edit a draft document and save it again", async ({ page }) => {
   await dialog.getByRole("button", { name: "Save draft" }).click();
   await expect(dialog).toBeHidden({ timeout: 60_000 });
   await expect(page.getByRole("row", { name: new RegExp(original) }).first()).toBeVisible();
+});
+
+/**
+ * Same feature on the procurement side (seeded draft purchase request). Names
+ * are fixed so re-runs stay idempotent even after a failed run.
+ */
+test("DOCS: edit a draft purchase request", async ({ page }) => {
+  test.setTimeout(180_000);
+  await login(page);
+  const ws = await resolveWorkspaceId(page);
+  await page.goto(`/app/w/${ws}/procurement/purchase-requests`);
+  await expect(page.getByRole("button", { name: "Create New" })).toBeVisible({ timeout: 60_000 });
+
+  const base = "E2E-PR-0001";
+  const edited = `${base}-EDIT`;
+  const row = page.getByRole("row").filter({ hasText: base }).first();
+  await expect(row).toBeVisible();
+  const dialog = page.getByRole("dialog");
+
+  const rename = async (value: string) => {
+    await page.getByRole("row").filter({ hasText: base }).first().getByRole("button", { name: "Edit draft" }).click();
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByRole("heading", { name: /Edit Draft/ })).toBeVisible();
+    await dialog.getByRole("textbox").nth(0).fill(value);
+    await dialog.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByText(/Draft updated/).first()).toBeVisible({ timeout: 60_000 });
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByText(value, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  };
+
+  await rename(edited);
+  await rename(base);
 });

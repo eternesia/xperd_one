@@ -7,6 +7,7 @@ import {
   Eye,
   FileInput,
   Loader2,
+  Pencil,
   Plus,
   Printer,
   Search,
@@ -39,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   assertFundsMapping,
@@ -101,6 +102,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
   const [to, setTo] = useState("");
   const [open, setOpen] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<string>("");
   const [sourceLines, setSourceLines] = useState<PrcLine[]>([]);
 
@@ -230,6 +232,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     setSourceId("");
     setSourceLines([]);
     setIsDraft(false);
+    setEditingId(null);
     setHeader({
       doc_number: "",
       doc_date: new Date().toISOString().slice(0, 10),
@@ -265,6 +268,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         data: {
           table: "prc_documents",
           workspaceId,
+          id: editingId ?? undefined,
           data: {
             doc_type: entity.docType,
             doc_number,
@@ -312,7 +316,18 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
           source_line_id: l.source_line_id ?? null,
         };
       });
-      if (payload.length) {
+      if (editingId) {
+        // #9: ganti seluruh baris draft dalam satu transaksi di server.
+        await replaceChildRows({
+          data: {
+            table: "prc_document_lines",
+            workspaceId,
+            parentColumn: "document_id",
+            parentId: docId,
+            rows: payload,
+          },
+        });
+      } else if (payload.length) {
         await upsertWorkspaceRows({ data: { table: "prc_document_lines", workspaceId, rows: payload } });
       }
 
@@ -392,7 +407,9 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     },
     onSuccess: () => {
       toast.success(
-        isDraft ? t("Saved as draft", "Disimpan sebagai draf") : t("Document submitted", "Dokumen terkirim"),
+        isDraft
+          ? t(editingId ? "Draft updated" : "Saved as draft", editingId ? "Draf diperbarui" : "Disimpan sebagai draf")
+          : t("Document submitted", "Dokumen terkirim"),
       );
       setOpen(false);
       resetForm();
@@ -403,6 +420,72 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  /** #9 (BS New): muat draft yang ada kembali ke form untuk diedit. */
+  const editDraft = async (doc: PrcDoc) => {
+    try {
+      const linesData = await listWorkspaceRows({
+        data: {
+          table: "prc_document_lines",
+          workspaceId,
+          filters: { document_id: doc.id },
+          orderBy: "line_no",
+          orderDir: "asc",
+          limit: 500,
+        },
+      });
+      const draftLines = (linesData?.rows ?? []) as unknown as PrcLine[];
+      // PrcDoc tidak membawa kolom bank, jadi ambil baris mentahnya sekali lagi
+      // supaya draft pembayaran bisa diedit tanpa kehilangan rekening.
+      const rawData = await listWorkspaceRows({
+        data: {
+          table: "prc_documents",
+          workspaceId,
+          filters: { id: doc.id },
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 1,
+        },
+      });
+      const raw = ((rawData?.rows ?? [])[0] ?? {}) as Record<string, unknown>;
+      const txt = (key: string) => (raw[key] == null ? "" : String(raw[key]));
+
+      setEditingId(doc.id);
+      setIsDraft(true);
+      setSourceId(doc.source_document_id ?? "");
+      setSourceLines([]);
+      setHeader({
+        doc_number: doc.doc_number ?? "",
+        doc_date: doc.doc_date ?? "",
+        due_date: doc.due_date ?? "",
+        supplier_code: doc.supplier_code ?? "",
+        supplier_name: doc.supplier_name ?? "",
+        warehouse_code: doc.warehouse_code ?? "",
+        bank_account_code: txt("bank_account_code"),
+        bank_account_name: txt("bank_account_name"),
+        bank_gl_code: txt("bank_gl_code"),
+        reference: doc.reference ?? "",
+        notes: doc.notes ?? "",
+      });
+      setLines(
+        draftLines.length
+          ? draftLines.map((l) => ({
+              item_code: l.item_code ?? "",
+              description: l.description ?? "",
+              qty: String(l.qty ?? 0),
+              uom_code: l.uom_code ?? "",
+              unit_price: String(l.unit_price ?? 0),
+              discount: String(l.discount ?? 0),
+              tax_rate: String(l.tax_rate ?? 0),
+              source_line_id: l.source_line_id ?? undefined,
+            }))
+          : [emptyLine()],
+      );
+      setOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load the draft");
+    }
+  };
 
   const remove = useMutation({
     mutationFn: async (doc: PrcDoc) => {
@@ -562,6 +645,16 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                   {formatMoney(row.total, lang, row.currency)}
                 </TableCell>
                 <TableCell className="text-right">
+                  {row.status === "draft" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Edit draft", "Edit draf")}
+                      onClick={() => void editDraft(row)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button asChild variant="ghost" size="icon" aria-label={t("Preview", "Pratinjau")}>
                     <Link
                       to="/app/w/$workspaceId/$moduleId/$submoduleId/$docId"
@@ -654,7 +747,8 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         <DialogContent className="max-h-[94vh] w-[96vw] max-w-7xl overflow-x-hidden overflow-y-auto sm:max-w-7xl">
           <DialogHeader>
             <DialogTitle>
-              {t("Create New", "Buat Baru")} · {lang === "id" ? entity.id_ : entity.en}
+              {editingId ? t("Edit Draft", "Edit Draf") : t("Create New", "Buat Baru")} ·{" "}
+              {lang === "id" ? entity.id_ : entity.en}
             </DialogTitle>
             <DialogDescription>
               {t(
