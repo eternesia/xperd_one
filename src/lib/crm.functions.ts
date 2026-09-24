@@ -149,6 +149,46 @@ export const deleteCrmBroadcast = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** An owner option for CRM lead forms: workspace member + whether it is you. */
+export interface WorkspaceOwner {
+  id: string;
+  name: string;
+  isCurrentUser: boolean;
+}
+
+/**
+ * Workspace members that can own a lead (#17). Also reports which entry is the
+ * signed-in user so the client can default the owner and offer "My leads"
+ * (#16) without a second round trip to fetch the profile.
+ */
+export const listWorkspaceOwners = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { workspaceId: string }) => {
+    if (!data?.workspaceId) throw new Error("Workspace is required");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { isWorkspaceMember } = await import("@/lib/auth-context.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+
+    if (!(await isWorkspaceMember(data.workspaceId, context.userId))) throw new Error("Forbidden");
+
+    const rows = await execute<{ user_id: string; full_name: string | null; email: string | null }>(
+      `SELECT m.user_id, p.full_name, p.email
+         FROM workspace_members m
+         LEFT JOIN profiles p ON p.id = m.user_id
+        WHERE m.workspace_id = ?
+        ORDER BY COALESCE(p.full_name, p.email, m.user_id)`,
+      [data.workspaceId],
+    );
+
+    return rows.map<WorkspaceOwner>((r) => ({
+      id: r.user_id,
+      name: r.full_name || r.email || r.user_id,
+      isCurrentUser: r.user_id === context.userId,
+    }));
+  });
+
 export interface ConvertLeadInput {
   workspaceId: string;
   leadId: string;

@@ -18,7 +18,7 @@ import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/d
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel } from "@/lib/crm";
-import { convertLeadToQuotation } from "@/lib/crm.functions";
+import { convertLeadToQuotation, listWorkspaceOwners, type WorkspaceOwner } from "@/lib/crm.functions";
 
 interface LeadRow {
   id: string;
@@ -124,15 +124,30 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>(EMPTY_LEAD);
   const convert = useServerFn(convertLeadToQuotation);
+  const listOwners = useServerFn(listWorkspaceOwners);
   const [converting, setConverting] = useState<string | null>(null);
+  const [mineOnly, setMineOnly] = useState(false);
+
+  // #17 (BS New): owner dipilih dari anggota workspace.
+  const { data: owners = [] } = useQuery({
+    queryKey: ["crm-owners", workspaceId],
+    queryFn: async () => {
+      const result = await listOwners({ data: { workspaceId } });
+      return (result ?? []) as WorkspaceOwner[];
+    },
+  });
+  // #16: pemilik default + filter "prospek saya" memakai pengguna yang login.
+  const me = owners.find((o) => o.isCurrentUser)?.name ?? null;
 
   const filtered = useMemo(() => {
+    let list = rows;
+    if (mineOnly && me) list = list.filter((r) => (r.owner_name ?? "") === me);
     const q = term.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
+    if (!q) return list;
+    return list.filter((r) =>
       [r.code, r.name, r.company_name, r.email, r.phone, r.owner_name].some((v) => (v ?? "").toLowerCase().includes(q)),
     );
-  }, [rows, term]);
+  }, [rows, term, mineOnly, me]);
 
   /** #18 (BS New): buat quotation dari lead langsung dari baris tabel. */
   async function convertLead(id: string) {
@@ -199,10 +214,13 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             placeholder={lang === "id" ? "Cari prospek…" : "Search leads…"}
           />
         </div>
+        <Button variant={mineOnly ? "navy" : "outline"} onClick={() => setMineOnly((v) => !v)}>
+          <UserRound /> {lang === "id" ? "Prospek saya" : "My leads"}
+        </Button>
         <Button
           variant="navy"
           onClick={() => {
-            setForm({ ...EMPTY_LEAD, code: nextLeadCode(rows.length) });
+            setForm({ ...EMPTY_LEAD, code: nextLeadCode(rows.length), owner_name: me ?? "" });
             setOpen(true);
           }}
         >
@@ -339,7 +357,17 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
               />
             </AdminField>
             <AdminField label={lang === "id" ? "Sales penanggung jawab" : "Assigned sales"}>
-              <Input value={form.owner_name ?? ""} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
+              <AdminSelect value={form.owner_name ?? ""} onChange={(v) => setForm({ ...form, owner_name: v })}>
+                <option value="">—</option>
+                {owners.map((o) => (
+                  <option key={o.id} value={o.name}>
+                    {o.name}
+                  </option>
+                ))}
+                {form.owner_name && !owners.some((o) => o.name === form.owner_name) && (
+                  <option value={form.owner_name}>{form.owner_name}</option>
+                )}
+              </AdminSelect>
             </AdminField>
             {form.stage === "lost" && (
               <AdminField label={lang === "id" ? "Alasan kalah" : "Lost reason"}>
