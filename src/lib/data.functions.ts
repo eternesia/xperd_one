@@ -315,6 +315,54 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export interface ReplaceChildRowsInput {
+  table: string;
+  workspaceId: string;
+  /** Column that links the child rows to their parent (e.g. `document_id`). */
+  parentColumn: string;
+  parentId: string;
+  rows: Record<string, unknown>[];
+}
+
+/**
+ * Replace all child rows of one parent document in a single transaction
+ * (delete + insert), so editing a draft can never leave the document without
+ * its lines when something fails halfway.
+ */
+export const replaceChildRows = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((input: unknown) => input as ReplaceChildRowsInput)
+  .handler(async ({ data, context }) => {
+    const { canWriteWorkspace } = await import("@/lib/auth-context.server");
+    const { transaction, uuid } = await import("@/integrations/mysql/pool");
+    const table = assertTable(data.table);
+    const [parentColumn] = cleanColumns(table, [data.parentColumn]);
+    if (!parentColumn) throw new Error("Unknown parent column");
+    if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
+
+    const omit = new Set(["id", "workspace_id", parentColumn]);
+    await transaction(async (conn) => {
+      await conn.execute(`DELETE FROM \`${table}\` WHERE \`${parentColumn}\` = ? AND \`workspace_id\` = ?`, [
+        data.parentId,
+        data.workspaceId,
+      ]);
+      for (const row of data.rows ?? []) {
+        const payload: Record<string, unknown> = {
+          id: typeof row.id === "string" && row.id ? row.id : uuid(),
+          workspace_id: data.workspaceId,
+          [parentColumn]: data.parentId,
+        };
+        for (const c of cleanColumns(table, Object.keys(row), omit)) payload[c] = row[c];
+        const cols = Object.keys(payload);
+        await conn.execute(
+          `INSERT INTO \`${table}\` (\`${cols.join("`,`")}\`) VALUES (${cols.map(() => "?").join(", ")})`,
+          cols.map((c) => payload[c]) as never[],
+        );
+      }
+    });
+    return { ok: true, replaced: (data.rows ?? []).length };
+  });
+
 export interface UpsertRowsInput {
   table: string;
   workspaceId: string;
