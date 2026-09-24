@@ -23,20 +23,22 @@ test("SETTINGS: upload, persist and remove the workspace document logo", async (
   const fileInput = page.locator('input[type="file"]').first();
   await expect(fileInput).toBeVisible();
 
-  // Mulai dari keadaan tanpa logo.
-  if (await logo.isVisible().catch(() => false)) {
+  // Tanpa logo kustom, yang tampil adalah logo default brand Xperd One.
+  if (await page.getByRole("button", { name: "Remove" }).isVisible().catch(() => false)) {
     await page.getByRole("button", { name: "Remove" }).click();
     await save.click();
     await expect(page.getByText(/Settings saved|Pengaturan disimpan/).first()).toBeVisible({ timeout: 60_000 });
   }
+  await expect(page.getByText("Default logo (Xperd One)")).toBeVisible();
+  await expect(logo).toHaveAttribute("src", /xperd-one/);
 
-  // Unggah logo -> pratinjau muncul dan template cetak memuat data URL-nya.
+  // Unggah logo kustom -> pratinjau berganti dan template cetak memuat data URL-nya.
   await fileInput.setInputFiles({
     name: "logo.png",
     mimeType: "image/png",
     buffer: Buffer.from(PNG_1PX, "base64"),
   });
-  await expect(logo).toBeVisible({ timeout: 30_000 });
+  await expect(logo).toHaveAttribute("src", /^data:image\//);
 
   const preview = page.locator("iframe").first();
   await expect
@@ -48,13 +50,14 @@ test("SETTINGS: upload, persist and remove the workspace document logo", async (
 
   // Persist setelah reload.
   await page.reload();
-  await expect(page.getByAltText("Logo")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByAltText("Logo")).toHaveAttribute("src", /^data:image\//, { timeout: 60_000 });
 
-  // Bersihkan kembali (state awal) dan pastikan tersimpan.
+  // Hapus logo kustom -> kembali ke logo default Xperd One (state awal).
   await page.getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByText("No logo")).toBeVisible();
+  await expect(page.getByText("Default logo (Xperd One)")).toBeVisible();
   await save.click();
   await expect(page.getByText(/Settings saved|Pengaturan disimpan/).first()).toBeVisible({ timeout: 60_000 });
   await page.reload();
-  await expect(page.getByText("No logo")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("Default logo (Xperd One)")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByAltText("Logo")).toHaveAttribute("src", /xperd-one/);
 });

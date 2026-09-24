@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getWorkspaceRow, listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
+import { DEFAULT_WORKSPACE_LOGO } from "@/lib/brand";
 import { downloadDocHtmlPdf, printDocHtml, type DocPrintMeta, type DocTemplate } from "@/lib/doc-print";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -117,7 +118,8 @@ function DocumentDetail() {
       taxId: activeWorkspace?.tax_id ?? null,
       bankInfo: activeWorkspace?.bank_info ?? null,
       footerNote: activeWorkspace?.doc_footer_note ?? null,
-      logoUrl: activeWorkspace?.logo_url ?? null,
+      // #4: workspace yang belum unggah logo memakai logo brand Xperd One.
+      logoUrl: activeWorkspace?.logo_url || DEFAULT_WORKSPACE_LOGO,
     },
     labels,
   });

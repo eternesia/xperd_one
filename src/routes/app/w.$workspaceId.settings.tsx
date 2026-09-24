@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateWorkspaceSettings } from "@/lib/platform.functions";
+import { DEFAULT_WORKSPACE_LOGO } from "@/lib/brand";
 import { DOC_TEMPLATES, buildDocHtml, type DocTemplate } from "@/lib/doc-print";
 import type { PrcDoc, PrcLine } from "@/lib/procurement";
 import { useApp } from "@/lib/app-context";
@@ -282,13 +283,12 @@ function SettingsPage() {
                 </Label>
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 w-40 items-center justify-center rounded-md border border-dashed border-border bg-muted/30">
-                    {form.logo_url ? (
-                      <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-36 object-contain" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {lang === "id" ? "Belum ada logo" : "No logo"}
-                      </span>
-                    )}
+                    {/* #4: bila workspace belum punya logo sendiri, tampilkan logo default Xperd One. */}
+                    <img
+                      src={form.logo_url || DEFAULT_WORKSPACE_LOGO}
+                      alt="Logo"
+                      className="max-h-14 max-w-36 object-contain"
+                    />
                   </div>
                   <Input
                     type="file"
@@ -296,7 +296,7 @@ function SettingsPage() {
                     className="max-w-xs"
                     onChange={(e) => pickLogo(e.target.files?.[0])}
                   />
-                  {form.logo_url && (
+                  {form.logo_url ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -305,6 +305,10 @@ function SettingsPage() {
                     >
                       {lang === "id" ? "Hapus" : "Remove"}
                     </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {lang === "id" ? "Logo default (Xperd One)" : "Default logo (Xperd One)"}
+                    </span>
                   )}
                 </div>
               </div>
@@ -340,7 +344,7 @@ function SettingsPage() {
                   title={tpl.en}
                   className="pointer-events-none h-[1123px] w-[794px] origin-top-left border-0"
                   style={{ transform: "scale(0.32)" }}
-                  srcDoc={previewHtml(tpl.id, form.name || "XPERD", lang, form.logo_url)}
+                  srcDoc={previewHtml(tpl.id, form.name || "XPERD", lang, form.logo_url || DEFAULT_WORKSPACE_LOGO)}
                 />
               </div>
               <div className="border-t border-border p-3">
