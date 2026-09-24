@@ -38,6 +38,8 @@ function DocumentDetail() {
   const isSales = moduleId === "sales";
   const salesEntity = findSlsEntity(submoduleId);
   const entity = isSales ? salesEntity : findPrcEntity(submoduleId);
+  // Delivery orders list goods only — BS hides every price/tax/total for them.
+  const hideAmounts = isSales && entity?.docType === "delivery_order";
 
   const { data, isLoading } = useQuery({
     queryKey: ["doc-detail", moduleId, docId],
@@ -99,6 +101,7 @@ function DocumentDetail() {
     lang,
     template: ((activeWorkspace?.doc_template as DocTemplate | undefined) ?? "classic"),
     statusLabel: doc ? (lang === "id" ? STATUS_LABEL[doc.status].id_ : STATUS_LABEL[doc.status].en) : "",
+    hideAmounts,
     company: {
       name: activeWorkspace?.name ?? "XPERD",
       legalName: activeWorkspace?.legal_name ?? null,
@@ -180,7 +183,7 @@ function DocumentDetail() {
           <Info label={labels.supplier} value={doc.supplier_name || doc.supplier_code || "—"} />
           <Info label={labels.reference} value={doc.reference ?? "—"} />
           <Info label={t("Warehouse", "Gudang")} value={doc.warehouse_code ?? "—"} />
-          <Info label={t("Currency", "Mata uang")} value={doc.currency} />
+          {!hideAmounts && <Info label={t("Currency", "Mata uang")} value={doc.currency} />}
           {(doc as unknown as { bank_account_name?: string | null }).bank_account_name && (
             <Info
               label={labels.bank}
@@ -197,14 +200,14 @@ function DocumentDetail() {
               <th className="py-2 text-left">{labels.description}</th>
               <th className="py-2 text-right">{labels.qty}</th>
               <th className="py-2 text-left">{labels.uom}</th>
-              <th className="py-2 text-right">{labels.price}</th>
-              <th className="py-2 text-right">{labels.lineTotal}</th>
+              {!hideAmounts && <th className="py-2 text-right">{labels.price}</th>}
+              {!hideAmounts && <th className="py-2 text-right">{labels.lineTotal}</th>}
             </tr>
           </thead>
           <tbody>
             {lines.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                <td colSpan={hideAmounts ? 5 : 7} className="py-6 text-center text-muted-foreground">
                   {t("No lines.", "Tidak ada rincian.")}
                 </td>
               </tr>
@@ -216,22 +219,24 @@ function DocumentDetail() {
                 <td className="py-2">{l.description ?? "—"}</td>
                 <td className="py-2 text-right">{l.qty}</td>
                 <td className="py-2">{l.uom_code ?? "—"}</td>
-                <td className="py-2 text-right">{formatMoney(l.unit_price, lang, doc.currency)}</td>
-                <td className="py-2 text-right">{formatMoney(l.line_total, lang, doc.currency)}</td>
+                {!hideAmounts && <td className="py-2 text-right">{formatMoney(l.unit_price, lang, doc.currency)}</td>}
+                {!hideAmounts && <td className="py-2 text-right">{formatMoney(l.line_total, lang, doc.currency)}</td>}
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="mt-6 flex flex-col items-end gap-1 text-sm">
-          <Total label={labels.subtotal} value={formatMoney(doc.subtotal, lang, doc.currency)} />
-          <Total label={labels.discount} value={formatMoney(doc.discount_amount, lang, doc.currency)} />
-          <Total label={labels.tax} value={formatMoney(doc.tax_amount, lang, doc.currency)} />
-          <div className="mt-1 flex w-64 justify-between border-t border-border pt-2 text-base font-semibold text-navy dark:text-primary-foreground">
-            <span>{labels.total}</span>
-            <span>{formatMoney(doc.total, lang, doc.currency)}</span>
+        {!hideAmounts && (
+          <div className="mt-6 flex flex-col items-end gap-1 text-sm">
+            <Total label={labels.subtotal} value={formatMoney(doc.subtotal, lang, doc.currency)} />
+            <Total label={labels.discount} value={formatMoney(doc.discount_amount, lang, doc.currency)} />
+            <Total label={labels.tax} value={formatMoney(doc.tax_amount, lang, doc.currency)} />
+            <div className="mt-1 flex w-64 justify-between border-t border-border pt-2 text-base font-semibold text-navy dark:text-primary-foreground">
+              <span>{labels.total}</span>
+              <span>{formatMoney(doc.total, lang, doc.currency)}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {doc.notes && (
           <div className="mt-8 border-t border-border pt-4">

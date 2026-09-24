@@ -520,21 +520,23 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
               <TableHead>{t("Customer", "Pelanggan")}</TableHead>
               <TableHead>{t("Source", "Sumber")}</TableHead>
               <TableHead>{t("Status", "Status")}</TableHead>
-              <TableHead className="text-right">{t("Total", "Total")}</TableHead>
+              {entity.docType !== "delivery_order" && (
+                <TableHead className="text-right">{t("Total", "Total")}</TableHead>
+              )}
               <TableHead className="text-right">{t("Actions", "Aksi")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-sm text-muted-foreground">
+                <TableCell colSpan={entity.docType === "delivery_order" ? 7 : 8} className="py-8 text-sm text-muted-foreground">
                   {t("Loading…", "Memuat…")}
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={entity.docType === "delivery_order" ? 7 : 8} className="py-10 text-center text-sm text-muted-foreground">
                   {t("No documents match your filters.", "Tidak ada dokumen sesuai filter.")}
                 </TableCell>
               </TableRow>
@@ -557,9 +559,11 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                     {lang === "id" ? STATUS_LABEL[row.status].id_ : STATUS_LABEL[row.status].en}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right text-sm font-medium">
-                  {formatMoney(row.total, lang, row.currency)}
-                </TableCell>
+                {entity.docType !== "delivery_order" && (
+                  <TableCell className="text-right text-sm font-medium">
+                    {formatMoney(row.total, lang, row.currency)}
+                  </TableCell>
+                )}
                 <TableCell className="text-right">
                   <Button asChild variant="ghost" size="icon" aria-label={t("Preview", "Pratinjau")}>
                     <Link
@@ -699,8 +703,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                         )}
                         {sourceDocs.map((d) => (
                           <SelectItem key={d.id} value={d.id}>
-                            {d.doc_number} · {d.customer_name || d.customer_code || "—"} ·{" "}
-                            {formatMoney(d.total, lang, d.currency)}
+                            {d.doc_number} · {d.customer_name || d.customer_code || "—"}
+                            {entity.docType !== "delivery_order" && ` · ${formatMoney(d.total, lang, d.currency)}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -818,9 +822,9 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                       <th className="p-2 text-left">{t("Description", "Deskripsi")}</th>
                       <th className="p-2 text-left">{t("Qty", "Qty")}</th>
                       <th className="p-2 text-left">{t("UoM", "Satuan")}</th>
-                      <th className="p-2 text-left">{t("Price", "Harga")}</th>
-                      <th className="p-2 text-left">{t("Disc.", "Diskon")}</th>
-                      <th className="p-2 text-left">{t("Tax %", "Pajak %")}</th>
+                      {entity.docType !== "delivery_order" && <th className="p-2 text-left">{t("Price", "Harga")}</th>}
+                      {entity.docType !== "delivery_order" && <th className="p-2 text-left">{t("Disc.", "Diskon")}</th>}
+                      {entity.docType !== "delivery_order" && <th className="p-2 text-left">{t("Tax %", "Pajak %")}</th>}
                       <th className="w-10" />
                     </tr>
                   </thead>
@@ -876,7 +880,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                               onChange={(e) => patch({ uom_code: e.target.value })}
                             />
                           </td>
-                          <td className="p-1">
+                          {entity.docType !== "delivery_order" && <td className="p-1">
                             <Input
                               type="number"
                               step="any"
@@ -884,8 +888,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                               value={l.unit_price}
                               onChange={(e) => patch({ unit_price: e.target.value })}
                             />
-                          </td>
-                          <td className="p-1">
+                          </td>}
+                          {entity.docType !== "delivery_order" && <td className="p-1">
                             <Input
                               type="number"
                               step="any"
@@ -893,8 +897,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                               value={l.discount}
                               onChange={(e) => patch({ discount: e.target.value })}
                             />
-                          </td>
-                          <td className="p-1">
+                          </td>}
+                          {entity.docType !== "delivery_order" && <td className="p-1">
                             <Select value={String(Number(l.tax_rate) || 0)} onValueChange={(v) => patch({ tax_rate: v })}>
                               <SelectTrigger className="h-9 w-36">
                                 <SelectValue />
@@ -907,7 +911,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                                 ))}
                               </SelectContent>
                             </Select>
-                          </td>
+                          </td>}
                           <td className="p-1 text-center">
                             <Button
                               type="button"
@@ -924,7 +928,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                   </tbody>
                 </table>
               </div>
-              <div className="flex justify-end gap-6 text-sm">
+              {entity.docType !== "delivery_order" && <div className="flex justify-end gap-6 text-sm">
                 <span className="text-muted-foreground">
                   {t("Subtotal", "Subtotal")}: {formatMoney(totals.subtotal, lang)}
                 </span>
@@ -934,7 +938,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                 <span className="font-semibold text-navy dark:text-primary-foreground">
                   {t("Total", "Total")}: {formatMoney(totals.total, lang)}
                 </span>
-              </div>
+              </div>}
             </div>
 
             <Field label={t("Notes", "Catatan")}>

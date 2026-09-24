@@ -44,6 +44,8 @@ export interface DocPrintMeta {
   company: DocCompany;
   labels: Record<string, string>;
   statusLabel: string;
+  /** Delivery orders print without prices/tax/totals (BS parity). */
+  hideAmounts?: boolean;
 }
 
 function esc(v: unknown) {
@@ -102,18 +104,18 @@ function baseCss(t: DocTemplate, scope = "") {
   return rules.join("\n");
 }
 
-function lineRows(lines: PrcLine[], lang: string, labels: Record<string, string>) {
+function lineRows(lines: PrcLine[], lang: string, labels: Record<string, string>, hideAmounts = false) {
   if (!lines.length)
-    return `<tr><td colspan="6" class="center muted" style="padding:26px">${esc(labels.noLines ?? "-")}</td></tr>`;
+    return `<tr><td colspan="${hideAmounts ? 3 : 6}" class="center muted" style="padding:26px">${esc(labels.noLines ?? "-")}</td></tr>`;
   return lines
     .map(
       (l, i) => `<tr>
       <td class="muted">${i + 1}</td>
       <td><strong>${esc(l.item_code ?? "-")}</strong>${l.description ? `<div class="muted" style="margin-top:3px">${esc(l.description)}</div>` : ""}</td>
       <td class="right">${num(l.qty, lang)}<div class="muted" style="font-size:10px">${esc(l.uom_code ?? "")}</div></td>
-      <td class="right">${money(l.unit_price, lang)}</td>
-      <td class="right">${num(l.tax_rate ?? 0, lang)}%</td>
-      <td class="right"><strong>${money(l.line_total, lang)}</strong></td>
+       ${hideAmounts ? "" : `<td class="right">${money(l.unit_price, lang)}</td>
+       <td class="right">${num(l.tax_rate ?? 0, lang)}%</td>
+       <td class="right"><strong>${money(l.line_total, lang)}</strong></td>`}
     </tr>`,
     )
     .join("");
@@ -169,10 +171,10 @@ function classicBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
     <table class="items" style="margin-top:26px;border:1px solid #d8dce4">
       <thead><tr style="background:${p.soft};color:${p.dark}">
         <th class="right" style="width:28px">#</th><th style="text-align:left">${esc(L.description)}</th>
-        <th class="right">${esc(L.qty)}</th><th class="right">${esc(L.price)}</th>
-        <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>
+        <th class="right">${esc(L.qty)}</th>${m.hideAmounts ? "" : `<th class="right">${esc(L.price)}</th>
+         <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>`}
       </tr></thead>
-      <tbody>${lineRows(lines, m.lang, L)}</tbody>
+       <tbody>${lineRows(lines, m.lang, L, m.hideAmounts)}</tbody>
     </table>
 
     <div style="display:flex;justify-content:space-between;margin-top:20px;gap:40px">
@@ -180,7 +182,7 @@ function classicBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
         ${m.company.bankInfo ? `<div><div style="font-weight:700">${esc(L.bank)}</div><div class="muted" style="margin-top:4px">${nl2br(m.company.bankInfo)}</div></div>` : ""}
         ${doc.notes ? `<div class="notes"><strong>${esc(L.notes)}</strong><br/>${nl2br(doc.notes)}</div>` : ""}
       </div>
-      <table class="totals" style="width:320px">${totalsRows(doc, m.lang, L, p.dark)}</table>
+       ${m.hideAmounts ? "" : `<table class="totals" style="width:320px">${totalsRows(doc, m.lang, L, p.dark)}</table>`}
     </div>
 
     <div style="position:absolute;left:48px;right:48px;bottom:40px;border-top:1px solid #e5e7eb;padding-top:10px" class="muted">
@@ -199,8 +201,8 @@ function modernBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
         <div style="font-size:10px;letter-spacing:.28em;color:${p.accent};margin-top:4px">${esc(m.title).toUpperCase()}</div>
       </div>
       <div style="text-align:right">
-        <div style="color:${p.accent};font-weight:700;font-size:14px">${esc(L.total)}</div>
-        <div style="font-size:26px;font-weight:800;color:${p.dark}">${esc(doc.currency)} ${money(doc.total, m.lang)}</div>
+        ${m.hideAmounts ? "" : `<div style="color:${p.accent};font-weight:700;font-size:14px">${esc(L.total)}</div>
+        <div style="font-size:26px;font-weight:800;color:${p.dark}">${esc(doc.currency)} ${money(doc.total, m.lang)}</div>`}
         <div class="muted" style="margin-top:6px">${esc(L.number)}: <strong>${esc(doc.doc_number)}</strong></div>
         <div class="muted">${esc(L.date)}: ${esc(doc.doc_date)}${doc.due_date ? ` · ${esc(L.dueDate)}: ${esc(doc.due_date)}` : ""}</div>
         <div style="margin-top:8px"><span class="status" style="background:${p.accent};color:#fff">${esc(m.statusLabel)}</span></div>
@@ -222,15 +224,15 @@ function modernBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
     <table class="items" style="margin-top:28px">
       <thead><tr style="background:${p.accent};color:#fff">
         <th class="right" style="width:28px">#</th><th style="text-align:left">${esc(L.description)}</th>
-        <th class="right">${esc(L.qty)}</th><th class="right">${esc(L.price)}</th>
-        <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>
+         <th class="right">${esc(L.qty)}</th>${m.hideAmounts ? "" : `<th class="right">${esc(L.price)}</th>
+         <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>`}
       </tr></thead>
-      <tbody>${lines.length ? lineRows(lines, m.lang, L).replace(/<tr>/g, '<tr style="border-bottom:1px solid #e3e9ef">') : lineRows(lines, m.lang, L)}</tbody>
+       <tbody>${lines.length ? lineRows(lines, m.lang, L, m.hideAmounts).replace(/<tr>/g, '<tr style="border-bottom:1px solid #e3e9ef">') : lineRows(lines, m.lang, L, m.hideAmounts)}</tbody>
     </table>
 
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+    ${m.hideAmounts ? "" : `<div style="display:flex;justify-content:flex-end;margin-top:14px">
       <table class="totals" style="width:330px;background:${p.soft};border-radius:4px">${totalsRows(doc, m.lang, L, p.dark)}</table>
-    </div>
+    </div>`}
 
     <div style="display:flex;justify-content:space-between;margin-top:34px;gap:40px">
       <div style="flex:1">
@@ -275,15 +277,15 @@ function minimalBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
     <table class="items" style="margin-top:22px">
       <thead><tr style="border-bottom:1px solid ${p.dark};color:${p.dark}">
         <th class="right" style="width:28px">#</th><th style="text-align:left">${esc(L.description)}</th>
-        <th class="right">${esc(L.qty)}</th><th class="right">${esc(L.price)}</th>
-        <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>
+         <th class="right">${esc(L.qty)}</th>${m.hideAmounts ? "" : `<th class="right">${esc(L.price)}</th>
+         <th class="right">${esc(L.tax)}</th><th class="right">${esc(L.lineTotal)}</th>`}
       </tr></thead>
-      <tbody>${lineRows(lines, m.lang, L).replace(/<tr>/g, '<tr style="border-bottom:1px solid #ece8de">')}</tbody>
+       <tbody>${lineRows(lines, m.lang, L, m.hideAmounts).replace(/<tr>/g, '<tr style="border-bottom:1px solid #ece8de">')}</tbody>
     </table>
 
-    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+     ${m.hideAmounts ? "" : `<div style="display:flex;justify-content:flex-end;margin-top:16px">
       <table class="totals" style="width:320px">${totalsRows(doc, m.lang, L, p.dark)}</table>
-    </div>
+     </div>`}
 
     <div style="margin-top:30px;background:${p.soft};border-left:3px solid ${p.accent};padding:14px 18px">
       ${m.company.bankInfo ? `<div style="font-weight:600">${esc(L.bank)}</div><div class="muted" style="margin-top:3px">${nl2br(m.company.bankInfo)}</div>` : ""}
