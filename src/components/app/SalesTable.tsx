@@ -40,7 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
+import { isAmountSettlement } from "@/lib/sales";
 import { useI18n } from "@/lib/i18n";
 import {
   postArInvoiceJournal,
@@ -167,7 +168,16 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           limit: 50,
         },
       });
-      return (data?.rows ?? []) as unknown as SlsDoc[];
+      const list = (data?.rows ?? []) as unknown as SlsDoc[];
+      if (!isAmountSettlement(entity.docType) || !list.length) return list;
+      // #7 (BS New): dokumen penyelesaian (AR Invoice / Sales Receipt) hanya
+      // menarik sumber yang MASIH punya sisa nilai, supaya sumber yang sudah
+      // lunas tidak ditagih dua kali. Sisa = total dokumen - SUM(total) anak.
+      const settled = await sumDocumentTotalsBySource({
+        data: { table: "sls_documents", workspaceId, sourceIds: list.map((d) => d.id) },
+      });
+      const used = new Map<string, number>((settled ?? []).map((r) => [r.source_document_id, r.total]));
+      return list.filter((d) => Number(d.total) - (used.get(d.id) ?? 0) > 0.01);
     },
   });
 

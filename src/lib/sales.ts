@@ -191,3 +191,12 @@ export const SLS_ENTITIES: SlsEntity[] = [
 export function findSlsEntity(submoduleId?: string) {
   return SLS_ENTITIES.find((e) => e.submoduleId === submoduleId);
 }
+
+/**
+ * #7 (BS New): dokumen yang menyelesaikan dokumen sumber berdasarkan NILAI
+ * (AR Invoice & Sales Receipt), bukan berdasarkan qty seperti SO/DO/retur.
+ * Untuk dokumen ini sisa sumber = total dokumen - SUM(total) dokumen anak.
+ */
+export function isAmountSettlement(docType: SlsDocType) {
+  return docType === "ar_invoice" || docType === "sales_receipt";
+}
