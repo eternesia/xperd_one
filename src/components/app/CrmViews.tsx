@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Construction, FileOutput, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { CalendarClock, Check, Construction, FileOutput, Loader2, Pencil, Plus, Search, Trash2, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
 import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel } from "@/lib/crm";
@@ -127,6 +127,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
   const listOwners = useServerFn(listWorkspaceOwners);
   const [converting, setConverting] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // #17 (BS New): owner dipilih dari anggota workspace.
   const { data: owners = [] } = useQuery({
@@ -160,6 +161,72 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
       toast.error(e instanceof Error ? e.message : "Convert failed");
     } finally {
       setConverting(null);
+    }
+  }
+
+  /** #15 (BS New): import prospek dari Excel/CSV, lewati duplikat email/no. HP. */
+  async function handleImport(file: File) {
+    setImporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]!];
+      const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet!);
+      const seenEmail = new Set(rows.map((r) => (r.email ?? "").toLowerCase()).filter(Boolean));
+      const seenPhone = new Set(rows.map((r) => (r.phone ?? "").replace(/\D/g, "")).filter(Boolean));
+      const payload: Record<string, unknown>[] = [];
+      let skipped = 0;
+      parsed.forEach((raw) => {
+        // Alias header EN/ID supaya template apa pun bisa dipakai.
+        const pick = (...keys: string[]) => {
+          for (const k of keys) {
+            const hit = Object.keys(raw).find((c) => c.trim().toLowerCase() === k);
+            if (hit && raw[hit] != null && String(raw[hit]).trim()) return String(raw[hit]).trim();
+          }
+          return "";
+        };
+        const name = pick("name", "nama", "contact", "kontak");
+        if (!name) return;
+        const email = pick("email").toLowerCase();
+        const phone = pick("phone", "telepon", "wa", "whatsapp");
+        const digits = phone.replace(/\D/g, "");
+        if ((email && seenEmail.has(email)) || (digits && seenPhone.has(digits))) {
+          skipped += 1;
+          return;
+        }
+        if (email) seenEmail.add(email);
+        if (digits) seenPhone.add(digits);
+        payload.push({
+          code: nextLeadCode(rows.length + payload.length),
+          name,
+          company_name: pick("company", "perusahaan") || null,
+          email: email || null,
+          phone: phone || null,
+          source: pick("source", "sumber") || "website",
+          stage: "new",
+          status: "open",
+          probability: 10,
+          estimated_value: Number(pick("value", "nilai", "estimated_value")) || 0,
+          owner_name: pick("owner", "sales") || me || null,
+          notes: pick("notes", "catatan") || null,
+        });
+      });
+      if (!payload.length) {
+        toast.info(lang === "id" ? `Tidak ada baris baru (${skipped} duplikat)` : `No new rows (${skipped} duplicates)`);
+        return;
+      }
+      // Insert massal lewat server fn (nama kolom difilter whitelist di server).
+      await upsertWorkspaceRows({ data: { table: "crm_leads", workspaceId, rows: payload } });
+      toast.success(
+        lang === "id"
+          ? `${payload.length} prospek diimpor, ${skipped} duplikat dilewati`
+          : `${payload.length} leads imported, ${skipped} duplicates skipped`,
+      );
+      qc.invalidateQueries({ queryKey: ["crm-leads", workspaceId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -214,6 +281,21 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             placeholder={lang === "id" ? "Cari prospek…" : "Search leads…"}
           />
         </div>
+        <input
+          id="crm-lead-import"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void handleImport(f);
+          }}
+        />
+        <Button variant="outline" disabled={importing} onClick={() => document.getElementById("crm-lead-import")?.click()}>
+          {importing ? <Loader2 className="animate-spin" /> : <Upload />}{" "}
+          {lang === "id" ? "Impor Excel" : "Import Excel"}
+        </Button>
         <Button variant={mineOnly ? "navy" : "outline"} onClick={() => setMineOnly((v) => !v)}>
           <UserRound /> {lang === "id" ? "Prospek saya" : "My leads"}
         </Button>
