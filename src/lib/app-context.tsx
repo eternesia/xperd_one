@@ -19,6 +19,8 @@ export interface Workspace {
   doc_template: string;
   bank_info: string | null;
   doc_footer_note: string | null;
+  /** #4 (BS New): logo dokumen (data URL) milik workspace. */
+  logo_url: string | null;
   status: "setup" | "active" | "suspended";
 }
 

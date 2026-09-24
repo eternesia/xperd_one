@@ -42,6 +42,7 @@ function SettingsPage() {
     bank_info: "",
     doc_footer_note: "",
     doc_template: "classic" as DocTemplate,
+    logo_url: "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +62,7 @@ function SettingsPage() {
       bank_info: activeWorkspace.bank_info ?? "",
       doc_footer_note: activeWorkspace.doc_footer_note ?? "",
       doc_template: (activeWorkspace.doc_template as DocTemplate) ?? "classic",
+      logo_url: activeWorkspace.logo_url ?? "",
     });
   }, [activeWorkspace]);
 
@@ -85,6 +87,7 @@ function SettingsPage() {
             bank_info: form.bank_info.trim() || null,
             doc_footer_note: form.doc_footer_note.trim() || null,
             doc_template: form.doc_template,
+            logo_url: form.logo_url || null,
           },
         },
       });
@@ -95,6 +98,32 @@ function SettingsPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * #4 (BS New): logo di-resize di browser (maks 400x160) lalu disimpan sebagai
+   * data URL — Old tidak punya object storage seperti Supabase Storage.
+   */
+  function pickLogo(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error(lang === "id" ? "File harus gambar" : "File must be an image");
+      return;
+    }
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      img.onload = () => {
+        const scale = Math.min(1, 400 / img.width, 160 / img.height);
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+        setForm((f) => ({ ...f, logo_url: c.toDataURL("image/png") }));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
@@ -244,6 +273,41 @@ function SettingsPage() {
                   onChange={(e) => setForm({ ...form, doc_footer_note: e.target.value })}
                 />
               </div>
+              {/* #4 (BS New): logo workspace dipakai di header cetak/PDF dokumen. */}
+              <div className="space-y-2 sm:col-span-2">
+                <Label>
+                  {lang === "id"
+                    ? "Logo dokumen (header Invoice, SO, DO, PO, GR)"
+                    : "Document logo (Invoice, SO, DO, PO, GR header)"}
+                </Label>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-40 items-center justify-center rounded-md border border-dashed border-border bg-muted/30">
+                    {form.logo_url ? (
+                      <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-36 object-contain" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {lang === "id" ? "Belum ada logo" : "No logo"}
+                      </span>
+                    )}
+                  </div>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    className="max-w-xs"
+                    onChange={(e) => pickLogo(e.target.files?.[0])}
+                  />
+                  {form.logo_url && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setForm({ ...form, logo_url: "" })}
+                    >
+                      {lang === "id" ? "Hapus" : "Remove"}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
             <Button type="submit" variant="navy" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : <Save />} {lang === "id" ? "Simpan" : "Save changes"}
@@ -276,7 +340,7 @@ function SettingsPage() {
                   title={tpl.en}
                   className="pointer-events-none h-[1123px] w-[794px] origin-top-left border-0"
                   style={{ transform: "scale(0.32)" }}
-                  srcDoc={previewHtml(tpl.id, form.name || "XPERD", lang)}
+                  srcDoc={previewHtml(tpl.id, form.name || "XPERD", lang, form.logo_url)}
                 />
               </div>
               <div className="border-t border-border p-3">
@@ -293,7 +357,7 @@ function SettingsPage() {
   );
 }
 
-function previewHtml(template: DocTemplate, companyName: string, lang: string) {
+function previewHtml(template: DocTemplate, companyName: string, lang: string, logoUrl?: string) {
   const doc = {
     doc_number: "INV/2026/0001",
     doc_date: "2026-08-14",
@@ -326,6 +390,8 @@ function previewHtml(template: DocTemplate, companyName: string, lang: string) {
       phone: "0851 9504 1191",
       email: "info@example.co.id",
       bankInfo: "BCA 4974741191",
+      // #4 (BS New): preview menampilkan logo workspace bila sudah ada.
+      logoUrl: logoUrl || null,
     },
     labels: {
       number: lang === "id" ? "Nomor" : "Number",

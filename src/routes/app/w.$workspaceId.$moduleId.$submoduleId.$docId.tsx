@@ -117,6 +117,7 @@ function DocumentDetail() {
       taxId: activeWorkspace?.tax_id ?? null,
       bankInfo: activeWorkspace?.bank_info ?? null,
       footerNote: activeWorkspace?.doc_footer_note ?? null,
+      logoUrl: activeWorkspace?.logo_url ?? null,
     },
     labels,
   });

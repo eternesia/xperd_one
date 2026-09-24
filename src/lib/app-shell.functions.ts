@@ -42,6 +42,8 @@ export interface ShellWorkspace {
   doc_template: string;
   bank_info: string | null;
   doc_footer_note: string | null;
+  /** #4 (BS New): logo dokumen (data URL) milik workspace. */
+  logo_url: string | null;
   status: "setup" | "active" | "suspended";
 }
 
@@ -80,6 +82,7 @@ export const getAppShellData = createServerFn({ method: "GET" }).handler(async (
         `SELECT w.id, w.tenant_id, w.name, w.legal_name, w.slug, w.currency, w.timezone,
                 w.fiscal_year_start_month, w.default_costing_method,
                 w.address, w.tax_id, w.phone, w.email, w.doc_template, w.bank_info, w.doc_footer_note,
+                w.logo_url,
                 w.status
            FROM workspaces w
           WHERE w.tenant_id = ?

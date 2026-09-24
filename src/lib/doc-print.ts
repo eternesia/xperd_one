@@ -35,6 +35,8 @@ export interface DocCompany {
   taxId?: string | null;
   bankInfo?: string | null;
   footerNote?: string | null;
+  /** #4 (BS New): logo workspace (data URL) di header dokumen. */
+  logoUrl?: string | null;
 }
 
 export interface DocPrintMeta {
@@ -145,7 +147,7 @@ function classicBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
   return `<div class="sheet">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <div style="font-size:20px;font-weight:700;color:${p.dark}">${esc(m.company.name)}</div>
+        ${m.company.logoUrl ? `<img src="${esc(m.company.logoUrl)}" alt="" style="max-height:56px;max-width:180px;object-fit:contain;display:block;margin-bottom:8px" />` : ""}<div style="font-size:20px;font-weight:700;color:${p.dark}">${esc(m.company.name)}</div>
         <div class="muted" style="margin-top:8px;line-height:1.6">${companyBlock(m.company)}</div>
       </div>
       <div style="text-align:right">
@@ -199,7 +201,7 @@ function modernBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
   return `<div class="sheet" style="background:#fbfcfd">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div style="background:${p.dark};color:#fff;padding:18px 26px;border-radius:4px">
-        <div style="font-size:20px;font-weight:800;letter-spacing:.02em">${esc(m.company.name)}</div>
+        ${m.company.logoUrl ? `<img src="${esc(m.company.logoUrl)}" alt="" style="max-height:72px;max-width:190px;object-fit:contain;display:block;margin-bottom:8px" />` : ""}<div style="font-size:20px;font-weight:800;letter-spacing:.02em">${esc(m.company.name)}</div>
         <div style="font-size:10px;letter-spacing:.28em;color:${p.accent};margin-top:4px">${esc(m.title).toUpperCase()}</div>
       </div>
       <div style="text-align:right">
@@ -264,7 +266,7 @@ function minimalBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:8px">
         <h1 style="font-size:30px;font-weight:300;letter-spacing:.02em;color:${p.dark}">${esc(doc.doc_number)}</h1>
         <div style="text-align:right">
-          <div style="font-size:16px;font-weight:600;color:${p.dark}">${esc(m.company.name)}</div>
+          ${m.company.logoUrl ? `<img src="${esc(m.company.logoUrl)}" alt="" style="max-height:56px;max-width:180px;object-fit:contain;display:block;margin-left:auto;margin-bottom:8px" />` : ""}<div style="font-size:16px;font-weight:600;color:${p.dark}">${esc(m.company.name)}</div>
           <div class="muted" style="margin-top:4px;line-height:1.6">${companyBlock(m.company)}</div>
         </div>
       </div>
