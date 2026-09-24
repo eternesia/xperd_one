@@ -46,6 +46,8 @@ export interface DocPrintMeta {
   statusLabel: string;
   /** Delivery orders print without prices/tax/totals (BS parity). */
   hideAmounts?: boolean;
+  /** Bank account chosen on the document — shown instead of the company bank text. */
+  paymentAccount?: string | null;
 }
 
 function esc(v: unknown) {
@@ -179,7 +181,7 @@ function classicBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
 
     <div style="display:flex;justify-content:space-between;margin-top:20px;gap:40px">
       <div style="flex:1">
-        ${m.company.bankInfo ? `<div><div style="font-weight:700">${esc(L.bank)}</div><div class="muted" style="margin-top:4px">${nl2br(m.company.bankInfo)}</div></div>` : ""}
+        ${m.paymentAccount ? `<div><div style="font-weight:700">${esc(L.bank)}</div><div class="muted" style="margin-top:4px">${esc(m.paymentAccount)}</div></div>` : ""}
         ${doc.notes ? `<div class="notes"><strong>${esc(L.notes)}</strong><br/>${nl2br(doc.notes)}</div>` : ""}
       </div>
        ${m.hideAmounts ? "" : `<table class="totals" style="width:320px">${totalsRows(doc, m.lang, L, p.dark)}</table>`}
@@ -236,7 +238,7 @@ function modernBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
 
     <div style="display:flex;justify-content:space-between;margin-top:34px;gap:40px">
       <div style="flex:1">
-        ${m.company.bankInfo ? `<div><div style="font-weight:700;color:${p.dark}">${esc(L.bank)}</div><div class="muted" style="margin-top:4px">${nl2br(m.company.bankInfo)}</div></div>` : ""}
+        ${m.paymentAccount ? `<div><div style="font-weight:700;color:${p.dark}">${esc(L.bank)}</div><div class="muted" style="margin-top:4px">${esc(m.paymentAccount)}</div></div>` : ""}
         ${doc.notes ? `<div class="notes"><strong>${esc(L.notes)}</strong><br/>${nl2br(doc.notes)}</div>` : ""}
       </div>
       <div style="width:220px;text-align:center">
@@ -288,7 +290,7 @@ function minimalBody(doc: PrcDoc, lines: PrcLine[], m: DocPrintMeta) {
      </div>`}
 
     <div style="margin-top:30px;background:${p.soft};border-left:3px solid ${p.accent};padding:14px 18px">
-      ${m.company.bankInfo ? `<div style="font-weight:600">${esc(L.bank)}</div><div class="muted" style="margin-top:3px">${nl2br(m.company.bankInfo)}</div>` : ""}
+      ${m.paymentAccount ? `<div style="font-weight:600">${esc(L.bank)}</div><div class="muted" style="margin-top:3px">${esc(m.paymentAccount)}</div>` : ""}
       ${doc.notes ? `<div style="margin-top:10px"><strong>${esc(L.notes)}</strong><div class="muted" style="margin-top:3px;white-space:pre-line">${nl2br(doc.notes)}</div></div>` : ""}
     </div>
 

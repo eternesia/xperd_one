@@ -318,6 +318,8 @@ function previewHtml(template: DocTemplate, companyName: string, lang: string) {
     lang,
     template,
     statusLabel: "UNPAID",
+    // #5 (BS New): preview ikut menampilkan contoh rekening pembayaran.
+    paymentAccount: "BCA 4974741191",
     company: {
       name: companyName,
       address: "Asia Pacific Building, BSD Serpong",

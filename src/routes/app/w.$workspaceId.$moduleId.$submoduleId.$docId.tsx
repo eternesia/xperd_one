@@ -102,6 +102,12 @@ function DocumentDetail() {
     template: ((activeWorkspace?.doc_template as DocTemplate | undefined) ?? "classic"),
     statusLabel: doc ? (lang === "id" ? STATUS_LABEL[doc.status].id_ : STATUS_LABEL[doc.status].en) : "",
     hideAmounts,
+    // #2 (BS New): blok rekening di dokumen memakai rekening yang DIPILIH pada
+    // dokumen AR Invoice, bukan teks bank info milik workspace.
+    paymentAccount:
+      isSales && entity?.docType === "ar_invoice"
+        ? ((doc as unknown as { bank_account_name?: string | null } | null)?.bank_account_name ?? null)
+        : null,
     company: {
       name: activeWorkspace?.name ?? "XPERD",
       legalName: activeWorkspace?.legal_name ?? null,
