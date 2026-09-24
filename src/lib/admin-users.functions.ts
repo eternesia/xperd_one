@@ -249,3 +249,93 @@ export const adminRemoveWorkspaceAccess = createServerFn({ method: "POST" })
     ]);
     return { ok: true };
   });
+
+// ---------------------------------------------------------------------------
+// #25 (BS New): reset transaksi tenant — SEMUA logika di kode aplikasi.
+// Sengaja TIDAK memakai trigger DB maupun tabel/kolom baru: daftar tabel yang
+// dibersihkan ada di konstanta TX_TABLES di bawah, dijalankan satu transaksi
+// MySQL (atomic) dan diverifikasi ulang sebelum commit. Master data (item,
+// customer, supplier, COA, gudang, paket) tidak disentuh.
+// ---------------------------------------------------------------------------
+
+/** Urutan penting: anak dulu (lines -> documents) agar tidak melanggar FK. */
+const TX_TABLES = [
+  "acc_journal_lines",
+  "acc_journal_entries",
+  "sls_shipment_scans",
+  "sls_document_lines",
+  "sls_documents",
+  "prc_document_lines",
+  "prc_documents",
+  "inv_movements",
+  "cb_transactions",
+  "fa_depreciations",
+  "tax_records",
+] as const;
+
+export interface AdminResetTenantInput {
+  tenantId: string;
+}
+
+export const adminResetTenantTransactions = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: AdminResetTenantInput) => {
+    if (!data?.tenantId || typeof data.tenantId !== "string") throw new Error("tenantId required");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+    const { transaction } = await import("@/integrations/mysql/pool");
+    await requireAdmin(context.userId);
+
+    const workspaces = await execute<{ id: string }>("SELECT id FROM workspaces WHERE tenant_id = ?", [
+      data.tenantId,
+    ]);
+    const ids = workspaces.map((w) => w.id);
+    if (!ids.length) return { workspaces: 0, deleted: {} as Record<string, number> };
+
+    const placeholders = ids.map(() => "?").join(", ");
+    const deleted: Record<string, number> = {};
+
+    await transaction(async (conn) => {
+      for (const table of TX_TABLES) {
+        const [result] = await conn.execute(
+          `DELETE FROM \`${table}\` WHERE workspace_id IN (${placeholders})`,
+          ids,
+        );
+        deleted[table] = Number((result as { affectedRows?: number }).affectedRows ?? 0);
+      }
+
+      // Turunan yang tidak dihapus, tapi direset ke kondisi awal.
+      await conn.execute(
+        `UPDATE fa_assets
+            SET accumulated_depreciation = 0, status = 'active', disposal_date = NULL, disposal_amount = NULL
+          WHERE workspace_id IN (${placeholders})`,
+        ids,
+      );
+      await conn.execute(
+        `UPDATE cb_accounts SET opening_balance = 0 WHERE workspace_id IN (${placeholders})`,
+        ids,
+      );
+      // Lead tetap ada (master CRM), hanya tautan ke penawarannya yang dilepas.
+      await conn.execute(
+        `UPDATE crm_leads SET quotation_id = NULL WHERE workspace_id IN (${placeholders})`,
+        ids,
+      );
+
+      // Verifikasi di dalam transaksi: kalau masih ada sisa, batalkan semua.
+      const leftovers: string[] = [];
+      for (const table of TX_TABLES) {
+        const [rows] = await conn.query(
+          `SELECT COUNT(*) AS n FROM \`${table}\` WHERE workspace_id IN (${placeholders})`,
+          ids,
+        );
+        const count = Number((rows as { n?: number }[])[0]?.n ?? 0);
+        if (count > 0) leftovers.push(`${table}: ${count}`);
+      }
+      if (leftovers.length) throw new Error(`Reset tidak tuntas — ${leftovers.join(", ")}`);
+    });
+
+    return { workspaces: ids.length, deleted };
+  });

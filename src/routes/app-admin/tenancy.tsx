@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { adminDelete, adminList, adminListTenantsWithPackages, adminSave } from "@/lib/platform.functions";
+import { adminResetTenantTransactions } from "@/lib/admin-users.functions";
 import { formatDate } from "@/lib/xperd";
 
 export const Route = createFileRoute("/app-admin/tenancy")({
@@ -314,6 +315,28 @@ function TenancyPage() {
                       }}
                     >
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                    {/* #25 (BS New): reset transaksi tenant — logika & daftar tabelnya
+                        ada di KODE (`adminResetTenantTransactions`), tanpa trigger DB. */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Reset transaction data"
+                      title="Reset transaction data"
+                      onClick={async () => {
+                        const typed = prompt(
+                          `Reset SEMUA transaksi "${t.name}" (jurnal, penjualan, pembelian, stok, kas/bank, pajak)? Master data tetap.\nKetik RESET untuk melanjutkan.`,
+                        );
+                        if (typed !== "RESET") return;
+                        try {
+                          const r = await adminResetTenantTransactions({ data: { tenantId: t.id } });
+                          toast.success(`Transaksi dibersihkan di ${r.workspaces} workspace.`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Gagal mereset transaksi");
+                        }
+                      }}
+                    >
+                      <RotateCcw className="h-4 w-4 text-amber-600" />
                     </Button>
                     <Button
                       variant="ghost"
