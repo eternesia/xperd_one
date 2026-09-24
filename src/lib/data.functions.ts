@@ -315,6 +315,56 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export interface SumBySourceInput {
+  table: string;
+  workspaceId: string;
+  /** Source (parent) documents to total up. Empty list returns []. */
+  sourceIds: string[];
+  /** Statuses to ignore — drafts/cancelled documents do not settle anything. */
+  excludeStatuses?: string[];
+}
+
+export interface SourceTotalRow {
+  source_document_id: string;
+  total: number;
+}
+
+/**
+ * #7 (BS New): sum the document totals grouped by `source_document_id`, so the
+ * UI can tell how much of a source document has already been settled and only
+ * offer the ones with a remaining balance. Aggregated in SQL instead of
+ * shipping every child row to the client.
+ */
+export const sumDocumentTotalsBySource = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((input: unknown) => input as SumBySourceInput)
+  .handler(async ({ data, context }) => {
+    const { isWorkspaceMember } = await import("@/lib/auth-context.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+    const table = assertTable(data.table);
+    const [sourceColumn] = cleanColumns(table, ["source_document_id"]);
+    if (!sourceColumn) throw new Error("Unknown source column");
+    if (!(await isWorkspaceMember(data.workspaceId, context.userId))) throw new Error("Forbidden");
+    if (!data.sourceIds?.length) return [] as SourceTotalRow[];
+
+    const placeholders = data.sourceIds.map(() => "?").join(", ");
+    const excluded = (data.excludeStatuses ?? ["draft", "cancelled"]).filter(Boolean);
+    const statusClause = excluded.length ? ` AND \`status\` NOT IN (${excluded.map(() => "?").join(", ")})` : "";
+
+    const rows = await execute<{ source_document_id: string; total: string | number | null }>(
+      `SELECT \`${sourceColumn}\` AS source_document_id, SUM(\`total\`) AS total
+         FROM \`${table}\`
+        WHERE \`workspace_id\` = ? AND \`${sourceColumn}\` IN (${placeholders})${statusClause}
+        GROUP BY \`${sourceColumn}\``,
+      [data.workspaceId, ...data.sourceIds, ...excluded],
+    );
+
+    return rows.map<SourceTotalRow>((r) => ({
+      source_document_id: r.source_document_id,
+      total: Number(r.total) || 0,
+    }));
+  });
+
 export interface ReplaceChildRowsInput {
   table: string;
   workspaceId: string;
