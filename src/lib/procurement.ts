@@ -154,7 +154,7 @@ export const PRC_ENTITIES: PrcEntity[] = [
       docType: "goods_receipt",
       en: "Goods Receipt",
       id_: "Penerimaan Barang",
-      fromStatuses: ["received", "partial"],
+      fromStatuses: ["received", "partial", "closed"],
     },
     allowPartial: true,
     autoJournal: false,
@@ -175,7 +175,7 @@ export const PRC_ENTITIES: PrcEntity[] = [
       docType: "ap_invoice",
       en: "AP Invoice",
       id_: "Faktur Hutang",
-      fromStatuses: ["invoiced", "partial"],
+      fromStatuses: ["invoiced", "partial", "closed"],
     },
     allowPartial: true,
     autoJournal: true,
@@ -257,6 +257,15 @@ export function computeLine(line: Pick<PrcLine, "qty" | "unit_price" | "discount
 /** remaining quantity still open on a source line */
 export function remainingQty(line: PrcLine) {
   return Math.max(0, Number(line.qty || 0) - Number(line.qty_fulfilled || 0));
+}
+
+/**
+ * #7 (BS New): dokumen penyelesaian berbasis NILAI. AP Invoice & Purchase
+ * Payment mengonsumsi sisa NILAI dokumen sumber, bukan qty per baris (jadi qty
+ * item tidak pernah dikonsumsi dan sisa qty tidak relevan).
+ */
+export function isAmountSettlement(docType: PrcDocType) {
+  return docType === "ap_invoice" || docType === "purchase_payment";
 }
 
 /** derive the source document status after its children consumed some quantity */

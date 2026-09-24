@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   assertFundsMapping,
@@ -62,6 +62,7 @@ import {
   type PrcEntity,
   type PrcLine,
   type PrcStatus,
+  isAmountSettlement,
 } from "@/lib/procurement";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -105,6 +106,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sourceId, setSourceId] = useState<string>("");
   const [sourceLines, setSourceLines] = useState<PrcLine[]>([]);
+  const [sourceOpenTotal, setSourceOpenTotal] = useState(0);
 
   const [header, setHeader] = useState({
     doc_number: "",
@@ -168,7 +170,15 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
           limit: 50,
         },
       });
-      return (data?.rows ?? []) as unknown as PrcDoc[];
+      const list = (data?.rows ?? []) as unknown as PrcDoc[];
+      if (!isAmountSettlement(entity.docType) || !list.length) return list;
+      // #7 (BS New): dokumen penyelesaian hanya menarik sumber yang MASIH punya
+      // sisa nilai, supaya sumber yang sudah lunas tidak ditagih dua kali.
+      const settled = await sumDocumentTotalsBySource({
+        data: { table: "prc_documents", workspaceId, sourceIds: list.map((d) => d.id) },
+      });
+      const used = new Map<string, number>((settled ?? []).map((r) => [r.source_document_id, r.total]));
+      return list.filter((d) => Number(d.total) - (used.get(d.id) ?? 0) > 0.01);
     },
   });
 
@@ -179,13 +189,28 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
       data: { table: "prc_document_lines", workspaceId, filters: { document_id: id }, orderBy: "line_no", orderDir: "asc", limit: 500 },
     });
     const list = (srcLinesData?.rows ?? []) as unknown as PrcLine[];
-    const openLines = list.filter((l) => remainingQty(l) > 0.0001);
+    // #7 tahap 2b (BS New): dokumen penyelesaian (AP Invoice / Purchase Payment)
+    // memakai SISA NILAI dokumen sumber, bukan sisa qty per baris.
+    let openTotal = Number(doc.total);
+    if (isAmountSettlement(entity.docType)) {
+      const settledRows = await sumDocumentTotalsBySource({
+        data: { table: "prc_documents", workspaceId, sourceIds: [id] },
+      });
+      const settled = (settledRows ?? []).reduce((sum, r) => sum + Number(r.total || 0), 0);
+      openTotal = Math.max(0, Number(doc.total) - settled);
+      if (openTotal <= 0.01) {
+        toast.error(t("This document has no remaining balance.", "Dokumen ini tidak memiliki sisa nilai."));
+        return;
+      }
+    }
+    const openLines = isAmountSettlement(entity.docType) ? list : list.filter((l) => remainingQty(l) > 0.0001);
     if (!openLines.length) {
       toast.error(t("Nothing left to pull from this document.", "Tidak ada sisa yang bisa ditarik."));
       return;
     }
     setSourceId(id);
     setSourceLines(list);
+    setSourceOpenTotal(openTotal);
     setHeader((h) => ({
       ...h,
       supplier_code: doc.supplier_code ?? "",
@@ -193,17 +218,18 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
       warehouse_code: doc.warehouse_code ?? h.warehouse_code,
       reference: doc.doc_number,
     }));
+    const openRatio = isAmountSettlement(entity.docType) && Number(doc.total) > 0 ? openTotal / Number(doc.total) : 1;
     setLines(
       openLines.map((l) => ({
         item_code: l.item_code ?? "",
         description: l.description ?? "",
-        qty: String(remainingQty(l)),
+        qty: String(isAmountSettlement(entity.docType) ? Number(l.qty) || 1 : remainingQty(l)),
         uom_code: l.uom_code ?? "",
-        unit_price: String(l.unit_price ?? 0),
-        discount: String(l.discount ?? 0),
+        unit_price: String(Number(l.unit_price ?? 0) * openRatio),
+        discount: String(Number(l.discount ?? 0) * openRatio),
         tax_rate: String(l.tax_rate ?? 0),
         source_line_id: l.id,
-        max_qty: remainingQty(l),
+        max_qty: isAmountSettlement(entity.docType) ? undefined : remainingQty(l),
       })),
     );
     toast.success(t(`Pulled from ${doc.doc_number}`, `Ditarik dari ${doc.doc_number}`));
@@ -231,6 +257,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     setLines([emptyLine()]);
     setSourceId("");
     setSourceLines([]);
+    setSourceOpenTotal(0);
     setIsDraft(false);
     setEditingId(null);
     setHeader({
@@ -331,29 +358,35 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         await upsertWorkspaceRows({ data: { table: "prc_document_lines", workspaceId, rows: payload } });
       }
 
-      // consume the source document (supports partial fulfilment)
+      // #7: Goods Receipt/Retur mengonsumsi QTY; AP Invoice & Purchase Payment
+      // mengonsumsi NILAI saja (qty item tidak diubah).
       if (sourceDoc && !isDraft) {
-        const consumed = new Map<string, number>();
-        usable.forEach((l) => {
-          if (!l.source_line_id) return;
-          consumed.set(l.source_line_id, (consumed.get(l.source_line_id) ?? 0) + (Number(l.qty) || 0));
-        });
-        const nextLines = sourceLines.map((sl) => ({
-          ...sl,
-          qty_fulfilled: Number(sl.qty_fulfilled ?? 0) + (consumed.get(sl.id) ?? 0),
-        }));
-        for (const sl of nextLines) {
-          if (!consumed.has(sl.id)) continue;
-          await saveWorkspaceRow({
-            data: {
-              table: "prc_document_lines",
-              workspaceId,
-              id: sl.id,
-              data: { qty_fulfilled: Math.min(Number(sl.qty), sl.qty_fulfilled ?? 0) },
-            },
+        let stillOpen: boolean;
+        if (isAmountSettlement(entity.docType)) {
+          stillOpen = totals.total + 0.01 < sourceOpenTotal;
+        } else {
+          const consumed = new Map<string, number>();
+          usable.forEach((l) => {
+            if (!l.source_line_id) return;
+            consumed.set(l.source_line_id, (consumed.get(l.source_line_id) ?? 0) + (Number(l.qty) || 0));
           });
+          const nextLines = sourceLines.map((sl) => ({
+            ...sl,
+            qty_fulfilled: Number(sl.qty_fulfilled ?? 0) + (consumed.get(sl.id) ?? 0),
+          }));
+          for (const sl of nextLines) {
+            if (!consumed.has(sl.id)) continue;
+            await saveWorkspaceRow({
+              data: {
+                table: "prc_document_lines",
+                workspaceId,
+                id: sl.id,
+                data: { qty_fulfilled: Math.min(Number(sl.qty), sl.qty_fulfilled ?? 0) },
+              },
+            });
+          }
+          stillOpen = nextLines.some((l) => Number(l.qty) - Number(l.qty_fulfilled ?? 0) > 0.0001);
         }
-        const stillOpen = nextLines.some((l) => Number(l.qty) - Number(l.qty_fulfilled ?? 0) > 0.0001);
         await saveWorkspaceRow({
           data: {
             table: "prc_documents",
@@ -450,10 +483,50 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
       const raw = ((rawData?.rows ?? [])[0] ?? {}) as Record<string, unknown>;
       const txt = (key: string) => (raw[key] == null ? "" : String(raw[key]));
 
+      // #7 tahap 2b (BS New): sisa yang boleh ditagih milik DOKUMEN SUMBER,
+      // bukan draft ini.
+      let sourceOpen = 0;
+      let upstreamLines: PrcLine[] = [];
+      if (doc.source_document_id) {
+        const srcDocData = await listWorkspaceRows({
+          data: {
+            table: "prc_documents",
+            workspaceId,
+            filters: { id: doc.source_document_id },
+            orderBy: "created_at",
+            orderDir: "desc",
+            limit: 1,
+          },
+        });
+        const srcDoc = ((srcDocData?.rows ?? [])[0] ?? null) as Record<string, unknown> | null;
+        const srcLinesData = await listWorkspaceRows({
+          data: {
+            table: "prc_document_lines",
+            workspaceId,
+            filters: { document_id: doc.source_document_id },
+            orderBy: "line_no",
+            orderDir: "asc",
+            limit: 500,
+          },
+        });
+        upstreamLines = (srcLinesData?.rows ?? []) as unknown as PrcLine[];
+        const srcTotal = srcDoc?.total == null ? Number(doc.total) : Number(srcDoc.total);
+        if (isAmountSettlement(entity.docType)) {
+          const settledRows = await sumDocumentTotalsBySource({
+            data: { table: "prc_documents", workspaceId, sourceIds: [doc.source_document_id] },
+          });
+          const settled = (settledRows ?? []).reduce((sum, r) => sum + Number(r.total || 0), 0);
+          sourceOpen = Math.max(0, srcTotal - settled);
+        } else {
+          sourceOpen = srcTotal;
+        }
+      }
+
       setEditingId(doc.id);
       setIsDraft(true);
       setSourceId(doc.source_document_id ?? "");
-      setSourceLines([]);
+      setSourceLines(upstreamLines);
+      setSourceOpenTotal(sourceOpen);
       setHeader({
         doc_number: doc.doc_number ?? "",
         doc_date: doc.doc_date ?? "",
@@ -762,6 +835,10 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
             className="space-y-5"
             onSubmit={(e) => {
               e.preventDefault();
+              if (sourceId && isAmountSettlement(entity.docType) && totals.total > sourceOpenTotal + 0.01) {
+                toast.error(t("The amount exceeds the remaining balance.", "Nominal melebihi sisa yang belum diproses."));
+                return;
+              }
               const over = lines.find((l) => l.max_qty !== undefined && Number(l.qty) > l.max_qty + 0.0001);
               if (over) {
                 toast.error(
@@ -811,6 +888,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                       onClick={() => {
                         setSourceId("");
                         setSourceLines([]);
+                        setSourceOpenTotal(0);
                         setLines([emptyLine()]);
                       }}
                     >
@@ -819,12 +897,43 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                   )}
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <FileInput className="h-3.5 w-3.5" />
-                    {t(
-                      "Partial quantities are allowed — the source stays open until fully fulfilled.",
-                      "Qty sebagian diperbolehkan — dokumen sumber tetap terbuka sampai terpenuhi.",
-                    )}
+                    {isAmountSettlement(entity.docType)
+                      ? t(
+                          "Partial amounts are allowed without changing item quantities.",
+                          "Nominal termin dapat diubah tanpa mengubah qty item.",
+                        )
+                      : t(
+                          "Partial quantities are allowed — the source stays open until fully fulfilled.",
+                          "Qty sebagian diperbolehkan — dokumen sumber tetap terbuka sampai terpenuhi.",
+                        )}
                   </p>
                 </div>
+                {sourceId && isAmountSettlement(entity.docType) && (
+                  <PartialAmount
+                    lang={lang}
+                    t={t}
+                    openTotal={sourceOpenTotal}
+                    currentTotal={totals.total}
+                    label={
+                      entity.docType === "ap_invoice"
+                        ? t("Amount to invoice", "Nilai yang ditagih")
+                        : t("Amount paid", "Nilai yang dibayar")
+                    }
+                    onApply={(amount: number) =>
+                      setLines((ls) =>
+                        ls.map((l) => {
+                          const ratio = totals.total > 0 ? amount / totals.total : 0;
+                          return {
+                            ...l,
+                            qty: String(Number(l.qty) || 1),
+                            unit_price: String((Number(l.unit_price) || 0) * ratio),
+                            discount: String((Number(l.discount) || 0) * ratio),
+                          };
+                        }),
+                      )
+                    }
+                  />
+                )}
               </div>
             )}
 
@@ -1078,6 +1187,58 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-2">
       <Label className="text-xs uppercase tracking-wide text-muted-foreground">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * #7 (BS New): widget Partial / Full untuk dokumen penyelesaian berbasis NILAI
+ * (AP Invoice & Purchase Payment).
+ */
+function PartialAmount({
+  lang,
+  t,
+  openTotal,
+  currentTotal,
+  label,
+  onApply,
+}: {
+  lang: string;
+  t: (en: string, id: string) => string;
+  openTotal: number;
+  currentTotal: number;
+  label: string;
+  onApply: (amount: number) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const apply = () => {
+    const v = Number(amount);
+    if (!v || v <= 0 || openTotal <= 0) return;
+    onApply(Math.min(openTotal, v));
+  };
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border border-dashed border-gold/50 bg-gold/5 p-3">
+      <div className="grid gap-1">
+        <span className="text-xs font-medium">{label}</span>
+        <Input
+          type="number"
+          min={0}
+          className="w-48"
+          value={amount}
+          placeholder={String(Math.round(openTotal))}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={apply}>
+        {t("Apply partial", "Terapkan sebagian")}
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => onApply(openTotal)}>
+        {t("Full", "Penuh")}
+      </Button>
+      <p className="w-full text-xs text-muted-foreground">
+        {t("Open balance", "Sisa")}: {formatMoney(openTotal, lang)} · {t("This document", "Dokumen ini")}:{" "}
+        {formatMoney(currentTotal, lang)}
+      </p>
     </div>
   );
 }
