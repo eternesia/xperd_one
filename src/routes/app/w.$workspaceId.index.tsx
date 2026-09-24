@@ -42,7 +42,7 @@ function Launcher() {
           <p className="text-[11px] font-semibold tracking-[0.32em] text-gold">
             {lang === "id" ? "PELUNCUR MODUL" : "MODULE LAUNCHER"}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold text-navy dark:text-primary-foreground lg:text-3xl">
+          <h1 className="mt-1 text-2xl font-semibold text-navy dark:text-foreground lg:text-3xl">
             {activeWorkspace?.name}
           </h1>
         </div>
@@ -68,7 +68,7 @@ function Launcher() {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-3 text-sm font-semibold text-navy dark:text-primary-foreground">
+                <p className="mt-3 text-sm font-semibold text-navy dark:text-foreground">
                   {lang === "id" ? m.id_ : m.en}
                 </p>
                 <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
@@ -127,7 +127,7 @@ function Launcher() {
                 <u.icon className="h-5 w-5" />
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-navy dark:text-primary-foreground">
+                <span className="block text-sm font-semibold text-navy dark:text-foreground">
                   {lang === "id" ? u.id_ : u.en}
                 </span>
                 <span className="mt-0.5 block line-clamp-1 text-xs text-muted-foreground">

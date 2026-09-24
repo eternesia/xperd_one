@@ -643,7 +643,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
           if (!v) resetForm();
         }}
       >
-        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+        <DialogContent className="max-h-[94vh] w-[96vw] max-w-7xl overflow-x-hidden overflow-y-auto sm:max-w-7xl">
           <DialogHeader>
             <DialogTitle>
               {t("Create New", "Buat Baru")} · {lang === "id" ? entity.id_ : entity.en}

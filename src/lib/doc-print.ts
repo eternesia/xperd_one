@@ -369,9 +369,19 @@ export async function downloadDocHtmlPdf(doc: PrcDoc, lines: PrcLine[], meta: Do
       windowWidth: 794,
       width: 794,
     });
-    const pdf = new jsPDF({ unit: "px", format: [794, 1123], orientation: "portrait" });
+    // Multi-page: slice the rendered canvas into A4-sized steps instead of
+    // squeezing a long document onto a single page.
+    const pageW = 794;
+    const pageH = 1123;
+    const imgH = (canvas.height * pageW) / canvas.width;
+    const pdf = new jsPDF({ unit: "px", format: [pageW, pageH], orientation: "portrait" });
     const img = canvas.toDataURL("image/jpeg", 0.98);
-    pdf.addImage(img, "JPEG", 0, 0, 794, 1123, undefined, "FAST");
+    let offset = 0;
+    while (offset < imgH - 1) {
+      if (offset > 0) pdf.addPage([pageW, pageH], "portrait");
+      pdf.addImage(img, "JPEG", 0, -offset, pageW, imgH);
+      offset += pageH;
+    }
     pdf.save(`${doc.doc_number.replace(/[/\\]/g, "-")}.pdf`);
   } finally {
     frame.remove();

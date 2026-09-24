@@ -205,10 +205,6 @@ function SettingsPage() {
               </div>
             </div>
 
-            <Button type="submit" variant="navy" disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : <Save />} {lang === "id" ? "Simpan" : "Save changes"}
-            </Button>
-
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="addr">{lang === "id" ? "Alamat" : "Address"}</Label>
@@ -249,6 +245,9 @@ function SettingsPage() {
                 />
               </div>
             </div>
+            <Button type="submit" variant="navy" disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" /> : <Save />} {lang === "id" ? "Simpan" : "Save changes"}
+            </Button>
           </form>
         </CardContent>
       </Card>

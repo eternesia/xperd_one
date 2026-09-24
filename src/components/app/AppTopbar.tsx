@@ -2,14 +2,16 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
+  BookOpenCheck,
   Check,
   ChevronsUpDown,
+  CircleHelp,
   Grid2x2,
   Languages,
   LogOut,
+  MessageCircleQuestion,
   Moon,
   Search,
-  Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -135,9 +137,41 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
       </DropdownMenu>
 
       <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" size="icon" onClick={() => setAssistantOpen(true)} aria-label="AI assistant">
-          <Sparkles className="h-4 w-4 text-gold" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={lang === "id" ? "Panduan dan XPERD Assistant" : "Guide and XPERD Assistant"}
+            >
+              <CircleHelp className="h-4 w-4 text-gold" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuLabel>{lang === "id" ? "Pusat Bantuan XPERD" : "XPERD Help Center"}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => navigate({ to: "/app/w/$workspaceId/guide", params: { workspaceId } })}
+            >
+              <BookOpenCheck className="h-4 w-4 text-gold" />
+              <span>
+                <span className="block font-medium">{lang === "id" ? "Panduan Pengguna" : "User Guide"}</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {lang === "id" ? "Baca langkah penggunaan" : "Read step-by-step guidance"}
+                </span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setAssistantOpen(true)}>
+              <MessageCircleQuestion className="h-4 w-4 text-gold" />
+              <span>
+                <span className="block font-medium">XPERD Assistant</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {lang === "id" ? "Tanyakan hal yang belum jelas" : "Ask about anything unclear"}
+                </span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Popover>
           <PopoverTrigger asChild>

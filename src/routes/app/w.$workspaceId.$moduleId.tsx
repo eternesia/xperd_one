@@ -20,7 +20,7 @@ function ModuleShell() {
   if (!mod) {
     return (
       <div className="mx-auto max-w-3xl px-5 py-16 text-center">
-        <h1 className="text-xl font-semibold text-navy dark:text-primary-foreground">
+        <h1 className="text-xl font-semibold text-navy dark:text-foreground">
           {lang === "id" ? "Modul tidak ditemukan" : "Module not found"}
         </h1>
         <Link
@@ -38,7 +38,7 @@ function ModuleShell() {
     return (
       <div className="mx-auto max-w-lg px-5 py-20 text-center">
         <Lock className="mx-auto h-8 w-8 text-gold" />
-        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
+        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-foreground">
           {lang === "id" ? `${mod.id_} belum aktif` : `${mod.en} is not active`}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -70,7 +70,7 @@ function ModuleShell() {
 
         <div className="flex items-center gap-2 rounded-xl bg-secondary/60 px-3 py-2">
           <mod.icon className="h-4 w-4 text-gold" />
-          <span className="text-sm font-semibold text-navy dark:text-primary-foreground">
+          <span className="text-sm font-semibold text-navy dark:text-foreground">
             {lang === "id" ? mod.id_ : mod.en}
           </span>
         </div>

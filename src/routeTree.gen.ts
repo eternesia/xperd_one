@@ -46,6 +46,7 @@ import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/publ
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdModuleIdRouteImport } from './routes/app/w.$workspaceId.$moduleId'
 import { Route as AppWWorkspaceIdBillingRouteImport } from './routes/app/w.$workspaceId.billing'
+import { Route as AppWWorkspaceIdGuideRouteImport } from './routes/app/w.$workspaceId.guide'
 import { Route as AppWWorkspaceIdMaintenanceRouteImport } from './routes/app/w.$workspaceId.maintenance'
 import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/app/w.$workspaceId.settings'
 import { Route as AppWWorkspaceIdTeamRouteImport } from './routes/app/w.$workspaceId.team'
@@ -241,6 +242,11 @@ const AppWWorkspaceIdBillingRoute = AppWWorkspaceIdBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AppWWorkspaceIdRoute,
 } as any)
+const AppWWorkspaceIdGuideRoute = AppWWorkspaceIdGuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
+  getParentRoute: () => AppWWorkspaceIdRoute,
+} as any)
 const AppWWorkspaceIdMaintenanceRoute =
   AppWWorkspaceIdMaintenanceRouteImport.update({
     id: '/maintenance',
@@ -312,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
+  '/app/w/$workspaceId/guide': typeof AppWWorkspaceIdGuideRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
@@ -352,6 +359,7 @@ export interface FileRoutesByTo {
   '/products': typeof SiteProductsIndexRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
+  '/app/w/$workspaceId/guide': typeof AppWWorkspaceIdGuideRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
@@ -398,6 +406,7 @@ export interface FileRoutesById {
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
+  '/app/w/$workspaceId/guide': typeof AppWWorkspaceIdGuideRoute
   '/app/w/$workspaceId/maintenance': typeof AppWWorkspaceIdMaintenanceRoute
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
@@ -444,6 +453,7 @@ export interface FileRouteTypes {
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
+    | '/app/w/$workspaceId/guide'
     | '/app/w/$workspaceId/maintenance'
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
@@ -484,6 +494,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/billing'
+    | '/app/w/$workspaceId/guide'
     | '/app/w/$workspaceId/maintenance'
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
@@ -529,6 +540,7 @@ export interface FileRouteTypes {
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
+    | '/app/w/$workspaceId/guide'
     | '/app/w/$workspaceId/maintenance'
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
@@ -811,6 +823,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdBillingRouteImport
       parentRoute: typeof AppWWorkspaceIdRoute
     }
+    '/app/w/$workspaceId/guide': {
+      id: '/app/w/$workspaceId/guide'
+      path: '/guide'
+      fullPath: '/app/w/$workspaceId/guide'
+      preLoaderRoute: typeof AppWWorkspaceIdGuideRouteImport
+      parentRoute: typeof AppWWorkspaceIdRoute
+    }
     '/app/w/$workspaceId/maintenance': {
       id: '/app/w/$workspaceId/maintenance'
       path: '/maintenance'
@@ -909,6 +928,7 @@ const AppWWorkspaceIdModuleIdRouteWithChildren =
 interface AppWWorkspaceIdRouteChildren {
   AppWWorkspaceIdModuleIdRoute: typeof AppWWorkspaceIdModuleIdRouteWithChildren
   AppWWorkspaceIdBillingRoute: typeof AppWWorkspaceIdBillingRoute
+  AppWWorkspaceIdGuideRoute: typeof AppWWorkspaceIdGuideRoute
   AppWWorkspaceIdMaintenanceRoute: typeof AppWWorkspaceIdMaintenanceRoute
   AppWWorkspaceIdSettingsRoute: typeof AppWWorkspaceIdSettingsRoute
   AppWWorkspaceIdTeamRoute: typeof AppWWorkspaceIdTeamRoute
@@ -918,6 +938,7 @@ interface AppWWorkspaceIdRouteChildren {
 const AppWWorkspaceIdRouteChildren: AppWWorkspaceIdRouteChildren = {
   AppWWorkspaceIdModuleIdRoute: AppWWorkspaceIdModuleIdRouteWithChildren,
   AppWWorkspaceIdBillingRoute: AppWWorkspaceIdBillingRoute,
+  AppWWorkspaceIdGuideRoute: AppWWorkspaceIdGuideRoute,
   AppWWorkspaceIdMaintenanceRoute: AppWWorkspaceIdMaintenanceRoute,
   AppWWorkspaceIdSettingsRoute: AppWWorkspaceIdSettingsRoute,
   AppWWorkspaceIdTeamRoute: AppWWorkspaceIdTeamRoute,

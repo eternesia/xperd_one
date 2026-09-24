@@ -59,7 +59,7 @@ export function ModuleDashboard({ mod, workspaceId }: { mod: AppModule; workspac
     <div className="space-y-8">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
+          <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
             {lang === "id" ? mod.id_ : mod.en} · {t("Dashboard", "Dasbor")}
           </h1>
           {LIVE_MODULES.has(mod.id) ? (
@@ -93,7 +93,7 @@ export function ModuleDashboard({ mod, workspaceId }: { mod: AppModule; workspac
               params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
               className="group rounded-2xl border border-border bg-card p-5 transition-all hover:-translate-y-1 hover:border-gold hover:shadow-lg"
             >
-              <p className="flex items-center justify-between font-medium text-navy dark:text-primary-foreground">
+              <p className="flex items-center justify-between font-medium text-navy dark:text-foreground">
                 {lang === "id" ? sub.id_ : sub.en}
                 <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-gold" />
               </p>
@@ -122,7 +122,7 @@ function Stat({
         <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
         <Icon className="h-4 w-4 text-gold" />
       </div>
-      <p className="mt-2 text-2xl font-semibold text-navy dark:text-primary-foreground">{value}</p>
+      <p className="mt-2 text-2xl font-semibold text-navy dark:text-foreground">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -131,7 +131,7 @@ function Stat({
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <p className="text-sm font-semibold text-navy dark:text-primary-foreground">{title}</p>
+      <p className="text-sm font-semibold text-navy dark:text-foreground">{title}</p>
       <div className="mt-4 h-64">{children}</div>
     </div>
   );
