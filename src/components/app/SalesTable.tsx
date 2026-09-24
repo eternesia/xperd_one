@@ -410,8 +410,14 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      await deleteWorkspaceRow({ data: { table: "sls_documents", workspaceId, id } });
+    mutationFn: async (doc: SlsDoc) => {
+      // #10 (BS New): hanya draft yang boleh dihapus — dijaga lagi di server.
+      if (doc.status !== "draft") {
+        throw new Error(t("Only draft documents can be deleted.", "Hanya dokumen berstatus Draf yang dapat dihapus."));
+      }
+      await deleteWorkspaceRow({
+        data: { table: "sls_documents", workspaceId, id: doc.id, requireStatus: "draft" },
+      });
     },
     onSuccess: () => {
       toast.success(t("Deleted", "Terhapus"));
@@ -593,16 +599,18 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                       <Printer className="h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("Delete", "Hapus")}
-                    onClick={() => {
-                      if (confirm(t(`Delete ${row.doc_number}?`, `Hapus ${row.doc_number}?`))) remove.mutate(row.id);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {row.status === "draft" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Delete", "Hapus")}
+                      onClick={() => {
+                        if (confirm(t(`Delete ${row.doc_number}?`, `Hapus ${row.doc_number}?`))) remove.mutate(row);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

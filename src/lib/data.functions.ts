@@ -283,6 +283,12 @@ export interface DeleteRowInput {
   table: string;
   workspaceId: string;
   id: string;
+  /**
+   * Optional `status` the row must have for the delete to go through. Sales and
+   * purchase documents pass "draft" so a confirmed document can never be
+   * removed, even if the client-side guard is bypassed.
+   */
+  requireStatus?: string;
 }
 
 export const deleteWorkspaceRow = createServerFn({ method: "POST" })
@@ -290,10 +296,22 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
   .validator((input: unknown) => input as DeleteRowInput)
   .handler(async ({ data, context }) => {
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
-    const { execute } = await import("@/integrations/mysql/pool");
+    const { result } = await import("@/integrations/mysql/pool");
     const table = assertTable(data.table);
     if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
-    await execute(`DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`, [data.id, data.workspaceId]);
+    const res = data.requireStatus
+      ? await result(`DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ? AND \`status\` = ?`, [
+          data.id,
+          data.workspaceId,
+          data.requireStatus,
+        ])
+      : await result(`DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`, [
+          data.id,
+          data.workspaceId,
+        ]);
+    if (data.requireStatus && res.affectedRows === 0) {
+      throw new Error(`Only rows with status ${data.requireStatus} can be deleted.`);
+    }
     return { ok: true };
   });
 
