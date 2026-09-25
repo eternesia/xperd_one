@@ -4,8 +4,9 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 **`Xperd One Business Suite New 2`** ke aplikasi produksi **`Xperd One Old Production`**
 (TanStack Start + MySQL).
 
-> Ringkasan perbandingan antar-ekspor ada di dokumen terpisah di luar repo
-> (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
+> Ringkasan perbandingan antar-ekspor ada di **`PARITY-BS-NEW-VS-OLD.md`**
+> (di repo ini, ikut ter-commit; salinan lama di luar repo:
+> `../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
 Status: **SELESAI** (`de502ae`, `7d13553`, `cac9f02`, `73d82f5`, `44036b5`,
@@ -278,8 +279,16 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
   hitung sudah konsisten antar-layar).
 - **Desember annual true-up Pasal 17** belum dihitung otomatis (memang begitu di
   ekspor).
-- **Reversal jurnal**: menghapus run yang sudah `approved` tidak membatalkan jurnal
-  yang sudah terposting.
+- **Reversal jurnal**: sejak perbaikan kecil terakhir, menyetujui ulang atau
+  **menghapus** run payroll kini ikut menghapus jurnalnya (tidak ada lagi jurnal
+  yatim/ganda); reversal otomatis untuk dokumen lain tetap belum ada.
 - **Absensi → payroll** (mis. potongan absensi otomatis) bila kelak dibutuhkan.
+
+## 8. Kerapian lanjutan (opsional)
+
+- Riwayat parity Batch 1 kini ter-versi di repo sebagai `PARITY-BS-NEW-VS-OLD.md`.
+- Data uji dev sudah dibersihkan (jurnal + baris kas uji 0014–0016, run payroll
+  uji beserta jurnal gandanya). Spec `cash-out-proof` dan `hr-payroll` memang
+  membuat satu baris tiap kali dijalankan (by design).
 | 5. Billing `pricing_unit` | ✅ selesai | `cac9f02` |
 | 6. COA + panduan + e2e | ⬜ belum | — |

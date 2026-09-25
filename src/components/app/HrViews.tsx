@@ -15,7 +15,7 @@ import { CashBankPicker } from "@/components/app/Pickers";
 import { useApp } from "@/lib/app-context";
 import { DEFAULT_WORKSPACE_LOGO } from "@/lib/brand";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
-import { postJournalEntry } from "@/lib/ledger.functions";
+import { postJournalEntry, deleteJournalEntry } from "@/lib/ledger.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   computePayslip,
@@ -1474,6 +1474,12 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
         { account_code: run.bank_account_code ?? "1010", account_name: run.notes, description: memo, debit: 0, credit: net },
       ].filter((l) => l.account_code && (l.debit > 0.0001 || l.credit > 0.0001));
 
+      // Jurnal lama untuk run ini (mis. dari percobaan sebelumnya) dihapus dulu
+      // supaya tidak menumpuk entri ganda untuk periode yang sama.
+      if (run.journal_entry_id) {
+        await deleteJournalEntry({ data: { workspaceId, entryId: run.journal_entry_id } }).catch(() => undefined);
+      }
+
       const posted = await postJournalEntry({
         data: {
           workspaceId,
@@ -1518,6 +1524,10 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
 
   const remove = useMutation({
     mutationFn: async (run: RunRow) => {
+      // Jurnal ikut dihapus supaya tidak ada jurnal yatim (tanpa run) di buku besar.
+      if (run.journal_entry_id) {
+        await deleteJournalEntry({ data: { workspaceId, entryId: run.journal_entry_id } }).catch(() => undefined);
+      }
       await deleteWorkspaceRow({ data: { table: "hr_payroll_runs", workspaceId, id: run.id } });
     },
     onSuccess: () => {
