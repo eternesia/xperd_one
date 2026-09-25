@@ -8,10 +8,9 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **Fase 0–3 & 5 selesai** (`de502ae`, `7d13553`, `cac9f02`) — skema, mesin
-payroll, modul add-on, dasbor payroll, dan label harga per karyawan sudah masuk.
-Fase berikutnya: `HrViews` (Fase 4, UI terbesar) lalu COA + panduan + e2e payroll
-(Fase 6).
+Status: **Fase 0–3, 5 selesai; Fase 4 batch A selesai** (`de502ae`, `7d13553`,
+`cac9f02`, `73d82f5`). Sisa Fase 4: employees, komponen gaji, payroll & slip,
+rekap BPJS/PPh 21 — lalu Fase 6 (COA + panduan + e2e payroll).
 
 ---
 
@@ -198,15 +197,18 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 - Verifikasi: e2e `hr-dashboard.spec.ts` hijau ✓; tsc 0 ✓
 
 ### Fase 4 — `HrViews` (per submodule, bisa dipecah 3 commit)
+- [x] **Batch A** — `src/components/app/HrViews.tsx` (kerangka) + hook data
+      (`useEmployees`/`useComponents`/`useOrgUnits` via `listWorkspaceRows`,
+      normalisasi TINYINT→boolean) + dispatcher `HrView` + route submodule
+- [x] `ptkp` — master PTKP & tarif TER (referensi `lib/hr.ts` + uji bruto)
+- [x] `departments` + `positions` — CRUD `hr_org_units` dengan rename yang
+      menyapu `hr_employees.department`/`position`; hapus ditolak bila masih dipakai
 - [ ] `employees` — CRUD karyawan (PTKP, gaji pokok, bank, BPJS, komponen, estimasi take-home)
-- [ ] `departments` + `positions` — CRUD `hr_org_units` (**rename ikut meng-update
-      `hr_employees.department`/`position`** — jangan dilewat)
-- [ ] `ptkp` + `components` — master PTKP/TER (read-only dari `hr.ts`) dan komponen gaji
-      (tombol "Muat komponen default")
-- [ ] `payroll` — buat draft run (periode, tanggal bayar, bank pembayar) → generate
-      slip per karyawan aktif → cetak slip → **approve & posting jurnal**
+- [ ] `components` — komponen gaji + tombol "Muat komponen default"
+- [ ] `payroll` — draft run (periode, tanggal bayar, bank) → generate slip → cetak
+      slip → **approve & posting jurnal** (idempotent: gagal = hapus run + slip)
 - [ ] `tax-bpjs` — rekap bulanan per karyawan (BPJS + PPh 21)
-- Verifikasi: e2e baru (lihat bagian 4)
+- Verifikasi: e2e `hr-org-master.spec.ts` (CRUD departemen + layar PTKP) hijau ✓
 
 ### Fase 5 — Billing & addons `pricing_unit`
 - [x] `lib/addons.functions.ts`: `AddonRow.pricing_unit` + SELECT + mapper
@@ -259,6 +261,6 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 | 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
 | 2. `modules.ts` + gating add-on | ✅ selesai | `7d13553` |
 | 3. `HrDashboard` | ✅ selesai | `cac9f02` |
-| 4. `HrViews` (employees → org units → ptkp/components → payroll → tax-bpjs) | ⬜ belum | — |
+| 4. `HrViews` | 🟡 batch A (`ptkp`, `departments`, `positions`) → sisa employees, components, payroll, tax-bpjs | `73d82f5` |
 | 5. Billing `pricing_unit` | ✅ selesai | `cac9f02` |
 | 6. COA + panduan + e2e | ⬜ belum | — |
