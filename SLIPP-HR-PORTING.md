@@ -8,9 +8,10 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **Fase 0–3, 5, 6 (COA) selesai; Fase 4 batch A–D selesai** (`de502ae`,
-`7d13553`, `cac9f02`, `73d82f5`, `44036b5`, `99bd00d`, `0ffbb1f`). Sisa Fase 4:
-rekap BPJS/PPh 21 + cetak slip gaji — lalu sisa Fase 6 (entri panduan).
+Status: **SELESAI** (`de502ae`, `7d13553`, `cac9f02`, `73d82f5`, `44036b5`,
+`99bd00d`, `0ffbb1f`, `da2de39`) — 7 submodule HR, dasbor, payroll + posting
+jurnal, cetak slip, rekap BPJS/PPh 21, COA pendukung, katalog add-on, dan panduan
+sudah terpasang. Sisa opsional tercatat di akhir dokumen.
 
 ---
 
@@ -208,9 +209,9 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 - [x] `components` — komponen gaji + tombol "Muat komponen default" (6 komponen
       standar; seed `004_hr_pay_components.sql` untuk data acuan dev)
 - [x] `payroll` — draft run (periode, tanggal bayar, bank opsional) → generate slip
-      → **approve & posting jurnal** (idempotent: gagal = hapus run + slip);
-      [ ] sisa: cetak slip gaji (HTML/PDF)
-- [ ] `tax-bpjs` — rekap bulanan per karyawan (BPJS + PPh 21)
+      → **approve & posting jurnal** (idempotent: gagal = hapus run + slip)
+- [x] cetak slip gaji (`slipHtml` + `printSlips`, satu slip per karyawan)
+- [x] `tax-bpjs` — rekap bulanan per karyawan (BPJS + PPh 21) + baris total
 - Catatan temuan: penutup approve wajib `saveWorkspaceRow` (UPDATE), BUKAN upsert
   parsial — `hr_payroll_runs` punya kolom NOT NULL
 - Verifikasi: e2e `hr-org-master`, `hr-components`, `hr-employees`, dan
@@ -225,9 +226,8 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 ### Fase 6 — COA, panduan, e2e
 - [ ] `src/lib/provisioning.server.ts`: tambah 1250, 2210, 2300, 6200, 6210
       (idempotent — cek sebelum insert agar tidak duplikat di workspace lama)
-- [ ] `src/lib/guide.ts`: ganti entri `hr` "coming soon" → 5 langkah
-- [ ] e2e: dashboard HR, CRUD karyawan, rename master departemen, generate payroll
-      1 periode + approve (verifikasi jurnal `acc_journal_*` terbentuk), rekap BPJS/PPh 21
+- [x] `src/lib/guide.ts`: entri `hr` → "Slipp HR (add-on)" dengan 5 langkah nyata
+- [x] e2e payroll end-to-end (`hr-payroll.spec.ts`) + rekap (`hr-tax-bpjs.spec.ts`)
 
 ## 4. Titik integrasi akuntansi (jangan sampai salah)
 
@@ -267,7 +267,19 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 | 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
 | 2. `modules.ts` + gating add-on | ✅ selesai | `7d13553` |
 | 3. `HrDashboard` | ✅ selesai | `cac9f02` |
-| 4. `HrViews` | 🟡 batch A–D (`ptkp`, `departments`, `positions`, `components`, `employees`, `payroll`) → sisa `tax-bpjs` + cetak slip | `73d82f5`, `44036b5`, `99bd00d`, `0ffbb1f` |
-| 6. COA + panduan + e2e payroll | 🟡 5 COA selesai + e2e payroll selesai → sisa entri panduan | `0ffbb1f` |
+| 4. `HrViews` | ✅ semua 7 submodule + cetak slip | `73d82f5`, `44036b5`, `99bd00d`, `0ffbb1f`, `da2de39` |
+| 6. COA + panduan + e2e payroll | ✅ | `0ffbb1f`, `da2de39` |
+
+## 7. Sisa opsional (tidak menghalangi)
+
+- **Absensi/attendance**: tidak ada di ekspor New 2 (submodule `attendance` lama
+  sudah dihapus), jadi belum ada yang perlu diporting.
+- **Verifikasi tarif TER PPh 21** vs lampiran PMK resmi (angka belum diaudit; hasil
+  hitung sudah konsisten antar-layar).
+- **Desember annual true-up Pasal 17** belum dihitung otomatis (memang begitu di
+  ekspor).
+- **Reversal jurnal**: menghapus run yang sudah `approved` tidak membatalkan jurnal
+  yang sudah terposting.
+- **Absensi → payroll** (mis. potongan absensi otomatis) bila kelak dibutuhkan.
 | 5. Billing `pricing_unit` | ✅ selesai | `cac9f02` |
 | 6. COA + panduan + e2e | ⬜ belum | — |
