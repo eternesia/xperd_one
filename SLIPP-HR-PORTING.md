@@ -8,7 +8,8 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **belum dimulai** (menunggu keputusan owner).
+Status: **Fase 0–1 selesai** (`de502ae`) — skema HR + mesin payroll sudah masuk.
+Fase berikutnya: modul & gating add-on (Fase 2).
 
 ---
 
@@ -50,13 +51,13 @@ harus dibuat sendiri di Old.
 ## 3. Fase kerja
 
 ### Fase 0 — Skema & whitelist
-- [ ] `db/migrations/008_hr_module.sql`:
+- [x] `db/migrations/008_hr_module.sql`:
   - `hr_org_units`, `hr_pay_components`, `hr_employees`, `hr_payroll_runs`, `hr_payslips`
   - `ALTER TABLE addons ADD COLUMN pricing_unit VARCHAR(20) NULL`
-- [ ] Daftarkan tabel di `COLS` (`src/lib/data.functions.ts`) + `hr_*` di allowlist bila perlu
-- [ ] Tambahkan `pricing_unit` ke `PCOLS.addons` (`src/lib/platform.functions.ts`)
-- [ ] `npm run migrate` di DB dev, cek `SHOW TABLES LIKE 'hr_%'`
-- Verifikasi: `tsc` 0 (belum ada kode baru), migration tercatat di `db_apply_log`
+- [x] Daftarkan tabel di `COLS` (`src/lib/data.functions.ts`)
+- [x] Tambahkan `pricing_unit` ke `PCOLS.addons` (`src/lib/platform.functions.ts`)
+- [x] `npm run migrate` di DB dev, cek `SHOW TABLES LIKE 'hr_%'`
+- Verifikasi: `tsc` 0 ✓, 5 tabel + kolom `pricing_unit` terpasang ✓
 
 #### Draft DDL (sesuaikan tipe dengan `db/migrations/001_schema.sql`)
 ```sql
@@ -167,12 +168,12 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 ```
 
 ### Fase 1 — `src/lib/hr.ts` (logika murni, tanpa I/O)
-- [ ] Port apa adanya: `PTKP_STATUSES`, `terCategory()`, `terRate()`, `terBrackets()`,
+- [x] Port apa adanya: `PTKP_STATUSES`, `terCategory()`, `terRate()`, `terBrackets()`,
       `PTKP_INFO`, `BPJS`, tipe `Employee`/`PayComponent`/`EmpComponent`/`SlipLine`,
-      `computePayslip()`, `HR_ACCOUNTS`, `periodLabel()`
+      `computePayslip()`, `HR_ACCOUNTS`, `periodLabel()` (201 baris, tanpa impor eksternal)
 - [ ] **Cek ulang tabel tarif TER** (A/B/C) vs lampiran PMK — angka harus benar
-- Verifikasi: `tsc` 0; bandingkan hasil `computePayslip` dengan ekspor untuk 2–3
-  contoh karyawan (bisa lewat spec kecil atau konsol)
+      (verifikasi angka masih terbuka; dilakukan bersama uji payroll di Fase 4)
+- Verifikasi: `tsc` 0 ✓
 
 ### Fase 2 — `modules.ts` + gating add-on
 - [ ] Ganti blok `hr` placeholder (`src/lib/modules.ts:248-261`) menjadi
@@ -244,8 +245,8 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 
 | Fase | Status | Commit |
 |---|---|---|
-| 0. Migration 008 + whitelist | ⬜ belum | — |
-| 1. `lib/hr.ts` | ⬜ belum | — |
+| 0. Migration 008 + whitelist | ✅ selesai | `de502ae` |
+| 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
 | 2. `modules.ts` + gating add-on | ⬜ belum | — |
 | 3. `HrDashboard` | ⬜ belum | — |
 | 4. `HrViews` (employees → org units → ptkp/components → payroll → tax-bpjs) | ⬜ belum | — |
