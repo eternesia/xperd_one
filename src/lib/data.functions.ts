@@ -24,6 +24,10 @@ const WORKSPACE_TABLES = new Set([
   "crm_campaigns",
   // CRM insights (migration 005_crm_insights.sql)
   "crm_targets", "crm_templates",
+  // Slipp HR (migration 008_hr_module.sql) — Batch 2.
+  // CATATAN: tabel harus terdaftar di DUA tempat: set ini (gate `assertTable`)
+  // dan `COLS` di bawah (whitelist kolom). Lewat salah satu = error/gagal simpan.
+  "hr_org_units", "hr_pay_components", "hr_employees", "hr_payroll_runs", "hr_payslips",
 ]);
 
 // Per-table column whitelist (used to build SQL identifiers safely).

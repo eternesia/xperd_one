@@ -307,7 +307,7 @@ function BillingPage() {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">{a.tagline ?? a.description}</p>
                   <p className="mt-2 text-sm font-medium">
-                    {money(Number(a.monthly_price))}/{t("mo", "bln")}
+                    {money(Number(a.monthly_price))}/{a.pricing_unit === "employee" ? t("employee/mo", "karyawan/bln") : t("mo", "bln")}
                   </p>
                 </div>
               );

@@ -14,6 +14,8 @@ export interface AddonRow {
   tagline: string | null;
   description: string | null;
   monthly_price: number;
+  /** Batch 2: satuan harga add-on, mis. `employee` = per karyawan/bulan. */
+  pricing_unit: string | null;
   module_id: string | null;
   is_active: boolean;
   sort_order: number;
@@ -38,6 +40,7 @@ function toAddonRow(r: Record<string, any>): AddonRow {
     tagline: r.tagline ?? null,
     description: r.description ?? null,
     monthly_price: Number(r.monthly_price) || 0,
+    pricing_unit: r.pricing_unit ?? null,
     module_id: r.module_id ?? null,
     is_active: Boolean(r.is_active),
     sort_order: Number(r.sort_order) || 0,
@@ -50,7 +53,7 @@ export const listAddonCatalog = createServerFn({ method: "POST" })
   .handler(async () => {
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute(
-      `SELECT id, code, name, tagline, description, monthly_price, module_id, is_active, sort_order
+      `SELECT id, code, name, tagline, description, monthly_price, pricing_unit, module_id, is_active, sort_order
          FROM addons ORDER BY sort_order ASC, name ASC`,
     );
     return (rows ?? []).map((r: Record<string, any>) => toAddonRow(r));
