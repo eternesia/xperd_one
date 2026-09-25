@@ -295,12 +295,33 @@ export const GUIDE_MODULES: GuideSection[] = [
   },
   {
     id: "hr",
-    titleEn: "HR & Payroll (coming soon)",
-    titleId: "HR & Payroll (segera)",
-    summaryEn: "Employees, attendance and payroll posting — in development.",
-    summaryId: "Karyawan, absensi, dan posting payroll — masih dalam pengembangan.",
+    titleEn: "Slipp HR (add-on)",
+    titleId: "Slipp HR (add-on)",
+    summaryEn:
+      "Employees, salary components, monthly payroll, payslips, BPJS and PPh 21 TER. Billed Rp15,000 per employee per month.",
+    summaryId:
+      "Karyawan, komponen gaji, payroll bulanan, slip gaji, BPJS, dan PPh 21 TER. Biaya Rp15.000 per karyawan per bulan.",
     steps: [
-      st("Planned: employee master, attendance capture, and payroll journals into Accounting.", "Rencana: master karyawan, pencatatan absensi, dan jurnal payroll ke Akuntansi."),
+      st(
+        "Salary Components: click 'Load defaults' or add your own allowances/deductions, marking fixed and taxable ones.",
+        "Komponen Gaji: klik 'Muat komponen default' atau tambah tunjangan/potongan sendiri, tandai yang tetap dan kena pajak.",
+      ),
+      st(
+        "Employees: fill in PTKP status, base salary, bank account, BPJS participation and component amounts. The right panel shows an estimated take-home pay.",
+        "Data Karyawan: isi status PTKP, gaji pokok, rekening, kepesertaan BPJS, dan nominal komponen. Panel kanan menampilkan estimasi gaji bersih.",
+      ),
+      st(
+        "Payroll: choose period, pay date and paying bank, then Generate. Review each payslip and print them.",
+        "Payroll: pilih periode, tanggal bayar, dan bank pembayar, lalu Proses. Periksa slip tiap karyawan dan cetak.",
+      ),
+      st(
+        "Approve & post journal: salary and BPJS expense, BPJS and PPh 21 payables, and the bank payment are posted to the ledger automatically.",
+        "Setujui & posting jurnal: beban gaji dan BPJS, hutang BPJS dan PPh 21, serta pembayaran bank otomatis masuk buku besar.",
+      ),
+      st(
+        "BPJS & PPh 21: monthly recap per employee for depositing contributions and tax.",
+        "BPJS & PPh 21: rekap bulanan per karyawan untuk setor iuran dan pajak.",
+      ),
     ],
   },
 ];

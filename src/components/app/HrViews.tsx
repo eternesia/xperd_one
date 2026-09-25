@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, Pencil, Plus, Printer, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { CashBankPicker } from "@/components/app/Pickers";
+import { useApp } from "@/lib/app-context";
+import { DEFAULT_WORKSPACE_LOGO } from "@/lib/brand";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { postJournalEntry } from "@/lib/ledger.functions";
 import { useI18n } from "@/lib/i18n";
@@ -152,7 +154,7 @@ export function HrView({ submoduleId, workspaceId }: { submoduleId: string; work
   if (submoduleId === "employees") return <EmployeesView workspaceId={workspaceId} />;
   if (submoduleId === "components") return <ComponentsView workspaceId={workspaceId} />;
   if (submoduleId === "payroll") return <PayrollView workspaceId={workspaceId} />;
-  if (submoduleId === "tax-bpjs") return <ComingSoon workspaceId={workspaceId} what="BPJS & PPh 21" />;
+  if (submoduleId === "tax-bpjs") return <TaxBpjsView workspaceId={workspaceId} />;
   return null;
 }
 
@@ -1249,6 +1251,9 @@ interface SlipRow {
   department: string | null;
   position: string | null;
   ptkp_status: string | null;
+  npwp: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
   base_salary: number;
   allowances: SlipLine[] | null;
   deductions: SlipLine[] | null;
@@ -1323,6 +1328,7 @@ function useSlips(workspaceId: string, runId?: string) {
 function PayrollView({ workspaceId }: { workspaceId: string }) {
   const { t, lang } = useT();
   const qc = useQueryClient();
+  const { activeWorkspace } = useApp();
   const { data: runs = [], isLoading } = useRuns(workspaceId);
   const { data: emps = [] } = useEmployees(workspaceId);
   const { data: comps = [] } = useComponents(workspaceId);
@@ -1716,6 +1722,16 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
             <Button variant="outline" onClick={() => setOpenRun(null)}>
               {t("Close", "Tutup")}
             </Button>
+            {openRun && slips.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  printSlips(slips, openRun, activeWorkspace?.name ?? "XPERD", activeWorkspace?.logo_url || DEFAULT_WORKSPACE_LOGO)
+                }
+              >
+                <Printer /> {t("Print payslips", "Cetak slip")}
+              </Button>
+            )}
             {openRun && openRun.status !== "approved" && (
               <Button variant="navy" disabled={approve.isPending} onClick={() => approve.mutate(openRun)}>
                 {approve.isPending && <Loader2 className="animate-spin" />} {t("Approve & post journal", "Setujui & posting jurnal")}
@@ -1724,6 +1740,193 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ---------------------- Rekap BPJS & PPh 21 + cetak slip ------------------- */
+
+const escHtml = (s: unknown) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+function slipHtml(s: SlipRow, run: RunRow, company: string, logo: string | null) {
+  const line = (l: SlipLine) =>
+    `<tr><td>${escHtml(l.name)}</td><td style="text-align:right">${fmtIDR(Number(l.amount) || 0)}</td></tr>`;
+  return `<section class="slip">
+    <header>
+      ${logo ? `<img src="${escHtml(logo)}" alt="" style="max-height:44px;max-width:150px;object-fit:contain" />` : ""}
+      <div>
+        <strong>${escHtml(company)}</strong>
+        <div class="muted">Slip Gaji — ${escHtml(run.run_no)} · ${escHtml(run.period)} · bayar ${escHtml(run.pay_date)}</div>
+      </div>
+    </header>
+    <div class="who">
+      <span>${escHtml(s.employee_code)} · ${escHtml(s.employee_name)}</span>
+      <span class="muted">${escHtml(s.department ?? "-")}${s.position ? " · " + escHtml(s.position) : ""} · PTKP ${escHtml(s.ptkp_status)} (TER ${escHtml(s.ter_category)} ${s.ter_rate}%)</span>
+    </div>
+    <table>
+      <tr><th>Penghasilan</th><th style="text-align:right">Nilai</th></tr>
+      <tr><td>Gaji pokok</td><td style="text-align:right">${fmtIDR(s.base_salary)}</td></tr>
+      ${(s.allowances ?? []).map(line).join("")}
+      <tr class="total"><td>Bruto</td><td style="text-align:right">${fmtIDR(s.gross)}</td></tr>
+      <tr><th>Potongan</th><th style="text-align:right">Nilai</th></tr>
+      ${(s.deductions ?? []).map(line).join("")}
+      <tr><td>BPJS karyawan</td><td style="text-align:right">${fmtIDR(s.bpjs_employee)}</td></tr>
+      <tr><td>PPh 21 TER ${escHtml(s.ter_category)} (${s.ter_rate}%)</td><td style="text-align:right">${fmtIDR(s.pph21)}</td></tr>
+      <tr class="total"><td>Gaji bersih</td><td style="text-align:right">${fmtIDR(s.net_pay)}</td></tr>
+    </table>
+    <footer class="muted">
+      BPJS perusahaan ${fmtIDR(s.bpjs_company)} · bank ${escHtml(s.bank_name ?? "-")} ${escHtml(s.bank_account ?? "")}
+    </footer>
+  </section>`;
+}
+
+/** Cetak slip di jendela baru (Chrome: user memilih "Save as PDF" bila perlu). */
+function printSlips(slips: SlipRow[], run: RunRow, company: string, logo: string | null) {
+  const win = window.open("", "_blank");
+  if (!win) {
+    toast.error("Popup diblokir browser — izinkan popup untuk mencetak slip.");
+    return;
+  }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+    <title>Slip Gaji ${escHtml(run.run_no)}</title>
+    <style>
+      body{font-family:ui-sans-serif,system-ui,sans-serif;margin:24px;color:#0f172a}
+      .slip{page-break-after:always;border:1px solid #cbd5e1;border-radius:10px;padding:16px;margin-bottom:18px}
+      .slip:last-child{page-break-after:auto}
+      header{display:flex;gap:12px;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding-bottom:8px}
+      .who{display:flex;justify-content:space-between;gap:12px;margin:10px 0;font-size:12px}
+      .muted{color:#64748b;font-size:11px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{padding:4px 6px;border-bottom:1px solid #eef2f7;text-align:left}
+      tr.total td{font-weight:700;border-top:1px solid #cbd5e1}
+      footer{margin-top:8px}
+      @media print{ .slip{border:none;padding:0} }
+    </style></head><body>
+    ${slips.map((s) => slipHtml(s, run, company, logo)).join("")}
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+function TaxBpjsView({ workspaceId }: { workspaceId: string }) {
+  const { t, lang } = useT();
+  const { activeWorkspace } = useApp();
+  const { data: runs = [] } = useRuns(workspaceId);
+  const [runId, setRunId] = useState<string>("");
+  const selected = runs.find((r) => r.id === runId) ?? runs[0];
+  const { data: slips = [], isLoading } = useSlips(workspaceId, selected?.id);
+
+  const sum = (k: keyof SlipRow) => slips.reduce((a, s) => a + toNum(s[k]), 0);
+  const bpjsEmp = sum("bpjs_employee");
+  const bpjsCo = sum("bpjs_company");
+  const pph = sum("pph21");
+  const gross = sum("gross");
+  const net = sum("net_pay");
+
+  return (
+    <div className="space-y-5">
+      <Header
+        eyebrow="SLIPP HR"
+        title={t("BPJS & PPh 21", "BPJS & PPh 21")}
+        desc={t(
+          "Monthly recap per employee for depositing BPJS contributions and PPh 21.",
+          "Rekap bulanan per karyawan untuk menyetor iuran BPJS dan PPh 21.",
+        )}
+      >
+        <AdminSelect value={selected?.id ?? ""} onChange={setRunId} className="w-64">
+          {runs.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.run_no} · {periodLabel(r.period, lang)}
+            </option>
+          ))}
+        </AdminSelect>
+        <Button
+          variant="outline"
+          disabled={!slips.length}
+          onClick={() =>
+            printSlips(slips, selected, activeWorkspace?.name ?? "XPERD", activeWorkspace?.logo_url || DEFAULT_WORKSPACE_LOGO)
+          }
+        >
+          <Printer /> {t("Print payslips", "Cetak slip")}
+        </Button>
+      </Header>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: t("Gross", "Bruto"), value: gross },
+          { label: t("BPJS to deposit", "BPJS disetor"), value: bpjsEmp + bpjsCo },
+          { label: "PPh 21", value: pph },
+          { label: t("Net pay", "Gaji bersih"), value: net },
+        ].map((k) => (
+          <Card key={k.label}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{k.label}</p>
+              <p className="text-xl font-semibold">{fmtIDR(k.value)}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Employee", "Karyawan")}</TableHead>
+                <TableHead>PTKP</TableHead>
+                <TableHead className="text-right">{t("Gross", "Bruto")}</TableHead>
+                <TableHead className="text-right">BPJS {t("employee", "karyawan")}</TableHead>
+                <TableHead className="text-right">BPJS {t("company", "perusahaan")}</TableHead>
+                <TableHead className="text-right">PPh 21</TableHead>
+                <TableHead className="text-right">{t("Net", "Bersih")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center">
+                    <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && !slips.length && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    {t("No payroll yet.", "Belum ada payroll.")}
+                  </TableCell>
+                </TableRow>
+              )}
+              {slips.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <span className="font-mono text-xs">{s.employee_code}</span> · {s.employee_name}
+                  </TableCell>
+                  <TableCell>
+                    {s.ptkp_status} <span className="text-muted-foreground">({s.ter_category} {s.ter_rate}%)</span>
+                  </TableCell>
+                  <TableCell className="text-right">{fmtIDR(s.gross)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(s.bpjs_employee)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(s.bpjs_company)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(s.pph21)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmtIDR(s.net_pay)}</TableCell>
+                </TableRow>
+              ))}
+              {slips.length > 0 && (
+                <TableRow className="font-semibold">
+                  <TableCell colSpan={2}>{t("Total", "Jumlah")}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(gross)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(bpjsEmp)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(bpjsCo)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(pph)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(net)}</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
