@@ -4,6 +4,7 @@ export const DEFAULT_COA: { code: string; name: string; account_type: string }[]
   { code: "1000", name: "Kas", account_type: "asset" },
   { code: "1010", name: "Bank BCA", account_type: "asset" },
   { code: "1200", name: "Piutang Usaha", account_type: "asset" },
+  { code: "1250", name: "Piutang Karyawan", account_type: "asset" },
   { code: "1300", name: "Persediaan Barang", account_type: "asset" },
   { code: "1400", name: "PPN Masukan", account_type: "asset" },
   { code: "1500", name: "Uang Muka Pembelian", account_type: "asset" },
@@ -12,6 +13,8 @@ export const DEFAULT_COA: { code: string; name: string; account_type: string }[]
   { code: "2000", name: "Hutang Usaha", account_type: "liability" },
   { code: "2100", name: "PPN Keluaran", account_type: "liability" },
   { code: "2200", name: "Hutang Pajak", account_type: "liability" },
+  { code: "2210", name: "Hutang PPh 21", account_type: "liability" },
+  { code: "2300", name: "Hutang BPJS", account_type: "liability" },
   { code: "3000", name: "Modal Disetor", account_type: "equity" },
   { code: "3900", name: "Laba Ditahan", account_type: "equity" },
   { code: "4000", name: "Pendapatan Penjualan", account_type: "revenue" },
@@ -19,6 +22,8 @@ export const DEFAULT_COA: { code: string; name: string; account_type: string }[]
   { code: "5000", name: "Harga Pokok Penjualan", account_type: "expense" },
   { code: "6000", name: "Beban Operasional", account_type: "expense" },
   { code: "6100", name: "Beban Penyusutan", account_type: "expense" },
+  { code: "6200", name: "Beban Gaji & Tunjangan", account_type: "expense" },
+  { code: "6210", name: "Beban BPJS Perusahaan", account_type: "expense" },
 ];
 
 const DEFAULT_UOMS = [

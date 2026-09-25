@@ -11,10 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
-import { deleteWorkspaceRow, listWorkspaceRows, upsertWorkspaceRows } from "@/lib/data.functions";
+import { CashBankPicker } from "@/components/app/Pickers";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { postJournalEntry } from "@/lib/ledger.functions";
 import { useI18n } from "@/lib/i18n";
 import {
   computePayslip,
+  HR_ACCOUNTS,
+  periodLabel,
   PTKP_INFO,
   PTKP_STATUSES,
   terBrackets,
@@ -22,6 +26,7 @@ import {
   terRate,
   type Employee,
   type PayComponent,
+  type SlipLine,
   type TerCategory,
 } from "@/lib/hr";
 
@@ -146,7 +151,7 @@ export function HrView({ submoduleId, workspaceId }: { submoduleId: string; work
   if (submoduleId === "positions") return <OrgMasterView key="p" workspaceId={workspaceId} kind="position" />;
   if (submoduleId === "employees") return <EmployeesView workspaceId={workspaceId} />;
   if (submoduleId === "components") return <ComponentsView workspaceId={workspaceId} />;
-  if (submoduleId === "payroll") return <ComingSoon workspaceId={workspaceId} what="Payroll & Payslips" />;
+  if (submoduleId === "payroll") return <PayrollView workspaceId={workspaceId} />;
   if (submoduleId === "tax-bpjs") return <ComingSoon workspaceId={workspaceId} what="BPJS & PPh 21" />;
   return null;
 }
@@ -1210,6 +1215,512 @@ function EmployeesView({ workspaceId }: { workspaceId: string }) {
             <Button variant="navy" disabled={save.isPending} onClick={() => form && save.mutate(form)}>
               {save.isPending && <Loader2 className="animate-spin" />} {t("Save", "Simpan")}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ------------------------------- Payroll --------------------------------- */
+
+interface RunRow {
+  id: string;
+  run_no: string;
+  period: string;
+  pay_date: string;
+  status: string;
+  bank_account_code: string | null;
+  employee_count: number;
+  total_gross: number;
+  total_deductions: number;
+  total_bpjs_company: number;
+  total_pph21: number;
+  total_net: number;
+  notes: string | null;
+  journal_entry_id: string | null;
+}
+
+interface SlipRow {
+  id: string;
+  run_id: string;
+  employee_code: string | null;
+  employee_name: string;
+  department: string | null;
+  position: string | null;
+  ptkp_status: string | null;
+  base_salary: number;
+  allowances: SlipLine[] | null;
+  deductions: SlipLine[] | null;
+  gross: number;
+  taxable_gross: number;
+  ter_category: string | null;
+  ter_rate: number;
+  pph21: number;
+  bpjs_employee: number;
+  bpjs_company: number;
+  other_deductions: number;
+  net_pay: number;
+}
+
+const parseJson = <T,>(v: unknown, fallback: T): T => {
+  if (v == null) return fallback;
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v || "null") ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return v as T;
+};
+
+function useRuns(workspaceId: string) {
+  return useQuery({
+    queryKey: ["hr-runs", workspaceId],
+    queryFn: async () => {
+      const res = await listWorkspaceRows({
+        data: { table: "hr_payroll_runs", workspaceId, orderBy: "period", orderDir: "desc", limit: 120 },
+      });
+      return ((res?.rows ?? []) as unknown as Record<string, unknown>[]).map((r) => ({
+        ...r,
+        employee_count: toNum(r.employee_count),
+        total_gross: toNum(r.total_gross),
+        total_deductions: toNum(r.total_deductions),
+        total_bpjs_company: toNum(r.total_bpjs_company),
+        total_pph21: toNum(r.total_pph21),
+        total_net: toNum(r.total_net),
+      })) as unknown as RunRow[];
+    },
+  });
+}
+
+const SLIP_NUM_KEYS = [
+  "base_salary", "gross", "taxable_gross", "ter_rate", "pph21", "bpjs_employee", "bpjs_company", "other_deductions", "net_pay",
+];
+
+function normalizeSlip(r: Record<string, unknown>): SlipRow {
+  const out: Record<string, unknown> = { ...r };
+  for (const k of SLIP_NUM_KEYS) out[k] = toNum(r[k]);
+  out.allowances = parseJson<SlipLine[]>(r.allowances, []);
+  out.deductions = parseJson<SlipLine[]>(r.deductions, []);
+  return out as unknown as SlipRow;
+}
+
+function useSlips(workspaceId: string, runId?: string) {
+  return useQuery({
+    queryKey: ["hr-slips", runId],
+    enabled: !!runId,
+    queryFn: async () => {
+      const res = await listWorkspaceRows({
+        data: { table: "hr_payslips", workspaceId, filters: { run_id: runId }, orderBy: "employee_code", limit: 500 },
+      });
+      return ((res?.rows ?? []) as unknown as Record<string, unknown>[]).map(normalizeSlip);
+    },
+  });
+}
+
+function PayrollView({ workspaceId }: { workspaceId: string }) {
+  const { t, lang } = useT();
+  const qc = useQueryClient();
+  const { data: runs = [], isLoading } = useRuns(workspaceId);
+  const { data: emps = [] } = useEmployees(workspaceId);
+  const { data: comps = [] } = useComponents(workspaceId);
+  const [newOpen, setNewOpen] = useState(false);
+  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [bank, setBank] = useState<{ code: string; name: string } | null>(null);
+  const [openRun, setOpenRun] = useState<RunRow | null>(null);
+  const { data: slips = [], isLoading: slipsLoading } = useSlips(workspaceId, openRun?.id);
+
+  const active = emps.filter((e) => e.status === "active");
+
+  /** Buat draft payroll: hitung slip semua karyawan aktif lalu simpan run + slip. */
+  const createRun = useMutation({
+    mutationFn: async () => {
+      if (!active.length) throw new Error(t("No active employees.", "Belum ada karyawan aktif."));
+      const computed = active.map((e) => ({ e, s: computePayslip(e, comps) }));
+      const sum = (k: keyof (typeof computed)[number]["s"]) => computed.reduce((a, c) => a + toNum(c.s[k]), 0);
+      const runId = crypto.randomUUID();
+      const totals = {
+        gross: sum("gross"),
+        pph: computed.reduce((a, c) => a + c.s.pph21, 0),
+        bpjsCo: computed.reduce((a, c) => a + c.s.bpjs_company, 0),
+        bpjsEmp: computed.reduce((a, c) => a + c.s.bpjs_employee, 0),
+        other: computed.reduce((a, c) => a + c.s.other_deductions, 0),
+        net: computed.reduce((a, c) => a + c.s.net_pay, 0),
+      };
+      try {
+        await upsertWorkspaceRows({
+          data: {
+            table: "hr_payroll_runs",
+            workspaceId,
+            rows: [
+              {
+                id: runId,
+                run_no: `PAY/${period.replace("-", "")}`,
+                period,
+                pay_date: payDate,
+                bank_account_code: bank?.code ?? "1010",
+                employee_count: active.length,
+                total_gross: totals.gross,
+                total_pph21: totals.pph,
+                total_bpjs_company: totals.bpjsCo,
+                total_deductions: totals.bpjsEmp + totals.pph + totals.other,
+                total_net: totals.net,
+                status: "draft",
+                notes: bank?.name ?? "Kas/Bank",
+              },
+            ],
+          },
+        });
+        await upsertWorkspaceRows({
+          data: {
+            table: "hr_payslips",
+            workspaceId,
+            rows: computed.map(({ e, s }) => ({
+              run_id: runId,
+              employee_id: e.id,
+              employee_code: e.code,
+              employee_name: e.name,
+              department: e.department,
+              position: e.position,
+              ptkp_status: e.ptkp_status,
+              npwp: e.npwp,
+              bank_name: e.bank_name,
+              bank_account: e.bank_account,
+              base_salary: toNum(e.base_salary),
+              allowances: JSON.stringify(s.allowances),
+              deductions: JSON.stringify(s.deductions),
+              bpjs: JSON.stringify(s.bpjs),
+              gross: s.gross,
+              taxable_gross: s.taxable_gross,
+              ter_category: s.ter_category,
+              ter_rate: s.ter_rate,
+              pph21: s.pph21,
+              bpjs_employee: s.bpjs_employee,
+              bpjs_company: s.bpjs_company,
+              other_deductions: s.other_deductions,
+              net_pay: s.net_pay,
+            })),
+          },
+        });
+      } catch (err) {
+        // Idempotent: gagal di tengah = bersihkan run + slip yang terlanjur masuk.
+        await deleteWorkspaceRow({ data: { table: "hr_payroll_runs", workspaceId, id: runId } }).catch(() => undefined);
+        throw err;
+      }
+      // Kembalikan run lengkap (total asli) supaya dialog rincian langsung benar.
+      return {
+        id: runId,
+        run_no: `PAY/${period.replace("-", "")}`,
+        period,
+        pay_date: payDate,
+        status: "draft",
+        bank_account_code: bank?.code ?? "1010",
+        employee_count: active.length,
+        total_gross: totals.gross,
+        total_deductions: totals.bpjsEmp + totals.pph + totals.other,
+        total_bpjs_company: totals.bpjsCo,
+        total_pph21: totals.pph,
+        total_net: totals.net,
+        notes: bank?.name ?? "Kas/Bank",
+        journal_entry_id: null,
+      } as RunRow;
+    },
+    onSuccess: (run) => {
+      toast.success(t("Payroll draft created", "Draft payroll dibuat"));
+      setNewOpen(false);
+      setBank(null);
+      qc.invalidateQueries({ queryKey: ["hr-runs", workspaceId] });
+      setOpenRun(run);
+    },
+    onError: (e: Error) =>
+      toast.error(e.message.toLowerCase().includes("duplicate") ? t("Payroll for this period already exists", "Payroll periode ini sudah ada") : e.message),
+  });
+
+  /**
+   * Setujui & posting jurnal payroll.
+   *  Debit : 6200 beban gaji (bruto), 6210 beban BPJS perusahaan
+   *  Kredit: 2300 hutang BPJS (karyawan + perusahaan), 2210 hutang PPh 21,
+   *          1250 piutang karyawan (potongan lain), bank pembayar (gaji bersih)
+   */
+  const approve = useMutation({
+    mutationFn: async (run: RunRow) => {
+      const res = await listWorkspaceRows({
+        data: { table: "hr_payslips", workspaceId, filters: { run_id: run.id }, orderBy: "employee_code", limit: 500 },
+      });
+      const rows = ((res?.rows ?? []) as unknown as Record<string, unknown>[]).map(normalizeSlip);
+      if (!rows.length) throw new Error(t("No payslips to post.", "Belum ada slip untuk diposting."));
+      const gross = rows.reduce((a, s) => a + s.gross, 0);
+      const bpjsCo = rows.reduce((a, s) => a + s.bpjs_company, 0);
+      const bpjsEmp = rows.reduce((a, s) => a + s.bpjs_employee, 0);
+      const pph = rows.reduce((a, s) => a + s.pph21, 0);
+      const other = rows.reduce((a, s) => a + s.other_deductions, 0);
+      const net = rows.reduce((a, s) => a + s.net_pay, 0);
+      const memo = `Payroll ${run.period}`;
+      const lines = [
+        { ...HR_ACCOUNTS.salaryExpense, description: memo, debit: gross, credit: 0 },
+        { ...HR_ACCOUNTS.bpjsExpense, description: memo, debit: bpjsCo, credit: 0 },
+        { ...HR_ACCOUNTS.bpjsPayable, description: memo, debit: 0, credit: bpjsCo + bpjsEmp },
+        { ...HR_ACCOUNTS.pph21Payable, description: memo, debit: 0, credit: pph },
+        { ...HR_ACCOUNTS.employeeReceivable, description: memo, debit: 0, credit: other },
+        { account_code: run.bank_account_code ?? "1010", account_name: run.notes, description: memo, debit: 0, credit: net },
+      ].filter((l) => l.account_code && (l.debit > 0.0001 || l.credit > 0.0001));
+
+      const posted = await postJournalEntry({
+        data: {
+          workspaceId,
+          entry: {
+            entry_no: `JRN/${run.period.replace("-", "")}/PAY`,
+            entry_date: run.pay_date,
+            source_type: "payroll",
+            source_id: run.id,
+            source_doc_number: run.run_no,
+            memo,
+            total_debit: lines.reduce((a, l) => a + l.debit, 0),
+            total_credit: lines.reduce((a, l) => a + l.credit, 0),
+            is_auto: true,
+          },
+          lines,
+        },
+      });
+      const entryId = (posted as { entryId?: string } | null)?.entryId ?? null;
+      // UPDATE parsial (bukan upsert): hr_payroll_runs punya kolom NOT NULL
+      // (run_no/period/pay_date) sehingga upsert parsial akan ditolak MySQL.
+      await saveWorkspaceRow({
+        data: {
+          table: "hr_payroll_runs",
+          workspaceId,
+          id: run.id,
+          data: {
+            status: "approved",
+            journal_entry_id: entryId,
+            approved_at: new Date().toISOString().slice(0, 19).replace("T", " "),
+          },
+        },
+      });
+    },
+    onSuccess: (_res, run) => {
+      toast.success(t("Payroll approved and posted to journal", "Payroll disetujui dan diposting ke jurnal"));
+      // Dialog rincian ikut menandai status baru (state lokal, tanpa menunggu refetch).
+      setOpenRun((prev) => (prev && prev.id === run.id ? { ...prev, status: "approved" } : prev));
+      qc.invalidateQueries({ queryKey: ["hr-runs", workspaceId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (run: RunRow) => {
+      await deleteWorkspaceRow({ data: { table: "hr_payroll_runs", workspaceId, id: run.id } });
+    },
+    onSuccess: () => {
+      toast.success(t("Payroll deleted", "Payroll dihapus"));
+      setOpenRun(null);
+      qc.invalidateQueries({ queryKey: ["hr-runs", workspaceId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-6">
+      <Header
+        eyebrow="SLIPP HR"
+        title={t("Payroll & Payslips", "Payroll & Slip Gaji")}
+        desc={t(
+          "Monthly payroll: generate payslips from active employees, then approve to post the journal.",
+          "Payroll bulanan: buat slip dari karyawan aktif, lalu setujui untuk posting jurnal.",
+        )}
+      >
+        <Button variant="navy" onClick={() => setNewOpen(true)}>
+          <Plus /> {t("Process payroll", "Proses payroll")}
+        </Button>
+      </Header>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Run", "Nomor")}</TableHead>
+                <TableHead>{t("Period", "Periode")}</TableHead>
+                <TableHead>{t("Pay date", "Tanggal bayar")}</TableHead>
+                <TableHead className="text-right">{t("Employees", "Karyawan")}</TableHead>
+                <TableHead className="text-right">{t("Gross", "Bruto")}</TableHead>
+                <TableHead className="text-right">PPh 21</TableHead>
+                <TableHead className="text-right">{t("Net", "Bersih")}</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-8 text-center">
+                    <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && runs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                    {t("No payroll runs yet.", "Belum ada payroll.")}
+                  </TableCell>
+                </TableRow>
+              )}
+              {runs.map((r) => (
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => setOpenRun(r)}>
+                  <TableCell className="font-mono text-xs">{r.run_no}</TableCell>
+                  <TableCell>{periodLabel(r.period, lang)}</TableCell>
+                  <TableCell>{r.pay_date}</TableCell>
+                  <TableCell className="text-right">{r.employee_count}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(r.total_gross)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(r.total_pph21)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmtIDR(r.total_net)}</TableCell>
+                  <TableCell>
+                    <Badge variant={r.status === "approved" ? "default" : "secondary"}>
+                      {r.status === "approved" ? t("Posted", "Terposting") : "Draft"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("Delete", "Hapus")}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        if (confirm(t("Delete this payroll run?", "Hapus payroll ini?"))) remove.mutate(r);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Dialog proses payroll baru */}
+      <Dialog open={newOpen} onOpenChange={(o) => !o && setNewOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Process payroll", "Proses payroll")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <AdminField label={t("Period", "Periode")}>
+              <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            </AdminField>
+            <AdminField label={t("Pay date", "Tanggal bayar")}>
+              <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            </AdminField>
+            <AdminField label={t("Paying bank account (optional)", "Akun bank pembayar (opsional)")}>
+              <CashBankPicker
+                workspaceId={workspaceId}
+                value={bank?.name}
+                onPick={(a) => setBank({ code: a.gl_account_code ?? a.code, name: a.name })}
+              />
+            </AdminField>
+            <p className="text-xs text-muted-foreground">
+              {bank
+                ? t("Salary will be paid from this account.", "Gaji dibayar dari akun ini.")
+                : t("If left empty, the payment posts to account 1010.", "Bila dikosongkan, pembayaran masuk ke akun 1010.")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                `${active.length} active employee(s) will be processed.`,
+                `${active.length} karyawan aktif akan diproses.`,
+              )}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewOpen(false)}>
+              {t("Cancel", "Batal")}
+            </Button>
+            <Button variant="navy" disabled={createRun.isPending} onClick={() => createRun.mutate()}>
+              {createRun.isPending && <Loader2 className="animate-spin" />} {t("Generate", "Proses")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog rincian run + slip */}
+      <Dialog open={!!openRun} onOpenChange={(o) => !o && setOpenRun(null)}>
+        <DialogContent className="max-h-[94vh] w-[96vw] max-w-6xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {openRun?.run_no} · {openRun ? periodLabel(openRun.period, lang) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {openRun && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant={openRun.status === "approved" ? "default" : "secondary"}>
+                  {openRun.status === "approved" ? t("Posted to journal", "Terposting ke jurnal") : "Draft"}
+                </Badge>
+                <span className="text-muted-foreground">
+                  {openRun.employee_count} {t("employees", "karyawan")} · {t("pay date", "bayar")} {openRun.pay_date}
+                </span>
+              </div>
+              <div className="rounded-xl border border-border bg-secondary/40 p-4">
+                <Row label={t("Gross", "Bruto")} value={openRun.total_gross} />
+                <Row label={t("Deductions", "Potongan")} value={-openRun.total_deductions} />
+                <Row label={t("Company BPJS", "BPJS perusahaan")} value={openRun.total_bpjs_company} />
+                <div className="my-2 border-t border-border" />
+                <Row label={t("Net pay", "Gaji bersih")} value={openRun.total_net} bold />
+              </div>
+
+              <div className="max-h-[45vh] overflow-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("Employee", "Karyawan")}</TableHead>
+                      <TableHead>PTKP</TableHead>
+                      <TableHead className="text-right">{t("Base salary", "Gaji pokok")}</TableHead>
+                      <TableHead className="text-right">{t("Gross", "Bruto")}</TableHead>
+                      <TableHead className="text-right">BPJS</TableHead>
+                      <TableHead className="text-right">PPh 21</TableHead>
+                      <TableHead className="text-right">{t("Net", "Bersih")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {slipsLoading && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-8 text-center">
+                          <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {slips.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <span className="font-mono text-xs">{s.employee_code}</span> · {s.employee_name}
+                        </TableCell>
+                        <TableCell>
+                          {s.ptkp_status} <span className="text-muted-foreground">({s.ter_category} {s.ter_rate}%)</span>
+                        </TableCell>
+                        <TableCell className="text-right">{fmtIDR(s.base_salary)}</TableCell>
+                        <TableCell className="text-right">{fmtIDR(s.gross)}</TableCell>
+                        <TableCell className="text-right">{fmtIDR(s.bpjs_employee)}</TableCell>
+                        <TableCell className="text-right">{fmtIDR(s.pph21)}</TableCell>
+                        <TableCell className="text-right font-medium">{fmtIDR(s.net_pay)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenRun(null)}>
+              {t("Close", "Tutup")}
+            </Button>
+            {openRun && openRun.status !== "approved" && (
+              <Button variant="navy" disabled={approve.isPending} onClick={() => approve.mutate(openRun)}>
+                {approve.isPending && <Loader2 className="animate-spin" />} {t("Approve & post journal", "Setujui & posting jurnal")}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
