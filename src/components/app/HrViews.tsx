@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AdminField, fmtIDR } from "@/components/app/admin-ui";
+import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { deleteWorkspaceRow, listWorkspaceRows, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -142,7 +142,7 @@ export function HrView({ submoduleId, workspaceId }: { submoduleId: string; work
   if (submoduleId === "departments") return <OrgMasterView key="d" workspaceId={workspaceId} kind="department" />;
   if (submoduleId === "positions") return <OrgMasterView key="p" workspaceId={workspaceId} kind="position" />;
   if (submoduleId === "employees") return <ComingSoon workspaceId={workspaceId} what="Employees" />;
-  if (submoduleId === "components") return <ComingSoon workspaceId={workspaceId} what="Salary Components" />;
+  if (submoduleId === "components") return <ComponentsView workspaceId={workspaceId} />;
   if (submoduleId === "payroll") return <ComingSoon workspaceId={workspaceId} what="Payroll & Payslips" />;
   if (submoduleId === "tax-bpjs") return <ComingSoon workspaceId={workspaceId} what="BPJS & PPh 21" />;
   return null;
@@ -458,6 +458,245 @@ function OrgMasterView({ workspaceId, kind }: { workspaceId: string; kind: OrgKi
               {t("Cancel", "Batal")}
             </Button>
             <Button disabled={save.isPending} onClick={() => form && save.mutate(form)}>
+              {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {t("Save", "Simpan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ------------------------------ Komponen gaji ----------------------------- */
+
+function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between py-0.5 ${bold ? "font-semibold text-navy dark:text-foreground" : ""}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span>{fmtIDR(value)}</span>
+    </div>
+  );
+}
+
+/** Default komponen gaji standar Indonesia (dipakai tombol "Muat komponen default"). */
+const DEFAULT_COMPONENTS: { code: string; name: string; kind: PayComponent["kind"]; is_fixed: boolean; taxable: boolean }[] = [
+  { code: "TJ-JAB", name: "Tunjangan Jabatan", kind: "allowance", is_fixed: true, taxable: true },
+  { code: "TJ-TRN", name: "Tunjangan Transport", kind: "allowance", is_fixed: true, taxable: true },
+  { code: "TJ-MKN", name: "Tunjangan Makan", kind: "allowance", is_fixed: false, taxable: true },
+  { code: "LEMBUR", name: "Uang Lembur", kind: "allowance", is_fixed: false, taxable: true },
+  { code: "POT-KAS", name: "Potongan Kasbon", kind: "deduction", is_fixed: false, taxable: false },
+  { code: "POT-ABS", name: "Potongan Absensi", kind: "deduction", is_fixed: false, taxable: false },
+];
+
+function ComponentsView({ workspaceId }: { workspaceId: string }) {
+  const { t } = useT();
+  const qc = useQueryClient();
+  const { data: rows = [] } = useComponents(workspaceId);
+  const [form, setForm] = useState<Partial<PayComponent> | null>(null);
+  const [seeding, setSeeding] = useState(false);
+
+  const save = useMutation({
+    mutationFn: async (f: Partial<PayComponent>) => {
+      if (!f.code?.trim() || !f.name?.trim()) {
+        throw new Error(t("Code and name are required.", "Kode dan nama wajib diisi."));
+      }
+      await upsertWorkspaceRows({
+        data: {
+          table: "hr_pay_components",
+          workspaceId,
+          rows: [
+            {
+              ...(f.id ? { id: f.id } : {}),
+              code: f.code.trim(),
+              name: f.name.trim(),
+              kind: f.kind ?? "allowance",
+              default_amount: Number(f.default_amount) || 0,
+              is_fixed: Boolean(f.is_fixed),
+              taxable: Boolean(f.taxable),
+              is_active: f.is_active ?? true,
+            },
+          ],
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success(t("Saved", "Tersimpan"));
+      setForm(null);
+      qc.invalidateQueries({ queryKey: ["hr-components", workspaceId] });
+    },
+    onError: (e: Error) =>
+      toast.error(e.message.toLowerCase().includes("duplicate") ? t("Code already exists", "Kode sudah dipakai") : e.message),
+  });
+
+  const seedDefaults = async () => {
+    setSeeding(true);
+    try {
+      const existing = new Set(rows.map((r) => r.code));
+      const missing = DEFAULT_COMPONENTS.filter((d) => !existing.has(d.code)).map((d) => ({
+        ...d,
+        default_amount: 0,
+        is_active: true,
+      }));
+      if (!missing.length) {
+        toast.info(t("All default components already exist.", "Semua komponen default sudah ada."));
+        return;
+      }
+      await upsertWorkspaceRows({ data: { table: "hr_pay_components", workspaceId, rows: missing } });
+      toast.success(t("Default components loaded", "Komponen default dimuat"));
+      qc.invalidateQueries({ queryKey: ["hr-components", workspaceId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      await deleteWorkspaceRow({ data: { table: "hr_pay_components", workspaceId, id } });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hr-components", workspaceId] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-6">
+      <Header
+        eyebrow="SLIPP HR"
+        title={t("Salary Components", "Komponen Gaji")}
+        desc={t(
+          "Fixed and variable allowances or deductions applied per employee.",
+          "Tunjangan dan potongan tetap/tidak tetap yang diterapkan per karyawan.",
+        )}
+      >
+        {rows.length === 0 && (
+          <Button variant="outline" disabled={seeding} onClick={() => void seedDefaults()}>
+            {seeding && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            {t("Load defaults", "Muat komponen default")}
+          </Button>
+        )}
+        <Button
+          variant="navy"
+          onClick={() => setForm({ kind: "allowance", is_fixed: true, taxable: true, is_active: true, default_amount: 0 })}
+        >
+          <Plus /> {t("New component", "Komponen baru")}
+        </Button>
+      </Header>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Code", "Kode")}</TableHead>
+                <TableHead>{t("Name", "Nama")}</TableHead>
+                <TableHead>{t("Type", "Jenis")}</TableHead>
+                <TableHead>{t("Nature", "Sifat")}</TableHead>
+                <TableHead>{t("Taxable", "Kena pajak")}</TableHead>
+                <TableHead className="text-right">{t("Default", "Default")}</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    {t("No components yet.", "Belum ada komponen.")}
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono text-xs">{r.code}</TableCell>
+                  <TableCell className="font-medium">
+                    {r.name}
+                    {!r.is_active && (
+                      <Badge variant="outline" className="ml-2">
+                        {t("Off", "Nonaktif")}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>{r.kind === "allowance" ? t("Allowance", "Tunjangan") : t("Deduction", "Potongan")}</TableCell>
+                  <TableCell>{r.is_fixed ? t("Fixed", "Tetap") : t("Variable", "Tidak tetap")}</TableCell>
+                  <TableCell>{r.taxable ? t("Yes", "Ya") : t("No", "Tidak")}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(Number(r.default_amount))}</TableCell>
+                  <TableCell className="text-right">
+                    <Button size="icon" variant="ghost" aria-label={t("Edit", "Ubah")} onClick={() => setForm({ ...r })}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("Delete", "Hapus")}
+                      onClick={() => confirm(t("Delete this component?", "Hapus komponen ini?")) && remove.mutate(r.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Salary component", "Komponen gaji")}</DialogTitle>
+          </DialogHeader>
+          {form && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AdminField label={t("Code", "Kode")}>
+                <Input value={form.code ?? ""} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              </AdminField>
+              <AdminField label={t("Name", "Nama")}>
+                <Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </AdminField>
+              <AdminField label={t("Type", "Jenis")}>
+                <AdminSelect value={form.kind ?? "allowance"} onChange={(v) => setForm({ ...form, kind: v as PayComponent["kind"] })}>
+                  <option value="allowance">{t("Allowance", "Tunjangan")}</option>
+                  <option value="deduction">{t("Deduction", "Potongan")}</option>
+                </AdminSelect>
+              </AdminField>
+              <AdminField label={t("Default amount", "Nominal default")}>
+                <Input
+                  type="number"
+                  value={form.default_amount ?? 0}
+                  onChange={(e) => setForm({ ...form, default_amount: Number(e.target.value) })}
+                />
+              </AdminField>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.is_fixed}
+                  onChange={(e) => setForm({ ...form, is_fixed: e.target.checked })}
+                />
+                {t("Fixed (every month)", "Tetap (setiap bulan)")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.taxable}
+                  onChange={(e) => setForm({ ...form, taxable: e.target.checked })}
+                />
+                {t("Taxable (PPh 21)", "Kena PPh 21")}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.is_active}
+                  onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                />
+                {t("Active", "Aktif")}
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForm(null)}>
+              {t("Cancel", "Batal")}
+            </Button>
+            <Button variant="navy" disabled={save.isPending} onClick={() => form && save.mutate(form)}>
               {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {t("Save", "Simpan")}
             </Button>
