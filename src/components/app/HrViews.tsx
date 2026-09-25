@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Download, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { deleteWorkspaceRow, listWorkspaceRows, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
+  computePayslip,
   PTKP_INFO,
   PTKP_STATUSES,
   terBrackets,
@@ -56,6 +57,8 @@ function useEmployees(workspaceId: string) {
         base_salary: toNum(r.base_salary),
         bpjs_kes: bool(r.bpjs_kes),
         bpjs_tk: bool(r.bpjs_tk),
+        // Kolom JSON bisa kembali sebagai string (tergantung driver) — normalkan.
+        components: typeof r.components === "string" ? JSON.parse(r.components || "[]") : (r.components ?? []),
       })) as unknown as Employee[];
     },
   });
@@ -141,7 +144,7 @@ export function HrView({ submoduleId, workspaceId }: { submoduleId: string; work
   if (submoduleId === "ptkp") return <PtkpMasterView workspaceId={workspaceId} />;
   if (submoduleId === "departments") return <OrgMasterView key="d" workspaceId={workspaceId} kind="department" />;
   if (submoduleId === "positions") return <OrgMasterView key="p" workspaceId={workspaceId} kind="position" />;
-  if (submoduleId === "employees") return <ComingSoon workspaceId={workspaceId} what="Employees" />;
+  if (submoduleId === "employees") return <EmployeesView workspaceId={workspaceId} />;
   if (submoduleId === "components") return <ComponentsView workspaceId={workspaceId} />;
   if (submoduleId === "payroll") return <ComingSoon workspaceId={workspaceId} what="Payroll & Payslips" />;
   if (submoduleId === "tax-bpjs") return <ComingSoon workspaceId={workspaceId} what="BPJS & PPh 21" />;
@@ -699,6 +702,513 @@ function ComponentsView({ workspaceId }: { workspaceId: string }) {
             <Button variant="navy" disabled={save.isPending} onClick={() => form && save.mutate(form)}>
               {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {t("Save", "Simpan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ------------------------------ Data karyawan ---------------------------- */
+
+const emptyEmp = (): Partial<Employee> => ({
+  code: "",
+  name: "",
+  status: "active",
+  ptkp_status: "TK/0",
+  base_salary: 0,
+  bpjs_kes: true,
+  bpjs_tk: true,
+  components: [],
+});
+
+/** Kolom teks dasar untuk template/impor Excel. */
+const EMP_COLS = [
+  "code", "name", "nik", "npwp", "email", "phone", "department", "position", "join_date",
+  "status", "ptkp_status", "base_salary", "bank_name", "bank_account", "bpjs_kes", "bpjs_tk", "notes",
+];
+
+function EmployeesView({ workspaceId }: { workspaceId: string }) {
+  const { t, lang } = useT();
+  const qc = useQueryClient();
+  const { data: rows = [], isLoading } = useEmployees(workspaceId);
+  const { data: comps = [] } = useComponents(workspaceId);
+  const { data: depts = [] } = useOrgUnits(workspaceId, "department");
+  const { data: positions = [] } = useOrgUnits(workspaceId, "position");
+  const [q, setQ] = useState("");
+  const [form, setForm] = useState<Partial<Employee> | null>(null);
+
+  const filtered = rows.filter((r) =>
+    [r.code, r.name, r.department, r.position].join(" ").toLowerCase().includes(q.toLowerCase()),
+  );
+
+  const save = useMutation({
+    mutationFn: async (f: Partial<Employee>) => {
+      if (!f.code?.trim() || !f.name?.trim()) {
+        throw new Error(t("Code and name are required.", "Kode dan nama wajib diisi."));
+      }
+      const list = (f.components ?? []).filter((c) => toNum(c.amount) > 0);
+      await upsertWorkspaceRows({
+        data: {
+          table: "hr_employees",
+          workspaceId,
+          rows: [
+            {
+              ...(f.id ? { id: f.id } : {}),
+              code: f.code.trim(),
+              name: f.name.trim(),
+              nik: f.nik?.trim() || null,
+              npwp: f.npwp?.trim() || null,
+              email: f.email?.trim() || null,
+              phone: f.phone?.trim() || null,
+              department: f.department || null,
+              position: f.position || null,
+              join_date: f.join_date || null,
+              status: f.status ?? "active",
+              ptkp_status: f.ptkp_status ?? "TK/0",
+              base_salary: toNum(f.base_salary),
+              bank_name: f.bank_name?.trim() || null,
+              bank_account: f.bank_account?.trim() || null,
+              bpjs_kes: Boolean(f.bpjs_kes),
+              bpjs_tk: Boolean(f.bpjs_tk),
+              components: JSON.stringify(list),
+              notes: f.notes?.trim() || null,
+            },
+          ],
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success(t("Employee saved", "Karyawan disimpan"));
+      setForm(null);
+      qc.invalidateQueries({ queryKey: ["hr-employees", workspaceId] });
+    },
+    onError: (e: Error) =>
+      toast.error(e.message.toLowerCase().includes("duplicate") ? t("Code already exists", "Kode sudah dipakai") : e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      await deleteWorkspaceRow({ data: { table: "hr_employees", workspaceId, id } });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hr-employees", workspaceId] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openNew = () => {
+    const next = `EMP-${String(rows.length + 1).padStart(4, "0")}`;
+    setForm({
+      ...emptyEmp(),
+      code: next,
+      components: comps
+        .filter((c) => c.is_fixed && c.is_active && Number(c.default_amount) > 0)
+        .map((c) => ({ component_id: c.id, amount: Number(c.default_amount) })),
+    });
+  };
+
+  const setCompAmount = (id: string, amount: number) => {
+    if (!form) return;
+    const list = [...(form.components ?? [])].filter((c) => c.component_id !== id);
+    if (amount) list.push({ component_id: id, amount });
+    setForm({ ...form, components: list });
+  };
+
+  const preview = form ? computePayslip({ ...(emptyEmp() as Employee), ...(form as Employee) }, comps) : null;
+  const activeComps = comps.filter((c) => c.is_active);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  async function downloadTemplate() {
+    const XLSX = await import("xlsx");
+    const sample: Record<string, unknown> = {
+      code: "EMP-0001",
+      name: "Budi Santoso",
+      nik: "3171xxxxxxxxxxxx",
+      npwp: "",
+      email: "budi@contoh.com",
+      phone: "0812xxxx",
+      department: depts[0]?.name ?? "",
+      position: positions[0]?.name ?? "",
+      join_date: "2026-01-15",
+      status: "active",
+      ptkp_status: "TK/0",
+      base_salary: 5000000,
+      bank_name: "BCA",
+      bank_account: "1234567890",
+      bpjs_kes: "TRUE",
+      bpjs_tk: "TRUE",
+      notes: "",
+    };
+    activeComps.forEach((c) => (sample[c.code] = Number(c.default_amount) || 0));
+    const ws = XLSX.utils.json_to_sheet([sample], { header: [...EMP_COLS, ...activeComps.map((c) => c.code)] });
+    const info = XLSX.utils.aoa_to_sheet([
+      ["Kolom", "Keterangan"],
+      ["code, name", "Wajib. Kode yang sudah ada akan diperbarui."],
+      ["ptkp_status", PTKP_STATUSES.join(", ")],
+      ["status", "active / inactive"],
+      ["join_date", "YYYY-MM-DD"],
+      ["bpjs_kes, bpjs_tk", "TRUE / FALSE"],
+      ["department, position", "Harus sama dengan nama di Master Departemen / Jabatan"],
+      ...activeComps.map((c) => [c.code, `Nominal komponen: ${c.name}`]),
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Karyawan");
+    XLSX.utils.book_append_sheet(wb, info, "Petunjuk");
+    XLSX.writeFile(wb, "template-karyawan.xlsx");
+  }
+
+  async function handleImport(file: File) {
+    setImporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      if (!raw.length) throw new Error(t("The file has no rows.", "Berkas tidak berisi baris data."));
+      const deptNames = new Set(depts.map((d) => d.name));
+      const posNames = new Set(positions.map((d) => d.name));
+      const existing = new Map(rows.map((r) => [r.code, r.id]));
+      const bool = (v: unknown) => (v === "" || v === undefined ? true : ["true", "1", "yes", "ya", "y"].includes(String(v).toLowerCase()));
+      const str = (v: unknown) => (v === "" || v === undefined || v === null ? null : String(v).trim());
+      const warnings: string[] = [];
+      const payloads: Record<string, unknown>[] = [];
+      raw.forEach((r, i) => {
+        const lower: Record<string, unknown> = {};
+        Object.entries(r).forEach(([k, v]) => (lower[String(k).trim().toLowerCase().replace(/\s+/g, "_")] = v));
+        const code = str(lower.code);
+        const name = str(lower.name);
+        if (!code || !name) {
+          warnings.push(`Baris ${i + 2}: code/name kosong`);
+          return;
+        }
+        let jd: string | null = null;
+        const j = lower.join_date;
+        if (j instanceof Date) jd = new Date(j.getTime() - j.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        else if (str(j)) jd = str(j);
+        const ptkp = str(lower.ptkp_status)?.toUpperCase() ?? "TK/0";
+        const dept = str(lower.department);
+        const pos = str(lower.position);
+        if (dept && !deptNames.has(dept)) warnings.push(`Baris ${i + 2}: departemen "${dept}" belum ada di master`);
+        if (pos && !posNames.has(pos)) warnings.push(`Baris ${i + 2}: jabatan "${pos}" belum ada di master`);
+        const components = activeComps
+          .map((c) => ({ component_id: c.id, amount: Number(lower[c.code.toLowerCase()]) || 0 }))
+          .filter((c) => c.amount > 0);
+        const id = existing.get(code);
+        payloads.push({
+          ...(id ? { id } : {}),
+          code,
+          name,
+          nik: str(lower.nik),
+          npwp: str(lower.npwp),
+          email: str(lower.email),
+          phone: str(lower.phone),
+          department: dept,
+          position: pos,
+          join_date: jd,
+          status: str(lower.status)?.toLowerCase() === "inactive" ? "inactive" : "active",
+          ptkp_status: (PTKP_STATUSES as readonly string[]).includes(ptkp) ? ptkp : "TK/0",
+          base_salary: Number(lower.base_salary) || 0,
+          bank_name: str(lower.bank_name),
+          bank_account: str(lower.bank_account),
+          bpjs_kes: bool(lower.bpjs_kes),
+          bpjs_tk: bool(lower.bpjs_tk),
+          components: JSON.stringify(components),
+          notes: str(lower.notes),
+        });
+      });
+      if (!payloads.length) {
+        throw new Error(t("No valid rows: code and name are required.", "Tidak ada baris valid: kolom code dan name wajib diisi."));
+      }
+      await upsertWorkspaceRows({ data: { table: "hr_employees", workspaceId, rows: payloads } });
+      toast.success(t(`${payloads.length} row(s) saved`, `${payloads.length} baris tersimpan`));
+      if (warnings.length) {
+        toast.warning(warnings.slice(0, 5).join("\n") + (warnings.length > 5 ? `\n+${warnings.length - 5} lainnya` : ""));
+      }
+      qc.invalidateQueries({ queryKey: ["hr-employees", workspaceId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Import failed", "Impor gagal"));
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Header
+        eyebrow="SLIPP HR"
+        title={t("Employees", "Data Karyawan")}
+        desc={t(
+          "Profile, tax status, salary and bank account per employee.",
+          "Profil, status pajak, gaji, dan rekening per karyawan.",
+        )}
+      >
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input className="w-56 pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search…", "Cari…")} />
+        </div>
+        <Button variant="outline" onClick={() => void downloadTemplate()}>
+          <Download /> Template
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleImport(f);
+          }}
+        />
+        <Button variant="outline" disabled={importing} onClick={() => fileRef.current?.click()}>
+          {importing ? <Loader2 className="animate-spin" /> : <Upload />} {t("Import Excel", "Impor Excel")}
+        </Button>
+        <Button variant="navy" onClick={openNew}>
+          <Plus /> {t("New employee", "Karyawan baru")}
+        </Button>
+      </Header>
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">#</TableHead>
+                <TableHead>{t("Code", "Kode")}</TableHead>
+                <TableHead>{t("Name", "Nama")}</TableHead>
+                <TableHead>{t("Department / Position", "Departemen / Jabatan")}</TableHead>
+                <TableHead>PTKP</TableHead>
+                <TableHead className="text-right">{t("Base salary", "Gaji pokok")}</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-8 text-center">
+                    <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                    {t("No employees yet.", "Belum ada karyawan.")}
+                  </TableCell>
+                </TableRow>
+              )}
+              {filtered.map((r, i) => (
+                <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.code}</TableCell>
+                  <TableCell className="font-medium">{r.name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {[r.department, r.position].filter(Boolean).join(" · ") || "—"}
+                  </TableCell>
+                  <TableCell>{r.ptkp_status}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(toNum(r.base_salary))}</TableCell>
+                  <TableCell>
+                    <Badge variant={r.status === "active" ? "secondary" : "outline"}>
+                      {r.status === "active" ? t("Active", "Aktif") : t("Inactive", "Nonaktif")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button size="icon" variant="ghost" aria-label={t("Edit", "Ubah")} onClick={() => setForm({ ...r })}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("Delete", "Hapus")}
+                      onClick={() => confirm(t("Delete this employee?", "Hapus karyawan ini?")) && remove.mutate(r.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
+        <DialogContent className="max-h-[94vh] w-[96vw] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{form?.id ? t("Edit employee", "Ubah karyawan") : t("New employee", "Karyawan baru")}</DialogTitle>
+          </DialogHeader>
+          {form && (
+            <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <AdminField label={t("Code", "Kode")}>
+                    <Input value={form.code ?? ""} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+                  </AdminField>
+                  <AdminField label={t("Full name", "Nama lengkap")}>
+                    <Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </AdminField>
+                  <AdminField label="Status">
+                    <AdminSelect value={form.status ?? "active"} onChange={(v) => setForm({ ...form, status: v })}>
+                      <option value="active">{t("Active", "Aktif")}</option>
+                      <option value="inactive">{t("Inactive", "Nonaktif")}</option>
+                    </AdminSelect>
+                  </AdminField>
+                  <AdminField label="NIK">
+                    <Input value={form.nik ?? ""} onChange={(e) => setForm({ ...form, nik: e.target.value })} />
+                  </AdminField>
+                  <AdminField label="NPWP">
+                    <Input value={form.npwp ?? ""} onChange={(e) => setForm({ ...form, npwp: e.target.value })} />
+                  </AdminField>
+                  <AdminField label={t("PTKP status", "Status PTKP")}>
+                    <AdminSelect value={form.ptkp_status ?? "TK/0"} onChange={(v) => setForm({ ...form, ptkp_status: v })}>
+                      {PTKP_STATUSES.map((p) => (
+                        <option key={p} value={p}>
+                          {p} — {PTKP_INFO[p][lang === "id" ? "id" : "en"]}
+                        </option>
+                      ))}
+                    </AdminSelect>
+                    {(() => {
+                      const p = form.ptkp_status ?? "TK/0";
+                      const cat = terCategory(p);
+                      const sal = toNum(form.base_salary);
+                      return (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          PTKP {fmtIDR(PTKP_INFO[p]?.annual ?? 0)}/{t("yr", "thn")} · TER {cat}
+                          {sal > 0 && (
+                            <>
+                              {" "}
+                              · {t("base salary rate", "tarif gaji pokok")} {terRate(cat, sal)}%
+                            </>
+                          )}
+                        </p>
+                      );
+                    })()}
+                  </AdminField>
+                  <AdminField label={t("Department", "Departemen")}>
+                    <OrgSelect
+                      options={depts}
+                      value={form.department ?? ""}
+                      onChange={(v) => setForm({ ...form, department: v })}
+                      empty={t("Add in Master Departments", "Tambah di Master Departemen")}
+                    />
+                  </AdminField>
+                  <AdminField label={t("Position", "Jabatan")}>
+                    <OrgSelect
+                      options={positions}
+                      value={form.position ?? ""}
+                      onChange={(v) => setForm({ ...form, position: v })}
+                      empty={t("Add in Master Positions", "Tambah di Master Jabatan")}
+                    />
+                  </AdminField>
+                  <AdminField label={t("Join date", "Tanggal masuk")}>
+                    <Input
+                      type="date"
+                      value={form.join_date ?? ""}
+                      onChange={(e) => setForm({ ...form, join_date: e.target.value || null })}
+                    />
+                  </AdminField>
+                  <AdminField label="Email">
+                    <Input value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  </AdminField>
+                  <AdminField label={t("Phone", "Telepon")}>
+                    <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                  </AdminField>
+                  <AdminField label={t("Base salary", "Gaji pokok")}>
+                    <Input
+                      type="number"
+                      value={form.base_salary ?? 0}
+                      onChange={(e) => setForm({ ...form, base_salary: Number(e.target.value) })}
+                    />
+                  </AdminField>
+                  <AdminField label="Bank">
+                    <Input value={form.bank_name ?? ""} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} />
+                  </AdminField>
+                  <AdminField label={t("Account no.", "No. rekening")}>
+                    <Input value={form.bank_account ?? ""} onChange={(e) => setForm({ ...form, bank_account: e.target.value })} />
+                  </AdminField>
+                  <div className="flex flex-col justify-end gap-2 text-sm">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!form.bpjs_kes}
+                        onChange={(e) => setForm({ ...form, bpjs_kes: e.target.checked })}
+                      />{" "}
+                      BPJS Kesehatan
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!form.bpjs_tk}
+                        onChange={(e) => setForm({ ...form, bpjs_tk: e.target.checked })}
+                      />{" "}
+                      BPJS Ketenagakerjaan
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-navy dark:text-foreground">
+                    {t("Allowances & deductions", "Tunjangan & potongan")}
+                  </p>
+                  {activeComps.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("Create pay components first in Salary Components.", "Buat komponen gaji dahulu di menu Komponen Gaji.")}
+                    </p>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {activeComps.map((c) => {
+                        const val = form.components?.find((x) => x.component_id === c.id)?.amount ?? 0;
+                        return (
+                          <div key={c.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm">{c.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {c.kind === "allowance" ? t("Allowance", "Tunjangan") : t("Deduction", "Potongan")}
+                              </p>
+                            </div>
+                            <Input
+                              className="w-36"
+                              type="number"
+                              value={val}
+                              onChange={(e) => setCompAmount(c.id, Number(e.target.value))}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <AdminField label={t("Notes", "Catatan")}>
+                  <Textarea value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                </AdminField>
+              </div>
+
+              {preview && (
+                <div className="h-fit rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+                  <p className="mb-3 text-xs font-semibold tracking-widest text-gold">
+                    {t("MONTHLY ESTIMATE", "ESTIMASI BULANAN")}
+                  </p>
+                  <Row label={t("Gross pay", "Gaji bruto")} value={preview.gross} />
+                  <Row label="BPJS (karyawan)" value={-preview.bpjs_employee} />
+                  <Row label={`PPh 21 TER ${preview.ter_category} (${preview.ter_rate}%)`} value={-preview.pph21} />
+                  <Row label={t("Other deductions", "Potongan lain")} value={-preview.other_deductions} />
+                  <div className="my-2 border-t border-border" />
+                  <Row label={t("Take-home pay", "Gaji bersih")} value={preview.net_pay} bold />
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    BPJS {t("company", "perusahaan")}: {fmtIDR(preview.bpjs_company)}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForm(null)}>
+              {t("Cancel", "Batal")}
+            </Button>
+            <Button variant="navy" disabled={save.isPending} onClick={() => form && save.mutate(form)}>
+              {save.isPending && <Loader2 className="animate-spin" />} {t("Save", "Simpan")}
             </Button>
           </DialogFooter>
         </DialogContent>
