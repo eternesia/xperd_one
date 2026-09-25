@@ -8,8 +8,9 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **Fase 0–1 selesai** (`de502ae`) — skema HR + mesin payroll sudah masuk.
-Fase berikutnya: modul & gating add-on (Fase 2).
+Status: **Fase 0–2 selesai** (`de502ae`, `7d13553`) — skema HR, mesin payroll, dan
+modul HR sudah terdaftar sebagai add-on. Fase berikutnya: `HrDashboard` (Fase 3)
+lalu `HrViews` (Fase 4).
 
 ---
 
@@ -176,12 +177,13 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 - Verifikasi: `tsc` 0 ✓
 
 ### Fase 2 — `modules.ts` + gating add-on
-- [ ] Ganti blok `hr` placeholder (`src/lib/modules.ts:248-261`) menjadi
-      `addon: "slipp_hr"` + 7 submodule: `employees`, `departments`, `positions`,
-      `ptkp`, `components`, `payroll`, `tax-bpjs`
-- [ ] Pastikan gating add-on yang ada di Old membaca `mod.addon` (submodule HR
-      tampil **hanya** bila tenant punya add-on `slipp_hr`)
-- Verifikasi: modul HR tidak muncul tanpa add-on; muncul setelah add-on aktif
+- [x] Ganti blok `hr` placeholder menjadi `addon: "slipp_hr"` + 7 submodule
+      (`employees`, `departments`, `positions`, `ptkp`, `components`, `payroll`, `tax-bpjs`)
+- [x] Pastikan gating add-on yang ada di Old membaca `mod.addon`: sudah ada
+      (`w.$workspaceId.tsx:37` dan `w.$workspaceId.index.tsx:52,65` via `hasAddon()`)
+- [x] Katalog add-on: `db/migrations/009_hr_addon.sql` (`slipp_hr`, Rp15.000,
+      pricing_unit `employee`, module_id `hr`) — idempotent
+- Verifikasi: modul HR tampil tetapi **terkunci** di workspace tanpa add-on ✓; tsc 0 ✓
 
 ### Fase 3 — `HrDashboard`
 - [ ] Port `HrDashboard.tsx` (232 baris): kartu total karyawan aktif, payroll
@@ -247,7 +249,7 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 |---|---|---|
 | 0. Migration 008 + whitelist | ✅ selesai | `de502ae` |
 | 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
-| 2. `modules.ts` + gating add-on | ⬜ belum | — |
+| 2. `modules.ts` + gating add-on | ✅ selesai | `7d13553` |
 | 3. `HrDashboard` | ⬜ belum | — |
 | 4. `HrViews` (employees → org units → ptkp/components → payroll → tax-bpjs) | ⬜ belum | — |
 | 5. Billing `pricing_unit` | ⬜ belum | — |
