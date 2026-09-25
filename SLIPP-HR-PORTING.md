@@ -8,9 +8,9 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **Fase 0–3, 5 selesai; Fase 4 batch A–C selesai** (`de502ae`, `7d13553`,
-`cac9f02`, `73d82f5`, `44036b5`, `99bd00d`). Sisa Fase 4: payroll & slip gaji,
-rekap BPJS/PPh 21 — lalu Fase 6 (COA + panduan + e2e payroll).
+Status: **Fase 0–3, 5, 6 (COA) selesai; Fase 4 batch A–D selesai** (`de502ae`,
+`7d13553`, `cac9f02`, `73d82f5`, `44036b5`, `99bd00d`, `0ffbb1f`). Sisa Fase 4:
+rekap BPJS/PPh 21 + cetak slip gaji — lalu sisa Fase 6 (entri panduan).
 
 ---
 
@@ -207,11 +207,14 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
       estimasi take-home) + tombol Template & Impor Excel (xlsx)
 - [x] `components` — komponen gaji + tombol "Muat komponen default" (6 komponen
       standar; seed `004_hr_pay_components.sql` untuk data acuan dev)
-- [ ] `payroll` — draft run (periode, tanggal bayar, bank) → generate slip → cetak
-      slip → **approve & posting jurnal** (idempotent: gagal = hapus run + slip)
+- [x] `payroll` — draft run (periode, tanggal bayar, bank opsional) → generate slip
+      → **approve & posting jurnal** (idempotent: gagal = hapus run + slip);
+      [ ] sisa: cetak slip gaji (HTML/PDF)
 - [ ] `tax-bpjs` — rekap bulanan per karyawan (BPJS + PPh 21)
-- Verifikasi: e2e `hr-org-master.spec.ts`, `hr-components.spec.ts`, dan
-  `hr-employees.spec.ts` (tambah dengan estimasi → ubah → hapus) hijau ✓
+- Catatan temuan: penutup approve wajib `saveWorkspaceRow` (UPDATE), BUKAN upsert
+  parsial — `hr_payroll_runs` punya kolom NOT NULL
+- Verifikasi: e2e `hr-org-master`, `hr-components`, `hr-employees`, dan
+  `hr-payroll` (generate → approve → jurnal terposting) hijau ✓
 
 ### Fase 5 — Billing & addons `pricing_unit`
 - [x] `lib/addons.functions.ts`: `AddonRow.pricing_unit` + SELECT + mapper
@@ -264,6 +267,7 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 | 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
 | 2. `modules.ts` + gating add-on | ✅ selesai | `7d13553` |
 | 3. `HrDashboard` | ✅ selesai | `cac9f02` |
-| 4. `HrViews` | 🟡 batch A–C (`ptkp`, `departments`, `positions`, `components`, `employees`) → sisa payroll, tax-bpjs | `73d82f5`, `44036b5`, `99bd00d` |
+| 4. `HrViews` | 🟡 batch A–D (`ptkp`, `departments`, `positions`, `components`, `employees`, `payroll`) → sisa `tax-bpjs` + cetak slip | `73d82f5`, `44036b5`, `99bd00d`, `0ffbb1f` |
+| 6. COA + panduan + e2e payroll | 🟡 5 COA selesai + e2e payroll selesai → sisa entri panduan | `0ffbb1f` |
 | 5. Billing `pricing_unit` | ✅ selesai | `cac9f02` |
 | 6. COA + panduan + e2e | ⬜ belum | — |
