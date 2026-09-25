@@ -8,9 +8,10 @@ Dokumen kerja untuk memindahkan modul **Slipp HR** dari ekspor Lovable
 > (`../DIFF-BS-NEW-VS-OLD-PRODUCTION.md`, bagian **Batch 2 — Ekspor `New 2`**).
 > File ini yang dipakai untuk kerja harian karena ikut ter-commit di git.
 
-Status: **Fase 0–2 selesai** (`de502ae`, `7d13553`) — skema HR, mesin payroll, dan
-modul HR sudah terdaftar sebagai add-on. Fase berikutnya: `HrDashboard` (Fase 3)
-lalu `HrViews` (Fase 4).
+Status: **Fase 0–3 & 5 selesai** (`de502ae`, `7d13553`, `cac9f02`) — skema, mesin
+payroll, modul add-on, dasbor payroll, dan label harga per karyawan sudah masuk.
+Fase berikutnya: `HrViews` (Fase 4, UI terbesar) lalu COA + panduan + e2e payroll
+(Fase 6).
 
 ---
 
@@ -38,9 +39,11 @@ harus dibuat sendiri di Old.
    `listWorkspaceRows` / `saveWorkspaceRow` / `upsertWorkspaceRows` /
    `deleteWorkspaceRow` / `replaceChildRows` dari `@/lib/data.functions`, dan
    `await import("@/integrations/mysql/pool")` di server fn baru.
-2. **Whitelist kolom.** Setiap kolom baru harus masuk `COLS` (data.functions) atau
-   `PCOLS` (platform.functions), plus `CB_ALLOWED`-style allowlist bila tabel
-   ditulis lewat server fn khusus. Tanpa ini nilai **dibuang tanpa error**.
+2. **Whitelist kolom — DUA tempat.** Tabel baru harus masuk `WORKSPACE_TABLES`
+   (gate `assertTable`, error "Table X is not allowed") **dan** `COLS`
+   (whitelist kolom) di `src/lib/data.functions.ts`; `PCOLS` untuk tabel platform.
+   Tanpa `COLS` nilai **dibuang tanpa error**; tanpa `WORKSPACE_TABLES` query
+   gagal total. Ini sudah menggigit sekali di Fase 3 (semua query HR gagal).
 3. **Tabel baru → migration** di `db/migrations/` (idempotent, dijalankan
    `npm run migrate`) dan fixture uji di `db/seeds/`.
 4. **Gerbang mutu sebelum commit:** `npx tsc --noEmit` = 0, `npm run build` = 0,
@@ -186,9 +189,13 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 - Verifikasi: modul HR tampil tetapi **terkunci** di workspace tanpa add-on ✓; tsc 0 ✓
 
 ### Fase 3 — `HrDashboard`
-- [ ] Port `HrDashboard.tsx` (232 baris): kartu total karyawan aktif, payroll
-      terakhir, komponen aktif, tautan cepat ke submodule
-- Verifikasi: halaman `/app/w/<ws>/hr` merender angka dari DB
+- [x] Port `HrDashboard.tsx` (`src/components/app/HrDashboard.tsx`): 6 KPI, tren
+      payroll 12 bulan, biaya per departemen, ringkasan BPJS & PPh 21, insentif
+      tidak tetap vs tetap, headcount, riwayat payroll
+- [x] Data lewat `listWorkspaceRows` (bukan Supabase), tipe eksplisit, status run
+      memakai `approved`, plus state error yang terlihat
+- [x] Route `/app/w/<ws>/hr` → `HrDashboard`
+- Verifikasi: e2e `hr-dashboard.spec.ts` hijau ✓; tsc 0 ✓
 
 ### Fase 4 — `HrViews` (per submodule, bisa dipecah 3 commit)
 - [ ] `employees` — CRUD karyawan (PTKP, gaji pokok, bank, BPJS, komponen, estimasi take-home)
@@ -202,9 +209,10 @@ CREATE TABLE IF NOT EXISTS hr_payslips (
 - Verifikasi: e2e baru (lihat bagian 4)
 
 ### Fase 5 — Billing & addons `pricing_unit`
-- [ ] `lib/addons.ts`: tambah `pricing_unit` pada tipe + select
-- [ ] `routes/app/w.$workspaceId.billing.tsx`: label `employee/mo` → "karyawan/bln"
-- Verifikasi: kartu add-on Slipp HR menampilkan Rp15.000/karyawan/bulan
+- [x] `lib/addons.functions.ts`: `AddonRow.pricing_unit` + SELECT + mapper
+- [x] `routes/app/w.$workspaceId.billing.tsx`: label `employee/mo` → "karyawan/bln"
+- [x] Katalog add-on `slipp_hr` Rp15.000 `pricing_unit='employee'` (migration 009)
+- Verifikasi: label di halaman Billing mengikuti `pricing_unit` ✓
 
 ### Fase 6 — COA, panduan, e2e
 - [ ] `src/lib/provisioning.server.ts`: tambah 1250, 2210, 2300, 6200, 6210
@@ -250,7 +258,7 @@ Di Old, posting memakai pola `postJournalEntry` dari `@/lib/ledger.functions`
 | 0. Migration 008 + whitelist | ✅ selesai | `de502ae` |
 | 1. `lib/hr.ts` | ✅ selesai (tarif TER perlu dicek ulang di Fase 4) | `de502ae` |
 | 2. `modules.ts` + gating add-on | ✅ selesai | `7d13553` |
-| 3. `HrDashboard` | ⬜ belum | — |
+| 3. `HrDashboard` | ✅ selesai | `cac9f02` |
 | 4. `HrViews` (employees → org units → ptkp/components → payroll → tax-bpjs) | ⬜ belum | — |
-| 5. Billing `pricing_unit` | ⬜ belum | — |
+| 5. Billing `pricing_unit` | ✅ selesai | `cac9f02` |
 | 6. COA + panduan + e2e | ⬜ belum | — |
