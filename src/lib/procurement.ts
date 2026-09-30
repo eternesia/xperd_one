@@ -33,6 +33,8 @@ export interface PrcDoc {
   subtotal: number;
   discount_amount: number;
   tax_amount: number;
+  /** #36: PPh yang kita potong dari tagihan supplier — mengurangi nilai bayar */
+  withholding_amount?: number;
   total: number;
   notes: string | null;
   source_document_id?: string | null;
@@ -51,6 +53,8 @@ export interface PrcLine {
   unit_price: number;
   discount: number;
   tax_rate: number;
+  /** #36: kode master `md_taxes`, supaya posting tahu PPN vs PPh */
+  tax_code?: string | null;
   line_total: number;
   source_line_id?: string | null;
   qty_fulfilled?: number;

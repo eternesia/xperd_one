@@ -1,8 +1,8 @@
 import {
   fetchMdAccounts as fetchMdAccountsFn,
-  fetchMdItems,
   postJournalEntry,
 } from "@/lib/ledger.functions";
+import { movingAverageCosts } from "@/lib/inventory";
 import type { PrcDoc } from "@/lib/procurement";
 
 export const JOURNAL_ACCOUNTS = {
@@ -15,6 +15,13 @@ export const JOURNAL_ACCOUNTS = {
   salesReturn: { account_code: "4100", account_name: "Retur Penjualan" },
   vatOut: { account_code: "2100", account_name: "PPN Keluaran" },
   cogs: { account_code: "5000", account_name: "Harga Pokok Penjualan" },
+  /**
+   * #36 (BS New 3): PPh yang dipotong pelanggan atas invoice kita. Ini bukan
+   * beban dan bukan pengurang pendapatan, melainkan kredit pajak (aset) yang
+   * bisa diperhitungkan saat PPh badan. Sisi pembelian (Hutang Pajak 2200)
+   * menyusul bersama auto-jurnal AP Invoice (#38).
+   */
+  prepaidWht: { account_code: "1450", account_name: "PPh Dibayar Dimuka" },
 };
 
 interface JLine {
@@ -175,6 +182,7 @@ interface SalesDocRef {
   discount_amount?: number;
   tax_amount?: number;
   total?: number;
+  withholding_amount?: number;
 }
 
 export interface SalesJournalLineInput {
@@ -182,13 +190,23 @@ export interface SalesJournalLineInput {
   qty: number;
 }
 
-/** total inventory cost of the delivered/returned lines, from master item cost price */
-export async function costOfLines(workspaceId: string, lines: SalesJournalLineInput[]) {
+/**
+ * #40 (BS New 3): total HPP baris yang keluar (atau masuk kembali lewat retur),
+ * memakai biaya rata-rata bergerak sampai tanggal dokumen — bukan harga jual
+ * dan bukan lagi harga pokok master yang statis.
+ */
+export async function costOfLines(
+  workspaceId: string,
+  lines: SalesJournalLineInput[],
+  upToDate?: string,
+) {
   const codes = [...new Set(lines.map((l) => l.item_code).filter(Boolean))] as string[];
   if (!codes.length) return 0;
-  const data = await fetchMdItems({ data: { workspaceId, codes } });
-  const map = new Map((data ?? []).map((r) => [(r as { code: string }).code, Number((r as { cost_price: number }).cost_price) || 0]));
-  return lines.reduce((s, l) => s + (l.item_code ? (map.get(l.item_code) ?? 0) * (Number(l.qty) || 0) : 0), 0);
+  const costs = await movingAverageCosts(workspaceId, codes, upToDate);
+  return lines.reduce(
+    (s, l) => s + (l.item_code ? (costs.get(l.item_code) ?? 0) * (Number(l.qty) || 0) : 0),
+    0,
+  );
 }
 
 /** Delivery order: Dr Cost of Goods Sold / Cr Inventory */
@@ -197,7 +215,7 @@ export async function postDeliveryJournal(
   doc: SalesDocRef,
   lines: SalesJournalLineInput[],
 ) {
-  const cost = await costOfLines(workspaceId, lines);
+  const cost = await costOfLines(workspaceId, lines, doc.doc_date);
   if (cost <= 0.0001) return;
   const memo = `Delivery ${doc.doc_number}${doc.customer_name ? ` · ${doc.customer_name}` : ""}`;
   await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name } as never, memo, [
@@ -206,12 +224,20 @@ export async function postDeliveryJournal(
   ]);
 }
 
-/** AR invoice: Dr Accounts Receivable / Cr Sales revenue + Cr Output VAT */
+/**
+ * AR invoice: Dr Accounts Receivable + Dr Prepaid PPh / Cr Sales revenue +
+ * Cr Output VAT.
+ * #36: `total` sudah dikurangi PPh yang dipotong pelanggan, jadi sisi debit
+ * piutang tetap sebesar yang benar-benar akan ditagih, dan bagian PPh masuk ke
+ * akun kredit pajak 1450 supaya jurnal tetap seimbang.
+ */
 export async function postArInvoiceJournal(workspaceId: string, doc: SalesDocRef) {
   const net = Number(doc.subtotal ?? 0) - Number(doc.discount_amount ?? 0);
+  const wht = Number(doc.withholding_amount ?? 0);
   const memo = `Sales invoice ${doc.doc_number}${doc.customer_name ? ` · ${doc.customer_name}` : ""}`;
   await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name } as never, memo, [
     { ...JOURNAL_ACCOUNTS.receivable, description: memo, debit: Number(doc.total ?? 0), credit: 0 },
+    { ...JOURNAL_ACCOUNTS.prepaidWht, description: `${memo} · PPh`, debit: wht, credit: 0 },
     { ...JOURNAL_ACCOUNTS.sales, description: memo, debit: 0, credit: net },
     { ...JOURNAL_ACCOUNTS.vatOut, description: memo, debit: 0, credit: Number(doc.tax_amount ?? 0) },
   ]);
@@ -234,11 +260,14 @@ export async function postSalesReturnJournal(
   lines: SalesJournalLineInput[],
 ) {
   const net = Number(doc.subtotal ?? 0) - Number(doc.discount_amount ?? 0);
-  const cost = await costOfLines(workspaceId, lines);
+  const cost = await costOfLines(workspaceId, lines, doc.doc_date);
+  const wht = Number(doc.withholding_amount ?? 0);
   const memo = `Sales return ${doc.doc_number}${doc.customer_name ? ` · ${doc.customer_name}` : ""}`;
   await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name } as never, memo, [
     { ...JOURNAL_ACCOUNTS.salesReturn, description: memo, debit: net, credit: 0 },
     { ...JOURNAL_ACCOUNTS.vatOut, description: memo, debit: Number(doc.tax_amount ?? 0), credit: 0 },
+    // #36: retur membalik kredit pajak yang tadinya diakui di invoice
+    { ...JOURNAL_ACCOUNTS.prepaidWht, description: `${memo} · PPh`, debit: 0, credit: wht },
     { ...JOURNAL_ACCOUNTS.receivable, description: memo, debit: 0, credit: Number(doc.total ?? 0) },
     { ...JOURNAL_ACCOUNTS.inventory, description: memo, debit: cost, credit: 0 },
     { ...JOURNAL_ACCOUNTS.cogs, description: memo, debit: 0, credit: cost },

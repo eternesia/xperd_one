@@ -1,4 +1,4 @@
-import { insertInvMovements } from "@/lib/ledger.functions";
+import { fetchMdItems, fetchMovingAverageCosts, insertInvMovements } from "@/lib/ledger.functions";
 
 export type InvMovementType = "in" | "out" | "transfer" | "adjustment";
 
@@ -146,6 +146,33 @@ export function buildBalances(movements: InvMovement[], perWarehouse = true): St
   return out.sort((a, b) => a.item_code.localeCompare(b.item_code));
 }
 
+/**
+ * #40 (BS New 3): biaya rata-rata bergerak per item dari penerimaan yang sudah
+ * diposting sampai `upToDate`; jatuh kembali ke `md_items.cost_price` bila item
+ * belum pernah diterima ke stok.
+ */
+export async function movingAverageCosts(
+  workspaceId: string,
+  itemCodes: string[],
+  upToDate?: string,
+): Promise<Map<string, number>> {
+  const codes = [...new Set(itemCodes.filter(Boolean))];
+  const out = new Map<string, number>();
+  if (!codes.length) return out;
+  const rows = (await fetchMovingAverageCosts({ data: { workspaceId, codes, upToDate } })) ?? [];
+  for (const r of rows as { item_code: string; unit_cost: number }[]) {
+    out.set(r.item_code, Number(r.unit_cost) || 0);
+  }
+  const missing = codes.filter((c) => !out.has(c));
+  if (missing.length) {
+    const items = (await fetchMdItems({ data: { workspaceId, codes: missing } })) ?? [];
+    for (const i of items as { code: string; cost_price: number }[]) {
+      out.set(i.code, Number(i.cost_price) || 0);
+    }
+  }
+  return out;
+}
+
 export interface MovementInput {
   movement_date: string;
   movement_type: InvMovementType;
@@ -235,6 +262,14 @@ export async function postSalesMovements(
   lines: { item_code: string | null; description?: string | null; uom_code?: string | null; qty: number; unit_price: number }[],
 ) {
   const sign = doc.doc_type === "delivery_order" ? -1 : 1;
+  // #40 (BS New 3): stok yang keluar (dan yang kembali lewat retur) dinilai
+  // dengan biaya rata-rata bergerak yang sesungguhnya — BUKAN harga jual di
+  // baris dokumen.
+  const costs = await movingAverageCosts(
+    workspaceId,
+    lines.map((l) => l.item_code ?? "").filter(Boolean),
+    doc.doc_date,
+  );
   await insertMovements(
     workspaceId,
     lines
@@ -247,7 +282,7 @@ export async function postSalesMovements(
         uom_code: l.uom_code ?? null,
         warehouse_code: doc.warehouse_code ?? null,
         qty: sign * (Number(l.qty) || 0),
-        unit_cost: Number(l.unit_price) || 0,
+        unit_cost: costs.get(l.item_code as string) ?? 0,
         ref_type: doc.doc_type,
         ref_id: doc.id,
         ref_number: doc.doc_number,

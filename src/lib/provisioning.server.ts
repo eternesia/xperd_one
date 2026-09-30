@@ -7,6 +7,8 @@ export const DEFAULT_COA: { code: string; name: string; account_type: string }[]
   { code: "1250", name: "Piutang Karyawan", account_type: "asset" },
   { code: "1300", name: "Persediaan Barang", account_type: "asset" },
   { code: "1400", name: "PPN Masukan", account_type: "asset" },
+  // #36 (BS New 3): kredit pajak PPh yang dipotong pelanggan atas invoice kita.
+  { code: "1450", name: "PPh Dibayar Dimuka", account_type: "asset" },
   { code: "1500", name: "Uang Muka Pembelian", account_type: "asset" },
   { code: "1700", name: "Aset Tetap", account_type: "asset" },
   { code: "1790", name: "Akumulasi Penyusutan", account_type: "asset" },

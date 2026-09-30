@@ -90,33 +90,90 @@ export const LINE_TAX_RATES: { value: number; en: string; id_: string }[] = [
   { value: 12, en: "VAT 12%", id_: "PPN 12%" },
 ];
 
-export interface TaxRateOption {
-  value: number;
+/**
+ * #36 (BS New 3): definisi pajak LENGKAP untuk satu baris dokumen. Tarif saja
+ * tidak cukup — posting jurnal harus tahu apakah baris itu PPN (menambah nilai)
+ * atau PPh/withholding (mengurangi nilai yang dibayar/diterima).
+ * `code` = kode master `md_taxes`, disimpan di baris dokumen sebagai `tax_code`.
+ */
+export interface LineTaxOption {
+  code: string;
+  name: string;
   label: string;
+  rate: number;
+  /** "none" bila baris master tidak punya jenis pajak (non-taxable). */
+  taxType: TaxType | "none";
+  accountCode: string | null;
+}
+
+export const NO_TAX_OPTION: LineTaxOption = {
+  code: "",
+  name: "Non-taxable",
+  label: "Non-taxable (0%)",
+  rate: 0,
+  taxType: "none",
+  accountCode: null,
+};
+
+/** PPh (withholding) mengurangi nilai tagihan, bukan menambah PPN. */
+export function isWithholdingTax(option?: LineTaxOption | null) {
+  return option?.taxType === "withholding";
 }
 
 /** Line-level tax options sourced from Master Data → Tax Rates (md_taxes). */
 export function useLineTaxOptions(workspaceId: string, lang: "en" | "id") {
   return useQuery({
-    queryKey: ["md_taxes", workspaceId],
-    queryFn: async (): Promise<TaxRateOption[]> => {
+    queryKey: ["md_taxes", workspaceId, lang],
+    queryFn: async (): Promise<LineTaxOption[]> => {
       const data = await listWorkspaceRows({
         data: {
           table: "md_taxes",
           workspaceId,
           orderBy: "rate",
           orderDir: "asc",
-          limit: 100,
+          limit: 200,
           filters: { is_active: 1 },
         },
       });
-      const rows = (data?.rows ?? []).map((r) => {
-        const row = r as { name: string; rate: number };
-        return { value: Number(row.rate) || 0, label: `${row.name} (${Number(row.rate) || 0}%)` };
+      const rows = (data?.rows ?? []) as {
+        code: string;
+        name: string;
+        rate: number | null;
+        tax_type: string | null;
+        account_code: string | null;
+      }[];
+      const mapped: LineTaxOption[] = rows.map((r) => {
+        const rate = Number(r.rate) || 0;
+        const taxType = (["vat_in", "vat_out", "withholding"].includes(r.tax_type ?? "")
+          ? r.tax_type
+          : "none") as TaxType | "none";
+        return {
+          code: r.code,
+          name: r.name,
+          label: `${r.name} (${rate}%)`,
+          rate,
+          taxType,
+          accountCode: r.account_code ?? null,
+        };
       });
-      const unique = rows.filter((r, i) => rows.findIndex((x) => x.value === r.value) === i);
-      if (unique.length) return unique;
-      return LINE_TAX_RATES.map((r) => ({ value: r.value, label: lang === "id" ? r.id_ : r.en }));
+      if (mapped.length) {
+        // selalu sediakan opsi "tanpa pajak" di paling atas bila master belum punya
+        const hasNone = mapped.some((m) => m.rate === 0 && m.taxType === "none");
+        if (hasNone) return mapped;
+        return [
+          { ...NO_TAX_OPTION, label: lang === "id" ? "Tanpa pajak (0%)" : "Non-taxable (0%)" },
+          ...mapped,
+        ];
+      }
+      // Fallback: tarif bawaan bila master pajak workspace belum diisi.
+      return LINE_TAX_RATES.map((r) => ({
+        code: r.value === 0 ? "" : `RATE${r.value}`,
+        name: lang === "id" ? r.id_ : r.en,
+        label: lang === "id" ? r.id_ : r.en,
+        rate: r.value,
+        taxType: (r.value === 0 ? "none" : "vat_out") as TaxType | "none",
+        accountCode: r.value === 0 ? null : "2100",
+      }));
     },
   });
 }

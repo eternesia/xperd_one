@@ -52,7 +52,7 @@ import {
 } from "@/lib/journal";
 import { postSalesMovements } from "@/lib/inventory";
 import { cn } from "@/lib/utils";
-import { useLineTaxOptions } from "@/lib/tax";
+import { isWithholdingTax, useLineTaxOptions } from "@/lib/tax";
 import {
   computeLine,
   formatMoney,
@@ -74,6 +74,8 @@ interface DraftLine {
   unit_price: string;
   discount: string;
   tax_rate: string;
+  /** #36: kode master `md_taxes`. `tax_rate` ikut terisi agar perhitungan tetap sama. */
+  tax_code: string;
   source_line_id?: string;
   max_qty?: number;
 }
@@ -86,6 +88,7 @@ const emptyLine = (): DraftLine => ({
   unit_price: "0",
   discount: "0",
   tax_rate: "0",
+  tax_code: "",
 });
 
 export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspaceId: string }) {
@@ -93,6 +96,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
   const qc = useQueryClient();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const { data: taxOptions = [] } = useLineTaxOptions(workspaceId, lang);
+  const taxByCode = useMemo(() => new Map(taxOptions.map((o) => [o.code, o])), [taxOptions]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -231,6 +235,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         unit_price: String(Number(l.unit_price ?? 0) * openRatio),
         discount: String(Number(l.discount ?? 0) * openRatio),
         tax_rate: String(l.tax_rate ?? 0),
+        tax_code: l.tax_code ?? "",
         source_line_id: l.id,
         max_qty: isAmountSettlement(entity.docType) ? undefined : remainingQty(l),
       })),
@@ -242,6 +247,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
     let subtotal = 0;
     let discount = 0;
     let tax = 0;
+    let withholding = 0;
     lines.forEach((l) => {
       const c = computeLine({
         qty: Number(l.qty) || 0,
@@ -251,10 +257,13 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
       });
       subtotal += c.gross;
       discount += Number(l.discount) || 0;
-      tax += c.tax;
+      // #36: PPh (withholding) bukan PPN — ia mengurangi nilai yang dibayar
+      // pelanggan, jadi dipisah dari `tax` (yang tetap PPN saja).
+      if (isWithholdingTax(taxByCode.get(l.tax_code))) withholding += c.tax;
+      else tax += c.tax;
     });
-    return { subtotal, discount, tax, total: subtotal - discount + tax };
-  }, [lines]);
+    return { subtotal, discount, tax, withholding, total: subtotal - discount + tax - withholding };
+  }, [lines, taxByCode]);
 
   const resetForm = () => {
     setLines([emptyLine()]);
@@ -314,6 +323,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             subtotal: totals.subtotal,
             discount_amount: totals.discount,
             tax_amount: totals.tax,
+            withholding_amount: totals.withholding,
             total: totals.total,
             notes: header.notes || null,
             source_document_id: sourceDoc?.id ?? null,
@@ -342,6 +352,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           unit_price: Number(l.unit_price) || 0,
           discount: Number(l.discount) || 0,
           tax_rate: Number(l.tax_rate) || 0,
+          tax_code: l.tax_code || null,
           line_total: c.net + c.tax,
           source_line_id: l.source_line_id ?? null,
         };
@@ -411,6 +422,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           subtotal: totals.subtotal,
           discount_amount: totals.discount,
           tax_amount: totals.tax,
+          withholding_amount: totals.withholding,
           total: totals.total,
         };
         const journalLines = usable.map((l) => ({
@@ -559,6 +571,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
               unit_price: String(l.unit_price ?? 0),
               discount: String(l.discount ?? 0),
               tax_rate: String(l.tax_rate ?? 0),
+              tax_code: l.tax_code ?? "",
               source_line_id: l.source_line_id ?? undefined,
             }))
           : [emptyLine()],
@@ -1120,16 +1133,25 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                             />
                           </td>}
                           {entity.docType !== "delivery_order" && <td className="p-1">
-                            <Select value={String(Number(l.tax_rate) || 0)} onValueChange={(v) => patch({ tax_rate: v })}>
+                            <Select
+                              value={l.tax_code || "__none"}
+                              onValueChange={(v) => {
+                                const opt = taxOptions.find((o) => o.code === v);
+                                patch({ tax_code: v === "__none" ? "" : v, tax_rate: String(opt?.rate ?? 0) });
+                              }}
+                            >
                               <SelectTrigger className="h-9 w-36">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {taxOptions.map((r) => (
-                                  <SelectItem key={r.value} value={String(r.value)}>
-                                    {r.label}
-                                  </SelectItem>
-                                ))}
+                                <SelectItem value="__none">{t("Non-taxable (0%)", "Tanpa pajak (0%)")}</SelectItem>
+                                {taxOptions
+                                  .filter((r) => r.code)
+                                  .map((r) => (
+                                    <SelectItem key={r.code} value={r.code}>
+                                      {r.label}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </td>}
@@ -1154,8 +1176,13 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                   {t("Subtotal", "Subtotal")}: {formatMoney(totals.subtotal, lang)}
                 </span>
                 <span className="text-muted-foreground">
-                  {t("Tax", "Pajak")}: {formatMoney(totals.tax, lang)}
+                  {t("VAT", "PPN")}: {formatMoney(totals.tax, lang)}
                 </span>
+                {totals.withholding > 0 && (
+                  <span className="text-muted-foreground">
+                    {t("Withholding (PPh)", "Potongan PPh")}: -{formatMoney(totals.withholding, lang)}
+                  </span>
+                )}
                 <span className="font-semibold text-navy dark:text-primary-foreground">
                   {t("Total", "Total")}: {formatMoney(totals.total, lang)}
                 </span>

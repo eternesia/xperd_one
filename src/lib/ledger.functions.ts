@@ -282,6 +282,42 @@ export const fetchMdItems = createServerFn({ method: "POST" })
     return execute("SELECT code, cost_price FROM md_items WHERE workspace_id = ?", [data.workspaceId]);
   });
 
+/**
+ * #40 (BS New 3): biaya rata-rata bergerak per item, dihitung dari penerimaan
+ * stok yang sudah diposting (qty > 0) sampai `upToDate`.
+ * Dipakai untuk menilai stok yang KELUAR: sebelumnya baris keluar memakai harga
+ * jual dokumen, sehingga nilai persediaan dan HPP salah.
+ * Agregasi dilakukan di SQL supaya seluruh mutasi tidak perlu ditarik ke browser.
+ */
+export const fetchMovingAverageCosts = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((i: unknown) => i as { workspaceId: string; codes: string[]; upToDate?: string })
+  .handler(async ({ data, context }) => {
+    await withMember(data.workspaceId, context.userId);
+    const { execute } = await import("@/integrations/mysql/pool");
+    const codes = [...new Set((data.codes ?? []).filter(Boolean))];
+    if (!codes.length) return [] as { item_code: string; unit_cost: number }[];
+    const ph = codes.map(() => "?").join(", ");
+    const params: unknown[] = [data.workspaceId, ...codes];
+    let sql = `SELECT item_code,
+                      SUM(CASE WHEN value > 0 THEN value ELSE qty * unit_cost END) AS total_value,
+                      SUM(qty) AS total_qty
+                 FROM inv_movements
+                WHERE workspace_id = ? AND qty > 0 AND item_code IN (${ph})`;
+    if (data.upToDate) {
+      sql += " AND movement_date <= ?";
+      params.push(data.upToDate);
+    }
+    sql += " GROUP BY item_code";
+    const rows = (await execute(sql, params)) as { item_code: string; total_value: number; total_qty: number }[];
+    return rows
+      .filter((r) => Number(r.total_qty) > 0.000001)
+      .map((r) => ({
+        item_code: r.item_code,
+        unit_cost: Number(r.total_value) / Number(r.total_qty),
+      }));
+  });
+
 export const fetchFaAssets = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((i: unknown) => i as { workspaceId: string })
