@@ -19,6 +19,8 @@ import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components
 import { TenderView } from "@/components/app/CrmTender";
 // #54–56 (BS New 3): akun media sosial & penjadwal postingan.
 import { PostSchedulerView, SocialAccountsView, SocialDashboardView } from "@/components/app/CrmSocial";
+// #51 (BS New 3): pustaka dokumen tender.
+import { DocLibraryView } from "@/components/app/CrmDocLibrary";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
@@ -124,6 +126,8 @@ export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; wor
   if (submoduleId === "social-accounts") return <SocialAccountsView workspaceId={workspaceId} />;
   if (submoduleId === "post-scheduler") return <PostSchedulerView workspaceId={workspaceId} />;
   if (submoduleId === "social-dashboard") return <SocialDashboardView workspaceId={workspaceId} />;
+  // #51 (BS New 3): pustaka dokumen tender.
+  if (submoduleId === "doc-library") return <DocLibraryView workspaceId={workspaceId} />;
   return <ComingSoon submoduleId={submoduleId} />;
 }
 

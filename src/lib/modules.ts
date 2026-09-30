@@ -255,6 +255,8 @@ const MODULE_DEFS: AppModule[] = [
       s("social-dashboard", "Social Dashboard", "Dasbor Media Sosial"),
       s("social-accounts", "Social Accounts", "Akun Media Sosial"),
       s("post-scheduler", "Post Scheduler", "Jadwal Postingan"),
+      // Batch 3 #51 (BS New 3): pustaka dokumen tender.
+      s("doc-library", "Document Library", "Pustaka Dokumen"),
     ],
   },
   {

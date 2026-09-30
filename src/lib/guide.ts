@@ -285,6 +285,10 @@ export const GUIDE_MODULES: GuideSection[] = [
       st("Tender Checklist: create a tender with agency, HPS and submission deadline; a standard 26-document checklist is filled in automatically.", "Checklist Tender: buat tender dengan instansi, HPS, dan batas waktu; checklist standar 26 dokumen terisi otomatis."),
       st("Tick each document (or set its status), mark which ones are mandatory, and fill in PIC plus the validity date so expired documents are flagged.", "Centang setiap dokumen (atau ubah statusnya), tandai mana yang wajib, lalu isi PIC dan tanggal berlaku agar dokumen kedaluwarsa ditandai."),
       st("The eligibility card turns green only when every mandatory document is ready and still valid — then print the evaluation sheet or export the package.", "Kartu kelayakan baru berwarna hijau bila semua dokumen wajib siap dan masih berlaku — lalu cetak lembar evaluasi atau ekspor paketnya."),
+      // #62 (BS New 3): panduan Pustaka Dokumen.
+      st("Document Library: upload legal & qualification files (NIB, NPWP, akta, sertifikat) once with their validity date; files are stored on the workspace server and can be reused in every tender.", "Pustaka Dokumen: unggah berkas legal & kualifikasi (NIB, NPWP, akta, sertifikat) sekali beserta tanggal berlakunya; berkas disimpan di server workspace dan bisa dipakai ulang di setiap tender."),
+      st("Replacing an existing document keeps the previous file as a version history (v2, v3, …) so audits stay traceable.", "Mengganti dokumen yang ada menyimpan berkas lama sebagai riwayat versi (v2, v3, …) sehingga jejak audit tetap ada."),
+      st("In a tender checklist, pick a document from the library or press “Autofill from library”; documents expiring within 30 days are flagged in the CRM dashboard.", "Di checklist tender, ambil dokumen dari pustaka atau tekan “Isi otomatis dari pustaka”; dokumen yang habis dalam ≤30 hari ditandai di dasbor CRM."),
     ],
   },
   {

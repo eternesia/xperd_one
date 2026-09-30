@@ -7,11 +7,11 @@
  * - Lapisan data memakai `listWorkspaceRows`/`upsertWorkspaceRows`/`deleteWorkspaceRow`
  *   (bukan Supabase), tanggal dibulatkan lewat `sqlDateTime()`.
  * - Fitur yang **belum** diporting karena menunggu keputusan penyimpanan berkas:
- *   unggah file per dokumen, pustaka dokumen (#51), template DOCX (#52), dan
- *   unduh paket ZIP. Nama berkas & tautan pustaka yang sudah ada tetap ditampilkan.
+ *   unduh paket ZIP (#52). Nama berkas & tautan pustaka yang sudah ada tetap ditampilkan.
  */
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,6 +21,8 @@ import {
   Plus,
   Printer,
   Trash2,
+  Upload,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,8 +35,12 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { PageSkeleton, PaginationBar, usePagination } from "@/components/app/ui-states";
+// #51 (BS New 3): pustaka dokumen untuk autofill & lampiran checklist.
+import { matchLibrary, openWsFile, uploadWsFile, useDocLibrary, type LibDoc } from "@/components/app/CrmDocLibrary";
+import { useApp } from "@/lib/app-context";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
-import { sqlDateTime, sqlDateTimeOrNull } from "@/lib/datetime";
+import { uploadWorkspaceFile } from "@/lib/files.functions";
+import { sqlDateTimeOrNull } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 
 type Cat = "administrative" | "technical" | "commercial";
@@ -106,6 +112,17 @@ const lbl = (list: { id: string; en: string; id_: string }[], id: string, lang: 
   const x = list.find((l) => l.id === id);
   return x ? (lang === "id" ? x.id_ : x.en) : id;
 };
+
+/** Dokumen yang tertaut pustaka selalu memakai berkas & masa berlaku terbaru. */
+function mergeLib(docs: Doc[], lib: LibDoc[]): Doc[] {
+  return docs.map((d) => {
+    const linked = d.library_doc_id ? lib.find((x) => x.id === d.library_doc_id) : undefined;
+    return linked
+      ? { ...d, expiry_date: linked.expiry_date, file_path: linked.file_path, file_name: linked.file_name }
+      : d;
+  });
+}
+
 const isDone = (d: Doc) => d.status === "ready" || d.status === "verified";
 const isExpired = (d: Doc, deadline: string | null) =>
   !!d.expiry_date && new Date(d.expiry_date) < new Date(deadline ?? Date.now());
@@ -383,9 +400,88 @@ function TenderDetail({
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const qc = useQueryClient();
-  const s = useMemo(() => score(docs, tender.deadline_at), [docs, tender.deadline_at]);
+  const { activeWorkspace } = useApp();
+  const { data: lib = [] } = useDocLibrary(workspaceId);
+  const uploadFn = useServerFn(uploadWorkspaceFile);
+  const merged = useMemo(() => mergeLib(docs, lib), [docs, lib]);
+  const s = useMemo(() => score(merged, tender.deadline_at), [merged, tender.deadline_at]);
   const [newDoc, setNewDoc] = useState<Record<Cat, string>>({ administrative: "", technical: "", commercial: "" });
+  const [uploading, setUploading] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-tender-docs", workspaceId] });
+
+  async function linkLib(d: Doc, libId: string) {
+    const linked = lib.find((x) => x.id === libId);
+    await patchDoc(
+      d.id,
+      linked
+        ? {
+            library_doc_id: linked.id,
+            status: linked.file_path ? "ready" : d.status,
+            expiry_date: linked.expiry_date,
+          }
+        : { library_doc_id: null },
+    );
+  }
+
+  async function uploadRow(d: Doc, file: File) {
+    setUploading(d.id);
+    try {
+      const path = await uploadWsFile(workspaceId, `crm/tenders/${tender.id}`, file, uploadFn);
+      await patchDoc(d.id, { file_path: path, file_name: file.name, library_doc_id: null, status: "ready" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Upload failed", "Unggah gagal"));
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function saveToLib(d: Doc) {
+    if (!d.file_path) return;
+    try {
+      const created = crypto.randomUUID();
+      await upsertWorkspaceRows({
+        data: {
+          table: "crm_doc_library",
+          workspaceId,
+          rows: [
+            {
+              id: created,
+              category: d.category,
+              name: d.name,
+              file_path: d.file_path,
+              file_name: d.file_name,
+              expiry_date: d.expiry_date,
+              version: 1,
+            },
+          ],
+        },
+      });
+      await patchDoc(d.id, { library_doc_id: created });
+      await qc.invalidateQueries({ queryKey: ["crm-doc-library", workspaceId] });
+      toast.success(t("Saved to library", "Disimpan ke pustaka"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("Could not save", "Gagal menyimpan"));
+    }
+  }
+
+  /** Menautkan dokumen checklist ke pustaka berdasarkan kemiripan nama. */
+  async function autoFill() {
+    const withFile = lib.filter((x) => x.file_path);
+    let filled = 0;
+    for (const d of docs) {
+      if (d.library_doc_id || d.file_path) continue;
+      const hit = matchLibrary(d.name, withFile);
+      if (!hit) continue;
+      await patchDoc(d.id, { library_doc_id: hit.id, status: "ready", expiry_date: hit.expiry_date });
+      filled += 1;
+    }
+    await refresh();
+    toast.success(
+      filled
+        ? t(`${filled} documents filled from library`, `${filled} dokumen terisi dari pustaka`)
+        : t("No library match found", "Tidak ada dokumen pustaka yang cocok"),
+    );
+  }
 
   async function patchDoc(id: string, patch: Partial<Doc>) {
     try {
@@ -462,7 +558,7 @@ function TenderDetail({
   function printSheet() {
     const esc = (v: string | null) => (v ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] ?? c);
     const sections = CATS.map((c) => {
-      const rows = docs
+      const rows = merged
         .filter((d) => d.category === c.id)
         .map(
           (d, i) =>
@@ -508,6 +604,9 @@ function TenderDetail({
               </option>
             ))}
           </AdminSelect>
+          <Button variant="outline" onClick={() => void autoFill()}>
+            <Wand2 /> {t("Autofill from library", "Isi otomatis dari pustaka")}
+          </Button>
           <Button variant="outline" onClick={printSheet}>
             <Printer /> {t("Print evaluation", "Cetak lembar evaluasi")}
           </Button>
@@ -553,7 +652,7 @@ function TenderDetail({
       </div>
 
       {CATS.map((c) => {
-        const list = docs.filter((d) => d.category === c.id);
+        const list = merged.filter((d) => d.category === c.id);
         const done = list.filter(isDone).length;
         return (
           <Card key={c.id}>
@@ -634,10 +733,60 @@ function TenderDetail({
                             />
                           </TableCell>
                           <TableCell className="min-w-56 space-y-1">
-                            {d.file_name ? (
-                              <p className="truncate text-xs text-muted-foreground">{d.file_name}</p>
+                            <div className="flex items-center gap-1">
+                              <AdminSelect
+                                className="h-8 text-xs"
+                                value={d.library_doc_id ?? ""}
+                                onChange={(v) => void linkLib(d, v)}
+                              >
+                                <option value="">
+                                  {t("— Pick from library —", "— Ambil dari pustaka —")}
+                                </option>
+                                {lib.map((l) => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.name}
+                                  </option>
+                                ))}
+                              </AdminSelect>
+                              <label
+                                className="cursor-pointer rounded p-1 hover:bg-muted"
+                                title={t("Upload tender-specific file", "Unggah berkas khusus tender ini")}
+                              >
+                                {uploading === d.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Upload className="h-4 w-4" />
+                                )}
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) void uploadRow(d, file);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
+                            {d.file_path ? (
+                              <div className="flex items-center gap-2 text-xs">
+                                <button
+                                  className="truncate text-primary underline"
+                                  onClick={() => d.file_path && openWsFile(d.file_path)}
+                                >
+                                  {d.file_name}
+                                </button>
+                                {!d.library_doc_id && (
+                                  <button
+                                    className="whitespace-nowrap text-gold underline"
+                                    onClick={() => void saveToLib(d)}
+                                  >
+                                    {t("Save to library", "Simpan ke pustaka")}
+                                  </button>
+                                )}
+                              </div>
                             ) : (
-                              <p className="text-xs text-muted-foreground">{t("No file yet", "Belum ada file")}</p>
+                              <p className="text-xs text-muted-foreground">{t("No file yet", "Belum ada berkas")}</p>
                             )}
                             <Input
                               className="h-8 text-xs"
