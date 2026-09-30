@@ -23,6 +23,8 @@ import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspac
 import { APP_MODULES } from "@/lib/modules";
 import { listProfilesByIds } from "@/lib/platform.functions";
 import { createWorkspaceUser, updateWorkspaceUser } from "@/lib/team.functions";
+// #47 (BS New 3): komponen daftar bersama (pencarian, paginasi, skeleton).
+import { PageSkeleton, PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
 
 export const Route = createFileRoute("/app/w/$workspaceId/team")({
   component: TeamPage,
@@ -54,6 +56,16 @@ function TeamPage() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<MemberRow | null>(null);
   const [editForm, setEditForm] = useState({ fullName: "", phone: "", password: "" });
+  const [search, setSearch] = useState("");
+
+  // #47: pencarian + paginasi bersama (menggantikan daftar panjang tanpa filter).
+  const shownMembers = useSearchFilter(members, search, (m) => [
+    m.profile?.full_name,
+    m.profile?.email,
+    m.role,
+    m.user_id,
+  ]);
+  const pager = usePagination(shownMembers, 10);
 
   const createUser = useServerFn(createWorkspaceUser);
   const updateUser = useServerFn(updateWorkspaceUser);
@@ -296,13 +308,17 @@ function TeamPage() {
           )}
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
               <CardTitle>Users</CardTitle>
+              <SearchInput value={search} onChange={setSearch} placeholder="Search name, email, or role…" />
             </CardHeader>
             <CardContent className="space-y-3">
-              {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {loading && <PageSkeleton stats={0} columns={4} rows={4} />}
               {!loading && members.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
-              {members.map((m) => (
+              {!loading && members.length > 0 && shownMembers.length === 0 && (
+                <p className="text-sm text-muted-foreground">No member matches “{search}”.</p>
+              )}
+              {!loading && pager.items.map((m) => (
                 <div
                   key={m.id}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3"
@@ -348,6 +364,7 @@ function TeamPage() {
                   </div>
                 </div>
               ))}
+              {!loading && <PaginationBar p={pager} />}
             </CardContent>
           </Card>
         </TabsContent>

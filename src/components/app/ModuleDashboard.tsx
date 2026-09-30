@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -14,7 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowUpRight, FileText, PackageCheck, Receipt, Wallet } from "lucide-react";
+// #49 (BS New 3): ikon tambahan untuk ringkasan dashboard modul.
+import { CircleCheck, FileText, Landmark, PackageCheck, Receipt, Scale, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { countWorkspaceRows, listWorkspaceRows } from "@/lib/data.functions";
@@ -80,27 +80,6 @@ export function ModuleDashboard({ mod, workspaceId }: { mod: AppModule; workspac
       {mod.id === "fixed-asset" && <FixedAssetDashboard workspaceId={workspaceId} />}
       {mod.id === "tax" && <TaxDashboard workspaceId={workspaceId} />}
       {mod.id === "reporting" && <ExecutiveDashboard workspaceId={workspaceId} />}
-
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-          {t("Sub modules", "Sub modul")}
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {mod.submodules.map((sub) => (
-            <Link
-              key={sub.id}
-              to="/app/w/$workspaceId/$moduleId/$submoduleId"
-              params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
-              className="group rounded-2xl border border-border bg-card p-5 transition-all hover:-translate-y-1 hover:border-gold hover:shadow-lg"
-            >
-              <p className="flex items-center justify-between font-medium text-navy dark:text-foreground">
-                {lang === "id" ? sub.id_ : sub.en}
-                <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-gold" />
-              </p>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -312,31 +291,61 @@ function MasterDataDashboard({ workspaceId }: { workspaceId: string }) {
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…", "Memuat…")}</p>;
 
   const chartData = counts.map((c) => ({ name: lang === "id" ? c.entity.id_ : c.entity.en, value: c.count }));
+  const totalRecords = counts.reduce((sum, row) => sum + row.count, 0);
+  const configured = counts.filter((row) => row.count > 0).length;
+  const largest = [...counts].sort((a, b) => b.count - a.count)[0];
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {counts.slice(0, 4).map((c) => (
-          <Stat
-            key={c.entity.table}
-            label={lang === "id" ? c.entity.id_ : c.entity.en}
-            value={String(c.count)}
-            hint={t("records", "data")}
-            icon={FileText}
-          />
-        ))}
+        <Stat label={t("Total master records", "Total data master")} value={String(totalRecords)} icon={FileText} />
+        <Stat
+          label={t("Configured masters", "Master terisi")}
+          value={`${configured} / ${counts.length}`}
+          icon={CircleCheck}
+        />
+        <Stat
+          label={t("Largest master", "Master terbesar")}
+          value={largest ? String(largest.count) : "0"}
+          hint={largest ? (lang === "id" ? largest.entity.id_ : largest.entity.en) : "—"}
+          icon={Landmark}
+        />
+        <Stat
+          label={t("Empty masters", "Master belum terisi")}
+          value={String(counts.length - configured)}
+          icon={PackageCheck}
+        />
       </div>
-      <Panel title={t("Records per master table", "Jumlah data per master")}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-            <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-15} height={50} textAnchor="end" />
-            <YAxis fontSize={11} allowDecimals={false} tickLine={false} axisLine={false} width={40} />
-            <Tooltip />
-            <Bar dataKey="value" fill="#0A1A35" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Panel>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title={t("Records per master table", "Jumlah data per master")}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-15} height={50} textAnchor="end" />
+              <YAxis fontSize={11} allowDecimals={false} tickLine={false} axisLine={false} width={40} />
+              <Tooltip />
+              <Bar dataKey="value" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Panel>
+        <Panel title={t("Master data composition", "Komposisi data master")}>
+          {totalRecords === 0 ? (
+            <Empty />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData.filter((row) => row.value > 0)} dataKey="value" nameKey="name" innerRadius={52} outerRadius={88}>
+                  {chartData.map((_, index) => (
+                    <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }
@@ -633,6 +642,14 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
   const revenue = sum("revenue");
   const expense = sum("expense");
   const net = revenue - expense;
+  // #49 (BS New 3): ringkasan neraca, margin, dan kontrol keseimbangan jurnal.
+  const assets = sum("asset");
+  const liabilities = sum("liability");
+  const equity = sum("equity") + net;
+  const margin = revenue ? (net / revenue) * 100 : 0;
+  const unbalanced = (data?.entries ?? []).filter(
+    (entry) => Math.abs(Number(entry.total_debit || 0) - Number(entry.total_credit || 0)) > 0.5,
+  ).length;
 
   const monthly = useMemo(() => {
     const byId = new Map((data?.entries ?? []).map((e) => [e.id, e]));
@@ -655,16 +672,54 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
 
   const mix = (["asset", "liability", "equity"] as AccAccountType[]).map((type) => ({
     name: lang === "id" ? ACCOUNT_TYPE_LABEL[type].id_ : ACCOUNT_TYPE_LABEL[type].en,
-    value: Math.abs(sum(type)),
+    value: Math.abs(type === "equity" ? equity : sum(type)),
   }));
+
+  const topExpenses = balances
+    .filter((balance) => balance.type === "expense" && balance.balance > 0)
+    .sort((a, b) => b.balance - a.balance)
+    .slice(0, 5);
+  const recentEntries = (data?.entries ?? []).slice(0, 6);
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t("Journal entries", "Jurnal")} value={String(data?.entries.length ?? 0)} icon={FileText} hint={String(year)} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-navy dark:text-foreground">
+            {t("Accounting summary", "Ringkasan akuntansi")}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t(
+              `Year to date through ${new Date().toLocaleDateString("en-US")}`,
+              `Tahun berjalan sampai ${new Date().toLocaleDateString("id-ID")}`,
+            )}
+          </p>
+        </div>
+        <Badge variant={unbalanced === 0 ? "secondary" : "destructive"} className="gap-1.5">
+          {unbalanced === 0 && <CircleCheck className="h-3.5 w-3.5" />}
+          {unbalanced === 0
+            ? t("All journals balanced", "Semua jurnal seimbang")
+            : t(`${unbalanced} unbalanced journals`, `${unbalanced} jurnal tidak seimbang`)}
+        </Badge>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Stat label={t("Revenue", "Pendapatan")} value={formatMoney(revenue, lang)} icon={Receipt} />
         <Stat label={t("Expenses", "Beban")} value={formatMoney(expense, lang)} icon={Wallet} />
-        <Stat label={t("Net result", "Laba bersih")} value={formatMoney(net, lang)} icon={PackageCheck} />
+        <Stat
+          label={t("Net profit / loss", "Laba / rugi bersih")}
+          value={formatMoney(net, lang)}
+          icon={PackageCheck}
+          hint={t(`Net margin ${margin.toFixed(1)}%`, `Margin bersih ${margin.toFixed(1)}%`)}
+        />
+        <Stat label={t("Total assets", "Total aset")} value={formatMoney(assets, lang)} icon={Landmark} />
+        <Stat label={t("Total liabilities", "Total kewajiban")} value={formatMoney(liabilities, lang)} icon={Scale} />
+        <Stat
+          label={t("Journal entries", "Jurnal tercatat")}
+          value={String(data?.entries.length ?? 0)}
+          icon={FileText}
+          hint={String(year)}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -692,6 +747,67 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
             </PieChart>
           </ResponsiveContainer>
         </Panel>
+      </div>
+
+      {/* #49 (BS New 3): akun beban terbesar + aktivitas jurnal terbaru. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm font-semibold text-navy dark:text-foreground">
+            {t("Largest expense accounts", "Akun beban terbesar")}
+          </p>
+          <div className="mt-4 space-y-3">
+            {topExpenses.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t("No expense posted yet.", "Belum ada beban yang diposting.")}</p>
+            )}
+            {topExpenses.map((account) => {
+              const share = expense > 0 ? Math.min(100, (account.balance / expense) * 100) : 0;
+              return (
+                <div key={account.code}>
+                  <div className="flex items-center justify-between gap-4 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="text-muted-foreground">{account.code}</span> · {account.name}
+                    </span>
+                    <span className="shrink-0 font-medium text-navy dark:text-foreground">
+                      {formatMoney(account.balance, lang)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-gold" style={{ width: `${share}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm font-semibold text-navy dark:text-foreground">
+            {t("Recent journal activity", "Aktivitas jurnal terbaru")}
+          </p>
+          <div className="mt-4 divide-y divide-border">
+            {recentEntries.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t("No journal posted yet.", "Belum ada jurnal yang diposting.")}</p>
+            )}
+            {recentEntries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-navy dark:text-foreground">{entry.entry_no}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {entry.entry_date} · {entry.memo || entry.source_doc_number || t("Journal entry", "Jurnal")}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-medium text-navy dark:text-foreground">
+                    {formatMoney(Number(entry.total_debit || 0), lang)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.is_auto ? t("Automatic", "Otomatis") : t("Manual", "Manual")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -732,6 +848,9 @@ function FixedAssetDashboard({ workspaceId }: { workspaceId: string }) {
   const net = assets.reduce((s, a) => s + bookValue(a), 0);
   const monthly = active.reduce((s, a) => s + monthlyCharge(a), 0);
 
+  // #49 (BS New 3): akumulasi penyusutan + nilai buku per kategori.
+  const accumulated = assets.reduce((s, a) => s + Number(a.accumulated_depreciation || 0), 0);
+
   const byPeriod = useMemo(() => {
     const map = new Map<string, number>();
     for (const d of deps) {
@@ -744,27 +863,57 @@ function FixedAssetDashboard({ workspaceId }: { workspaceId: string }) {
       .map(([period, amount]) => ({ period, amount }));
   }, [deps]);
 
+  const byCategory = useMemo(() => {
+    const rows = new Map<string, number>();
+    assets.forEach((asset) => {
+      const category = asset.category || t("Uncategorized", "Tanpa kategori");
+      rows.set(category, (rows.get(category) ?? 0) + bookValue(asset));
+    });
+    return [...rows.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [assets, lang]);
+
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MiniCard label={t("Active assets", "Aset aktif")} value={String(active.length)} />
         <MiniCard label={t("Acquisition cost", "Harga perolehan")} value={money(cost)} />
         <MiniCard label={t("Net book value", "Nilai buku")} value={money(net)} highlight />
+        <MiniCard label={t("Accumulated depreciation", "Akumulasi penyusutan")} value={money(accumulated)} />
         <MiniCard label={t("Monthly depreciation", "Penyusutan bulanan")} value={money(monthly)} />
       </div>
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="mb-4 text-sm font-medium text-navy dark:text-primary-foreground">
-          {t("Depreciation trend", "Tren penyusutan")}
-        </p>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={byPeriod}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="period" fontSize={12} />
-            <YAxis fontSize={12} />
-            <Tooltip formatter={(v: number) => money(Number(v))} />
-            <Bar dataKey="amount" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title={t("Depreciation trend", "Tren penyusutan")}>
+          {byPeriod.length === 0 ? (
+            <Empty />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byPeriod}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="period" fontSize={12} />
+                <YAxis fontSize={12} />
+                <Tooltip formatter={(v: number) => money(Number(v))} />
+                <Bar dataKey="amount" fill={CHART_COLORS[0]} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
+        <Panel title={t("Book value by category", "Nilai buku per kategori")}>
+          {byCategory.length === 0 ? (
+            <Empty />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={byCategory} dataKey="value" nameKey="name" innerRadius={50} outerRadius={88}>
+                  {byCategory.map((_, index) => (
+                    <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => money(Number(v))} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
       </div>
     </div>
   );
@@ -784,6 +933,18 @@ function TaxDashboard({ workspaceId }: { workspaceId: string }) {
   const vatIn = records.filter((r) => r.tax_type === "vat_in").reduce((s, r) => s + Number(r.tax_amount || 0), 0);
   const vatOut = records.filter((r) => r.tax_type === "vat_out").reduce((s, r) => s + Number(r.tax_amount || 0), 0);
   const wht = records.filter((r) => r.tax_type === "withholding").reduce((s, r) => s + Number(r.tax_amount || 0), 0);
+  // #49 (BS New 3): status dokumen pajak + dokumen periode berjalan.
+  const statuses = (["draft", "reported", "paid"] as const).map((status) => ({
+    name:
+      status === "draft"
+        ? t("Draft", "Draf")
+        : status === "reported"
+          ? t("Reported", "Dilaporkan")
+          : t("Paid", "Disetor"),
+    value: records.filter((record) => record.status === status).length,
+  }));
+  const currentPeriod = new Date().toISOString().slice(0, 7);
+  const currentRecords = records.filter((record) => record.period === currentPeriod);
 
   return (
     <div className="space-y-6">
@@ -793,21 +954,50 @@ function TaxDashboard({ workspaceId }: { workspaceId: string }) {
         <MiniCard label={t("Withholding", "PPh")} value={money(wht)} />
         <MiniCard label={t("Net VAT payable", "PPN kurang bayar")} value={money(vatOut - vatIn)} highlight />
       </div>
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="mb-4 text-sm font-medium text-navy dark:text-primary-foreground">
-          {t("VAT by period", "PPN per periode")}
-        </p>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={summary}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="period" fontSize={12} />
-            <YAxis fontSize={12} />
-            <Tooltip formatter={(v: number) => money(Number(v))} />
-            <Legend />
-            <Bar dataKey="vatIn" name={t("Input VAT", "PPN Masukan")} fill={CHART_COLORS[2]} radius={[6, 6, 0, 0]} />
-            <Bar dataKey="vatOut" name={t("Output VAT", "PPN Keluaran")} fill={CHART_COLORS[1]} radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MiniCard label={t("Records this period", "Dokumen periode ini")} value={String(currentRecords.length)} />
+        <MiniCard label={t("Draft records", "Dokumen draf")} value={String(statuses[0].value)} />
+        <MiniCard
+          label={t("Reported / paid", "Dilaporkan / disetor")}
+          value={String(statuses[1].value + statuses[2].value)}
+          highlight
+        />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title={t("VAT by period", "PPN per periode")}>
+          {summary.length === 0 ? (
+            <Empty />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={summary}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="period" fontSize={12} />
+                <YAxis fontSize={12} />
+                <Tooltip formatter={(v: number) => money(Number(v))} />
+                <Legend />
+                <Bar dataKey="vatIn" name={t("Input VAT", "PPN Masukan")} fill={CHART_COLORS[2]} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="vatOut" name={t("Output VAT", "PPN Keluaran")} fill={CHART_COLORS[1]} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
+        <Panel title={t("Tax record status", "Status dokumen pajak")}>
+          {records.length === 0 ? (
+            <Empty />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={statuses} dataKey="value" nameKey="name" innerRadius={50} outerRadius={88}>
+                  {statuses.map((_, index) => (
+                    <Cell key={index} fill={CHART_COLORS[index + 1]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </Panel>
       </div>
     </div>
   );
@@ -836,6 +1026,11 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
   const inflow = trx.filter((x) => x.trx_type === "in").reduce((s, x) => s + Number(x.amount || 0), 0);
   const outflow = trx.filter((x) => x.trx_type === "out").reduce((s, x) => s + Number(x.amount || 0), 0);
   const openItems = trx.filter((x) => !x.is_reconciled).length;
+  // #49 (BS New 3): ringkasan bulan berjalan + daftar saldo & mutasi terbaru.
+  const monthPrefix = new Date().toISOString().slice(0, 7);
+  const monthTrx = trx.filter((x) => x.trx_date.startsWith(monthPrefix));
+  const monthIn = monthTrx.filter((x) => x.trx_type === "in").reduce((s, x) => s + Number(x.amount || 0), 0);
+  const monthOut = monthTrx.filter((x) => x.trx_type === "out").reduce((s, x) => s + Number(x.amount || 0), 0);
 
   const monthly = useMemo(() => {
     const rows = Array.from({ length: 12 }, (_, i) => ({
@@ -845,13 +1040,16 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
     }));
     for (const x of trx) {
       const idx = new Date(x.trx_date).getMonth();
-      if (x.trx_type === "in") rows[idx].in += Number(x.amount || 0);
-      if (x.trx_type === "out") rows[idx].out += Number(x.amount || 0);
+      const row = rows[idx];
+      if (!row) continue;
+      if (x.trx_type === "in") row.in += Number(x.amount || 0);
+      if (x.trx_type === "out") row.out += Number(x.amount || 0);
     }
     return rows;
   }, [trx, lang, year]);
 
   const mix = balances.map((b) => ({ name: b.account.name, value: Math.max(0, b.balance) }));
+  const recent = [...trx].sort((a, b) => b.trx_date.localeCompare(a.trx_date)).slice(0, 8);
 
   return (
     <div className="space-y-6">
@@ -859,6 +1057,27 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
         <Stat label={t("Cash & bank balance", "Saldo kas & bank")} value={formatMoney(totalBalance, lang)} icon={Wallet} />
         <Stat label={t("Cash in", "Kas masuk")} value={formatMoney(inflow, lang)} icon={Receipt} hint={String(year)} />
         <Stat label={t("Cash out", "Kas keluar")} value={formatMoney(outflow, lang)} icon={FileText} hint={String(year)} />
+        <Stat label={t("Net cash flow", "Arus kas bersih")} value={formatMoney(inflow - outflow, lang)} icon={Wallet} hint={String(year)} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label={t("Cash in this month", "Kas masuk bulan ini")}
+          value={formatMoney(monthIn, lang)}
+          icon={Receipt}
+          hint={monthPrefix}
+        />
+        <Stat
+          label={t("Cash out this month", "Kas keluar bulan ini")}
+          value={formatMoney(monthOut, lang)}
+          icon={FileText}
+          hint={monthPrefix}
+        />
+        <Stat
+          label={t("Transactions this month", "Transaksi bulan ini")}
+          value={String(monthTrx.length)}
+          icon={PackageCheck}
+        />
         <Stat label={t("Unreconciled", "Belum rekonsiliasi")} value={String(openItems)} icon={PackageCheck} />
       </div>
 
@@ -887,6 +1106,70 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
             </PieChart>
           </ResponsiveContainer>
         </Panel>
+      </div>
+
+      {/* #49 (BS New 3): saldo kas/bank per rekening + mutasi terbaru. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm font-semibold text-navy dark:text-foreground">
+            {t("Account balances", "Saldo kas & bank")}
+          </p>
+          <div className="mt-4 divide-y divide-border">
+            {balances.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t("No account configured yet.", "Belum ada rekening.")}</p>
+            )}
+            {balances.map((account) => (
+              <div key={account.account.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-navy dark:text-foreground">
+                    {account.account.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{account.account.code}</p>
+                </div>
+                <p className="shrink-0 text-sm font-medium text-navy dark:text-foreground">
+                  {formatMoney(account.balance, lang)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm font-semibold text-navy dark:text-foreground">
+            {t("Recent movements", "Mutasi terbaru")}
+          </p>
+          <div className="mt-4 divide-y divide-border">
+            {recent.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t("No transaction yet.", "Belum ada transaksi.")}</p>
+            )}
+            {recent.map((item) => {
+              const amount = Number(item.amount || 0);
+              const signed = item.trx_type === "out" ? -amount : amount;
+              return (
+                <div key={item.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-navy dark:text-foreground">
+                      {item.memo || item.reference || item.trx_no || t("Cash transaction", "Transaksi kas")}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {item.trx_date}
+                      {item.is_reconciled ? ` · ${t("Reconciled", "Terekonsiliasi")}` : ` · ${t("Unreconciled", "Belum rekonsiliasi")}`}
+                    </p>
+                  </div>
+                  <p
+                    className={cn(
+                      "shrink-0 text-sm font-medium",
+                      signed < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
+                    )}
+                  >
+                    {signed < 0 ? "-" : "+"}
+                    {formatMoney(Math.abs(signed), lang)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
