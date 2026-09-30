@@ -200,6 +200,45 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 22 (2026-09-30) — uji **instalasi bersih** (migrate + seed + e2e di DB kosong)
+
+Selama ini seluruh verifikasi dilakukan pada DB dev yang sudah terisi bertahap,
+sehingga fixture yang hilang tidak terlihat. Ronde ini mengulang seluruh alur di
+**container MySQL 8.4 sekali-pakai** (port 3309, DB `xperd_fresh`):
+
+| Langkah | Hasil |
+|---|---|
+| `docker run mysql:8.4` + `npm run migrate` | **13 migrasi** (001–013) terpasang dari nol pada DB kosong |
+| `npm run seed` | **11 seed** terpasang; 73 tabel; `addons` berisi qalling/slipp_hr/omnix; wallet Omnix + produk tenant/invoice terisi |
+| `npm run migrate` & `npm run seed` ulang | “up to date”, “nothing to do” — tidak ada duplikasi |
+| `npm run seed -- --force` | semua seed dapat dijalankan ulang tanpa error & tanpa menambah baris (2 tenant, 2 invoice, 1 baris ledger) |
+| **e2e pertama** | **4 gagal** — celah fixture yang selama ini tersembunyi |
+
+**Empat kegagalan itu memang celah fixture, bukan regresi kode:**
+
+1. `admin-tenancy` — `000_dev_bootstrap.sql` berjalan **sebelum** `001_core_seed.sql`,
+   jadi saat itu tabel `packages` masih kosong → `package_id` tenant demo NULL →
+   kolom Package menampilkan “—”.
+2. `qalling-standalone` + 4 spec CRM — add-on **`qalling` belum pernah diberikan
+   lewat seed**; di DB dev add-on itu ada karena aktivasi manual, jadi spec CRM
+   selama ini ter-*skip* diam-diam (“CRM add-on (qalling) is not assigned”).
+3. `draft-delete` & `draft-edit` — bergantung pada dokumen `QUO/...` yang dulu
+   terbentuk **kebetulan** dari e2e CRM (konversi lead → penawaran).
+
+**Dua seed baru** (dijalankan setelah `001_core_seed.sql` sehingga katalog
+`packages`/`addons` sudah ada):
+
+| File | Isi |
+|---|---|
+| `db/seeds/001f_dev_tenant_package_addons.sql` | Mengaitkan tenant demo ke paket `one-professional` + mengaktifkan add-on `qalling`. Catatan penting: variabel MySQL berkolase `utf8mb4_general_ci` sedangkan `tenants.id` `utf8mb4_unicode_ci` → perbandingan butuh `COLLATE utf8mb4_unicode_ci`, jika tidak muncul `ER_CANT_AGGREGATE_2COLLATIONS` |
+| `db/seeds/001g_dev_quotation_fixture.sql` | Satu penawaran **draft** (`QUO/E2E/9001`) + satu barisnya untuk e2e dokumen draft |
+
+**Hasil e2e pada DB bersih:** **38 lulus + 1 skip / 0 gagal** — identik dengan
+hasil di DB dev, termasuk 4 spec CRM yang kini benar-benar berjalan (tidak lagi
+skip) dan `draft-delete`/`draft-edit` yang kini berdiri sendiri tanpa bergantung
+pada data sisa run lain. Container uji dihapus setelah selesai; seed baru juga
+sudah diterapkan ke DB dev agar keduanya seragam.
+
 ### Ronde 21 (2026-09-30) — #55 penjaga endpoint Meta + runbook aktivasi
 
 Integrasi Meta membutuhkan App ID/Secret milik user, tetapi bagian yang **bisa
