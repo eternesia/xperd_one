@@ -39,10 +39,15 @@ import { Route as AppAdminTicketsRouteImport } from './routes/app-admin/tickets'
 import { Route as AppAdminUsersRouteImport } from './routes/app-admin/users'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
+import { Route as QallingIndexRouteImport } from './routes/qalling.index'
+import { Route as QallingAppRouteImport } from './routes/qalling.app'
+import { Route as QallingLoginRouteImport } from './routes/qalling.login'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
+import { Route as QallingAppIndexRouteImport } from './routes/qalling.app.index'
+import { Route as QallingAppSubmoduleIdRouteImport } from './routes/qalling.app.$submoduleId'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
@@ -208,6 +213,21 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
+const QallingIndexRoute = QallingIndexRouteImport.update({
+  id: '/qalling/',
+  path: '/qalling/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingAppRoute = QallingAppRouteImport.update({
+  id: '/qalling/app',
+  path: '/qalling/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingLoginRoute = QallingLoginRouteImport.update({
+  id: '/qalling/login',
+  path: '/qalling/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
@@ -228,6 +248,16 @@ const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
   id: '/w/$workspaceId',
   path: '/w/$workspaceId',
   getParentRoute: () => AppRoute,
+} as any)
+const QallingAppIndexRoute = QallingAppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => QallingAppRoute,
+} as any)
+const QallingAppSubmoduleIdRoute = QallingAppSubmoduleIdRouteImport.update({
+  id: '/$submoduleId',
+  path: '/$submoduleId',
+  getParentRoute: () => QallingAppRoute,
 } as any)
 const ApiPublicHooksSocialPublishRoute =
   ApiPublicHooksSocialPublishRouteImport.update({
@@ -329,12 +359,17 @@ export interface FileRoutesByFullPath {
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/qalling/app': typeof QallingAppRouteWithChildren
+  '/qalling/login': typeof QallingLoginRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/qalling/': typeof QallingIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
+  '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/products/': typeof SiteProductsIndexRoute
+  '/qalling/app/': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
@@ -374,12 +409,16 @@ export interface FileRoutesByTo {
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/qalling/login': typeof QallingLoginRoute
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
   '/app': typeof AppIndexRoute
+  '/qalling': typeof QallingIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
+  '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/products': typeof SiteProductsIndexRoute
+  '/qalling/app': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
@@ -422,13 +461,18 @@ export interface FileRoutesById {
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/qalling/app': typeof QallingAppRouteWithChildren
+  '/qalling/login': typeof QallingLoginRoute
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
+  '/qalling/': typeof QallingIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
+  '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/_site/products/': typeof SiteProductsIndexRoute
+  '/qalling/app/': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
@@ -473,12 +517,17 @@ export interface FileRouteTypes {
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app/onboarding'
+    | '/qalling/app'
+    | '/qalling/login'
     | '/app-admin/'
     | '/app/'
+    | '/qalling/'
     | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/app/w/$workspaceId'
+    | '/qalling/app/$submoduleId'
     | '/products/'
+    | '/qalling/app/'
     | '/api/public/hooks/social-publish'
     | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
@@ -518,12 +567,16 @@ export interface FileRouteTypes {
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app/onboarding'
+    | '/qalling/login'
     | '/'
     | '/app-admin'
     | '/app'
+    | '/qalling'
     | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
+    | '/qalling/app/$submoduleId'
     | '/products'
+    | '/qalling/app'
     | '/api/public/hooks/social-publish'
     | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
@@ -565,13 +618,18 @@ export interface FileRouteTypes {
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app/onboarding'
+    | '/qalling/app'
+    | '/qalling/login'
     | '/_site/'
     | '/app-admin/'
     | '/app/'
+    | '/qalling/'
     | '/.mcp/invoke-tool/$tool'
     | '/_site/products/$slug'
     | '/app/w/$workspaceId'
+    | '/qalling/app/$submoduleId'
     | '/_site/products/'
+    | '/qalling/app/'
     | '/api/public/hooks/social-publish'
     | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
@@ -596,6 +654,9 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiWorkspaceFilesRoute: typeof ApiWorkspaceFilesRoute
+  QallingAppRoute: typeof QallingAppRouteWithChildren
+  QallingLoginRoute: typeof QallingLoginRoute
+  QallingIndexRoute: typeof QallingIndexRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
@@ -814,6 +875,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/qalling/': {
+      id: '/qalling/'
+      path: '/qalling'
+      fullPath: '/qalling/'
+      preLoaderRoute: typeof QallingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/app': {
+      id: '/qalling/app'
+      path: '/qalling/app'
+      fullPath: '/qalling/app'
+      preLoaderRoute: typeof QallingAppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/login': {
+      id: '/qalling/login'
+      path: '/qalling/login'
+      fullPath: '/qalling/login'
+      preLoaderRoute: typeof QallingLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.mcp/invoke-tool/$tool': {
       id: '/.mcp/invoke-tool/$tool'
       path: '/.mcp/invoke-tool/$tool'
@@ -841,6 +923,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/w/$workspaceId'
       preLoaderRoute: typeof AppWWorkspaceIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/qalling/app/': {
+      id: '/qalling/app/'
+      path: '/'
+      fullPath: '/qalling/app/'
+      preLoaderRoute: typeof QallingAppIndexRouteImport
+      parentRoute: typeof QallingAppRoute
+    }
+    '/qalling/app/$submoduleId': {
+      id: '/qalling/app/$submoduleId'
+      path: '/$submoduleId'
+      fullPath: '/qalling/app/$submoduleId'
+      preLoaderRoute: typeof QallingAppSubmoduleIdRouteImport
+      parentRoute: typeof QallingAppRoute
     }
     '/api/public/hooks/social-publish': {
       id: '/api/public/hooks/social-publish'
@@ -1056,6 +1152,20 @@ const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
   AppAdminRouteChildren,
 )
 
+interface QallingAppRouteChildren {
+  QallingAppSubmoduleIdRoute: typeof QallingAppSubmoduleIdRoute
+  QallingAppIndexRoute: typeof QallingAppIndexRoute
+}
+
+const QallingAppRouteChildren: QallingAppRouteChildren = {
+  QallingAppSubmoduleIdRoute: QallingAppSubmoduleIdRoute,
+  QallingAppIndexRoute: QallingAppIndexRoute,
+}
+
+const QallingAppRouteWithChildren = QallingAppRoute._addFileChildren(
+  QallingAppRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   SiteRoute: SiteRouteWithChildren,
   AppRoute: AppRouteWithChildren,
@@ -1066,6 +1176,9 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiWorkspaceFilesRoute: ApiWorkspaceFilesRoute,
+  QallingAppRoute: QallingAppRouteWithChildren,
+  QallingLoginRoute: QallingLoginRoute,
+  QallingIndexRoute: QallingIndexRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,

@@ -3,6 +3,7 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  redirect,
   useRouter,
   HeadContent,
   Scripts,
@@ -13,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { I18nProvider } from "@/lib/i18n";
+import { isQallingHost, isQallingPath } from "@/lib/qalling";
 
 function NotFoundComponent() {
   return (
@@ -75,6 +77,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // #64 (BS New 3): permukaan Qalling standalone. Host `qalling.*` diarahkan ke
+  // `/qalling` (jaring pengaman di klien; pemetaan utama tetap di reverse proxy).
+  beforeLoad: ({ location }) => {
+    if (typeof window === "undefined") return;
+    if (!isQallingHost(window.location.hostname)) return;
+    if (isQallingPath(location.pathname)) return;
+    if (location.pathname.startsWith("/api/")) return;
+    throw redirect({ to: "/qalling" });
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
