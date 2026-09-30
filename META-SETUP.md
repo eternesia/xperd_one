@@ -80,19 +80,24 @@ generik), akun di `crm_social_accounts` dengan `source='meta'`.
   Tanpa `SOCIAL_PUBLISH_SECRET`, endpoint itu terbuka — **wajib** diset di produksi
   (diuji: 403 tanpa/wrong secret, 200 dengan secret lewat header atau `?secret=`).
 
-## 5. Verifikasi tanpa App (sudah otomatis)
+## 5. Cek cepat penjaga endpoint (manual)
 
-`e2e/meta-guards.spec.ts` menguji hal-hal yang tidak butuh kredensial:
-
-- hook cron menolak pemanggil tanpa secret (bila `SOCIAL_PUBLISH_SECRET` diset),
-- callback OAuth menolak `state` kosong/asing/tanpa baris pengaturan (400),
-- panel Meta hanya menampilkan App ID + placeholder secret, tanpa access token di HTML.
-
-Jalankan:
+Spec e2e khusus Meta sudah dihapus (integrasi Meta ditunda), jadi penjaga
+endpoint cukup diperiksa manual dengan `curl`:
 
 ```bash
-SOCIAL_PUBLISH_SECRET=rahasia-e2e npx playwright test e2e/meta-guards.spec.ts
+# 1) Hook cron: 403 tanpa secret, 200 dengan secret.
+SOCIAL_PUBLISH_SECRET=rahasia-e2e npm start &   # jalankan app dengan secret
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3999/api/public/hooks/social-publish
+curl -s -o /dev/null -w "%{http_code}\n" -H "x-webhook-secret: rahasia-e2e" \
+  http://127.0.0.1:3999/api/public/hooks/social-publish
+
+# 2) Callback OAuth: state kosong/asing/tanpa baris pengaturan harus 400.
+curl -s -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:3999/api/public/meta/callback"
 ```
+
+Di UI, pastikan kartu Meta hanya menampilkan **App ID** + placeholder
+`••••••••` untuk App Secret (nilai tersimpan tidak pernah dikirim ke browser).
 
 ## 6. Ketika App sudah siap — langkah uji end-to-end
 
