@@ -24,6 +24,9 @@ const WORKSPACE_TABLES = new Set([
   "crm_campaigns",
   // CRM insights (migration 005_crm_insights.sql)
   "crm_targets", "crm_templates",
+  // CRM Tender & Pustaka Dokumen (migration 010_new3_schema.sql, Batch 3 #50–52)
+  "crm_tenders", "crm_tender_docs", "crm_doc_library", "crm_doc_library_versions",
+  "crm_tender_templates", "crm_tender_template_versions",
   // Slipp HR (migration 008_hr_module.sql) — Batch 2.
   // CATATAN: tabel harus terdaftar di DUA tempat: set ini (gate `assertTable`)
   // dan `COLS` di bawah (whitelist kolom). Lewat salah satu = error/gagal simpan.
@@ -65,6 +68,13 @@ const COLS: Record<string, string[]> = {
   workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
   crm_leads: ["id", "workspace_id", "code", "name", "company_name", "email", "phone", "source", "stage", "status", "estimated_value", "probability", "currency", "owner_user_id", "owner_name", "customer_code", "converted_customer_code", "quotation_id", "next_follow_up_at", "last_activity_at", "lost_reason", "stage_changed_at", "notes", "created_by", "created_at", "updated_at"],
   crm_activities: ["id", "workspace_id", "lead_id", "activity_type", "subject", "body", "due_at", "done_at", "outcome", "owner_user_id", "owner_name", "created_by", "created_at", "updated_at"],
+  // --- Batch 3 #50–52: tender checklist + pustaka dokumen ---
+  crm_tenders: ["id", "workspace_id", "code", "title", "agency", "lead_id", "hps_value", "deadline_at", "status", "pic_name", "notes", "created_at", "updated_at"],
+  crm_tender_docs: ["id", "workspace_id", "tender_id", "category", "name", "is_mandatory", "status", "pic_name", "expiry_date", "file_ref", "library_doc_id", "file_path", "file_name", "notes", "sort_order", "created_at"],
+  crm_doc_library: ["id", "workspace_id", "category", "name", "doc_number", "issued_date", "expiry_date", "file_path", "file_name", "mime", "size", "version", "notes", "created_at", "updated_at"],
+  crm_doc_library_versions: ["id", "workspace_id", "library_doc_id", "version", "file_path", "file_name", "expiry_date", "created_at"],
+  crm_tender_templates: ["id", "workspace_id", "tender_id", "tender_doc_id", "category", "name", "source_pdf_path", "source_pdf_name", "source_pages", "template_path", "template_name", "mime", "size", "version", "notes", "created_at", "updated_at"],
+  crm_tender_template_versions: ["id", "workspace_id", "template_id", "version", "template_path", "template_name", "size", "created_at"],
   crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
   crm_broadcast_recipients: ["id", "broadcast_id", "workspace_id", "lead_id", "name", "phone", "email", "status", "error", "sent_at", "created_at", "updated_at"],
   crm_campaigns: ["id", "workspace_id", "name", "objective", "platforms", "content", "media_url", "budget", "start_date", "end_date", "status", "reach", "clicks", "leads_generated", "owner_name", "created_by", "created_at", "updated_at"],

@@ -281,6 +281,10 @@ export const GUIDE_MODULES: GuideSection[] = [
       st("Social Campaigns: plan campaigns per platform and record reach, clicks and leads generated.", "Kampanye Sosial: rencanakan kampanye per platform dan catat jangkauan, klik, serta prospek yang dihasilkan."),
       st("Templates & Sales Targets: reusable messages with {{name}} and monthly target vs attainment per sales.", "Template & Target Sales: pesan siap pakai dengan {{name}} serta target bulanan vs pencapaian per sales."),
       st("CRM Dashboard: pipeline value, weighted forecast, win rate, stalled leads and lost-reason analysis.", "Dasbor CRM: nilai pipeline, forecast tertimbang, win rate, prospek mandek, dan analisis alasan kalah."),
+      // #62 (BS New 3): panduan Tender Checklist.
+      st("Tender Checklist: create a tender with agency, HPS and submission deadline; a standard 26-document checklist is filled in automatically.", "Checklist Tender: buat tender dengan instansi, HPS, dan batas waktu; checklist standar 26 dokumen terisi otomatis."),
+      st("Tick each document (or set its status), mark which ones are mandatory, and fill in PIC plus the validity date so expired documents are flagged.", "Centang setiap dokumen (atau ubah statusnya), tandai mana yang wajib, lalu isi PIC dan tanggal berlaku agar dokumen kedaluwarsa ditandai."),
+      st("The eligibility card turns green only when every mandatory document is ready and still valid — then print the evaluation sheet or export the package.", "Kartu kelayakan baru berwarna hijau bila semua dokumen wajib siap dan masih berlaku — lalu cetak lembar evaluasi atau ekspor paketnya."),
     ],
   },
   {

@@ -249,6 +249,8 @@ const MODULE_DEFS: AppModule[] = [
       s("campaigns", "Social Campaigns", "Kampanye Sosial"),
       s("targets", "Sales Targets", "Target Sales"),
       s("templates", "Message Templates", "Template Pesan"),
+      // Batch 3 #50 (BS New 3): checklist dokumen tender.
+      s("tenders", "Tender Checklist", "Checklist Tender"),
     ],
   },
   {

@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
 import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
+// #50 (BS New 3): checklist dokumen tender.
+import { TenderView } from "@/components/app/CrmTender";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
@@ -113,6 +115,8 @@ export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; wor
   if (submoduleId === "campaigns") return <CampaignView workspaceId={workspaceId} />;
   if (submoduleId === "targets") return <CrmTargetsView workspaceId={workspaceId} />;
   if (submoduleId === "templates") return <CrmTemplatesView workspaceId={workspaceId} />;
+  // #50 (BS New 3): checklist dokumen tender.
+  if (submoduleId === "tenders") return <TenderView workspaceId={workspaceId} />;
   return <ComingSoon submoduleId={submoduleId} />;
 }
 
