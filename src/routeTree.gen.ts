@@ -25,6 +25,7 @@ import { Route as SiteRegisterRouteImport } from './routes/_site/register'
 import { Route as SiteResourcesRouteImport } from './routes/_site/resources'
 import { Route as SiteSolutionsRouteImport } from './routes/_site/solutions'
 import { Route as SiteTechnologyRouteImport } from './routes/_site/technology'
+import { Route as ApiWorkspaceFilesRouteImport } from './routes/api/workspace-files'
 import { Route as AppAdminIndexRouteImport } from './routes/app-admin/index'
 import { Route as AppAdminAddonsRouteImport } from './routes/app-admin/addons'
 import { Route as AppAdminAnnouncementsRouteImport } from './routes/app-admin/announcements'
@@ -136,6 +137,11 @@ const SiteTechnologyRoute = SiteTechnologyRouteImport.update({
   id: '/technology',
   path: '/technology',
   getParentRoute: () => SiteRoute,
+} as any)
+const ApiWorkspaceFilesRoute = ApiWorkspaceFilesRouteImport.update({
+  id: '/api/workspace-files',
+  path: '/api/workspace-files',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/',
@@ -311,6 +317,7 @@ export interface FileRoutesByFullPath {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -355,6 +362,7 @@ export interface FileRoutesByTo {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -402,6 +410,7 @@ export interface FileRoutesById {
   '/_site/resources': typeof SiteResourcesRoute
   '/_site/solutions': typeof SiteSolutionsRoute
   '/_site/technology': typeof SiteTechnologyRoute
+  '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
@@ -496,6 +506,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
@@ -542,6 +553,7 @@ export interface FileRouteTypes {
     | '/_site/resources'
     | '/_site/solutions'
     | '/_site/technology'
+    | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
     | '/app-admin/content'
@@ -583,6 +595,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  ApiWorkspaceFilesRoute: typeof ApiWorkspaceFilesRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
@@ -702,6 +715,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/technology'
       preLoaderRoute: typeof SiteTechnologyRouteImport
       parentRoute: typeof SiteRoute
+    }
+    '/api/workspace-files': {
+      id: '/api/workspace-files'
+      path: '/api/workspace-files'
+      fullPath: '/api/workspace-files'
+      preLoaderRoute: typeof ApiWorkspaceFilesRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/app-admin/': {
       id: '/app-admin/'
@@ -1045,6 +1065,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  ApiWorkspaceFilesRoute: ApiWorkspaceFilesRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
