@@ -103,3 +103,59 @@ export const updateWorkspaceUser = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+export type WorkspaceRole = "owner" | "admin" | "staff" | "viewer";
+
+export interface WorkspaceAccessResult {
+  role: WorkspaceRole | null;
+  /** Izin per kunci: `module` untuk dashboard/modul, `module/submodule` untuk submodul. */
+  access: { module_id: string; can_view: boolean; can_edit: boolean }[];
+}
+
+/**
+ * #58 (BS New 3): kontrak izin akses untuk satu workspace.
+ * `module_id` di `workspace_role_access` boleh berupa `module` atau `module/submodule`,
+ * sehingga matriks Role Access bisa mengatur View/Edit sampai ke tiap submodul.
+ */
+export const getWorkspaceAccess = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { workspaceId: string }) => {
+    if (!data?.workspaceId) throw new Error("Workspace is required");
+    return data;
+  })
+  .handler(async ({ data, context }): Promise<WorkspaceAccessResult> => {
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+
+    const member = await executeOne<{ role: string }>(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
+      [data.workspaceId, context.userId],
+    );
+
+    let role = member?.role ?? null;
+    if (!role) {
+      // Pemilik tenant otomatis punya akses penuh walau tanpa baris keanggotaan.
+      const owner = await executeOne<{ c: number }>(
+        `SELECT COUNT(*) AS c
+           FROM workspaces w
+           JOIN tenants t ON t.id = w.tenant_id
+          WHERE w.id = ? AND t.owner_id = ?`,
+        [data.workspaceId, context.userId],
+      );
+      if (Number(owner?.c ?? 0) > 0) role = "owner";
+    }
+    if (!role) throw new Error("Forbidden");
+
+    const rows = await execute<{ module_id: string; can_view: number; can_edit: number }>(
+      "SELECT module_id, can_view, can_edit FROM workspace_role_access WHERE workspace_id = ? AND role = ?",
+      [data.workspaceId, role],
+    );
+
+    return {
+      role: role as WorkspaceRole,
+      access: (rows ?? []).map((row) => ({
+        module_id: row.module_id,
+        can_view: Number(row.can_view) === 1,
+        can_edit: Number(row.can_edit) === 1,
+      })),
+    };
+  });

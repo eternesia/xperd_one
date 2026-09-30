@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { KeyRound, Loader2, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { KeyRound, LayoutDashboard, Loader2, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { PageSkeleton, PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -23,8 +25,6 @@ import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspac
 import { APP_MODULES } from "@/lib/modules";
 import { listProfilesByIds } from "@/lib/platform.functions";
 import { createWorkspaceUser, updateWorkspaceUser } from "@/lib/team.functions";
-// #47 (BS New 3): komponen daftar bersama (pencarian, paginasi, skeleton).
-import { PageSkeleton, PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
 
 export const Route = createFileRoute("/app/w/$workspaceId/team")({
   component: TeamPage,
@@ -392,15 +392,19 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
     const next: AccessRow[] = [];
     for (const role of ACCESS_ROLES) {
       for (const m of APP_MODULES.filter((mod) => !mod.disabled)) {
-        const found = existing.get(`${role}:${m.id}`);
-        next.push(
-          found ?? {
-            role,
-            module_id: m.id,
-            can_view: true,
-            can_edit: role !== "viewer",
-          },
-        );
+        // #58: kunci izin mencakup dashboard modul + setiap submodulnya.
+        const keys = [m.id, ...m.submodules.map((sub) => `${m.id}/${sub.id}`)];
+        for (const key of keys) {
+          const found = existing.get(`${role}:${key}`);
+          next.push(
+            found ?? {
+              role,
+              module_id: key,
+              can_view: true,
+              can_edit: role !== "viewer",
+            },
+          );
+        }
       }
     }
     setRows(next);
@@ -441,66 +445,117 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-        <div>
+      <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 space-y-0 border-b border-border">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-gold" /> Role access
           </CardTitle>
-          <CardDescription>Choose which modules each role can open and edit in this workspace.</CardDescription>
+          <CardDescription>
+            Set View and Edit access for every dashboard and submodule. Owners always have full access.
+          </CardDescription>
         </div>
         <Button variant="navy" onClick={save} disabled={saving || loading}>
           {saving ? <Loader2 className="animate-spin" /> : <Save />} Save
         </Button>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="p-0">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="p-6 text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 text-left">Module</th>
-                {ACCESS_ROLES.map((r) => (
-                  <th key={r} className="py-2 text-center capitalize">
-                    {r}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {modules.map((m) => (
-                <tr key={m.id} className="border-b border-border/60">
-                  <td className="py-2 font-medium text-navy dark:text-primary-foreground">{m.en}</td>
-                  {ACCESS_ROLES.map((role) => {
-                    const row = rows.find((r) => r.role === role && r.module_id === m.id);
-                    return (
-                      <td key={role} className="py-2">
-                        <div className="flex items-center justify-center gap-4">
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Checkbox
-                              checked={row?.can_view ?? false}
-                              onCheckedChange={(v) => toggle(role, m.id, "can_view", Boolean(v))}
-                            />
-                            view
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Checkbox
-                              checked={row?.can_edit ?? false}
-                              disabled={!row?.can_view}
-                              onCheckedChange={(v) => toggle(role, m.id, "can_edit", Boolean(v))}
-                            />
-                            edit
-                          </label>
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Accordion type="multiple" className="px-4 sm:px-6">
+            {modules.map((module) => (
+              <AccordionItem key={module.id} value={module.id}>
+                <AccordionTrigger className="gap-3 py-4 hover:no-underline">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-secondary">
+                      <module.icon className="h-4 w-4 text-gold" />
+                    </span>
+                    <span className="min-w-0 text-left">
+                      <span className="block truncate font-semibold text-navy dark:text-primary-foreground">
+                        {module.en}
+                      </span>
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        Dashboard + {module.submodules.length} submodules
+                      </span>
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3">
+                    <PermissionLine
+                      label="Dashboard & module access"
+                      icon={<LayoutDashboard className="h-4 w-4" />}
+                      accessKey={module.id}
+                      rows={rows}
+                      onToggle={toggle}
+                    />
+                    {module.submodules.map((submodule) => (
+                      <PermissionLine
+                        key={submodule.id}
+                        label={submodule.en}
+                        accessKey={`${module.id}/${submodule.id}`}
+                        rows={rows}
+                        onToggle={toggle}
+                      />
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** #58: satu baris izin (View/Edit) untuk dashboard modul atau sebuah submodul. */
+function PermissionLine({
+  label,
+  icon,
+  accessKey,
+  rows,
+  onToggle,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  accessKey: string;
+  rows: AccessRow[];
+  onToggle: (role: AccessRole, moduleId: string, key: "can_view" | "can_edit", value: boolean) => void;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-background p-3">
+      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+        {icon}
+        {label}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {ACCESS_ROLES.map((role) => {
+          const row = rows.find((item) => item.role === role && item.module_id === accessKey);
+          return (
+            <div key={role} className="rounded-md bg-secondary/50 p-2.5">
+              <p className="mb-2 text-xs font-semibold capitalize text-foreground">{role}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={row?.can_view ?? false}
+                    onCheckedChange={(value) => onToggle(role, accessKey, "can_view", Boolean(value))}
+                  />
+                  View
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={row?.can_edit ?? false}
+                    disabled={!row?.can_view}
+                    onCheckedChange={(value) => onToggle(role, accessKey, "can_edit", Boolean(value))}
+                  />
+                  Edit
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
