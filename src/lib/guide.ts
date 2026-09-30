@@ -289,6 +289,10 @@ export const GUIDE_MODULES: GuideSection[] = [
       st("Document Library: upload legal & qualification files (NIB, NPWP, akta, sertifikat) once with their validity date; files are stored on the workspace server and can be reused in every tender.", "Pustaka Dokumen: unggah berkas legal & kualifikasi (NIB, NPWP, akta, sertifikat) sekali beserta tanggal berlakunya; berkas disimpan di server workspace dan bisa dipakai ulang di setiap tender."),
       st("Replacing an existing document keeps the previous file as a version history (v2, v3, …) so audits stay traceable.", "Mengganti dokumen yang ada menyimpan berkas lama sebagai riwayat versi (v2, v3, …) sehingga jejak audit tetap ada."),
       st("In a tender checklist, pick a document from the library or press “Autofill from library”; documents expiring within 30 days are flagged in the CRM dashboard.", "Di checklist tender, ambil dokumen dari pustaka atau tekan “Isi otomatis dari pustaka”; dokumen yang habis dalam ≤30 hari ditandai di dasbor CRM."),
+      // #62 (BS New 3): panduan Template Isian Panitia.
+      st("Committee fill-in templates: upload the KAK/RKS source PDF and the editable .docx form; placeholders such as {{nama_perusahaan}}, {{npwp}} and {{telepon}} are replaced with your workspace profile when the file is downloaded.", "Template isian panitia: unggah PDF sumber KAK/RKS dan formulir .docx yang bisa diedit; placeholder seperti {{nama_perusahaan}}, {{npwp}}, dan {{telepon}} diganti dengan profil workspace saat berkas diunduh."),
+      st("Every downloaded Word file gets the letterhead automatically (configure it under Settings → Tender Letterhead) without changing the source template.", "Setiap Word yang diunduh otomatis memakai kop perusahaan (atur di Pengaturan → Kop Surat Tender) tanpa mengubah berkas sumbernya."),
+      st("Use “Download package (ZIP)” in the tender to get all checklist files plus every letterheaded template in one archive, sorted per category.", "Gunakan “Unduh paket (ZIP)” di tender untuk mendapatkan semua berkas checklist plus seluruh template ber-kop dalam satu arsip, terurut per kategori."),
     ],
   },
   {
