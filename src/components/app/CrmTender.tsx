@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  FileArchive,
   ListChecks,
   Loader2,
   Plus,
@@ -37,6 +38,8 @@ import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { PageSkeleton, PaginationBar, usePagination } from "@/components/app/ui-states";
 // #51 (BS New 3): pustaka dokumen untuk autofill & lampiran checklist.
 import { matchLibrary, openWsFile, uploadWsFile, useDocLibrary, type LibDoc } from "@/components/app/CrmDocLibrary";
+// #52 (BS New 3): template isian panitia (DOCX + kop).
+import { generateTenderDocx, TenderTemplates, useTenderTemplates } from "@/components/app/CrmTenderTemplates";
 import { useApp } from "@/lib/app-context";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { uploadWorkspaceFile } from "@/lib/files.functions";
@@ -402,11 +405,13 @@ function TenderDetail({
   const qc = useQueryClient();
   const { activeWorkspace } = useApp();
   const { data: lib = [] } = useDocLibrary(workspaceId);
+  const { data: fillTemplates = [] } = useTenderTemplates(workspaceId, tender.id);
   const uploadFn = useServerFn(uploadWorkspaceFile);
   const merged = useMemo(() => mergeLib(docs, lib), [docs, lib]);
   const s = useMemo(() => score(merged, tender.deadline_at), [merged, tender.deadline_at]);
   const [newDoc, setNewDoc] = useState<Record<Cat, string>>({ administrative: "", technical: "", commercial: "" });
   const [uploading, setUploading] = useState<string | null>(null);
+  const [zipping, setZipping] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: ["crm-tender-docs", workspaceId] });
 
   async function linkLib(d: Doc, libId: string) {
@@ -481,6 +486,59 @@ function TenderDetail({
         ? t(`${filled} documents filled from library`, `${filled} dokumen terisi dari pustaka`)
         : t("No library match found", "Tidak ada dokumen pustaka yang cocok"),
     );
+  }
+
+  /** #52: mengunduh seluruh berkas checklist + template sebagai satu ZIP. */
+  async function downloadZip() {
+    const withFile = merged.filter((d) => d.file_path);
+    if (!withFile.length && !fillTemplates.length) {
+      toast.error(t("No files or templates attached", "Belum ada berkas atau template terlampir"));
+      return;
+    }
+    setZipping(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const folders: Record<string, string> = {
+        administrative: "1-Administrasi",
+        technical: "2-Teknis",
+        commercial: "3-Penawaran",
+      };
+
+      for (const category of CATS) {
+        const list = merged.filter((d) => d.category === category.id);
+        for (let i = 0; i < list.length; i += 1) {
+          const doc = list[i];
+          if (!doc.file_path) continue;
+          const response = await fetch(`/api/workspace-files?path=${encodeURIComponent(doc.file_path)}`);
+          if (!response.ok) continue;
+          const blob = await response.blob();
+          const fileName = doc.file_name ?? "";
+          const ext = fileName.includes(".") ? fileName.slice(fileName.lastIndexOf(".")) : "";
+          const name = `${String(i + 1).padStart(2, "0")}-${doc.name.replace(/[\\/:*?"<>|]+/g, "-")}${ext}`;
+          zip.folder(folders[category.id])?.file(name, blob);
+        }
+
+        const categoryTemplates = fillTemplates.filter((template) => template.category === category.id);
+        for (let i = 0; i < categoryTemplates.length; i += 1) {
+          const template = categoryTemplates[i];
+          const generated = await generateTenderDocx(template, activeWorkspace);
+          const name = `${String(list.length + i + 1).padStart(2, "0")}-${template.name.replace(/[\\/:*?"<>|]+/g, "-")}-dengan-kop.docx`;
+          zip.folder(folders[category.id])?.file(name, generated);
+        }
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = `${tender.code}-${tender.title.replace(/[^\w]+/g, "_").slice(0, 40)}.zip`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(anchor.href), 5000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("Export failed", "Ekspor gagal"));
+    } finally {
+      setZipping(false);
+    }
   }
 
   async function patchDoc(id: string, patch: Partial<Doc>) {
@@ -607,6 +665,10 @@ function TenderDetail({
           <Button variant="outline" onClick={() => void autoFill()}>
             <Wand2 /> {t("Autofill from library", "Isi otomatis dari pustaka")}
           </Button>
+          <Button variant="outline" disabled={zipping} onClick={() => void downloadZip()}>
+            {zipping ? <Loader2 className="animate-spin" /> : <FileArchive />}
+            {t("Download package (ZIP)", "Unduh paket (ZIP)")}
+          </Button>
           <Button variant="outline" onClick={printSheet}>
             <Printer /> {t("Print evaluation", "Cetak lembar evaluasi")}
           </Button>
@@ -650,6 +712,8 @@ function TenderDetail({
           </CardContent>
         </Card>
       </div>
+
+      <TenderTemplates workspaceId={workspaceId} tenderId={tender.id} docs={merged} />
 
       {CATS.map((c) => {
         const list = merged.filter((d) => d.category === c.id);

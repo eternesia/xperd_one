@@ -65,6 +65,7 @@
     "jose": "^6.2.8",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.575.0",
     "mysql2": "^3.23.2",
     "react": "^19.2.0",
