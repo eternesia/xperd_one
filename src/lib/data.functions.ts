@@ -30,6 +30,9 @@ const WORKSPACE_TABLES = new Set([
   // CRM media sosial (migration 010) — `crm_meta_settings` & `crm_social_tokens`
   // sengaja TIDAK di sini: keduanya memuat rahasia dan hanya lewat server fn.
   "crm_social_accounts", "crm_scheduled_posts",
+  // Omnix (migration 010, Batch 3 #63): store & order per workspace. Wallet,
+  // ledger, dan kunci kanal bersifat per tenant / memuat rahasia → server fn.
+  "omnix_stores", "omnix_orders",
   // Slipp HR (migration 008_hr_module.sql) — Batch 2.
   // CATATAN: tabel harus terdaftar di DUA tempat: set ini (gate `assertTable`)
   // dan `COLS` di bawah (whitelist kolom). Lewat salah satu = error/gagal simpan.
@@ -80,6 +83,8 @@ const COLS: Record<string, string[]> = {
   crm_tender_template_versions: ["id", "workspace_id", "template_id", "version", "template_path", "template_name", "size", "created_at"],
   crm_social_accounts: ["id", "workspace_id", "platform", "account_name", "handle", "profile_url", "webhook_url", "status", "external_id", "source", "created_at", "updated_at"],
   crm_scheduled_posts: ["id", "workspace_id", "title", "caption", "media_url", "account_ids", "scheduled_at", "status", "last_error", "published_at", "results", "created_at", "updated_at"],
+  omnix_stores: ["id", "workspace_id", "channel", "store_name", "shop_ref", "status", "last_sync_at", "created_at", "updated_at"],
+  omnix_orders: ["id", "workspace_id", "store_id", "channel", "order_no", "buyer_name", "order_date", "status", "items", "gross_amount", "marketplace_fee", "net_amount", "omnix_fee", "fee_charged", "courier", "tracking_no", "packing_status", "packed_at", "picked_up_at", "completed_at", "created_at", "updated_at"],
   crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
   crm_broadcast_recipients: ["id", "broadcast_id", "workspace_id", "lead_id", "name", "phone", "email", "status", "error", "sent_at", "created_at", "updated_at"],
   crm_campaigns: ["id", "workspace_id", "name", "objective", "platforms", "content", "media_url", "budget", "start_date", "end_date", "status", "reach", "clicks", "leads_generated", "owner_name", "created_by", "created_at", "updated_at"],

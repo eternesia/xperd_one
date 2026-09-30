@@ -13,6 +13,8 @@ import { ShipmentScan } from "@/components/app/ShipmentScan";
 import { PosRegister } from "@/components/app/PosRegister";
 import { SalesTable } from "@/components/app/SalesTable";
 import { CrmView } from "@/components/app/CrmViews";
+// #63 (BS New 3): modul add-on Omnix.
+import { OmnixView } from "@/components/app/OmnixViews";
 import { HrView } from "@/components/app/HrViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +163,12 @@ function SubModuleBody({
 
   if (moduleId === "crm") {
     return <CrmView submoduleId={submoduleId} workspaceId={workspaceId} />;
+  }
+
+  // Batch 3 #63 (BS New 3): modul add-on Omnix (toko, transaksi, pengiriman,
+  // laporan, saldo & tagihan, pengaturan API).
+  if (moduleId === "omnix") {
+    return <OmnixView submoduleId={submoduleId} workspaceId={workspaceId} />;
   }
 
   if (moduleId === "hr") {

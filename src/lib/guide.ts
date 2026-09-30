@@ -264,6 +264,21 @@ export const GUIDE_MODULES: GuideSection[] = [
     ],
   },
   {
+    id: "omnix",
+    titleEn: "Omnix (add-on)",
+    titleId: "Omnix (add-on)",
+    summaryEn: "Marketplace & food-delivery operations: stores, orders, packing, reports and pay-as-you-go billing.",
+    summaryId: "Operasional marketplace & food delivery: toko, pesanan, pengemasan, laporan, dan tagihan per transaksi.",
+    steps: [
+      st("Activate the Omnix add-on from Billing & Package, then enter each platform's partner keys under API Settings — secret keys are stored only on the server.", "Aktifkan add-on Omnix dari Tagihan & Paket, lalu isi kunci partner tiap platform di Pengaturan API — secret key hanya disimpan di server."),
+      st("Store Connections: add a store per channel; a store can only be added once that channel's keys are validated.", "Koneksi Toko: tambahkan toko per kanal; toko hanya bisa ditambahkan setelah kunci kanal tersebut tervalidasi."),
+      st("Transactions: record orders and change their status. Completing an order charges the Omnix fee from your balance (or uses the active bundle quota) — the charge happens inside the same database transaction, without any database trigger.", "Transaksi: catat pesanan dan ubah statusnya. Menyelesaikan pesanan memotong biaya Omnix dari saldo (atau memakai kuota paket aktif) — pemotongan terjadi dalam transaksi database yang sama, tanpa trigger database."),
+      st("Shipping & Pickup: scan the resi barcode to mark a parcel as packed, then scan again at courier hand-over.", "Pengiriman & Pickup: scan barcode resi untuk menandai paket dikemas, lalu scan lagi saat diserahkan ke kurir."),
+      st("Balance & Billing: request a top up (verified by the XPERD team) or buy the monthly bundle for a lower per-order cost; the wallet history lists every charge.", "Saldo & Tagihan: ajukan top up (diverifikasi tim XPERD) atau beli paket bulanan agar biaya per pesanan lebih murah; riwayat saldo mencatat setiap pemotongan."),
+      st("Reports: filter by period, channel, store, courier or packing status and export to CSV for reconciliation.", "Laporan: filter per periode, kanal, toko, kurir, atau status kemas lalu ekspor ke CSV untuk rekonsiliasi."),
+    ],
+  },
+  {
     id: "crm",
     titleEn: "Qalling CRM (add-on)",
     titleId: "Qalling CRM (add-on)",

@@ -19,10 +19,89 @@ import {
   adminSetTenantAddonStatus,
   adminUpsertTenantAddon,
 } from "@/lib/addons.functions";
+// #63 (BS New 3): review top up saldo Omnix (khusus Super Admin).
+import { listOmnixTopups, omnixReviewTopup, type OmnixTopupRow } from "@/lib/omnix.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/app-admin/addons")({
   component: AddonsPage,
 });
+
+/**
+ * #63: pengajuan top up saldo Omnix menunggu verifikasi Super Admin.
+ * Saldo hanya bertambah saat disetujui (transaksi di `omnixReviewTopup`).
+ */
+function OmnixTopupReview() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listOmnixTopups);
+  const reviewFn = useServerFn(omnixReviewTopup);
+  const { data: pending = [] } = useQuery<OmnixTopupRow[]>({
+    queryKey: ["omnix-topups"],
+    queryFn: async () => listFn({ data: {} }),
+  });
+
+  const review = useMutation({
+    mutationFn: (input: { ledgerId: string; approve: boolean }) => reviewFn({ data: input }),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ["omnix-topups"] });
+      toast.success(result.status === "posted" ? "Top up disetujui" : "Top up ditolak");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (pending.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Omnix · Top up menunggu verifikasi ({pending.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="overflow-x-auto p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tenant</TableHead>
+              <TableHead className="text-right">Nominal</TableHead>
+              <TableHead>Catatan</TableHead>
+              <TableHead>Diajukan</TableHead>
+              <TableHead className="w-48" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pending.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.tenant_name ?? row.tenant_id}</TableCell>
+                <TableCell className="text-right">{fmtIDR(Number(row.amount))}</TableCell>
+                <TableCell className="text-xs">{row.note ?? "—"}</TableCell>
+                <TableCell className="text-xs">{new Date(row.created_at).toLocaleString("id-ID")}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="navy"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ ledgerId: row.id, approve: true })}
+                    >
+                      Setujui
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={review.isPending}
+                      onClick={() => review.mutate({ ledgerId: row.id, approve: false })}
+                    >
+                      Tolak
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface AddonForm {
   id?: string;
@@ -318,6 +397,8 @@ function AddonsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <OmnixTopupReview />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl">

@@ -13,6 +13,7 @@ import {
   Receipt,
   ReceiptText,
   ShoppingCart,
+  Store,
   Truck,
   Users,
   type LucideIcon,
@@ -257,6 +258,25 @@ const MODULE_DEFS: AppModule[] = [
       s("post-scheduler", "Post Scheduler", "Jadwal Postingan"),
       // Batch 3 #51 (BS New 3): pustaka dokumen tender.
       s("doc-library", "Document Library", "Pustaka Dokumen"),
+    ],
+  },
+  {
+    id: "omnix",
+    en: "Omnix",
+    id_: "Omnix",
+    descEn: "Omni-channel marketplace & food delivery in one dashboard (add-on).",
+    descId: "Marketplace & food delivery omni-channel dalam satu dasbor (add-on).",
+    icon: Store,
+    tone: "sky",
+    phase: 4,
+    addon: "omnix",
+    submodules: [
+      s("stores", "Store Connections", "Koneksi Toko"),
+      s("orders", "Transactions", "Transaksi"),
+      s("shipping", "Shipping & Pickup", "Pengiriman & Pickup"),
+      s("reports", "Reports", "Laporan"),
+      s("wallet", "Balance & Billing", "Saldo & Tagihan"),
+      s("settings", "API Settings", "Pengaturan API"),
     ],
   },
   {

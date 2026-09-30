@@ -85,7 +85,7 @@
 
 | # | Perubahan di New 3 | File New (bukti) | Old | Catatan port |
 |---|---|---|---|---|
-| 63 | **Modul baru Omnix** (add-on): 6 submodul — Koneksi Toko, Transaksi, Pengiriman & Pickup, Laporan, Saldo & Tagihan (Rp25/trx atau paket Rp350rb/20.000 trx), Pengaturan API; top-up dikonfirmasi Super Admin | `components/app/OmnixViews.tsx` (509), `OmnixOps.tsx` (316), `lib/modules.ts`, `routes/app-admin/addons.tsx`, migrations `0010`–`0012` (`omnix_stores`, `omnix_orders`, `omnix_wallets`, `omnix_wallet_ledger`, `omnix_channel_settings`, `omnix_channel_secrets`) | ❌ | **7 tabel**. Logika wallet/charge di New = **trigger + 3 fungsi plpgsql** (`omnix_charge_completed_order`, `omnix_request_topup`, `omnix_review_topup`, `omnix_buy_bundle`) → wajib ditulis ulang jadi server fn MySQL transaksional (pola `adminResetTenantTransactions`) |
+| 63 | **Modul baru Omnix** (add-on): 6 submodul — Koneksi Toko, Transaksi, Pengiriman & Pickup, Laporan, Saldo & Tagihan (Rp25/trx atau paket Rp350rb/20.000 trx), Pengaturan API; top-up dikonfirmasi Super Admin | `components/app/OmnixViews.tsx` (509), `OmnixOps.tsx` (316), `lib/modules.ts`, `routes/app-admin/addons.tsx`, migrations `0010`–`0012` (`omnix_stores`, `omnix_orders`, `omnix_wallets`, `omnix_wallet_ledger`, `omnix_channel_settings`, `omnix_channel_secrets`) | ✅ **ronde 18** | **7 tabel**. Logika wallet/charge di New = **trigger + 3 fungsi plpgsql** (`omnix_charge_completed_order`, `omnix_request_topup`, `omnix_review_topup`, `omnix_buy_bundle`) → sudah ditulis ulang jadi server fn MySQL transaksional **tanpa trigger** (`src/lib/omnix.functions.ts`, lihat ronde 18) |
 | 64 | **Permukaan Qalling standalone**: landing `/qalling`, `/qalling/login`, shell `/qalling/app` (memakai ulang view CRM), workspace aktif pertama; host `qalling.id`/`qalling.net` di-redirect ke `/qalling` | `routes/qalling.index.tsx`, `qalling.login.tsx`, `qalling.app.tsx`, `qalling.app.index.tsx`, `qalling.app.$submoduleId.tsx`, `routes/_site.tsx` | ❌ | Butuh domain khusus + keputusan produk; ±470 baris |
 | 65 | **Tag produk tenant/invoice** (`xperd` \| `qalling`): filter produk di Tenancy & Invoices, badge, tombol ganti produk | migration `0009` (`tenants.product`, `invoices.product`), `routes/app-admin/tenancy.tsx`, `routes/app-admin/invoices.tsx` | ❌ | Kebutuhan DB: kolom `product` di `tenants` & `invoices` + `PCOLS` |
 
@@ -200,7 +200,57 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
-### Ronde 17 (terbaru, 2026-09-30) — verifikasi di DB nyata + suite e2e hijau
+### Ronde 18 (terbaru, 2026-09-30) — #63 Omnix: saldo & biaya transaksi di level aplikasi (tanpa trigger DB)
+
+**Keputusan arsitektur (permintaan eksplisit user):** JANGAN pakai trigger/fungsi
+PostgreSQL. Trigger New 3 `omnix_charge_completed_order` diterjemahkan menjadi
+server fn `omnixSetOrderStatus` yang menjalankan seluruh logika uang **di level
+aplikasi** dalam **satu transaksi MySQL** (`transaction()` + `SELECT … FOR UPDATE`
+pada baris dompet), sehingga perilakunya sama: tidak ada celah saldo minus, dan
+bahkan bila dua request menyelesaikan pesanan yang sama bersamaan, hanya satu yang
+menagih karena baris dompet & pesanan dikunci.
+
+| File | Isi |
+|---|---|
+| `src/lib/omnix.ts` *(baru)* | Konstanta bisnis: 7 kanal (`OMNIX_CHANNELS` + pid/pub/sec), status pesanan/packing, `OMNIX_FEE_PER_ORDER = 25`, `OMNIX_BUNDLE` (Rp350.000 → kuota 20.000 selama 30 hari), `OMNIX_MIN_TOPUP = 10.000`, `packLabel()`, `isBundleActive()` |
+| `src/lib/omnix.functions.ts` *(baru, ~600 baris)* | Server fn: `getOmnixWallet`, `listOmnixLedger`, `omnixRequestTopup`, `omnixBuyBundle`, **`omnixSetOrderStatus`** (pengganti trigger), `listOmnixChannelSettings`, `omnixSaveChannelKeys`, `omnixClearChannelKeys`, `listOmnixTopups`, `omnixReviewTopup`, plus `lockWallet()` (`INSERT IGNORE` baris dompet lalu `FOR UPDATE`) |
+| `db/migrations/013_omnix_addon.sql` *(baru)* | Baris add-on `omnix` (`monthly_price 0`, `pricing_unit 'per transaksi'`, `module_id 'omnix'`) — harga aslinya per transaksi lewat dompet, bukan langganan |
+| `src/components/app/OmnixViews.tsx` *(baru)* | Dispatcher `OmnixView` → `StoresView` (koneksi toko, wajib kunci kanal tervalidasi), `OrdersView` (cari/filter/paginasi, CRUD, ubah status → tagih otomatis + toast saldo), `WalletView` (kartu saldo, beli paket, pengajuan top up, buku besar) |
+| `src/components/app/OmnixOps.tsx` *(baru)* | `OmnixSettingsView` (simpan/hapus kunci kanal, validasi panjang, `secret_hint '••••1234'`), `OmnixShippingView` (scan barcode packing/pickup + beep + log), `OmnixReportView` (5 kartu ringkasan, tabel per toko, detail, ekspor CSV) |
+| `src/routes/app-admin/addons.tsx` | `OmnixTopupReview`: daftar top up menunggu verifikasi Super Admin + tombol Setujui/Tolak. **Saldo hanya bertambah setelah disetujui** |
+| `src/lib/modules.ts` | Modul `omnix` (ikon `Store`, fase 4, `addon: "omnix"`) + 6 submodul |
+| `src/lib/data.functions.ts` | Whitelist `omnix_stores` & `omnix_orders` pada `WORKSPACE_TABLES` **dan** `COLS`. Dompet/ledger/kunci kanal sengaja **tidak** dimasukkan → hanya bisa diakses lewat server fn ber-izin |
+| `src/routes/app/w.$workspaceId.$moduleId.$submoduleId.index.tsx` | Rute `omnix` → `OmnixView` |
+| `src/lib/guide.ts` | Panduan modul Omnix (6 langkah, termasuk penjelasan bahwa biaya dipotong di dalam transaksi DB, tanpa trigger) |
+| `db/seeds/001c_dev_addon_omnix.sql`, `001d_dev_omnix_wallet.sql` *(baru)* | Fixture dev: add-on Omnix untuk tenant demo + saldo awal Rp100.000 beserta baris ledger-nya |
+| `e2e/omnix.spec.ts` *(baru)* | Uji e2e: selesaikan pesanan → saldo −Rp25 + ledger, ajukan top up Rp50.000 → setujui di `/app-admin/addons` → saldo +Rp50.000 |
+
+**Aturan uang yang diimplementasikan (semua dalam satu transaksi):**
+
+1. Menyelesaikan pesanan: `fee_charged = 0` → kunci dompet; bila paket aktif (`bundle_used < quota`) pakai kuota paket & biaya Rp0, jika tidak saldo wajib ≥ Rp25 lalu dipotong. Ledger `charge` mencatat `balance_after`, `fee_charged = 1`, `omnix_fee = 25`, `completed_at` diisi. Idempoten: perubahan status lain atau pesanan yang sudah tertagih tidak menagih lagi.
+2. Top up: `status = pending` (min Rp10.000). Super Admin menyetujui → kunci dompet, saldo bertambah, ledger `topup posted` + `balance_after`. Ditolak → `rejected` (saldo tidak berubah).
+3. Paket: potong Rp350.000 (saldo harus cukup, paket aktif lain ditolak) → kuota 20.000 dipakai 0, masa berlaku 30 hari.
+
+**Bukti di DB dev** (MySQL 8.4, `xperd-mysql-dev`):
+
+```
+omnix_wallets.balance = 149925.0000
+ledger: charge -25 (saldo 149925)  “Transaksi selesai: E2E-OMX-588043”
+        charge -25 (saldo 149950)  “Transaksi selesai: E2E-OMX-560217”
+        topup 50000 (saldo 149975) “Transfer manual”          (disetujui Super Admin)
+        charge -25 (saldo  99975)  “Transaksi selesai: E2E-OMX-0001”
+        topup 100000 (saldo 100000) “Saldo awal fixture dev”
+omnix_orders: E2E-OMX-* | completed | omnix_fee 25.0000 | fee_charged 1
+```
+
+**Verifikasi:** `npx tsc --noEmit` 0 error; `npm run build` ✓; `npm run migrate` (001–013) & `npm run seed` sukses; suite e2e **33 lulus, 0 gagal** (2,0 menit).
+
+**Dua masalah e2e yang ketangkap (bukan bug fitur):**
+
+1. Spec awalnya tidak idempoten: nomor pesanan tetap `E2E-OMX-0001` + pesanan sudah `fee_charged = 1` dari run sebelumnya → pemilihan status `completed` tidak lagi menagih sehingga toast tagihan tidak muncul dan spec gagal **hanya bila dijalankan dua kali** (di run tunggal hijau). Diperbaiki: nomor pesanan unik per run (`E2E-OMX-<epoch>`), asersi saldo relatif (`startBalance − 25`, `afterBalance + 50000`), dan baris persetujuan dipilih berdasarkan nominalnya.
+2. Asersi tombol hapus pakai `getByRole("button", { name: /Hapus|Delete/ })` yang bergantung pada *accessible name* dari atribut `title`. Playwright mencocokkan `name` ber-regex secara **penuh**, jadi setelah daftar ter-refresh `title` berubah menjadi “Already charged — cannot delete” → locator tidak menemukan elemen dan spec gagal walau UI sudah benar (snapshot menunjukkan tombol `[disabled]`). Diganti locator CSS `button[title*="charged"]` dan kini stabil.
+
+### Ronde 17 (2026-09-30) — verifikasi di DB nyata + suite e2e hijau
 
 **Migrasi dijalankan sungguhan**: `docker compose up -d --wait mysql` (MySQL **8.4**, container `xperd-mysql-dev`, port 3307) → `npm run migrate` sukses untuk **001–012**; 18 tabel `crm_*`, `workspaces.letterhead_config`, `md_items.is_stocked` terverifikasi lewat query.
 
@@ -218,7 +268,7 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 
 Tiga kegagalan awal (`cash-out-proof`, `draft-delete`, `draft-edit` PR) terbukti **karena data dev belum lengkap** (tanpa `cb_accounts`, dokumen fixture), bukan regresi kode — setelah fixture ditambahkan semuanya lulus.
 
-Belum: uji Meta end-to-end (#55, butuh App ID/Secret user) dan batch 3D (Omnix/Qalling/product tag) yang menunggu keputusan bisnis.
+Belum: uji Meta end-to-end (#55, butuh App ID/Secret user). Batch **3D** sudah dimulai: **#63 Omnix selesai di ronde 18**; sisa #64 (Qalling standalone) & #65 (tag produk tenant/invoice).
 
 ### Ronde 16 (2026-09-30) — #52 Template Isian Panitia (DOCX ber-kop) + paket ZIP
 
