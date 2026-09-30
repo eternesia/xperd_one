@@ -497,7 +497,12 @@ function SettingsPage() {
               <>
                 <div className="absolute left-[7%] top-[3%] flex h-20 w-[28%] items-center">
                   {form.logo_url ? (
-                    <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-32 object-contain" />
+                    <img
+                      src={form.logo_url}
+                      alt=""
+                      aria-hidden="true"
+                      className="max-h-14 max-w-32 object-contain"
+                    />
                   ) : (
                     <div className="flex items-center gap-2 text-navy dark:text-primary-foreground">
                       <FileText className="h-8 w-8" />
