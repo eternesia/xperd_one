@@ -32,7 +32,7 @@
 | Kolom baru | **±24** di 9 tabel yang sudah ada |
 | Dependensi baru | `jszip@^3.10.2` (satu-satunya; dipakai generate DOCX di browser) |
 | Item port | **#36–65** (30 item), dibagi 4 grup (A–D) |
-| Bisa port tanpa keputusan bisnis | Grup **A** (akuntansi, ±3.900 baris) & **C** (akses/UI, ±900 baris) |
+| Bisa port tanpa keputusan bisnis | Grup **A** (akuntansi, ±3.900 baris) & **C** (akses/UI, ±900 baris) — **keduanya sudah diimplementasikan (Ronde 1–11)** |
 | Butuh keputusan dulu | Grup **B** (storage file + kredensial Meta) & **D** (Omnix, Qalling) |
 
 **Sifat Batch 3:** bukan parity kecil. Ada **1 modul baru (Omnix)**, **5 submodul CRM baru**, **5 submodul akuntansi/kas baru**, plus 2 perbaikan yang menyentuh **kebenaran angka** di dokumen (pajak per baris & nilai persediaan) — dua item itu sebaiknya didahulukan.
@@ -76,10 +76,10 @@
 
 | # | Perubahan di New 3 | File New (bukti) | Old | Catatan port |
 |---|---|---|---|---|
-| 58 | **Izin per submodul**: `workspace_role_access.module_id` kini bisa berupa `module/submodule`; kontrak baru di app context (`workspaceRole`, `canViewModule`, `canViewSubmodule`, `canEditSubmodule`); matriks View/Edit untuk **setiap** dashboard & submodul di Team & Access | `lib/app-context.tsx`, `routes/app/w.$workspaceId.team.tsx` (+503) | ⚠️ | Tabel `workspace_role_access` **sudah ada** di Old + dipakai team.tsx; yang belum = kunci `module/submodule` + UI matriks + penegakan. Perlu memastikan kunci lama tetap kompatibel |
-| 59 | **Penegakan izin di route**: modul & submodul menyaring menu sesuai izin, layar "akses dibatasi", mode **view-only** (`fieldset disabled`) saat hanya punya View, cek di halaman dokumen | `routes/app/w.$workspaceId.$moduleId.tsx` (+114), `...$moduleId.index.tsx`, `...$moduleId.$submoduleId.index.tsx` (+43), `...$docId.tsx` | ❌ | Sentuh hampir semua route → kerjakan **setelah** submodul baru selesai |
-| 60 | **Master Data lebih pintar**: jenis field `reference` (dropdown dari master terkait), **kode otomatis** berurutan (ITM/SRV/SFT/SUB/CAT), `showWhen` (field muncul tergantung tipe), `readOnly`, teks bantuan | `lib/master-data.ts`, `components/app/MasterDataTable.tsx` (+137) | ❌ | Kode otomatis = perilaku berubah (kode tidak lagi diketik manual) |
-| 61 | **Menu modul mobile** jadi hamburger (Sheet) menggantikan baris pill horizontal | `routes/app/w.$workspaceId.$moduleId.tsx` | ❌ | Butuh komponen `sheet` shadcn — cek sudah ada di Old |
+| 58 | **Izin per submodul**: `workspace_role_access.module_id` kini bisa berupa `module/submodule`; kontrak baru di app context (`workspaceRole`, `canViewModule`, `canViewSubmodule`, `canEditSubmodule`); matriks View/Edit untuk **setiap** dashboard & submodul di Team & Access | `lib/app-context.tsx`, `routes/app/w.$workspaceId.team.tsx` (+503) | ✅ **selesai** | Server fn baru `getWorkspaceAccess` (peran + izin, pemilik tenant = owner); `app-context.tsx` menyediakan `workspaceRole`/`accessLoading`/`canView*`/`canEdit*`; matriks Role Access jadi accordion per modul **dan** per submodul. Kunci lama (`module` saja) tetap kompatibel — submodul tanpa baris izin = boleh (default true) |
+| 59 | **Penegakan izin di route**: modul & submodul menyaring menu sesuai izin, layar "akses dibatasi", mode **view-only** (`fieldset disabled`) saat hanya punya View, cek di halaman dokumen | `routes/app/w.$workspaceId.$moduleId.tsx` (+114), `...$moduleId.index.tsx`, `...$moduleId.$submoduleId.index.tsx` (+43), `...$docId.tsx` | ✅ **selesai** | Shell modul: gerbang `canViewModule` + spinner saat memuat izin + menu samping memfilter submodul; layar submodul: layar "Akses submodul dibatasi", pita "hanya lihat", isi dibungkus `<fieldset disabled>`; halaman dokumen ikut memeriksa izin; launcher & pencarian topbar menyaring modul/submodul |
+| 60 | **Master Data lebih pintar**: jenis field `reference` (dropdown dari master terkait), **kode otomatis** berurutan (ITM/SRV/SFT/SUB/CAT), `showWhen` (field muncul tergantung tipe), `readOnly`, teks bantuan | `lib/master-data.ts`, `components/app/MasterDataTable.tsx` (+137) | ✅ **selesai** (Ronde 4) | Sudah diporting bersama #41: `FieldType`+`reference`/`refTable`, `showWhen`, `readOnly`, `helpEn/helpId`, `codePrefix`/`codePrefixByType`, `ReferenceSelect`, `isVisible`, kode otomatis |
+| 61 | **Menu modul mobile** jadi hamburger (Sheet) menggantikan baris pill horizontal | `routes/app/w.$workspaceId.$moduleId.tsx` | ✅ **selesai** | Baris pill diganti header + `Sheet` hamburger (menu "Semua Modul", Dasbor, dan submodul yang boleh dilihat); komponen `sheet` sudah ada di Old |
 
 ## D. Modul/produk baru — **butuh keputusan bisnis**
 
@@ -163,9 +163,13 @@
 
 ---
 
-## Progres Batch 3 — di working tree, **belum di-commit** (2026-09-30)
+## Progres Batch 3 — commit `3bf1dbf` … `9b431a6` (2026-09-30)
 
-Fokus sesi ini: **#36 (pajak per baris + withholding PPh)** dan **#40 (nilai persediaan = moving average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
+Semua pekerjaan grup **A** dan **C** sudah di-commit & di-push ke `origin/master`
+(`3bf1dbf`, `3da1365`, `609a8c1`, `d3b5148`, `fc21235`, `889c81b`, `58a476c`,
+`327e274`, `ec113ee`, `ce87c2f`, `9b431a6`). Ronde 1 memulai dengan fokus
+**#36 (pajak per baris + withholding PPh)** dan **#40 (nilai persediaan = moving
+average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 
 ### File yang berubah (10) + 2 baru
 
@@ -194,9 +198,23 @@ Fokus sesi ini: **#36 (pajak per baris + withholding PPh)** dan **#40 (nilai per
 1. `npm run migrate` di DB dev — container `xperd-mysql-dev` (port 3307) sedang mati, jadi migration belum dijalankan di database nyata.
 2. `npm run test:e2e` (butuh app + DB dev hidup).
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
-4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Berikutnya batch **3B CRM/Tender** (#50–57, #62) yang masih menunggu keputusan penyimpanan berkas & kredensial Meta.
+4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61). Berikutnya batch **3B CRM/Tender** (#50–57, #62) yang masih menunggu keputusan penyimpanan berkas & kredensial Meta.
 
-### Ronde 10 (terbaru, 2026-09-30) — #47 komponen daftar bersama + settlement kas/bank
+### Ronde 11 (terbaru, 2026-09-30) — #58 izin per submodul, #59 penegakan izin, #61 menu mobile
+
+| File | Isi |
+|---|---|
+| `src/lib/team.functions.ts` | Server fn baru `getWorkspaceAccess({ workspaceId })` → `{ role, access[{ module_id, can_view, can_edit }] }`; peran dari `workspace_members`, pemilik tenant dianggap `owner`, `module_id` boleh `module` atau `module/submodule` |
+| `src/lib/app-context.tsx` | Kontrak izin: `workspaceRole`, `accessLoading`, `canViewModule`, `canViewSubmodule`, `canEditSubmodule`; izin dimuat ulang setiap workspace aktif berganti (gagal memuat → jangan kunci aplikasi). Aturan New 3 dipertahankan: owner selalu penuh, `can_edit` bawaan `role !== "viewer"` |
+| `src/routes/app/w.$workspaceId.team.tsx` | Matriks Role Access jadi accordion per modul: baris "Dashboard & module access" + satu baris `PermissionLine` untuk setiap submodul, dengan checkbox View/Edit per peran (admin/staff/viewer) |
+| `src/routes/app/w.$workspaceId.$moduleId.tsx` | Gerbang `canViewModule` (layar "Akses modul dibatasi" + tautan kembali), spinner saat izin masih dimuat, menu samping menyaring submodul, **dan** baris pill mobile diganti `Sheet` hamburger (#61) |
+| `src/routes/app/w.$workspaceId.$moduleId.$submoduleId.index.tsx` | Layar "Akses submodul dibatasi" bila tidak punya View, pita "Akses hanya lihat", isi dibungkus `<fieldset disabled={!canEdit}>`; isi dipindah ke komponen `SubModuleBody` |
+| `src/routes/app/w.$workspaceId.$moduleId.$submoduleId.$docId.tsx` | Pemeriksaan izin submodul sebelum dokumen dirender |
+| `src/routes/app/w.$workspaceId.index.tsx`, `src/components/app/AppTopbar.tsx` | Kisi peluncur & pencarian modul hanya menampilkan modul/submodul yang boleh dilihat peran (jumlah submodul di kartu mengikuti yang terlihat) |
+
+Verifikasi: `tsc` 0 error, `build` sukses. Belum: uji manual — login sebagai `viewer` → menu modul menyusut, submodul tanpa izin menampilkan layar terbatas, dan formulir tidak bisa diubah; uji juga pemilik tenant tanpa baris `workspace_members` tetap punya akses penuh.
+
+### Ronde 10 (2026-09-30) — #47 komponen daftar bersama + settlement kas/bank
 
 | File | Isi |
 |---|---|
