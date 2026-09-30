@@ -46,7 +46,7 @@ import { emitAuthChange } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
 import { APP_MODULES, LAUNCHER_UTILITIES } from "@/lib/modules";
 import { useTheme } from "@/lib/theme";
-import appLogo from "@/assets/xperd.png";
+import appLogo from "@/assets/xperd-one.png";
 
 export function AppTopbar({ workspaceId }: { workspaceId: string }) {
   const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId, canViewModule, canViewSubmodule } = useApp();
