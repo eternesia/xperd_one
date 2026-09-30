@@ -62,15 +62,15 @@
 
 | # | Perubahan di New 3 | File New (bukti) | Old | Catatan port |
 |---|---|---|---|---|
-| 50 | **Tender Checklist**: daftar dokumen wajib (administratif/teknis/komersial), HPS, deadline, PIC, status, sort order, progress | `components/app/CrmTender.tsx` (482), migrations `0004` (`crm_tenders`, `crm_tender_docs`), `0006` | ❌ | 2 tabel baru; submodul CRM `tenders` |
+| 50 | **Tender Checklist**: daftar dokumen wajib (administratif/teknis/komersial), HPS, deadline, PIC, status, sort order, progress | `components/app/CrmTender.tsx` (482), migrations `0004` (`crm_tenders`, `crm_tender_docs`), `0006` | ⚠️ **sebagian** (Ronde 12) | Diporting ke `src/components/app/CrmTender.tsx` Old + submodul CRM `tenders`. **Belum**: unggah berkas per dokumen, ambil dari pustaka (#51), template DOCX & ZIP (#52) — bergantung keputusan storage |
 | 51 | **Pustaka Dokumen** (legal/kualifikasi): unggah sekali, versi, masa berlaku, badge kedaluwarsa, dipakai untuk autofill checklist + ZIP per kategori | `components/app/CrmDocLibrary.tsx` (280), migration `0005` (`crm_doc_library`, `crm_doc_library_versions`) | ❌ | 2 tabel baru; **butuh file storage** (lihat §Infra) |
 | 52 | **Template Isian Panitia (DOCX)**: simpan PDF KAK/RKS sumber + formulir DOCX editable; saat diunduh, sistem menempel kop workspace dan mengganti placeholder profil perusahaan **tanpa mengubah file sumber** (JSZip, murni di browser) | `lib/tender-docx.ts` (189, `buildLetterheadedDocx`), `components/app/CrmTenderTemplates.tsx` (238), migration `0006` (`crm_tender_templates`, `crm_tender_template_versions`) | ❌ | `jszip` perlu ditambah ke `package.json` Old; logika DOCX client-side → portable apa adanya |
-| 53 | **Kop surat tender** di Settings: unggah gambar A4, toggle alamat/NPWP/telepon/email/garis, preview live | `workspaces.letterhead_config` (migration `0006`), `routes/app/w.$workspaceId.settings.tsx` (+187) | ❌ | Kebutuhan DB: `workspaces.letterhead_config` + whitelist `PCOLS.workspaces` |
+| 53 | **Kop surat tender** di Settings: unggah gambar A4, toggle alamat/NPWP/telepon/email/garis, preview live | `workspaces.letterhead_config` (migration `0006`), `routes/app/w.$workspaceId.settings.tsx` (+187) | ✅ **selesai** (Ronde 12) | Kolom JSON `workspaces.letterhead_config` sudah ada (migration 010) + ditambahkan ke `PCOLS.workspaces` dan query shell; gambar A4 dinormalisasi ke 1240×1754 lalu disimpan sebagai data URL (Old tanpa object storage) |
 | 54 | **Social Accounts multi-akun + Post Scheduler**: banyak akun per platform, jadwal mingguan/bulanan, "Post now", auto-publish | `components/app/CrmSocial.tsx` (682), migrations `0007` (`crm_social_accounts`, `crm_scheduled_posts`), `0008` | ❌ | 2 tabel baru; penjadwalan butuh cron (pola `INTEROP-BOILERPLATE.md`) |
 | 55 | **Integrasi Meta App**: App ID/Secret (kolom disembunyikan dari browser), Facebook Login → Pages + Instagram, OAuth `state` nonce, `publishing` claim supaya tidak dobel-publish | `lib/meta-social.functions.ts` (`saveMetaApp`, `startMetaConnect`, `disconnectMeta`, `publishPostNow`), `lib/meta-publish.server.ts`, `routes/api/public/meta/callback.ts`, `routes/api/public/hooks/social-publish.ts`, migration `0008` (`crm_meta_settings`, `crm_social_tokens`) | ❌ | **Keputusan**: butuh Meta App milik user + app di-publish; token hanya boleh dibaca server fn (padanan `service_role`) |
 | 56 | **Social Dashboard**: jumlah akun/post, grafik mingguan, per akun, akan publish, kegagalan terakhir | `CrmSocial.tsx` (`SocialDashboardView`) | ❌ | — |
 | 57 | **Submodul CRM baru & penataan ulang**: `social-dashboard`, `social-accounts`, `post-scheduler`, `tenders`, `doc-library`; submodul "CRM Dashboard" dihapus (digabung ke dashboard modul); alert dokumen kedaluwarsa ≤30 hari di dashboard; tabel CRM (kontak, broadcast, campaigns, targets, templates) dapat search + pagination | `lib/modules.ts`, `components/app/CrmViews.tsx`, `CrmOutreach.tsx`, `CrmInsights.tsx` | ⚠️ | Old punya 10 submodul CRM (Batch 1); ini mengubah daftarnya → sesuaikan, jangan timpa `modules.ts` mentah |
-| 62 | **Panduan pengguna**: 3 entri baru (Tender Checklist, Pustaka Dokumen, Template Isian Panitia) | `lib/guide.ts` | ❌ | 3 baris konten, mudah |
+| 62 | **Panduan pengguna**: 3 entri baru (Tender Checklist, Pustaka Dokumen, Template Isian Panitia) | `lib/guide.ts` | ⚠️ **1/3** (Ronde 12) | Entri Tender Checklist sudah ditambahkan (3 langkah bilingual); entri Pustaka Dokumen & Template menunggu #51/#52 |
 
 ## C. Akses & UI (±900 baris)
 
@@ -200,7 +200,22 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61). Berikutnya batch **3B CRM/Tender** (#50–57, #62) yang masih menunggu keputusan penyimpanan berkas & kredensial Meta.
 
-### Ronde 11 (terbaru, 2026-09-30) — #58 izin per submodul, #59 penegakan izin, #61 menu mobile
+### Ronde 12 (terbaru, 2026-09-30) — #50 checklist tender, #53 kop surat, #62 sebagian
+
+| File | Isi |
+|---|---|
+| `src/lib/data.functions.ts` | Whitelist tabel CRM baru: `crm_tenders`, `crm_tender_docs`, `crm_doc_library`, `crm_doc_library_versions`, `crm_tender_templates`, `crm_tender_template_versions` di `WORKSPACE_TABLES` **dan** `COLS` (tanpa `COLS` nilai akan dibuang tanpa error) |
+| `src/components/app/CrmTender.tsx` *(baru, ~530 baris)* | Bertipe: `TenderView` (kartu tender: kode, kenaikan HPS, progress, badge layak submit, hitung hari ke deadline, template checklist standar 26 dokumen, paginasi `ui-states`) + `TenderDetail` (3 kategori dokumen, centang selesai, toggle wajib, status dokumen, PIC, tanggal berlaku + deteksi kedaluwarsa, catatan, tambah/hapus dokumen, ubah status tender, hapus tender + checklist, dan **lembar evaluasi siap cetak** dengan blok tanda tangan) |
+| `src/lib/modules.ts`, `src/components/app/CrmViews.tsx` | Submodul CRM baru `tenders` (“Checklist Tender”) + rute ke `TenderView` |
+| `src/lib/guide.ts` | Panduan bilingual 3 langkah untuk Tender Checklist (#62 sebagian) |
+| `src/lib/platform.functions.ts`, `src/lib/app-shell.functions.ts`, `src/lib/app-context.tsx` | `letterhead_config` masuk whitelist `PCOLS.workspaces`, ikut dibaca `getAppShellData`, dan tersedia di tipe `Workspace` (#53) |
+| `src/routes/app/w.$workspaceId.settings.tsx` | Kartu **Kop Surat Tender**: unggah PNG/JPG A4 (≤10 MB, dinormalisasi ke 1240×1754 dengan peringatan bila rasio bukan A4), toggle alamat/NPWP/telepon/email/garis pemisah, pratinjau A4 live (memakai logo & profil workspace), dan tombol simpan tersendiri via `form="workspace-settings-form"` |
+
+Verifikasi: `tsc` 0 error, `build` sukses. Belum: uji manual (buat tender + template 26 dokumen, centang dokumen wajib sampai badge hijau, cetak lembar evaluasi, unggah kop A4 lalu simpan dan buka ulang halaman).
+
+**Keputusan yang menunggu user (batch 3B):** penyimpanan berkas (#51 pustaka dokumen, #52 template DOCX + ZIP, unggah berkas pada checklist). Old tidak punya object storage; opsi: (a) data URL/blob di MySQL (maks 20 MB per berkas, dicadangkan lewat backup DB yang sudah ada), atau (b) disk lokal `/app/storage` (sudah ada named volume `local-storage` di `docker-compose.prod.yml`) + server fn unggah/unduh. #54–56 (akun sosial & Meta) juga menunggu App ID/Secret Meta milik user.
+
+### Ronde 11 (2026-09-30) — #58 izin per submodul, #59 penegakan izin, #61 menu mobile
 
 | File | Isi |
 |---|---|
