@@ -275,11 +275,36 @@ export const fetchMdItems = createServerFn({ method: "POST" })
     if (data.codes?.length) {
       const ph = data.codes.map(() => "?").join(", ");
       return execute(
-        `SELECT code, cost_price FROM md_items WHERE workspace_id = ? AND code IN (${ph})`,
+        `SELECT code, name, item_type, cost_price, is_stocked, expense_account_code FROM md_items WHERE workspace_id = ? AND code IN (${ph})`,
         [data.workspaceId, ...data.codes],
       );
     }
-    return execute("SELECT code, cost_price FROM md_items WHERE workspace_id = ?", [data.workspaceId]);
+    return execute(
+      "SELECT code, name, item_type, cost_price, is_stocked, expense_account_code FROM md_items WHERE workspace_id = ?",
+      [data.workspaceId],
+    );
+  });
+
+/**
+ * #38: total KREDIT per akun dari jurnal yang berasal dari satu dokumen sumber.
+ * Dipakai untuk mendeteksi Goods Receipt "lama" (yang sudah mengkredit Hutang
+ * Usaha 2000 dan mengakui PPN di muka, sebelum GR/IR dipakai) supaya AP Invoice
+ * tidak menjurnal penerimaan itu dua kali.
+ */
+export const fetchJournalSourceCredits = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((i: unknown) => i as { workspaceId: string; sourceId: string })
+  .handler(async ({ data, context }) => {
+    await withMember(data.workspaceId, context.userId);
+    const { execute } = await import("@/integrations/mysql/pool");
+    return execute(
+      `SELECT l.account_code, SUM(l.credit) AS credit
+         FROM acc_journal_lines l
+         JOIN acc_journal_entries e ON e.id = l.entry_id
+        WHERE e.workspace_id = ? AND e.source_id = ?
+        GROUP BY l.account_code`,
+      [data.workspaceId, data.sourceId],
+    );
   });
 
 /**

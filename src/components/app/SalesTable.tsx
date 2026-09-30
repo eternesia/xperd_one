@@ -47,6 +47,7 @@ import {
   postArInvoiceJournal,
   postDeliveryJournal,
   assertFundsMapping,
+  applyAdvanceToInvoice,
   postReceiptJournal,
   postSalesReturnJournal,
 } from "@/lib/journal";
@@ -430,9 +431,35 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           qty: Number(l.qty) || 0,
         }));
         if (entity.docType === "delivery_order") await postDeliveryJournal(workspaceId, journalDoc, journalLines);
-        if (entity.docType === "ar_invoice") await postArInvoiceJournal(workspaceId, journalDoc);
-        if (entity.docType === "sales_receipt")
-          await postReceiptJournal(workspaceId, journalDoc, funds ?? undefined);
+        if (entity.docType === "ar_invoice") {
+          await postArInvoiceJournal(workspaceId, journalDoc);
+          // #37: potongkan uang muka pelanggan yang masih terbuka ke invoice ini
+          const applied = await applyAdvanceToInvoice("ar", workspaceId, {
+            id: docId,
+            doc_number,
+            doc_date: header.doc_date,
+            partner: header.customer_name || "",
+            total: totals.total,
+          });
+          if (applied > 0) {
+            toast.success(
+              t(
+                `${formatMoney(applied, lang)} down payment applied to ${doc_number}`,
+                `Uang muka ${formatMoney(applied, lang)} dipotongkan ke ${doc_number}`,
+              ),
+            );
+          }
+        }
+        if (entity.docType === "sales_receipt") {
+          // #37: receipt tanpa dokumen sumber = uang muka (down payment)
+          const isAdvance = !sourceDoc;
+          await postReceiptJournal(workspaceId, journalDoc, funds ?? undefined, { advance: isAdvance });
+          if (isAdvance) {
+            await saveWorkspaceRow({
+              data: { table: "sls_documents", workspaceId, id: docId, data: { advance_kind: "advance" } },
+            });
+          }
+        }
         if (entity.docType === "sales_return") await postSalesReturnJournal(workspaceId, journalDoc, journalLines);
       }
 

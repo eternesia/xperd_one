@@ -43,7 +43,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import {
+  applyAdvanceToInvoice,
   assertFundsMapping,
+  postApInvoiceJournal,
   postGoodsReceiptJournal,
   postPaymentJournal,
   postPurchaseReturnJournal,
@@ -422,9 +424,64 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
           total: totals.total,
         };
         if (entity.docType === "goods_receipt") await postGoodsReceiptJournal(workspaceId, journalDoc);
-        if (entity.docType === "purchase_payment")
-          await postPaymentJournal(workspaceId, journalDoc, funds ?? undefined);
-        if (entity.docType === "purchase_return") await postPurchaseReturnJournal(workspaceId, journalDoc);
+        if (entity.docType === "ap_invoice") {
+          // #38: barang dari GR dibebankan ke GR/IR, jasa ke akun beban, plus
+          // PPN Masukan dan potongan PPh (Hutang Pajak).
+          await postApInvoiceJournal(
+            workspaceId,
+            journalDoc,
+            usable.map((l) => {
+              const c = computeLine({
+                qty: Number(l.qty) || 0,
+                unit_price: Number(l.unit_price) || 0,
+                discount: Number(l.discount) || 0,
+                tax_rate: Number(l.tax_rate) || 0,
+              });
+              const wht = isWithholdingTax(taxByCode.get(l.tax_code));
+              return {
+                item_code: l.item_code || null,
+                description: l.description || null,
+                net: c.net,
+                vat: wht ? 0 : c.tax,
+                wht: wht ? c.tax : 0,
+              };
+            }),
+            {
+              hasGoodsReceiptSource: sourceDoc?.doc_type === "goods_receipt",
+              goodsReceiptId: sourceDoc?.doc_type === "goods_receipt" ? sourceDoc.id : null,
+            },
+          );
+          // #37: potongkan uang muka pembelian yang masih terbuka ke invoice ini
+          const applied = await applyAdvanceToInvoice("ap", workspaceId, {
+            id: docId,
+            doc_number,
+            doc_date: header.doc_date,
+            partner: header.supplier_name || "",
+            total: totals.total,
+          });
+          if (applied > 0) {
+            toast.success(
+              t(
+                `${formatMoney(applied, lang)} down payment applied to ${doc_number}`,
+                `Uang muka ${formatMoney(applied, lang)} dipotongkan ke ${doc_number}`,
+              ),
+            );
+          }
+        }
+        if (entity.docType === "purchase_payment") {
+          // #37: payment tanpa dokumen sumber = uang muka pembelian
+          const isAdvance = !sourceDoc;
+          await postPaymentJournal(workspaceId, journalDoc, funds ?? undefined, { advance: isAdvance });
+          if (isAdvance) {
+            await saveWorkspaceRow({
+              data: { table: "prc_documents", workspaceId, id: docId, data: { advance_kind: "advance" } },
+            });
+          }
+        }
+        if (entity.docType === "purchase_return")
+          await postPurchaseReturnJournal(workspaceId, journalDoc, {
+            goodsReceiptId: sourceDoc?.doc_type === "goods_receipt" ? sourceDoc.id : null,
+          });
       }
 
       // stock movements (goods receipt adds stock, purchase return removes it)

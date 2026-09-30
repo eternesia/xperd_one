@@ -161,7 +161,10 @@ export const PRC_ENTITIES: PrcEntity[] = [
       fromStatuses: ["received", "partial", "closed"],
     },
     allowPartial: true,
-    autoJournal: false,
+    // #38 (BS New 3): AP Invoice kini menjurnal sendiri — barang yang bersumber
+    // dari Goods Receipt dibebankan ke GR/IR 2050, jasa/non-persediaan ke akun
+    // bebannya, plus PPN Masukan dan potongan PPh ke Hutang Pajak.
+    autoJournal: true,
   },
   {
     submoduleId: "payments",
