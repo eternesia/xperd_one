@@ -51,6 +51,8 @@ import {
   postPurchaseReturnJournal,
 } from "@/lib/journal";
 import { postProcurementMovements } from "@/lib/inventory";
+// BS New 3: cermin-kan pembayaran ke buku kas & bank.
+import { recordSettlementCashTransaction } from "@/lib/cashbank";
 import { cn } from "@/lib/utils";
 import { isWithholdingTax, useLineTaxOptions } from "@/lib/tax";
 import {
@@ -477,6 +479,19 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
               data: { table: "prc_documents", workspaceId, id: docId, data: { advance_kind: "advance" } },
             });
           }
+          // saldo akun kas/bank yang dipilih ikut bergerak bersama buku besar
+          await recordSettlementCashTransaction(workspaceId, {
+            accountCode: header.bank_account_code || "",
+            direction: "out",
+            docNumber: doc_number,
+            docDate: header.doc_date,
+            amount: totals.total,
+            contactName: header.supplier_name || null,
+            reference: sourceDoc?.doc_number ?? header.reference ?? null,
+            controlAccountCode: isAdvance ? "1500" : "2000",
+            controlAccountName: isAdvance ? "Uang Muka Pembelian" : "Hutang Usaha",
+            memo: `Payment ${doc_number}${header.supplier_name ? ` · ${header.supplier_name}` : ""}`,
+          });
         }
         if (entity.docType === "purchase_return")
           await postPurchaseReturnJournal(workspaceId, journalDoc, {
@@ -518,6 +533,10 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
       void qc.invalidateQueries({ queryKey: ["prc-dashboard"] });
       void qc.invalidateQueries({ queryKey: ["inv-movements"] });
       void qc.invalidateQueries({ queryKey: ["inv-dashboard"] });
+      // settlement kas/bank (pembayaran) turut menyegarkan buku kas
+      void qc.invalidateQueries({ queryKey: ["cb-trx"] });
+      void qc.invalidateQueries({ queryKey: ["cb-accounts"] });
+      void qc.invalidateQueries({ queryKey: ["cb-dashboard"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

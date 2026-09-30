@@ -5,7 +5,7 @@ import {
   insertCbTransaction,
   postJournalEntry,
 } from "@/lib/ledger.functions";
-import { deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 
 export type CbAccountKind = "cash" | "bank";
 export type CbTrxType = "in" | "out" | "transfer";
@@ -391,6 +391,69 @@ export async function createCbTransaction(workspaceId: string, input: CbTrxInput
         attachment_url: input.attachment_url ?? null,
         amount,
         journal_entry_id: journalEntryId,
+      },
+    },
+  });
+}
+
+export interface SettlementInput {
+  /** kode akun kas/bank yang dipilih pada dokumen penjualan/pembelian */
+  accountCode: string;
+  direction: CbTrxType;
+  docNumber: string;
+  docDate: string;
+  amount: number;
+  contactName?: string | null;
+  reference?: string | null;
+  /** akun kontrol (piutang/hutang/uang muka) yang dilunasi transaksi ini */
+  controlAccountCode: string;
+  controlAccountName: string;
+  journalEntryId?: string | null;
+  memo: string;
+}
+
+/**
+ * #48 lanjutan (BS New 3): cermin-kan penerimaan kas (AR) / pembayaran (AP) ke
+ * buku kas & bank supaya saldo rekening yang dipilih bergerak bersama buku besar.
+ * Jurnal GL-nya sudah diposting oleh alur penjualan/pembelian, jadi di sini
+ * **tidak** ada jurnal baru (hanya baris buku kas).
+ */
+export async function recordSettlementCashTransaction(workspaceId: string, input: SettlementInput) {
+  const amount = Number(input.amount) || 0;
+  if (!input.accountCode || amount <= 0) return;
+
+  const accounts = await fetchCbAccounts(workspaceId);
+  const account = accounts.find((a) => a.code === input.accountCode);
+  if (!account) return;
+
+  // idempoten: dokumen yang disimpan ulang tidak boleh dihitung dua kali
+  const found = await listWorkspaceRows({
+    data: {
+      table: "cb_transactions",
+      workspaceId,
+      filters: { trx_no: input.docNumber },
+      limit: 1,
+    },
+  });
+  if ((found?.rows ?? []).length > 0) return;
+
+  await insertCbTransaction({
+    data: {
+      workspaceId,
+      trx: {
+        trx_no: input.docNumber,
+        trx_date: input.docDate,
+        trx_type: input.direction,
+        account_code: account.code,
+        account_name: account.name,
+        category_account_code: input.controlAccountCode,
+        category_account_name: input.controlAccountName,
+        contact_name: input.contactName || null,
+        method: "transfer",
+        reference: input.reference || input.docNumber,
+        memo: input.memo,
+        amount,
+        journal_entry_id: input.journalEntryId ?? null,
       },
     },
   });

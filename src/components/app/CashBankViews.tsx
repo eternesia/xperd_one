@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+// #44 (BS New 3): impor rekening koran + pencocokan otomatis.
+import { CbStatementImport } from "@/components/app/CbStatementImport";
 import { Eye, FileDown, Loader2, Paperclip, Pencil, Plus, Search, Sheet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -1131,6 +1133,27 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
           />
         </div>
       </div>
+
+      {/* #44 (BS New 3): pencocokan rekening koran butuh satu rekening bank tertentu. */}
+      {accountCode === ALL ? (
+        <p className="rounded-2xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+          {t(
+            "Select one bank account to import its bank statement and auto-match transactions.",
+            "Pilih satu rekening bank untuk mengimpor rekening koran dan mencocokkan transaksi otomatis.",
+          )}
+        </p>
+      ) : (
+        <CbStatementImport
+          workspaceId={workspaceId}
+          accountCode={accountCode}
+          transactions={scoped}
+          onBalance={(v) => setStatementBalance(String(v))}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ["cb-trx"] });
+            qc.invalidateQueries({ queryKey: ["cb-trx-recon"] });
+          }}
+        />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <Table>
