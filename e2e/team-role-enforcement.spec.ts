@@ -28,14 +28,17 @@ test("ROLES: cabut akses modul untuk viewer → menu & rute ikut berubah", async
   const ws = await resolveWorkspaceId(page);
   await page.goto(`/app/w/${ws}/team`);
 
-  /* ---------- 1. buat/segarkan user viewer ---------- */
-  await page.fill("#mname", "E2E Viewer");
-  await page.fill("#memail", VIEWER.email);
-  await page.fill("#mpass", VIEWER.password);
-  await page.locator("form").getByRole("combobox").first().click();
+  /* ---------- 1. buat/segarkan user viewer (dialog, seperti BS New 3) ---------- */
+  await page.getByRole("button", { name: /Create user/ }).first().click();
+  const createDialog = page.getByRole("dialog");
+  await expect(createDialog).toBeVisible({ timeout: 30_000 });
+  await createDialog.getByLabel("Full name").fill("E2E Viewer");
+  await createDialog.getByLabel("Email").fill(VIEWER.email);
+  await createDialog.getByLabel("Password").fill(VIEWER.password);
+  await createDialog.locator("form").getByRole("combobox").first().click();
   await page.getByRole("option", { name: "Viewer" }).click();
-  await page.getByRole("button", { name: /Create user/i }).click();
-  await expect(page.getByText(VIEWER.email).first()).toBeVisible({ timeout: 60_000 });
+  await createDialog.getByRole("button", { name: /Create user/ }).click();
+  await expect(page.getByRole("cell", { name: VIEWER.email }).first()).toBeVisible({ timeout: 60_000 });
 
   /* ---------- 2. cabut akses modul Tax untuk viewer ---------- */
   const openTax = async () => {
@@ -87,16 +90,16 @@ test("ROLES: cabut akses modul untuk viewer → menu & rute ikut berubah", async
 
   // Ubah peran anggota lewat dropdown → harus tersimpan (bug "roles tidak
   // ke-update" berakar pada matriks yang gagal dimuat, jadi bagian ini dikunci).
-  const memberCard = page.locator("div.rounded-lg.border").filter({ hasText: VIEWER.email }).first();
-  await expect(memberCard).toBeVisible({ timeout: 30_000 });
-  await memberCard.getByRole("combobox").first().click();
+  const memberRow = page.getByRole("row").filter({ hasText: VIEWER.email }).first();
+  await expect(memberRow).toBeVisible({ timeout: 30_000 });
+  await memberRow.getByRole("combobox").first().click();
   await page.getByRole("option", { name: "Admin" }).click();
-  await expect(memberCard).toContainText(/Admin/);
+  await expect(memberRow).toContainText(/Admin/);
   await page.reload();
-  const cardAfterReload = page.locator("div.rounded-lg.border").filter({ hasText: VIEWER.email }).first();
-  await expect(cardAfterReload).toContainText(/Admin/, { timeout: 30_000 });
+  const rowAfterReload = page.getByRole("row").filter({ hasText: VIEWER.email }).first();
+  await expect(rowAfterReload).toContainText(/Admin/, { timeout: 30_000 });
 
-  const remove = page.getByRole("button", { name: "Remove" }).first();
+  const remove = rowAfterReload.getByRole("button", { name: "Remove access" });
   await expect(remove).toBeVisible({ timeout: 30_000 });
   await remove.click();
   await expect(page.getByText(VIEWER.email)).toHaveCount(0, { timeout: 60_000 });

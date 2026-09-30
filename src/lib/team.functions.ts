@@ -159,3 +159,111 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
       })),
     };
   });
+
+export interface TenantUserRow {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  memberships: { workspaceId: string; workspaceName: string; role: string }[];
+}
+
+/**
+ * #58 (BS New 3): daftar pengguna yang sudah dikenal tenant ini beserta
+ * keanggotaan workspace-nya. Dipakai dialog "Give access" agar admin bisa
+ * memberi akses ke user yang sudah ada tanpa membuat akun baru.
+ */
+export const listTenantUsers = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { workspaceId: string }) => {
+    if (!data?.workspaceId) throw new Error("Workspace is required");
+    return data;
+  })
+  .handler(async ({ data, context }): Promise<TenantUserRow[]> => {
+    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+      throw new Error("Forbidden");
+    }
+
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+    const ws = await executeOne<{ tenant_id: string }>(
+      "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+      [data.workspaceId],
+    );
+    if (!ws) throw new Error("Workspace not found");
+
+    const siblings = await execute<{ id: string; name: string }>(
+      "SELECT id, name FROM workspaces WHERE tenant_id = ?",
+      [ws.tenant_id],
+    );
+    const workspaceIds = (siblings ?? []).map((row) => row.id);
+    if (!workspaceIds.length) return [];
+    const nameById = new Map((siblings ?? []).map((row) => [row.id, row.name]));
+
+    const placeholders = workspaceIds.map(() => "?").join(", ");
+    const members = await execute<{ workspace_id: string; user_id: string; role: string }>(
+      `SELECT workspace_id, user_id, role FROM workspace_members WHERE workspace_id IN (${placeholders})`,
+      workspaceIds,
+    );
+    const userIds = [...new Set((members ?? []).map((row) => row.user_id))];
+    if (!userIds.length) return [];
+
+    const userPlaceholders = userIds.map(() => "?").join(", ");
+    const profiles = await execute<{ id: string; full_name: string | null; email: string | null }>(
+      `SELECT id, full_name, email FROM profiles WHERE id IN (${userPlaceholders})`,
+      userIds,
+    );
+    const profileById = new Map((profiles ?? []).map((row) => [row.id, row]));
+
+    return userIds.map((id) => ({
+      userId: id,
+      fullName: profileById.get(id)?.full_name ?? null,
+      email: profileById.get(id)?.email ?? null,
+      memberships: (members ?? [])
+        .filter((row) => row.user_id === id)
+        .map((row) => ({
+          workspaceId: row.workspace_id,
+          workspaceName: nameById.get(row.workspace_id) ?? row.workspace_id,
+          role: row.role,
+        })),
+    }));
+  });
+
+/** #58 (BS New 3): beri akses workspace ini ke user tenant yang sudah ada. */
+export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { workspaceId: string; targetUserId: string; role: "admin" | "staff" | "viewer" }) => {
+    if (!data?.workspaceId || !data.targetUserId) throw new Error("Missing user or workspace");
+    if (!["admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+      throw new Error("Forbidden");
+    }
+
+    const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
+    const ws = await executeOne<{ tenant_id: string }>(
+      "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+      [data.workspaceId],
+    );
+    if (!ws) throw new Error("Workspace not found");
+
+    // Hanya user yang memang sudah ada di tenant ini (di workspace mana pun).
+    const belongs = await executeOne<{ c: number }>(
+      `SELECT COUNT(*) AS c
+         FROM workspace_members m
+         JOIN workspaces w ON w.id = m.workspace_id
+        WHERE m.user_id = ? AND w.tenant_id = ?`,
+      [data.targetUserId, ws.tenant_id],
+    );
+    if (Number(belongs?.c ?? 0) === 0) throw new Error("That user does not belong to this organisation");
+
+    await execute(
+      `INSERT INTO workspace_members (id, workspace_id, user_id, role)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE role = VALUES(role)`,
+      [uuid(), data.workspaceId, data.targetUserId, data.role],
+    );
+    return { ok: true };
+  });

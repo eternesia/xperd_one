@@ -24,10 +24,12 @@ test("TEAM: matriks Role Access termuat dan perubahan tersimpan", async ({ page 
 
   /* ---------- tab Users ---------- */
   await expect(page.getByRole("tab", { name: /Users|Pengguna/i }).first()).toBeVisible({ timeout: 30_000 });
-  // Daftar anggota dirender sebagai kartu (bukan tabel) — pemilik workspace
-  // harus muncul beserta alamat emailnya.
-  await expect(page.getByText(ADMIN.email).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/owner/i).first()).toBeVisible();
+  // Daftar anggota ditampilkan sebagai tabel (seperti BS New 3) — pemilik
+  // workspace harus muncul beserta alamat emailnya dan badge Owner.
+  await expect(page.getByRole("cell", { name: ADMIN.email }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/^Owner$/).first()).toBeVisible();
+  // Tombol aksi versi BS New 3 tersedia: Give access (user tenant yang sudah ada).
+  await expect(page.getByRole("button", { name: /Give access/i })).toBeVisible();
 
   /* ---------- tab Role Access: matriks harus termuat ---------- */
   await page.getByRole("tab", { name: /Role Access|Akses Peran/i }).first().click();

@@ -201,6 +201,37 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 25 (2026-09-30) — menyamakan halaman Team & Access dengan versi Lovable
+
+Pertanyaan pemilik produk: “halaman `/app/w/<ws>/team` sudah sama seperti di
+xperd-one-lovable?” Jawabannya **belum sepenuhnya**. Perbandingan berkas
+(`diff` team.tsx Old vs New 3) menemukan dua celah yang lalu ditutup:
+
+| Celah di Old | Penutup |
+|---|---|
+| Tidak ada cara memberi akses ke **user tenant yang sudah ada** (hanya bisa membuat akun baru) | Server fn baru di `src/lib/team.functions.ts`: **`listTenantUsers`** (user tenant + keanggotaan tiap workspace) & **`addExistingUserToWorkspace`** (validasi user memang milik tenant yang sama, lalu `INSERT … ON DUPLICATE KEY UPDATE role`), keduanya berpenjaga owner/admin |
+| Bentuk halaman berbeda: Old memakai kartu inline + daftar kartu anggota, New 3 memakai dialog + tabel | `src/routes/app/w.$workspaceId.team.tsx` diselaraskan: tautan **“Module launcher”**, tombol **Give access** & **Create user** di header kartu “Workspace users”, daftar anggota sebagai **tabel** (#, User, Joined, Role, Actions) + skeleton + paginasi, serta dialog **Create user / Give workspace access / Edit user**, dan meta `head()` halaman |
+
+**Verifikasi fitur “Give access” end-to-end** (dengan fixture sementara yang
+dihapus lagi setelah uji): dibuat workspace kedua + satu user tenant di
+dalamnya, lalu dari workspace demo admin membuka *Give access* → dropdown
+menampilkan user tersebut → *Grant access* → toast sukses dan user muncul di
+tabel anggota; dibuktikan juga lewat DB (`workspace_members` berisi user itu di
+kedua workspace) sebelum fixture dibersihkan.
+
+**Perbedaan yang tersisa memang disengaja** (adaptasi arsitektur, bukan fitur
+yang hilang):
+
+- Old memakai server fn MySQL (`listTenantUsers`, `addExistingUserToWorkspace`,
+  `getWorkspaceAccess`) alih-alih Supabase admin client; `getWorkspaceAccess`
+  sendiri tidak ada di New 3 karena di sana izin dibaca langsung dari klien.
+- Snapshot New 3 (`Xperd One Business Suite New 3`) dipakai sebagai acuan; repo
+  itu tidak dijalankan lagi, jadi perbandingan dilakukan pada kode.
+
+**Verifikasi:** `tsc` 0 error, `npm run build` sukses, suite e2e **38 lulus /
+0 gagal**. Kedua spec Team (`team-roles`, `team-role-enforcement`) diperbarui ke
+UI baru (dialog + tabel) dan tetap hijau.
+
 ### Ronde 24 (2026-09-30) — perbaikan "menu Team & Roles tidak ke-update"
 
 Laporan pengguna: halaman **Team & Access** tidak pernah menampilkan/menyimpan
