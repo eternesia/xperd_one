@@ -200,7 +200,27 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
-### Ronde 16 (terbaru, 2026-09-30) — #52 Template Isian Panitia (DOCX ber-kop) + paket ZIP
+### Ronde 17 (terbaru, 2026-09-30) — verifikasi di DB nyata + suite e2e hijau
+
+**Migrasi dijalankan sungguhan**: `docker compose up -d --wait mysql` (MySQL **8.4**, container `xperd-mysql-dev`, port 3307) → `npm run migrate` sukses untuk **001–012**; 18 tabel `crm_*`, `workspaces.letterhead_config`, `md_items.is_stocked` terverifikasi lewat query.
+
+**Fixture dev baru** (agar DB kosong bisa menjalankan seed & e2e):
+
+| File | Isi |
+|---|---|
+| `db/seeds/000_dev_bootstrap.sql` | Tenant + workspace demo (id disamakan dengan fixture lain: tenant `e77b5fd9…`, workspace `46bc16a0…`) + membership owner + role customer. Tanpa ini seed gagal `ER_NO_REFERENCED_ROW_2` di `sls_documents` |
+| `db/seeds/001a_dev_master_fixture.sql` | Cerminan `seedWorkspaceDefaults()`: 29 akun COA (+1450/2050/2110/2400/5200), 5 UOM, 4 kategori, 5 pajak, gudang, 2 akun kas/bank, plus item/pemasok/pelanggan contoh |
+| `db/seeds/001b_dev_doc_fixture.sql` | `E2E-SO-0001` (sales order approved, id `…000d` sesuai `doc-pdf.spec.ts`) & `E2E-PR-0001` (purchase request draft) beserta barisnya |
+
+**Hasil `npm run test:e2e`**: **32 lulus, 0 gagal, 0 skip** (1,9 menit) — termasuk spec alur dokumen, PDF, kas/bank, HR, CRM, registrasi, dan seluruh modul.
+
+**Bug yang ketangkap e2e**: kartu Kop Surat (#53) memakai `alt="Logo"` pada gambar pratinjau. Playwright `getByAltText('Logo')` cocok **sebagian**, jadi `workspace-logo.spec.ts` gagal karena strict-mode violation (2 elemen). Diperbaiki menjadi `alt=""` + `aria-hidden="true"` (commit `82a1652`) — jenis regresi yang tidak terlihat dari `tsc`/`build`.
+
+Tiga kegagalan awal (`cash-out-proof`, `draft-delete`, `draft-edit` PR) terbukti **karena data dev belum lengkap** (tanpa `cb_accounts`, dokumen fixture), bukan regresi kode — setelah fixture ditambahkan semuanya lulus.
+
+Belum: uji Meta end-to-end (#55, butuh App ID/Secret user) dan batch 3D (Omnix/Qalling/product tag) yang menunggu keputusan bisnis.
+
+### Ronde 16 (2026-09-30) — #52 Template Isian Panitia (DOCX ber-kop) + paket ZIP
 
 | File | Isi |
 |---|---|
