@@ -52,6 +52,11 @@ export type AccViewKind =
   | "profit-loss"
   | "cash-flow"
   | "equity-changes"
+  // #45 (BS New 3): subledger piutang/hutang.
+  | "ar-card"
+  | "ap-card"
+  | "ar-aging"
+  | "ap-aging"
   | "period-closing";
 
 export interface AccEntity {
@@ -69,6 +74,11 @@ export const ACC_ENTITIES: AccEntity[] = [
   { submoduleId: "profit-loss", en: "Profit & Loss", id_: "Laba Rugi" },
   { submoduleId: "cash-flow", en: "Cash Flow Statement", id_: "Laporan Arus Kas" },
   { submoduleId: "equity-changes", en: "Changes in Equity", id_: "Perubahan Ekuitas" },
+  // #45 (BS New 3): kartu & umur piutang/hutang per partner.
+  { submoduleId: "ar-card", en: "AR Card", id_: "Kartu Piutang" },
+  { submoduleId: "ap-card", en: "AP Card", id_: "Kartu Hutang" },
+  { submoduleId: "ar-aging", en: "AR Aging", id_: "Umur Piutang" },
+  { submoduleId: "ap-aging", en: "AP Aging", id_: "Umur Hutang" },
   { submoduleId: "period-closing", en: "Period Closing", id_: "Tutup Periode" },
 ];
 

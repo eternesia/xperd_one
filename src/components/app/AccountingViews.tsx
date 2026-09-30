@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// #45 (BS New 3): Kartu AR/AP & Aging (subledger) — komponen terpisah.
+import { AgingView, SubledgerCardView } from "@/components/app/SubledgerViews";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney, nextDocNumber } from "@/lib/procurement";
 import {
@@ -1387,6 +1389,15 @@ export function AccountingView({ entity, workspaceId }: { entity: AccEntity; wor
       return <CashFlowView workspaceId={workspaceId} />;
     case "equity-changes":
       return <EquityChangesView workspaceId={workspaceId} />;
+    // #45 (BS New 3): kartu & umur piutang/hutang.
+    case "ar-card":
+      return <SubledgerCardView side="ar" workspaceId={workspaceId} />;
+    case "ap-card":
+      return <SubledgerCardView side="ap" workspaceId={workspaceId} />;
+    case "ar-aging":
+      return <AgingView side="ar" workspaceId={workspaceId} />;
+    case "ap-aging":
+      return <AgingView side="ap" workspaceId={workspaceId} />;
     case "period-closing":
       return <PeriodClosingView workspaceId={workspaceId} />;
     default:
