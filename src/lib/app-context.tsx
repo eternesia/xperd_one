@@ -22,6 +22,15 @@ export interface Workspace {
   doc_footer_note: string | null;
   /** #4 (BS New): logo dokumen (data URL) milik workspace. */
   logo_url: string | null;
+  /** #53 (BS New 3): pengaturan kop surat tender (kolom JSON). */
+  letterhead_config?: {
+    show_address?: boolean;
+    show_tax_id?: boolean;
+    show_phone?: boolean;
+    show_email?: boolean;
+    show_divider?: boolean;
+    background_url?: string;
+  } | null;
   status: "setup" | "active" | "suspended";
 }
 

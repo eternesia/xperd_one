@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft, Loader2, Save } from "lucide-react";
+import { ChevronLeft, FileImage, FileText, Loader2, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,47 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+/** #53 (BS New 3): pengaturan kop surat tender. */
+interface LetterheadForm {
+  show_address: boolean;
+  show_tax_id: boolean;
+  show_phone: boolean;
+  show_email: boolean;
+  show_divider: boolean;
+  background_url: string;
+}
+
+const DEFAULT_LETTERHEAD: LetterheadForm = {
+  show_address: true,
+  show_tax_id: true,
+  show_phone: true,
+  show_email: true,
+  show_divider: true,
+  background_url: "",
+};
+
+/** Kolom JSON bisa datang sebagai objek atau string (tergantung driver). */
+function readLetterhead(value: unknown): LetterheadForm {
+  let raw: Record<string, unknown> = {};
+  if (typeof value === "string" && value.trim()) {
+    try {
+      raw = JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      raw = {};
+    }
+  } else if (value && typeof value === "object") {
+    raw = value as Record<string, unknown>;
+  }
+  return {
+    show_address: raw.show_address !== false,
+    show_tax_id: raw.show_tax_id !== false,
+    show_phone: raw.show_phone !== false,
+    show_email: raw.show_email !== false,
+    show_divider: raw.show_divider !== false,
+    background_url: typeof raw.background_url === "string" ? raw.background_url : "",
+  };
+}
+
 function SettingsPage() {
   const { workspaceId } = Route.useParams();
   const { activeWorkspace, tenant, pkg, refresh } = useApp();
@@ -45,6 +86,7 @@ function SettingsPage() {
     doc_template: "classic" as DocTemplate,
     logo_url: "",
   });
+  const [letterhead, setLetterhead] = useState<LetterheadForm>(DEFAULT_LETTERHEAD);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -65,6 +107,7 @@ function SettingsPage() {
       doc_template: (activeWorkspace.doc_template as DocTemplate) ?? "classic",
       logo_url: activeWorkspace.logo_url ?? "",
     });
+    setLetterhead(readLetterhead(activeWorkspace.letterhead_config));
   }, [activeWorkspace]);
 
   async function save(e: React.FormEvent) {
@@ -89,6 +132,7 @@ function SettingsPage() {
             doc_footer_note: form.doc_footer_note.trim() || null,
             doc_template: form.doc_template,
             logo_url: form.logo_url || null,
+            letterhead_config: JSON.stringify(letterhead),
           },
         },
       });
@@ -127,6 +171,53 @@ function SettingsPage() {
     reader.readAsDataURL(file);
   }
 
+  /**
+   * #53 (BS New 3): desain kop A4 dijadikan 1240×1754 px (rasio A4) lalu disimpan
+   * sebagai data URL — Old tidak punya object storage seperti Supabase Storage.
+   */
+  function pickLetterheadBackground(file?: File) {
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      toast.error(lang === "id" ? "Gunakan gambar PNG atau JPG" : "Use a PNG or JPG image");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(lang === "id" ? "Ukuran gambar maksimal 10 MB" : "Maximum image size is 10 MB");
+      return;
+    }
+    const image = new Image();
+    const reader = new FileReader();
+    reader.onload = () => {
+      image.onload = () => {
+        const targetWidth = 1240;
+        const targetHeight = 1754;
+        const sourceRatio = image.width / image.height;
+        const a4Ratio = targetWidth / targetHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, targetWidth, targetHeight);
+        const scale = Math.min(targetWidth / image.width, targetHeight / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        context.drawImage(image, (targetWidth - width) / 2, (targetHeight - height) / 2, width, height);
+        setLetterhead((current) => ({ ...current, background_url: canvas.toDataURL("image/jpeg", 0.88) }));
+        if (Math.abs(sourceRatio - a4Ratio) > 0.04) {
+          toast.warning(
+            lang === "id"
+              ? "Rasio gambar bukan A4; ruang kosong ditambahkan agar desain tidak terpotong."
+              : "The image is not A4; blank space was added to prevent cropping.",
+          );
+        }
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-10">
       <Link
@@ -154,7 +245,7 @@ function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-5" onSubmit={save}>
+          <form id="workspace-settings-form" className="space-y-5" onSubmit={save}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name">{lang === "id" ? "Nama perusahaan" : "Company name"}</Label>
@@ -317,6 +408,135 @@ function SettingsPage() {
               {busy ? <Loader2 className="animate-spin" /> : <Save />} {lang === "id" ? "Simpan" : "Save changes"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* #53 (BS New 3): kop surat tender — desain A4 lengkap atau kop otomatis. */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>{lang === "id" ? "Kop Surat Tender" : "Tender Letterhead"}</CardTitle>
+          <CardDescription>
+            {lang === "id"
+              ? "Unggah desain kop A4 lengkap agar hasil Word sama dengan desain Anda. Kop otomatis tetap dipakai jika belum ada gambar."
+              : "Upload a complete A4 letterhead design so Word matches your artwork. The automatic letterhead remains as a fallback."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 rounded-md border border-border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
+              <Label htmlFor="tender-letterhead-background">
+                {lang === "id" ? "Gambar latar kop surat" : "Letterhead background image"}
+              </Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {lang === "id"
+                  ? "Gunakan PNG/JPG A4 potret (contoh: 1240 × 1754 px), maksimal 10 MB. Sisakan area tengah untuk isi surat."
+                  : "Use an A4 portrait PNG/JPG (for example 1240 × 1754 px), up to 10 MB. Leave the middle area clear for document content."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" asChild>
+                <label htmlFor="tender-letterhead-background" className="cursor-pointer">
+                  <Upload className="h-4 w-4" />
+                  {letterhead.background_url
+                    ? lang === "id"
+                      ? "Ganti gambar"
+                      : "Replace image"
+                    : lang === "id"
+                      ? "Unggah gambar"
+                      : "Upload image"}
+                </label>
+              </Button>
+              <Input
+                id="tender-letterhead-background"
+                type="file"
+                accept="image/png,image/jpeg"
+                className="sr-only"
+                onChange={(event) => pickLetterheadBackground(event.target.files?.[0])}
+              />
+              {letterhead.background_url && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setLetterhead((current) => ({ ...current, background_url: "" }))}
+                >
+                  {lang === "id" ? "Hapus" : "Remove"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {(
+              [
+                ["show_address", lang === "id" ? "Alamat" : "Address"],
+                ["show_tax_id", "NPWP"],
+                ["show_phone", lang === "id" ? "Telepon" : "Phone"],
+                ["show_email", "Email"],
+                ["show_divider", lang === "id" ? "Garis pemisah" : "Divider"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={letterhead[key]}
+                  onChange={(event) => setLetterhead({ ...letterhead, [key]: event.target.checked })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+
+          <div className="relative mx-auto aspect-[1/1.414] w-full max-w-xl overflow-hidden rounded-md border border-border bg-card shadow-sm">
+            {letterhead.background_url ? (
+              <img
+                src={letterhead.background_url}
+                alt={lang === "id" ? "Pratinjau kop surat" : "Letterhead preview"}
+                className="absolute inset-0 h-full w-full object-contain"
+              />
+            ) : (
+              <>
+                <div className="absolute left-[7%] top-[3%] flex h-20 w-[28%] items-center">
+                  {form.logo_url ? (
+                    <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-32 object-contain" />
+                  ) : (
+                    <div className="flex items-center gap-2 text-navy dark:text-primary-foreground">
+                      <FileText className="h-8 w-8" />
+                      <span className="text-xs font-bold">{form.legal_name || form.name || "PERUSAHAAN"}</span>
+                    </div>
+                  )}
+                </div>
+                {letterhead.show_divider && (
+                  <div className="absolute left-[7%] right-[7%] top-[15%] border-b border-gold/80" />
+                )}
+                <div className="absolute bottom-[3%] right-[7%] w-[36%] text-right text-[9px] leading-4 text-muted-foreground">
+                  {letterhead.show_phone && form.phone && <p>T {form.phone}</p>}
+                  {letterhead.show_email && form.email && <p>E {form.email}</p>}
+                  {letterhead.show_tax_id && form.tax_id && <p>NPWP {form.tax_id}</p>}
+                  {letterhead.show_address && form.address && <p>{form.address}</p>}
+                  {!form.phone && !form.email && !form.tax_id && !form.address && (
+                    <p>
+                      {lang === "id"
+                        ? "Lengkapi profil perusahaan di atas"
+                        : "Complete the company profile above"}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+            <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-[9px] font-medium text-muted-foreground">
+              <FileImage className="h-3 w-3" /> {lang === "id" ? "Pratinjau A4" : "A4 preview"}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {lang === "id"
+              ? "Gunakan tombol Simpan di Profil Perusahaan setelah mengubah pengaturan kop."
+              : "Use the Save changes button in Company Profile after changing letterhead settings."}
+          </p>
+          <Button type="submit" form="workspace-settings-form" variant="navy" disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" /> : <Save />}{" "}
+            {lang === "id" ? "Simpan pengaturan kop" : "Save letterhead settings"}
+          </Button>
         </CardContent>
       </Card>
 

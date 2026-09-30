@@ -44,7 +44,20 @@ export interface ShellWorkspace {
   doc_footer_note: string | null;
   /** #4 (BS New): logo dokumen (data URL) milik workspace. */
   logo_url: string | null;
+  /** #53 (BS New 3): pengaturan kop surat — kolom JSON NULL. */
+  letterhead_config: LetterheadConfig | null;
   status: "setup" | "active" | "suspended";
+}
+
+/** #53 (BS New 3): konfigurasi kop surat tender milik workspace. */
+export interface LetterheadConfig {
+  show_address?: boolean;
+  show_tax_id?: boolean;
+  show_phone?: boolean;
+  show_email?: boolean;
+  show_divider?: boolean;
+  /** desain kop A4 lengkap sebagai data URL (jalur "gambar latar"). */
+  background_url?: string;
 }
 
 export const getAppShellData = createServerFn({ method: "GET" }).handler(async () => {
@@ -82,7 +95,7 @@ export const getAppShellData = createServerFn({ method: "GET" }).handler(async (
         `SELECT w.id, w.tenant_id, w.name, w.legal_name, w.slug, w.currency, w.timezone,
                 w.fiscal_year_start_month, w.default_costing_method,
                 w.address, w.tax_id, w.phone, w.email, w.doc_template, w.bank_info, w.doc_footer_note,
-                w.logo_url,
+                w.logo_url, w.letterhead_config,
                 w.status
            FROM workspaces w
           WHERE w.tenant_id = ?
