@@ -219,6 +219,17 @@ menampilkan user tersebut → *Grant access* → toast sukses dan user muncul di
 tabel anggota; dibuktikan juga lewat DB (`workspace_members` berisi user itu di
 kedua workspace) sebelum fixture dibersihkan.
 
+**Layout & UI kini juga disamakan** (bukan hanya fitur): wrapper halaman memakai
+`mx-auto max-w-5xl px-4 py-8 sm:px-5 sm:py-10` seperti New 3 — sebelumnya halaman
+Team **tidak punya padding sama sekali** sehingga isinya menempel ke tepi layar —
+plus jarak `mt-3` pada blok judul, `Tabs` `mt-6`, `TabsList`
+`grid w-full grid-cols-2 sm:w-fit`, dan `TabsContent` `pt-4`. Hasilnya diverifikasi
+dengan tangkapan layar sungguhan (tab Users: tautan *Module launcher* → judul →
+tab → kartu “Workspace users” dengan tombol *Give access*/*Create user*, kotak
+cari, tabel `#/User/Joined/Role/Actions` + paginasi; tab Role Access: akordeon per
+modul; dialog *Create user* & *Give workspace access*) dan pengukuran DOM
+(`max-width: 1024px`, padding `40px 20px`, lebar tabel 982px).
+
 **Perbedaan yang tersisa memang disengaja** (adaptasi arsitektur, bukan fitur
 yang hilang):
 

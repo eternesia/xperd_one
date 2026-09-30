@@ -246,7 +246,7 @@ function TeamPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-5 sm:py-10">
       <Link
         to="/app/w/$workspaceId"
         params={{ workspaceId: activeWorkspace?.id ?? "" }}
@@ -254,20 +254,20 @@ function TeamPage() {
       >
         <ChevronLeft className="h-3.5 w-3.5" /> Module launcher
       </Link>
-      <div>
+      <div className="mt-3">
         <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">Team & Access</h1>
         <p className="text-sm text-muted-foreground">
           Members of {activeWorkspace?.name}. Package limit: {tenant?.user_count ?? 1} / {pkg?.max_users ?? "∞"} users.
         </p>
       </div>
 
-      <Tabs defaultValue="users">
-        <TabsList>
+      <Tabs defaultValue="users" className="mt-6">
+        <TabsList className="grid w-full grid-cols-2 sm:w-fit">
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="access">Role Access</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="users" className="space-y-6 pt-4">
+        <TabsContent value="users" className="pt-4">
           <Card>
             <CardHeader className="grid grid-cols-1 gap-4 border-b border-border sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div className="min-w-0">
