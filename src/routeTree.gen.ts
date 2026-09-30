@@ -42,6 +42,8 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
+import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
+import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdModuleIdRouteImport } from './routes/app/w.$workspaceId.$moduleId'
@@ -221,6 +223,17 @@ const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
   path: '/w/$workspaceId',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiPublicHooksSocialPublishRoute =
+  ApiPublicHooksSocialPublishRouteImport.update({
+    id: '/api/public/hooks/social-publish',
+    path: '/api/public/hooks/social-publish',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicMetaCallbackRoute = ApiPublicMetaCallbackRouteImport.update({
+  id: '/api/public/meta/callback',
+  path: '/api/public/meta/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhooksMidtransRoute =
   ApiPublicWebhooksMidtransRouteImport.update({
     id: '/api/public/webhooks/midtrans',
@@ -315,6 +328,8 @@ export interface FileRoutesByFullPath {
   '/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/products/': typeof SiteProductsIndexRoute
+  '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
@@ -357,6 +372,8 @@ export interface FileRoutesByTo {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/products': typeof SiteProductsIndexRoute
+  '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
   '/app/w/$workspaceId/guide': typeof AppWWorkspaceIdGuideRoute
@@ -403,6 +420,8 @@ export interface FileRoutesById {
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/_site/products/': typeof SiteProductsIndexRoute
+  '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
@@ -450,6 +469,8 @@ export interface FileRouteTypes {
     | '/products/$slug'
     | '/app/w/$workspaceId'
     | '/products/'
+    | '/api/public/hooks/social-publish'
+    | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
@@ -492,6 +513,8 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/products/$slug'
     | '/products'
+    | '/api/public/hooks/social-publish'
+    | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/billing'
     | '/app/w/$workspaceId/guide'
@@ -537,6 +560,8 @@ export interface FileRouteTypes {
     | '/_site/products/$slug'
     | '/app/w/$workspaceId'
     | '/_site/products/'
+    | '/api/public/hooks/social-publish'
+    | '/api/public/meta/callback'
     | '/api/public/webhooks/midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
@@ -559,6 +584,8 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
+  ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
 }
 
@@ -795,6 +822,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/public/hooks/social-publish': {
+      id: '/api/public/hooks/social-publish'
+      path: '/api/public/hooks/social-publish'
+      fullPath: '/api/public/hooks/social-publish'
+      preLoaderRoute: typeof ApiPublicHooksSocialPublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/meta/callback': {
+      id: '/api/public/meta/callback'
+      path: '/api/public/meta/callback'
+      fullPath: '/api/public/meta/callback'
+      preLoaderRoute: typeof ApiPublicMetaCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/midtrans': {
       id: '/api/public/webhooks/midtrans'
       path: '/api/public/webhooks/midtrans'
@@ -1005,6 +1046,8 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
+  ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
 }
 export const routeTree = rootRouteImport

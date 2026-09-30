@@ -251,6 +251,10 @@ const MODULE_DEFS: AppModule[] = [
       s("templates", "Message Templates", "Template Pesan"),
       // Batch 3 #50 (BS New 3): checklist dokumen tender.
       s("tenders", "Tender Checklist", "Checklist Tender"),
+      // Batch 3 #54–56 (BS New 3): akun sosial & penjadwal postingan.
+      s("social-dashboard", "Social Dashboard", "Dasbor Media Sosial"),
+      s("social-accounts", "Social Accounts", "Akun Media Sosial"),
+      s("post-scheduler", "Post Scheduler", "Jadwal Postingan"),
     ],
   },
   {

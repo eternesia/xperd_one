@@ -27,6 +27,9 @@ const WORKSPACE_TABLES = new Set([
   // CRM Tender & Pustaka Dokumen (migration 010_new3_schema.sql, Batch 3 #50–52)
   "crm_tenders", "crm_tender_docs", "crm_doc_library", "crm_doc_library_versions",
   "crm_tender_templates", "crm_tender_template_versions",
+  // CRM media sosial (migration 010) — `crm_meta_settings` & `crm_social_tokens`
+  // sengaja TIDAK di sini: keduanya memuat rahasia dan hanya lewat server fn.
+  "crm_social_accounts", "crm_scheduled_posts",
   // Slipp HR (migration 008_hr_module.sql) — Batch 2.
   // CATATAN: tabel harus terdaftar di DUA tempat: set ini (gate `assertTable`)
   // dan `COLS` di bawah (whitelist kolom). Lewat salah satu = error/gagal simpan.
@@ -75,6 +78,8 @@ const COLS: Record<string, string[]> = {
   crm_doc_library_versions: ["id", "workspace_id", "library_doc_id", "version", "file_path", "file_name", "expiry_date", "created_at"],
   crm_tender_templates: ["id", "workspace_id", "tender_id", "tender_doc_id", "category", "name", "source_pdf_path", "source_pdf_name", "source_pages", "template_path", "template_name", "mime", "size", "version", "notes", "created_at", "updated_at"],
   crm_tender_template_versions: ["id", "workspace_id", "template_id", "version", "template_path", "template_name", "size", "created_at"],
+  crm_social_accounts: ["id", "workspace_id", "platform", "account_name", "handle", "profile_url", "webhook_url", "status", "external_id", "source", "created_at", "updated_at"],
+  crm_scheduled_posts: ["id", "workspace_id", "title", "caption", "media_url", "account_ids", "scheduled_at", "status", "last_error", "published_at", "results", "created_at", "updated_at"],
   crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
   crm_broadcast_recipients: ["id", "broadcast_id", "workspace_id", "lead_id", "name", "phone", "email", "status", "error", "sent_at", "created_at", "updated_at"],
   crm_campaigns: ["id", "workspace_id", "name", "objective", "platforms", "content", "media_url", "budget", "start_date", "end_date", "status", "reach", "clicks", "leads_generated", "owner_name", "created_by", "created_at", "updated_at"],
