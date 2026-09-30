@@ -12,8 +12,12 @@ import { login, resolveWorkspaceId } from "./helpers";
  * dan izin yang tersimpan tidak pernah terlihat/pernah diuji sampai ke menu.
  *
  * Spec ini: admin membuat user `viewer`, mencabut akses modul Tax untuk viewer,
- * lalu memastikan menu (kartu modul) dan rute modul ikut menolak. Di akhir
- * semuanya dikembalikan (izin + keanggotaan) supaya idempoten.
+ * lalu memastikan menu (kartu modul) dan rute modul ikut menolak, dan menutup
+ * dengan mengubah peran anggota lewat dropdown (Viewer → Admin) untuk memastikan
+ * perannya benar-benar tersimpan. Di akhir semuanya dikembalikan (izin +
+ * keanggotaan) supaya idempoten. Catatan: baris `app_users` milik user uji
+ * sengaja dibiarkan (tidak ada server fn hapus user); `createWorkspaceUser`
+ * memakai ulang user yang sama pada run berikutnya.
  */
 const VIEWER = { email: "e2e.viewer@xperd.local", password: "ViewerE2E2026" };
 const TAX_KEYS = ["tax", "tax/vat-in", "tax/vat-out", "tax/withholding", "tax/efaktur"];
@@ -80,6 +84,18 @@ test("ROLES: cabut akses modul untuk viewer → menu & rute ikut berubah", async
   await expect(page.getByText(/Role access saved/i).first()).toBeVisible({ timeout: 60_000 });
 
   await page.getByRole("tab", { name: /Users|Pengguna/i }).first().click();
+
+  // Ubah peran anggota lewat dropdown → harus tersimpan (bug "roles tidak
+  // ke-update" berakar pada matriks yang gagal dimuat, jadi bagian ini dikunci).
+  const memberCard = page.locator("div.rounded-lg.border").filter({ hasText: VIEWER.email }).first();
+  await expect(memberCard).toBeVisible({ timeout: 30_000 });
+  await memberCard.getByRole("combobox").first().click();
+  await page.getByRole("option", { name: "Admin" }).click();
+  await expect(memberCard).toContainText(/Admin/);
+  await page.reload();
+  const cardAfterReload = page.locator("div.rounded-lg.border").filter({ hasText: VIEWER.email }).first();
+  await expect(cardAfterReload).toContainText(/Admin/, { timeout: 30_000 });
+
   const remove = page.getByRole("button", { name: "Remove" }).first();
   await expect(remove).toBeVisible({ timeout: 30_000 });
   await remove.click();

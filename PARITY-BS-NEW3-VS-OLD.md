@@ -222,12 +222,19 @@ Ini juga menjelaskan mengapa izin yang tersimpan tidak pernah terlihat.
 | `src/routes/app/w.$workspaceId.team.tsx` | `orderBy: "created_at"` eksplisit pada pemuatan matriks; tambahan `data-testid` per modul (`role-access-module-<id>`) dan per baris izin (`role-access-line-<key>`) + `aria-label` pada tiap checkbox (`<key>:<role>:view|edit`) |
 | `src/components/ui/checkbox.tsx`, `switch.tsx` | **Bug ARIA**: nilai TINYINT MySQL (1/0) diteruskan mentah ke Radix sehingga `aria-checked="1"`/`"0"` — tidak valid, dibaca sebagai unchecked oleh pembaca layar & alat uji. Kini dinormalisasi ke boolean (nilai `undefined`/uncontrolled dan `"indeterminate"` tetap diteruskan) |
 | `e2e/team-roles.spec.ts` *(baru)* | Matriks Role Access harus termuat (regresi "Loading…" selamanya), memuat modul baru (CRM, Omnix), lalu ubah→simpan→muat ulang→tetap tersimpan, ditutup dengan mengembalikan nilai semula |
-| `e2e/team-role-enforcement.spec.ts` *(baru)* | Rantai penuh #58/#59: admin membuat user `viewer` → mencabut akses modul **Tax** (dashboard + 4 submodul) → kartu Tax hilang dari launcher viewer, dan membuka `/app/w/<ws>/tax` ditolak ("Module access restricted"); selesai itu izin dikembalikan dan anggota dihapus |
+| `e2e/team-role-enforcement.spec.ts` *(baru)* | Rantai penuh #58/#59: admin membuat user `viewer` → mencabut akses modul **Tax** (dashboard + 4 submodul) → kartu Tax hilang dari launcher viewer, dan membuka `/app/w/<ws>/tax` ditolak ("Module access restricted"); **lalu peran anggota diubah lewat dropdown (Viewer → Admin) dan dipastikan tetap tersimpan setelah halaman dimuat ulang**; selesai itu izin dikembalikan dan anggota dihapus |
 
 **Verifikasi:** `tsc` 0 error, `npm run build` sukses, dan suite e2e **38 lulus /
 0 gagal** (2,6 menit) — termasuk seluruh spec akuntansi, dokumen, CRM, Omnix,
-Qalling, dan HR yang ikut memakai lapisan data yang sama. DB dev dikembalikan ke
-kondisi setara default (matriks tersimpan dengan nilai bawaan, satu anggota owner).
+Qalling, dan HR yang ikut memakai lapisan data yang sama. Kedua spec baru juga
+dijalankan **dua kali berturut-turut (`--repeat-each=2`) → 4 lulus** sehingga
+terbukti idempoten. DB dev dikembalikan ke kondisi setara default (matriks
+tersimpan dengan nilai bawaan, satu anggota owner).
+
+Yang sudah dipastikan bekerja di `/app/w/<workspace>/team`: tautan menu dari
+launcher, daftar anggota, buat/ubah/hapus anggota beserta **ubah peran lewat
+dropdown** (tersimpan setelah reload), matriks Role Access (muat, ubah, simpan),
+dan penegakan izin ke menu + rute modul untuk user berperan `viewer`.
 
 ### Ronde 23 (2026-09-30) — hapus spec uji Meta (integrasi Meta ditunda)
 
