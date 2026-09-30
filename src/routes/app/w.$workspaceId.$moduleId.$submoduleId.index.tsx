@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Construction, Plus, Search } from "lucide-react";
+import { Construction, Lock, Plus, Search } from "lucide-react";
 
 import { MasterDataTable } from "@/components/app/MasterDataTable";
 import { AccountingView } from "@/components/app/AccountingViews";
@@ -16,6 +16,7 @@ import { CrmView } from "@/components/app/CrmViews";
 import { HrView } from "@/components/app/HrViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { findAccEntity } from "@/lib/accounting";
 import { findMasterEntity } from "@/lib/master-data";
@@ -35,6 +36,8 @@ export const Route = createFileRoute("/app/w/$workspaceId/$moduleId/$submoduleId
 function SubModulePage() {
   const { workspaceId, moduleId, submoduleId } = Route.useParams();
   const { lang } = useI18n();
+  // #59 (BS New 3): penegakan izin per submodul.
+  const { accessLoading, canViewSubmodule, canEditSubmodule } = useApp();
   const mod = findModule(moduleId);
   const sub = mod?.submodules.find((s) => s.id === submoduleId);
 
@@ -45,6 +48,69 @@ function SubModulePage() {
       </p>
     );
   }
+
+  if (accessLoading) {
+    return (
+      <div className="grid min-h-64 place-items-center">
+        <span className="text-sm text-muted-foreground">
+          {lang === "id" ? "Memuat akses…" : "Loading access…"}
+        </span>
+      </div>
+    );
+  }
+
+  if (!canViewSubmodule(moduleId, submoduleId)) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center">
+        <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
+          {lang === "id" ? "Akses submodul dibatasi" : "Submodule access restricted"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {lang === "id"
+            ? "Hubungi admin workspace untuk mendapatkan akses."
+            : "Contact your workspace admin to request access."}
+        </p>
+      </div>
+    );
+  }
+
+  const canEdit = canEditSubmodule(moduleId, submoduleId);
+
+  return (
+    <div className="space-y-3">
+      {!canEdit && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <Lock className="h-4 w-4 shrink-0" />
+          {lang === "id"
+            ? "Akses hanya lihat — perubahan data dinonaktifkan."
+            : "View-only access — data changes are disabled."}
+        </div>
+      )}
+      <fieldset
+        disabled={!canEdit}
+        className="min-w-0 disabled:[&_button]:cursor-not-allowed disabled:[&_button]:opacity-60 disabled:[&_input]:cursor-not-allowed disabled:[&_select]:cursor-not-allowed"
+      >
+        <SubModuleBody moduleId={moduleId} submoduleId={submoduleId} workspaceId={workspaceId} />
+      </fieldset>
+    </div>
+  );
+}
+
+/** Isi layar submodul — dipisah agar penegakan izin (#59) bisa membungkusnya. */
+function SubModuleBody({
+  moduleId,
+  submoduleId,
+  workspaceId,
+}: {
+  moduleId: string;
+  submoduleId: string;
+  workspaceId: string;
+}) {
+  const { lang } = useI18n();
+  const mod = findModule(moduleId);
+  const sub = mod?.submodules.find((s) => s.id === submoduleId);
+  if (!mod || !sub) return null;
 
   if (moduleId === "master-data") {
     const entity = findMasterEntity(submoduleId);

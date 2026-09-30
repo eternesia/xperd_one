@@ -49,7 +49,7 @@ import { useTheme } from "@/lib/theme";
 import appLogo from "@/assets/xperd.png";
 
 export function AppTopbar({ workspaceId }: { workspaceId: string }) {
-  const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId } = useApp();
+  const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId, canViewModule, canViewSubmodule } = useApp();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -58,13 +58,16 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
 
   const entries = useMemo(
     () => [
-      ...APP_MODULES.flatMap((m) => [
+      // #59: hanya modul/submodul yang boleh dilihat peran ini yang muncul.
+      ...APP_MODULES.filter((m) => canViewModule(m.id)).flatMap((m) => [
         { label: lang === "id" ? m.id_ : m.en, to: `/app/w/${workspaceId}/${m.id}`, group: lang === "id" ? "Modul" : "Modules" },
-        ...m.submodules.map((sub) => ({
-          label: `${lang === "id" ? m.id_ : m.en} · ${lang === "id" ? sub.id_ : sub.en}`,
-          to: `/app/w/${workspaceId}/${m.id}/${sub.id}`,
-          group: lang === "id" ? "Sub modul" : "Sub modules",
-        })),
+        ...m.submodules
+          .filter((sub) => canViewSubmodule(m.id, sub.id))
+          .map((sub) => ({
+            label: `${lang === "id" ? m.id_ : m.en} · ${lang === "id" ? sub.id_ : sub.en}`,
+            to: `/app/w/${workspaceId}/${m.id}/${sub.id}`,
+            group: lang === "id" ? "Sub modul" : "Sub modules",
+          })),
       ]),
       ...LAUNCHER_UTILITIES.map((u) => ({
         label: lang === "id" ? u.id_ : u.en,
@@ -72,7 +75,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
         group: lang === "id" ? "Pengaturan" : "Workspace",
       })),
     ],
-    [lang, workspaceId],
+    [lang, workspaceId, canViewModule, canViewSubmodule],
   );
 
   const groups = useMemo(() => {

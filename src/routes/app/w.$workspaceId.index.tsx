@@ -16,7 +16,7 @@ export const Route = createFileRoute("/app/w/$workspaceId/")({
 
 function Launcher() {
   const { workspaceId } = Route.useParams();
-  const { activeWorkspace } = useApp();
+  const { activeWorkspace, canViewModule, canViewSubmodule } = useApp();
   const { lang } = useI18n();
   const { hasAddon, loading: addonsLoading } = useTenantAddons();
 
@@ -48,9 +48,11 @@ function Launcher() {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {APP_MODULES.map((m) => {
+          {APP_MODULES.filter((m) => canViewModule(m.id)).map((m) => {
             const addonLocked = Boolean(m.addon) && !addonsLoading && !hasAddon(m.addon);
             const locked = m.disabled || addonLocked;
+            // #59: hitung hanya submodul yang boleh dilihat peran ini.
+            const visibleCount = m.submodules.filter((sub) => canViewSubmodule(m.id, sub.id)).length;
             const inner = (
               <>
                 <div className="flex items-start justify-between">
@@ -75,7 +77,7 @@ function Launcher() {
                   {lang === "id" ? m.descId : m.descEn}
                 </p>
                 <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-muted-foreground group-hover:text-gold">
-                  {m.submodules.length} {lang === "id" ? "sub modul" : "sub modules"}
+                  {visibleCount} {lang === "id" ? "sub modul" : "sub modules"}
                   <ArrowUpRight className="h-3 w-3" />
                 </p>
               </>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, Download, Printer } from "lucide-react";
+import { ChevronLeft, Download, Lock, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,7 @@ function DocumentDetail() {
   const { workspaceId, moduleId, submoduleId, docId } = Route.useParams();
   const { print } = Route.useSearch();
   const { lang } = useI18n();
-  const { activeWorkspace } = useApp();
+  const { activeWorkspace, accessLoading, canViewSubmodule } = useApp();
   const [pdfBusy, setPdfBusy] = useState(false);
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const isSales = moduleId === "sales";
@@ -133,6 +133,25 @@ function DocumentDetail() {
   }, [print, doc, entity]);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…", "Memuat…")}</p>;
+  // #59 (BS New 3): dokumen hanya boleh dibuka bila peran punya akses submodulnya.
+  if (accessLoading)
+    return <p className="text-sm text-muted-foreground">{t("Loading access…", "Memuat akses…")}</p>;
+  if (!canViewSubmodule(moduleId, submoduleId)) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center">
+        <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
+          {t("Document access restricted", "Akses dokumen dibatasi")}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {t(
+            "Contact your workspace admin to request access.",
+            "Hubungi admin workspace untuk mendapatkan akses.",
+          )}
+        </p>
+      </div>
+    );
+  }
   if (!doc || !entity)
     return <p className="text-sm text-muted-foreground">{t("Document not found.", "Dokumen tidak ditemukan.")}</p>;
 
