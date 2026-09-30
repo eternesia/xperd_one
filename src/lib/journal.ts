@@ -4,7 +4,7 @@ import {
   fetchMdItems,
   postJournalEntry,
 } from "@/lib/ledger.functions";
-import { listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { movingAverageCosts } from "@/lib/inventory";
 import type { PrcDoc } from "@/lib/procurement";
 
@@ -402,6 +402,58 @@ export async function postReceiptJournal(
     { ...cash, description: memo, debit: Number(doc.total ?? 0), credit: 0 },
     { ...creditAcc, description: memo, debit: 0, credit: Number(doc.total ?? 0) },
   ]);
+}
+
+/* ------------------------------ Kunci periode (#46) ----------------------- */
+
+export type PeriodLockType = "soft" | "hard";
+
+export function periodOfDate(date: string) {
+  return String(date).slice(0, 7);
+}
+
+export interface PeriodLock {
+  id: string;
+  period: string;
+  lock_type: PeriodLockType;
+  note: string | null;
+  created_at: string;
+}
+
+/** Daftar periode yang dikunci (dipakai layar Tutup Periode). */
+export async function fetchPeriodLocks(workspaceId: string) {
+  const data = await listWorkspaceRows({
+    data: {
+      table: "acc_period_locks",
+      workspaceId,
+      orderBy: "period",
+      orderDir: "desc",
+      limit: 200,
+    },
+  });
+  return (data?.rows ?? []) as unknown as PeriodLock[];
+}
+
+/**
+ * Kunci periode akuntansi. Penegakannya ada di server (`postJournalEntry`), jadi
+ * semua jalur posting — dokumen, kas/bank, payroll, jurnal manual — ikut terjaga.
+ */
+export async function lockPeriod(
+  workspaceId: string,
+  lock: { period: string; lock_type: PeriodLockType; note?: string | null },
+) {
+  if (!/^\d{4}-\d{2}$/.test(lock.period)) throw new Error("Periode harus format YYYY-MM.");
+  await saveWorkspaceRow({
+    data: {
+      table: "acc_period_locks",
+      workspaceId,
+      data: { period: lock.period, lock_type: lock.lock_type, note: lock.note ?? null },
+    },
+  });
+}
+
+export async function unlockPeriod(workspaceId: string, id: string) {
+  await deleteWorkspaceRow({ data: { table: "acc_period_locks", workspaceId, id } });
 }
 
 /* ------------------------------- Uang muka (#37) --------------------------- */

@@ -99,9 +99,22 @@ export const postJournalEntry = createServerFn({ method: "POST" })
   .validator((i: unknown) => i as { workspaceId: string; entry: JournalEntryInput; lines: JournalLineInput[] })
   .handler(async ({ data, context }) => {
     await withWriter(data.workspaceId, context.userId);
-    const { transaction, uuid } = await import("@/integrations/mysql/pool");
+    const { transaction, uuid, executeOne } = await import("@/integrations/mysql/pool");
     const entryId = uuid();
     const e = data.entry;
+    // #46 (BS New 3): periode yang dikunci menolak posting jurnal baru.
+    const period = String(e.entry_date).slice(0, 7);
+    const lock = (await executeOne(
+      "SELECT lock_type FROM acc_period_locks WHERE workspace_id = ? AND period = ? LIMIT 1",
+      [data.workspaceId, period],
+    )) as { lock_type: string } | null;
+    if (lock) {
+      throw new Error(
+        lock.lock_type === "hard"
+          ? `Periode ${period} terkunci (hard lock). Buka kuncinya sebelum memposting jurnal.`
+          : `Periode ${period} ditutup sementara (soft close). Minta admin membuka periode sebelum memposting jurnal.`,
+      );
+    }
     await transaction(async (conn) => {
       await conn.execute(
         `INSERT INTO acc_journal_entries

@@ -20,6 +20,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // #45 (BS New 3): Kartu AR/AP & Aging (subledger) — komponen terpisah.
 import { AgingView, SubledgerCardView } from "@/components/app/SubledgerViews";
+// #46 (BS New 3): kunci periode akuntansi.
+import { fetchPeriodLocks, lockPeriod, periodOfDate, unlockPeriod, type PeriodLockType } from "@/lib/journal";
+// #48 (BS New 3): laporan keuangan formal (kop, skontro, tanda tangan, ekspor).
+import { useApp } from "@/lib/app-context";
+import {
+  asOfLabel,
+  downloadStatementPdf,
+  exportStatementXlsx,
+  periodRangeLabel,
+  printStatement,
+  type StatementDoc,
+  type StmtEntity,
+  type StmtRow,
+} from "@/lib/financial-statement";
 import { useI18n } from "@/lib/i18n";
 import { formatMoney, nextDocNumber } from "@/lib/procurement";
 import {
@@ -438,6 +452,7 @@ function Pager({
 function LedgerView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
   const [account, setAccount] = useState<string>("");
@@ -469,7 +484,45 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-5">
-      <Header kicker={t("Accounting", "Akuntansi")} title={t("General Ledger", "Buku Besar")} action={<PrintButton />} />
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("General Ledger", "Buku Besar")}
+        action={
+          <StatementActions
+            build={() => ({
+              filename: `buku-besar-${activeAccount}-${from}-${to}`,
+              lang,
+              entity,
+              title: `${t("GENERAL LEDGER", "BUKU BESAR")} — ${activeAccount} ${meta?.name ?? ""}`.trim(),
+              periodLabel: periodRangeLabel(from, to, lang),
+              layout: "stafel",
+              orientation: "landscape",
+              columns: [t("Debit", "Debit"), t("Credit", "Kredit"), t("Balance", "Saldo")],
+              sections: [
+                {
+                  rows: [
+                    ...rows.map((r) => ({
+                      code: r.entry!.entry_date,
+                      label: `${r.entry!.entry_no} · ${r.line.description ?? r.entry!.memo ?? ""}`,
+                      values: [r.debit, r.credit, r.running] as (number | string | null)[],
+                      kind: "item" as const,
+                    })),
+                    {
+                      label: t("TOTAL / CLOSING BALANCE", "JUMLAH / SALDO AKHIR"),
+                      values: [
+                        rows.reduce((s, r) => s + r.debit, 0),
+                        rows.reduce((s, r) => s + r.credit, 0),
+                        rows.at(-1)?.running ?? 0,
+                      ],
+                      kind: "total" as const,
+                    },
+                  ],
+                },
+              ],
+            })}
+          />
+        }
+      />
 
       <div className="flex flex-wrap items-end gap-2 no-print">
         <div>
@@ -541,6 +594,7 @@ function useBalances(workspaceId: string, from: string, to: string) {
 function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
   const { balances, isLoading } = useBalances(workspaceId, from, to);
@@ -548,9 +602,38 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
   const totalDebit = balances.reduce((s, r) => s + r.debit, 0);
   const totalCredit = balances.reduce((s, r) => s + r.credit, 0);
 
+  // #48: versi formal untuk cetak/PDF/Excel (kolom debit-kredit-saldo).
+  const buildStatement = (): StatementDoc => ({
+    filename: `neraca-saldo-${from}-${to}`,
+    lang,
+    entity,
+    title: t("TRIAL BALANCE", "NERACA SALDO"),
+    periodLabel: periodRangeLabel(from, to, lang),
+    layout: "stafel",
+    orientation: "landscape",
+    columns: [t("Debit", "Debit"), t("Credit", "Kredit"), t("Balance", "Saldo")],
+    sections: [
+      {
+        rows: [
+          ...balances.map((r) => ({
+            code: r.code,
+            label: r.name,
+            values: [r.debit, r.credit, r.balance] as (number | string | null)[],
+            kind: "item" as const,
+          })),
+          { label: t("TOTAL", "JUMLAH"), values: [totalDebit, totalCredit, null], kind: "total" as const },
+        ],
+      },
+    ],
+  });
+
   return (
     <div className="space-y-5">
-      <Header kicker={t("Accounting", "Akuntansi")} title={t("Trial Balance", "Neraca Saldo")} action={<PrintButton />} />
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("Trial Balance", "Neraca Saldo")}
+        action={<StatementActions build={buildStatement} />}
+      />
       <div className="flex flex-wrap items-end gap-2 no-print">
         <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
       </div>
@@ -609,6 +692,85 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+/* --------------------- formal financial statement output ------------------- */
+
+/** #48 (BS New 3): data kop surat diambil dari profil workspace aktif. */
+function useStatementEntity(): StmtEntity {
+  const { activeWorkspace } = useApp();
+  return {
+    name: activeWorkspace?.name ?? "XPERD",
+    legalName: activeWorkspace?.legal_name ?? activeWorkspace?.name ?? "XPERD",
+    address: activeWorkspace?.address ?? null,
+    taxId: activeWorkspace?.tax_id ?? null,
+    phone: activeWorkspace?.phone ?? null,
+    email: activeWorkspace?.email ?? null,
+    logoUrl: activeWorkspace?.logo_url ?? null,
+    currency: activeWorkspace?.currency ?? "IDR",
+  };
+}
+
+/** Excel / PDF / Cetak laporan keuangan pada lembar A4 formal. */
+function StatementActions({ build }: { build: () => StatementDoc }) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const run = async (kind: "xlsx" | "pdf" | "print") => {
+    try {
+      const doc = build();
+      if (kind === "xlsx") await exportStatementXlsx(doc);
+      else if (kind === "pdf") await downloadStatementPdf(doc);
+      else printStatement(doc);
+    } catch {
+      toast.error(t("Export failed.", "Ekspor gagal."));
+    }
+  };
+  return (
+    <div className="no-print flex flex-wrap items-center gap-2">
+      <Button variant="outline" onClick={() => run("xlsx")}>
+        Excel
+      </Button>
+      <Button variant="outline" onClick={() => run("pdf")}>
+        PDF
+      </Button>
+      <Button variant="outline" onClick={() => run("print")}>
+        <Printer /> {t("Print", "Cetak")}
+      </Button>
+    </div>
+  );
+}
+
+function codeNum(code: string) {
+  const n = Number(String(code ?? "").replace(/\D/g, "").slice(0, 4));
+  return Number.isFinite(n) ? n : 0;
+}
+/** 1000-1599 aset lancar, 1600+ aset tidak lancar. */
+function isCurrentAsset(code: string) {
+  const n = codeNum(code);
+  return n === 0 || n < 1600;
+}
+/** 2000-2499 liabilitas jangka pendek, 2500+ jangka panjang. */
+function isCurrentLiability(code: string) {
+  const n = codeNum(code);
+  return n === 0 || n < 2500;
+}
+/** Akun 5xxx = beban pokok penjualan, sisanya beban usaha. */
+function isCogs(code: string, name: string) {
+  const n = codeNum(code);
+  return (n >= 5000 && n < 6000) || /harga pokok|hpp|cost of (goods|sales)/i.test(name ?? "");
+}
+
+function item(code: string, label: string, amount: number): StmtRow {
+  return { code, label, values: [amount], kind: "item" };
+}
+function group(label: string): StmtRow {
+  return { label, kind: "group" };
+}
+function subtotal(label: string, amount: number): StmtRow {
+  return { label, values: [amount], kind: "subtotal" };
+}
+function grandTotal(label: string, amount: number): StmtRow {
+  return { label, values: [amount], kind: "total" };
+}
+
 /* ------------------------------ profit & loss ----------------------------- */
 
 function StatementSection({
@@ -655,6 +817,7 @@ function sumType(balances: { type: AccAccountType; balance: number }[], type: Ac
 function ProfitLossView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
   const { balances } = useBalances(workspaceId, from, to);
@@ -665,9 +828,45 @@ function ProfitLossView({ workspaceId }: { workspaceId: string }) {
   const totalExpense = sumType(balances, "expense");
   const net = totalRevenue - totalExpense;
 
+  // #48: penyajian bertahap (pendapatan, beban pokok, laba kotor, beban usaha).
+  const cogs = expense.filter((e) => isCogs(e.code, e.name));
+  const opex = expense.filter((e) => !isCogs(e.code, e.name));
+  const totalCogs = cogs.reduce((s, r) => s + r.balance, 0);
+  const totalOpex = opex.reduce((s, r) => s + r.balance, 0);
+  const grossProfit = totalRevenue - totalCogs;
+
+  const buildStatement = (): StatementDoc => {
+    const rows: StmtRow[] = [];
+    rows.push(group(t("REVENUE", "PENDAPATAN USAHA")));
+    revenue.forEach((r) => rows.push({ ...item(r.code, r.name, r.balance), indent: 1 }));
+    rows.push(subtotal(t("Total revenue", "Jumlah pendapatan usaha"), totalRevenue));
+    rows.push(group(t("COST OF SALES", "BEBAN POKOK PENJUALAN")));
+    cogs.forEach((r) => rows.push({ ...item(r.code, r.name, r.balance), indent: 1 }));
+    rows.push(subtotal(t("Total cost of sales", "Jumlah beban pokok penjualan"), totalCogs));
+    rows.push(subtotal(t("GROSS PROFIT", "LABA (RUGI) KOTOR"), grossProfit));
+    rows.push(group(t("OPERATING EXPENSES", "BEBAN USAHA")));
+    opex.forEach((r) => rows.push({ ...item(r.code, r.name, r.balance), indent: 1 }));
+    rows.push(subtotal(t("Total operating expenses", "Jumlah beban usaha"), totalOpex));
+    rows.push({ label: "", kind: "blank" });
+    rows.push(grandTotal(t("NET PROFIT (LOSS) FOR THE PERIOD", "LABA (RUGI) BERSIH PERIODE BERJALAN"), net));
+    return {
+      filename: `laporan-laba-rugi-${from}-${to}`,
+      lang,
+      entity,
+      title: t("STATEMENT OF PROFIT OR LOSS", "LAPORAN LABA RUGI"),
+      periodLabel: periodRangeLabel(from, to, lang),
+      layout: "stafel",
+      sections: [{ rows }],
+    };
+  };
+
   return (
     <div className="space-y-5">
-      <Header kicker={t("Accounting", "Akuntansi")} title={t("Profit & Loss", "Laba Rugi")} action={<PrintButton />} />
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("Profit & Loss", "Laba Rugi")}
+        action={<StatementActions build={buildStatement} />}
+      />
       <div className="flex flex-wrap items-end gap-2 no-print">
         <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
       </div>
@@ -695,6 +894,7 @@ function ProfitLossView({ workspaceId }: { workspaceId: string }) {
 function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [to, setTo] = useState(today());
   const { balances } = useBalances(workspaceId, "", to);
 
@@ -707,9 +907,77 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
   const totalEquity = sumType(balances, "equity") + netIncome;
   const diff = totalAssets - (totalLiabilities + totalEquity);
 
+  // #48: penyajian skontro (aset di kiri, liabilitas + ekuitas di kanan).
+  const currentAssets = assets.filter((a) => isCurrentAsset(a.code));
+  const fixedAssets = assets.filter((a) => !isCurrentAsset(a.code));
+  const currentLiab = liabilities.filter((l) => isCurrentLiability(l.code));
+  const longLiab = liabilities.filter((l) => !isCurrentLiability(l.code));
+  const sum = (rows: { balance: number }[]) => rows.reduce((s, r) => s + r.balance, 0);
+
+  const buildStatement = (): StatementDoc => {
+    const leftRows: StmtRow[] = [];
+    leftRows.push(group(t("CURRENT ASSETS", "ASET LANCAR")));
+    currentAssets.forEach((a) => leftRows.push({ ...item(a.code, a.name, a.balance), indent: 1 }));
+    leftRows.push(subtotal(t("Total current assets", "Jumlah aset lancar"), sum(currentAssets)));
+    leftRows.push(group(t("NON-CURRENT ASSETS", "ASET TIDAK LANCAR")));
+    fixedAssets.forEach((a) => leftRows.push({ ...item(a.code, a.name, a.balance), indent: 1 }));
+    leftRows.push(subtotal(t("Total non-current assets", "Jumlah aset tidak lancar"), sum(fixedAssets)));
+    leftRows.push({ label: "", kind: "blank" });
+    leftRows.push(grandTotal(t("TOTAL ASSETS", "JUMLAH ASET"), totalAssets));
+
+    const rightRows: StmtRow[] = [];
+    rightRows.push(group(t("CURRENT LIABILITIES", "LIABILITAS JANGKA PENDEK")));
+    currentLiab.forEach((l) => rightRows.push({ ...item(l.code, l.name, l.balance), indent: 1 }));
+    rightRows.push(subtotal(t("Total current liabilities", "Jumlah liabilitas jangka pendek"), sum(currentLiab)));
+    rightRows.push(group(t("LONG-TERM LIABILITIES", "LIABILITAS JANGKA PANJANG")));
+    longLiab.forEach((l) => rightRows.push({ ...item(l.code, l.name, l.balance), indent: 1 }));
+    rightRows.push(subtotal(t("Total long-term liabilities", "Jumlah liabilitas jangka panjang"), sum(longLiab)));
+    rightRows.push(subtotal(t("Total liabilities", "Jumlah liabilitas"), totalLiabilities));
+    rightRows.push(group(t("EQUITY", "EKUITAS")));
+    equity.forEach((e) => rightRows.push({ ...item(e.code, e.name, e.balance), indent: 1 }));
+    rightRows.push({
+      label: t("Result for the period", "Laba (rugi) periode berjalan"),
+      values: [netIncome],
+      kind: "item",
+      indent: 1,
+    });
+    rightRows.push(subtotal(t("Total equity", "Jumlah ekuitas"), totalEquity));
+    rightRows.push({ label: "", kind: "blank" });
+    rightRows.push(
+      grandTotal(
+        t("TOTAL LIABILITIES AND EQUITY", "JUMLAH LIABILITAS DAN EKUITAS"),
+        totalLiabilities + totalEquity,
+      ),
+    );
+
+    // Samakan tinggi kedua kolom supaya jumlah besar berada di baris yang sama.
+    while (leftRows.length < rightRows.length) leftRows.splice(leftRows.length - 2, 0, { label: "", kind: "blank" });
+    while (rightRows.length < leftRows.length) rightRows.splice(rightRows.length - 2, 0, { label: "", kind: "blank" });
+
+    return {
+      filename: `laporan-posisi-keuangan-${to}`,
+      lang,
+      entity,
+      title: t("STATEMENT OF FINANCIAL POSITION (BALANCE SHEET)", "LAPORAN POSISI KEUANGAN (NERACA)"),
+      periodLabel: asOfLabel(to, lang),
+      layout: "skontro",
+      orientation: "landscape",
+      left: { title: t("ASSETS", "ASET"), rows: leftRows },
+      right: { title: t("LIABILITIES AND EQUITY", "LIABILITAS DAN EKUITAS"), rows: rightRows },
+      note:
+        Math.abs(diff) < 0.5
+          ? undefined
+          : `${t("Warning: the statement is out of balance by", "Perhatian: neraca belum seimbang sebesar")} ${formatMoney(diff, lang)}.`,
+    };
+  };
+
   return (
     <div className="space-y-5">
-      <Header kicker={t("Accounting", "Akuntansi")} title={t("Balance Sheet", "Neraca")} action={<PrintButton />} />
+      <Header
+        kicker={t("Accounting", "Akuntansi")}
+        title={t("Balance Sheet", "Neraca")}
+        action={<StatementActions build={buildStatement} />}
+      />
       <div className="flex flex-wrap items-end gap-2 no-print">
         <div>
           <Label className="text-xs text-muted-foreground">{t("As of", "Per tanggal")}</Label>
@@ -753,6 +1021,7 @@ function previousDay(date: string) {
 function CashFlowView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
 
@@ -783,7 +1052,61 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
       <Header
         kicker={t("Accounting", "Akuntansi")}
         title={t("Cash Flow Statement", "Laporan Arus Kas")}
-        action={<PrintButton />}
+        action={
+          <StatementActions
+            build={() => ({
+              filename: `laporan-arus-kas-${from}-${to}`,
+              lang,
+              entity,
+              title: t("STATEMENT OF CASH FLOWS", "LAPORAN ARUS KAS"),
+              periodLabel: periodRangeLabel(from, to, lang),
+              layout: "stafel",
+              orientation: "landscape",
+              columns: [t("Cash in", "Kas masuk"), t("Cash out", "Kas keluar"), t("Net", "Bersih")],
+              sections: [
+                {
+                  rows: [
+                    ...groups.flatMap((g) => {
+                      const label = lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en;
+                      const groupRows = result.rows.filter((r) => r.group === g);
+                      return [
+                        group(label),
+                        ...groupRows.map((r) => ({
+                          code: r.code,
+                          label: r.name,
+                          values: [r.inflow, r.outflow, r.net] as (number | string | null)[],
+                          kind: "item" as const,
+                          indent: 1,
+                        })),
+                        {
+                          label: `${t("Subtotal", "Jumlah")} — ${label}`,
+                          values: [null, null, result.totals[g]] as (number | string | null)[],
+                          kind: "subtotal" as const,
+                        },
+                      ];
+                    }),
+                    { label: "", kind: "blank" as const },
+                    {
+                      label: t("Net increase (decrease) in cash", "Kenaikan (penurunan) bersih kas"),
+                      values: [null, null, result.netChange] as (number | string | null)[],
+                      kind: "subtotal" as const,
+                    },
+                    {
+                      label: t("Cash at beginning of period", "Kas dan setara kas awal periode"),
+                      values: [null, null, result.opening] as (number | string | null)[],
+                      kind: "item" as const,
+                    },
+                    {
+                      label: t("CASH AT END OF PERIOD", "KAS DAN SETARA KAS AKHIR PERIODE"),
+                      values: [null, null, result.closing] as (number | string | null)[],
+                      kind: "total" as const,
+                    },
+                  ],
+                },
+              ],
+            })}
+          />
+        }
       />
       <div className="flex flex-wrap items-end gap-2 no-print">
         <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
@@ -855,6 +1178,7 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
 function EquityChangesView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const entity = useStatementEntity();
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
 
@@ -872,7 +1196,50 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
       <Header
         kicker={t("Accounting", "Akuntansi")}
         title={t("Changes in Equity", "Perubahan Ekuitas")}
-        action={<PrintButton />}
+        action={
+          <StatementActions
+            build={() => ({
+              filename: `laporan-perubahan-ekuitas-${from}-${to}`,
+              lang,
+              entity,
+              title: t("STATEMENT OF CHANGES IN EQUITY", "LAPORAN PERUBAHAN EKUITAS"),
+              periodLabel: periodRangeLabel(from, to, lang),
+              layout: "stafel",
+              orientation: "landscape",
+              columns: [
+                t("Opening balance", "Saldo awal"),
+                t("Movement", "Mutasi"),
+                t("Closing balance", "Saldo akhir"),
+              ],
+              sections: [
+                {
+                  rows: [
+                    ...statement.rows.map((r) => ({
+                      code: r.code,
+                      label: r.name,
+                      values: [r.opening, r.movement, r.closing] as (number | string | null)[],
+                      kind: "item" as const,
+                    })),
+                    {
+                      label: t("Result for the period", "Laba (rugi) periode berjalan"),
+                      values: [0, statement.netIncome, statement.netIncome] as (number | string | null)[],
+                      kind: "item" as const,
+                    },
+                    {
+                      label: t("TOTAL EQUITY", "JUMLAH EKUITAS"),
+                      values: [
+                        statement.openingTotal,
+                        statement.movementTotal + statement.netIncome,
+                        statement.closingTotal,
+                      ] as (number | string | null)[],
+                      kind: "total" as const,
+                    },
+                  ],
+                },
+              ],
+            })}
+          />
+        }
       />
       <div className="flex flex-wrap items-end gap-2 no-print">
         <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
@@ -961,6 +1328,34 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
 
   const alreadyClosed = (data?.entries ?? []).some((e) => e.source_type === "period_closing");
 
+  // #46 (BS New 3): kunci periode — periode terkunci menolak posting jurnal baru.
+  const [lockValue, setLockValue] = useState(monthStart().slice(0, 7));
+  const [lockType, setLockType] = useState<PeriodLockType>("hard");
+  const [lockNote, setLockNote] = useState("");
+  const { data: locks = [] } = useQuery({
+    queryKey: ["acc-period-locks", workspaceId],
+    queryFn: () => fetchPeriodLocks(workspaceId),
+  });
+  const addLock = useMutation({
+    mutationFn: async () =>
+      lockPeriod(workspaceId, { period: lockValue, lock_type: lockType, note: lockNote || null }),
+    onSuccess: () => {
+      toast.success(t("Period locked.", "Periode dikunci."));
+      setLockNote("");
+      qc.invalidateQueries({ queryKey: ["acc-period-locks", workspaceId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const removeLock = useMutation({
+    mutationFn: async (id: string) => unlockPeriod(workspaceId, id),
+    onSuccess: () => {
+      toast.success(t("Period unlocked.", "Kunci periode dibuka."));
+      qc.invalidateQueries({ queryKey: ["acc-period-locks", workspaceId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const toLocked = locks.some((l) => l.period === periodOfDate(to));
+
   const close = useMutation({
     mutationFn: async () => {
       const lines: ManualLineInput[] = [
@@ -1022,6 +1417,96 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <StatementSection title={t("Revenue accounts to close", "Akun pendapatan yang ditutup")} rows={revenue} total={totalRevenue} />
         <StatementSection title={t("Expense accounts to close", "Akun beban yang ditutup")} rows={expense} total={totalExpense} />
+      </div>
+
+      {/* #46 (BS New 3): kunci periode akuntansi. */}
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
+        <div>
+          <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
+            {t("Period locks", "Kunci periode")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Locked periods reject new journals — documents, cash/bank, payroll and manual entries alike.",
+              "Periode yang dikunci menolak jurnal baru — baik dari dokumen, kas/bank, payroll, maupun jurnal manual.",
+            )}
+          </p>
+        </div>
+        {toLocked && (
+          <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            {t(`Period ${periodOfDate(to)} is locked.`, `Periode ${periodOfDate(to)} terkunci.`)}
+          </p>
+        )}
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="grid gap-1">
+            <Label className="text-xs">{t("Period", "Periode")}</Label>
+            <Input
+              type="month"
+              value={lockValue}
+              onChange={(e) => setLockValue(e.target.value)}
+              className="h-9 w-[150px]"
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label className="text-xs">{t("Type", "Jenis")}</Label>
+            <Select value={lockType} onValueChange={(v) => setLockType(v as PeriodLockType)}>
+              <SelectTrigger className="h-9 w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="soft">{t("Soft close", "Tutup sementara")}</SelectItem>
+                <SelectItem value="hard">{t("Hard lock", "Kunci keras")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid min-w-[180px] flex-1 gap-1">
+            <Label className="text-xs">{t("Note", "Catatan")}</Label>
+            <Input value={lockNote} onChange={(e) => setLockNote(e.target.value)} className="h-9" />
+          </div>
+          <Button
+            variant="navy"
+            className="h-9"
+            disabled={addLock.isPending || !lockValue}
+            onClick={() => addLock.mutate()}
+          >
+            {addLock.isPending && <Loader2 className="animate-spin" />} {t("Lock period", "Kunci periode")}
+          </Button>
+        </div>
+        {!!locks.length && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Period", "Periode")}</TableHead>
+                <TableHead>{t("Type", "Jenis")}</TableHead>
+                <TableHead>{t("Note", "Catatan")}</TableHead>
+                <TableHead className="w-16" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {locks.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell className="font-medium">{l.period}</TableCell>
+                  <TableCell>
+                    <Badge variant={l.lock_type === "hard" ? "destructive" : "secondary"}>
+                      {l.lock_type === "hard" ? t("Hard", "Keras") : t("Soft", "Sementara")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{l.note || "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={removeLock.isPending}
+                      onClick={() => removeLock.mutate(l.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
     </div>
   );
