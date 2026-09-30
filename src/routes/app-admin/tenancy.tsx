@@ -86,6 +86,8 @@ function TenancyPage() {
   const [form, setForm] = useState<TenantForm>(EMPTY);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | TenantStatus>("all");
+  // #65: pemisah produk — tenant XPERD ERP vs Qalling.
+  const [productFilter, setProductFilter] = useState<"all" | "xperd" | "qalling">("all");
 
   const { data: packages = [] } = useQuery({
     queryKey: ["admin-packages"],
@@ -174,11 +176,27 @@ function TenancyPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // #65: ganti produk tenant (XPERD ⇄ Qalling).
+  const changeProduct = useMutation({
+    mutationFn: async ({ id, product }: { id: string; product: "xperd" | "qalling" }) => {
+      await adminSave({ data: { table: "tenants", id, data: { product } } });
+    },
+    onSuccess: (_r, v) => {
+      toast.success(`Produk tenant diubah ke ${v.product === "qalling" ? "Qalling" : "XPERD"}`);
+      qc.invalidateQueries({ queryKey: ["admin-tenants"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const filtered = tenants.filter((t) => {
     const matchesSearch = `${t.name} ${t.subdomain} ${t.pic_email ?? ""}`
       .toLowerCase()
       .includes(search.toLowerCase());
-    return matchesSearch && (statusFilter === "all" || t.status === statusFilter);
+    return (
+      matchesSearch &&
+      (statusFilter === "all" || t.status === statusFilter) &&
+      (productFilter === "all" || (t.product ?? "xperd") === productFilter)
+    );
   });
 
   const counts = STATUSES.map((s) => ({ status: s, count: tenants.filter((t) => t.status === s).length }));
@@ -230,6 +248,16 @@ function TenancyPage() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={productFilter} onValueChange={(v) => setProductFilter(v as "all" | "xperd" | "qalling")}>
+          <SelectTrigger className="w-44" aria-label="Filter produk">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua produk</SelectItem>
+            <SelectItem value="xperd">XPERD ERP</SelectItem>
+            <SelectItem value="qalling">Qalling</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -261,7 +289,25 @@ function TenancyPage() {
               {filtered.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>
-                    <p className="font-medium text-navy">{t.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-navy">{t.name}</p>
+                      {/* #65: klik badge untuk menukar produk tenant. */}
+                      <button
+                        type="button"
+                        title="Ganti produk"
+                        disabled={changeProduct.isPending}
+                        onClick={() =>
+                          changeProduct.mutate({
+                            id: t.id,
+                            product: (t.product ?? "xperd") === "qalling" ? "xperd" : "qalling",
+                          })
+                        }
+                      >
+                        <Badge variant={(t.product ?? "xperd") === "qalling" ? "default" : "outline"}>
+                          {(t.product ?? "xperd") === "qalling" ? "Qalling" : "XPERD"}
+                        </Badge>
+                      </button>
+                    </div>
                     <p className="text-xs text-muted-foreground">{t.subdomain}.xperd.id</p>
                   </TableCell>
                   <TableCell className="text-sm">{t.packages?.name ?? "—"}</TableCell>

@@ -24,10 +24,11 @@ const ADMIN_TABLES = new Set([
 
 // Per-table column whitelist (mirrors 001-schema.sql).
 const PCOLS: Record<string, string[]> = {
-  tenants: ["id", "name", "subdomain", "package_id", "owner_id", "status", "industry", "pic_name", "pic_email", "pic_phone", "city", "user_count", "trial_ends_at", "started_at", "ends_at", "workspace_count", "notes", "created_at", "updated_at"],
+  // `product` (#65, migration 010): pemisah tenant/invoice XPERD vs Qalling.
+  tenants: ["id", "name", "subdomain", "package_id", "owner_id", "status", "product", "industry", "pic_name", "pic_email", "pic_phone", "city", "user_count", "trial_ends_at", "started_at", "ends_at", "workspace_count", "notes", "created_at", "updated_at"],
   packages: ["id", "code", "name", "product_line", "tagline", "description", "monthly_price", "is_public_signup", "max_workspace", "max_company", "max_users", "features", "sort_order", "is_active", "created_at", "updated_at"],
   subscriptions: ["id", "tenant_id", "package_id", "status", "billing_cycle", "seats", "unit_price", "current_period_start", "current_period_end", "auto_renew", "cancelled_at", "created_at", "updated_at"],
-  invoices: ["id", "invoice_number", "tenant_id", "subscription_id", "status", "issue_date", "due_date", "subtotal", "tax_amount", "total", "paid_at", "payment_method", "payment_url", "gateway_reference", "auto_reminder", "notes", "created_at", "updated_at"],
+  invoices: ["id", "invoice_number", "tenant_id", "subscription_id", "status", "product", "issue_date", "due_date", "subtotal", "tax_amount", "total", "paid_at", "payment_method", "payment_url", "gateway_reference", "auto_reminder", "notes", "created_at", "updated_at"],
   reminders: ["id", "tenant_id", "invoice_id", "type", "status", "channel", "scheduled_at", "sent_at", "message", "created_at", "updated_at"],
   registrations: ["id", "company_name", "subdomain", "contact_name", "email", "phone", "city", "industry", "package_code", "billing_cycle", "status", "tenant_id", "notes", "created_at", "updated_at"],
   leads: ["id", "company_name", "contact_name", "email", "phone", "job_title", "industry", "employee_range", "interested_product", "message", "status", "source", "created_at", "updated_at"],

@@ -1,0 +1,17 @@
+feat(admin): tag produk tenant/invoice XPERD vs Qalling (#65)
+
+Kolom `tenants.product` & `invoices.product` (sudah ada sejak migration 010)
+kini benar-benar dipakai di UI Old:
+
+- `platform.functions.ts`: tambah `product` ke whitelist `PCOLS` tenants &
+  invoices — tanpa ini `adminSave` membuang nilainya secara senyap.
+- Tenancy: filter produk (Semua/XPERD ERP/Qalling), badge produk di baris tenant
+  yang sekaligus tombol "Ganti produk", dan filter memakai `product ?? "xperd"`
+  agar tenant lama (NULL) tetap terbaca sebagai XPERD.
+- Invoices: tombol filter produk berjumlah, kartu statistik + tabel mengikuti
+  filter, badge produk per invoice; invoice manual mewarisi produk tenant yang
+  dipilih dan invoice auto-generate mewarisi produk tenant-nya.
+- Fixture dev `001e_dev_product_tag_fixture.sql` (tenant Qalling + satu invoice
+  per produk) dan spec e2e idempoten `admin-product-tag.spec.ts`.
+
+Verifikasi: tsc 0 error, build sukses, suite e2e 35 lulus / 0 gagal.

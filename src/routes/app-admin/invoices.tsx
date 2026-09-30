@@ -53,6 +53,8 @@ function InvoicesPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<InvoiceForm>(EMPTY);
+  // #65: filter produk — invoice XPERD ERP vs Qalling.
+  const [product, setProduct] = useState<"all" | "xperd" | "qalling">("all");
 
   const { data: tenants = [] } = useQuery({
     queryKey: ["admin-tenants-mini"],
@@ -79,6 +81,7 @@ function InvoicesPage() {
   });
 
   const tenantName = (id: string | null) => tenants.find((t) => t.id === id)?.name ?? "—";
+  const shown = product === "all" ? invoices : invoices.filter((i) => (i.product ?? "xperd") === product);
 
   const dueSoon = useMemo(
     () =>
@@ -106,6 +109,8 @@ function InvoicesPage() {
         notes: v.notes || null,
         payment_url: v.payment_url || null,
         auto_reminder: v.auto_reminder,
+        // #65: produk invoice mengikuti produk tenant yang dipilih.
+        product: (tenants.find((t) => t.id === v.tenant_id)?.product as string) ?? "xperd",
       };
       await adminSave({ data: { table: "invoices", id: v.id ?? undefined, data: payload } });
     },
@@ -162,6 +167,8 @@ function InvoicesPage() {
           total: price + tax,
           notes: "Auto-generated renewal invoice (7 days before package end).",
           auto_reminder: true,
+          // #65: produk mengikuti produk tenant.
+          product: (t.product as string) ?? "xperd",
         };
       });
       for (const row of rows) {
@@ -213,9 +220,21 @@ function InvoicesPage() {
         </div>
       </header>
 
+      <div className="flex flex-wrap gap-2">
+        {([
+          ["all", "Semua"],
+          ["xperd", "XPERD ERP"],
+          ["qalling", "Qalling"],
+        ] as const).map(([k, label]) => (
+          <Button key={k} size="sm" variant={product === k ? "gold" : "outline"} onClick={() => setProduct(k)}>
+            {label} ({k === "all" ? invoices.length : invoices.filter((i) => (i.product ?? "xperd") === k).length})
+          </Button>
+        ))}
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Total invoices" value={String(invoices.length)} />
-        <Stat label="Unpaid" value={String(invoices.filter((i) => i.status !== "paid" && i.status !== "void").length)} />
+        <Stat label="Total invoices" value={String(shown.length)} />
+        <Stat label="Unpaid" value={String(shown.filter((i) => i.status !== "paid" && i.status !== "void").length)} />
         <Stat label="Renewing in 7 days" value={String(dueSoon.length)} />
       </div>
 
@@ -238,14 +257,20 @@ function InvoicesPage() {
                   <TableCell colSpan={6} className="text-sm text-muted-foreground">Loading…</TableCell>
                 </TableRow>
               )}
-              {!isLoading && invoices.length === 0 && (
+              {!isLoading && shown.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-sm text-muted-foreground">No invoices yet.</TableCell>
                 </TableRow>
               )}
-              {invoices.map((inv) => (
+              {shown.map((inv) => (
                 <TableRow key={inv.id}>
-                  <TableCell className="font-medium text-navy">{inv.invoice_number}</TableCell>
+                  <TableCell className="font-medium text-navy">
+                    {inv.invoice_number}{" "}
+                    {/* #65: badge produk invoice. */}
+                    <Badge variant={(inv.product ?? "xperd") === "qalling" ? "default" : "outline"}>
+                      {(inv.product ?? "xperd") === "qalling" ? "Qalling" : "XPERD"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-sm">{tenantName(inv.tenant_id)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {inv.issue_date} → {inv.due_date}

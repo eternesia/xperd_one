@@ -87,7 +87,7 @@
 |---|---|---|---|---|
 | 63 | **Modul baru Omnix** (add-on): 6 submodul — Koneksi Toko, Transaksi, Pengiriman & Pickup, Laporan, Saldo & Tagihan (Rp25/trx atau paket Rp350rb/20.000 trx), Pengaturan API; top-up dikonfirmasi Super Admin | `components/app/OmnixViews.tsx` (509), `OmnixOps.tsx` (316), `lib/modules.ts`, `routes/app-admin/addons.tsx`, migrations `0010`–`0012` (`omnix_stores`, `omnix_orders`, `omnix_wallets`, `omnix_wallet_ledger`, `omnix_channel_settings`, `omnix_channel_secrets`) | ✅ **ronde 18** | **7 tabel**. Logika wallet/charge di New = **trigger + 3 fungsi plpgsql** (`omnix_charge_completed_order`, `omnix_request_topup`, `omnix_review_topup`, `omnix_buy_bundle`) → sudah ditulis ulang jadi server fn MySQL transaksional **tanpa trigger** (`src/lib/omnix.functions.ts`, lihat ronde 18) |
 | 64 | **Permukaan Qalling standalone**: landing `/qalling`, `/qalling/login`, shell `/qalling/app` (memakai ulang view CRM), workspace aktif pertama; host `qalling.id`/`qalling.net` di-redirect ke `/qalling` | `routes/qalling.index.tsx`, `qalling.login.tsx`, `qalling.app.tsx`, `qalling.app.index.tsx`, `qalling.app.$submoduleId.tsx`, `routes/_site.tsx` | ❌ | Butuh domain khusus + keputusan produk; ±470 baris |
-| 65 | **Tag produk tenant/invoice** (`xperd` \| `qalling`): filter produk di Tenancy & Invoices, badge, tombol ganti produk | migration `0009` (`tenants.product`, `invoices.product`), `routes/app-admin/tenancy.tsx`, `routes/app-admin/invoices.tsx` | ❌ | Kebutuhan DB: kolom `product` di `tenants` & `invoices` + `PCOLS` |
+| 65 | **Tag produk tenant/invoice** (`xperd` \| `qalling`): filter produk di Tenancy & Invoices, badge, tombol ganti produk | migration `0009` (`tenants.product`, `invoices.product`), `routes/app-admin/tenancy.tsx`, `routes/app-admin/invoices.tsx` | ✅ **ronde 19** | Kolom `product` sudah ada di migration **010**; yang kurang hanya whitelist `PCOLS` + UI (lihat ronde 19) |
 
 ---
 
@@ -200,7 +200,23 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
-### Ronde 18 (terbaru, 2026-09-30) — #63 Omnix: saldo & biaya transaksi di level aplikasi (tanpa trigger DB)
+### Ronde 19 (2026-09-30) — #65 tag produk tenant/invoice (XPERD vs Qalling)
+
+Kolom `tenants.product` & `invoices.product` sudah ada sejak migration **010**
+(ronde 1) tetapi belum dipakai: UI Old tidak punya filter maupun tanda produk,
+sehingga tenant/invoice XPERD dan Qalling bercampur.
+
+| File | Isi |
+|---|---|
+| `src/lib/platform.functions.ts` | Tambah `product` ke `PCOLS.tenants` & `PCOLS.invoices`. Tanpa ini `adminSave` akan **membuang** nilai `product` secara senyap (whitelist kolom) |
+| `src/routes/app-admin/tenancy.tsx` | Filter **Semua produk / XPERD ERP / Qalling** di sebelah filter status; badge produk di sel tenant yang sekaligus tombol **Ganti produk** (`changeProduct` → `adminSave` + toast); filter ikut memakai `t.product ?? "xperd"` agar tenant lama (NULL) tetap terbaca sebagai XPERD |
+| `src/routes/app-admin/invoices.tsx` | Deret tombol filter produk berjumlah (`Semua (n)`, `XPERD ERP (n)`, `Qalling (n)`), kartu statistik & tabel mengikuti filter, badge produk per invoice; invoice manual mewarisi produk tenant terpilih dan invoice auto-generate mewarisi produk tenant-nya |
+| `e2e/admin-product-tag.spec.ts` *(baru)* | Spec idempoten: badge produk dibaca → ditukar → difilter (produk baru tampil, produk lama menyembunyikan) → dikembalikan ke nilai semula; ditambah pemeriksaan tombol filter & badge di halaman Invoices |
+
+Catatan: tanpa filter, invoice baru otomatis ber-`product` tenant-nya, jadi tidak
+ada invoice yang tertinggal ber-`xperd` saat tenant dipindah ke Qalling.
+
+### Ronde 18 (2026-09-30) — #63 Omnix: saldo & biaya transaksi di level aplikasi (tanpa trigger DB)
 
 **Keputusan arsitektur (permintaan eksplisit user):** JANGAN pakai trigger/fungsi
 PostgreSQL. Trigger New 3 `omnix_charge_completed_order` diterjemahkan menjadi
@@ -268,7 +284,7 @@ omnix_orders: E2E-OMX-* | completed | omnix_fee 25.0000 | fee_charged 1
 
 Tiga kegagalan awal (`cash-out-proof`, `draft-delete`, `draft-edit` PR) terbukti **karena data dev belum lengkap** (tanpa `cb_accounts`, dokumen fixture), bukan regresi kode — setelah fixture ditambahkan semuanya lulus.
 
-Belum: uji Meta end-to-end (#55, butuh App ID/Secret user). Batch **3D** sudah dimulai: **#63 Omnix selesai di ronde 18**; sisa #64 (Qalling standalone) & #65 (tag produk tenant/invoice).
+Belum: uji Meta end-to-end (#55, butuh App ID/Secret user). Batch **3D**: **#63 Omnix selesai di ronde 18**, **#65 tag produk selesai di ronde 19**; sisa #64 (Qalling standalone) yang butuh keputusan domain/produk.
 
 ### Ronde 16 (2026-09-30) — #52 Template Isian Panitia (DOCX ber-kop) + paket ZIP
 
