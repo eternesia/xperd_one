@@ -1,9 +1,11 @@
 import {
   fetchCbAccounts as fetchCbAccountsFn,
   fetchCbTransactions as fetchCbTransactionsFn,
+  fetchJournalLines as fetchJournalLinesFn,
   insertCbTransaction,
   postJournalEntry,
 } from "@/lib/ledger.functions";
+import { deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
 
 export type CbAccountKind = "cash" | "bank";
 export type CbTrxType = "in" | "out" | "transfer";
@@ -48,7 +50,7 @@ export interface CbTransaction {
   created_at: string;
 }
 
-export type CbViewKind = "accounts" | "ledger" | "reconciliation";
+export type CbViewKind = "accounts" | "ledger" | "reconciliation" | "reports";
 
 export interface CbEntity {
   submoduleId: string;
@@ -64,6 +66,8 @@ export const CB_ENTITIES: CbEntity[] = [
   { submoduleId: "cash-out", kind: "ledger", en: "Cash Out", id_: "Kas Keluar", trxType: "out" },
   { submoduleId: "transfers", kind: "ledger", en: "Fund Transfers", id_: "Transfer Dana", trxType: "transfer" },
   { submoduleId: "reconciliation", kind: "reconciliation", en: "Reconciliation", id_: "Rekonsiliasi Bank" },
+  // #43 (BS New 3): laporan mutasi kas & bank dengan ekspor Excel/PDF.
+  { submoduleId: "reports", kind: "reports", en: "Cash & Bank Report", id_: "Laporan Kas & Bank" },
 ];
 
 export function findCbEntity(submoduleId?: string) {
@@ -206,20 +210,12 @@ export interface CbTrxInput {
   amount: number;
 }
 
-/** Creates a cash/bank transaction and its automatic journal entry. */
-export async function createCbTransaction(workspaceId: string, input: CbTrxInput) {
-  const amount = Number(input.amount) || 0;
-  if (amount <= 0) throw new Error("Amount must be greater than zero.");
-
+/** #42: baris jurnal untuk sebuah transaksi kas/bank (dipakai create & update). */
+function buildCbLines(input: CbTrxInput, amount: number, memo: string): JournalLine[] {
   const cashGl = input.account.gl_account_code || "1010";
-  const memo =
-    input.memo ||
-    `${TRX_LABEL[input.trx_type].en} ${input.trx_no}${input.contact_name ? ` · ${input.contact_name}` : ""}`;
-
-  let lines: JournalLine[] = [];
   if (input.trx_type === "in") {
     if (!input.category_account_code) throw new Error("Select a source (revenue/receivable) account.");
-    lines = [
+    return [
       { account_code: cashGl, account_name: input.account.name, description: memo, debit: amount, credit: 0 },
       {
         account_code: input.category_account_code,
@@ -229,9 +225,10 @@ export async function createCbTransaction(workspaceId: string, input: CbTrxInput
         credit: amount,
       },
     ];
-  } else if (input.trx_type === "out") {
+  }
+  if (input.trx_type === "out") {
     if (!input.category_account_code) throw new Error("Select an expense/payable account.");
-    lines = [
+    return [
       {
         account_code: input.category_account_code,
         account_name: input.category_account_name ?? null,
@@ -241,14 +238,131 @@ export async function createCbTransaction(workspaceId: string, input: CbTrxInput
       },
       { account_code: cashGl, account_name: input.account.name, description: memo, debit: 0, credit: amount },
     ];
-  } else {
-    if (!input.counterpart) throw new Error("Select a destination account.");
-    const destGl = input.counterpart.gl_account_code || "1010";
-    lines = [
-      { account_code: destGl, account_name: input.counterpart.name, description: memo, debit: amount, credit: 0 },
-      { account_code: cashGl, account_name: input.account.name, description: memo, debit: 0, credit: amount },
-    ];
   }
+  if (!input.counterpart) throw new Error("Select a destination account.");
+  const destGl = input.counterpart.gl_account_code || "1010";
+  return [
+    { account_code: destGl, account_name: input.counterpart.name, description: memo, debit: amount, credit: 0 },
+    { account_code: cashGl, account_name: input.account.name, description: memo, debit: 0, credit: amount },
+  ];
+}
+
+function cbMemo(input: CbTrxInput) {
+  return (
+    input.memo ||
+    `${TRX_LABEL[input.trx_type].en} ${input.trx_no}${input.contact_name ? ` · ${input.contact_name}` : ""}`
+  );
+}
+
+/** Field baris transaksi (tanpa status rekonsiliasi, supaya tidak ikut tereset). */
+function cbRow(input: CbTrxInput, amount: number, memo: string, journalEntryId: string | null) {
+  return {
+    trx_no: input.trx_no,
+    trx_date: input.trx_date,
+    trx_type: input.trx_type,
+    account_code: input.account.code,
+    account_name: input.account.name,
+    counterpart_account_code: input.counterpart?.code ?? null,
+    counterpart_account_name: input.counterpart?.name ?? null,
+    category_account_code: input.category_account_code ?? null,
+    category_account_name: input.category_account_name ?? null,
+    contact_name: input.contact_name || null,
+    method: input.method,
+    reference: input.reference || null,
+    memo,
+    amount,
+    journal_entry_id: journalEntryId,
+    attachment_url: input.attachment_url ?? null,
+  };
+}
+
+/** #42: baris jurnal yang sudah diposting untuk sebuah transaksi (panel detail). */
+export async function fetchJournalLines(workspaceId: string, entryId: string) {
+  const rows = (await fetchJournalLinesFn({ data: { workspaceId, entryIds: [entryId] } })) as
+    | (JournalLine & { line_no: number })[]
+    | null;
+  return rows ?? [];
+}
+
+/**
+ * #42 (koreksi aman secara akuntansi): jurnal yang sudah diposting TIDAK dihapus,
+ * melainkan dibalik (storno) supaya buku besar tetap menyimpan jejak audit.
+ */
+async function postReversal(workspaceId: string, entryId: string, trxNo: string, reason: string) {
+  const original = await fetchJournalLines(workspaceId, entryId);
+  if (!original.length) return null;
+  const stamp = new Date().toISOString().slice(0, 10);
+  return postCbJournal(
+    workspaceId,
+    { trx_no: `REV/${trxNo}/${Date.now().toString().slice(-6)}`, trx_date: stamp, trx_type: "in" },
+    reason,
+    original.map((l) => ({
+      account_code: l.account_code,
+      account_name: l.account_name,
+      description: reason,
+      debit: Number(l.credit) || 0,
+      credit: Number(l.debit) || 0,
+    })),
+  );
+}
+
+/**
+ * #42: koreksi transaksi yang sudah diposting - jurnal lama dibalik lalu jurnal
+ * baru diposting, sehingga buku besar menampilkan kesalahan, koreksi, dan hasilnya.
+ */
+export async function updateCbTransaction(
+  workspaceId: string,
+  existing: CbTransaction,
+  input: CbTrxInput,
+) {
+  const amount = Number(input.amount) || 0;
+  if (amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  if (existing.journal_entry_id) {
+    await postReversal(
+      workspaceId,
+      existing.journal_entry_id,
+      existing.trx_no,
+      `Reversal of ${existing.trx_no} (edited)`,
+    );
+  }
+  const memo = cbMemo(input);
+  const journalEntryId = await postCbJournal(
+    workspaceId,
+    { trx_no: input.trx_no, trx_date: input.trx_date, trx_type: input.trx_type },
+    memo,
+    buildCbLines(input, amount, memo),
+  );
+  await saveWorkspaceRow({
+    data: {
+      table: "cb_transactions",
+      workspaceId,
+      id: existing.id,
+      data: cbRow(input, amount, memo, journalEntryId),
+    },
+  });
+}
+
+/** #42: batalkan transaksi - jurnalnya dibalik, barisnya dihapus dari daftar. */
+export async function deleteCbTransaction(workspaceId: string, existing: CbTransaction) {
+  if (existing.journal_entry_id) {
+    await postReversal(
+      workspaceId,
+      existing.journal_entry_id,
+      existing.trx_no,
+      `Reversal of ${existing.trx_no} (cancelled)`,
+    );
+  }
+  await deleteWorkspaceRow({ data: { table: "cb_transactions", workspaceId, id: existing.id } });
+}
+
+/** Creates a cash/bank transaction and its automatic journal entry. */
+export async function createCbTransaction(workspaceId: string, input: CbTrxInput) {
+  const amount = Number(input.amount) || 0;
+  if (amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const memo = cbMemo(input);
+  const lines = buildCbLines(input, amount, memo);
 
   const journalEntryId = await postCbJournal(
     workspaceId,

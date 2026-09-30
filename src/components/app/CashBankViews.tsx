@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Paperclip, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Eye, FileDown, Loader2, Paperclip, Pencil, Plus, Search, Sheet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,16 +26,21 @@ import { fetchAccounts } from "@/lib/accounting";
 import {
   buildCbBalances,
   createCbTransaction,
+  deleteCbTransaction,
   fetchCbAccounts,
   fetchCbTransactions,
+  fetchJournalLines,
   nextTrxNumber,
   PAYMENT_METHODS,
   TRX_LABEL,
   TRX_TONE,
+  updateCbTransaction,
   type CbAccount,
   type CbEntity,
+  type CbTransaction,
   type CbTrxType,
 } from "@/lib/cashbank";
+import { exportTablePdf, exportTableXlsx, type TableExport } from "@/lib/report-export";
 import { formatMoney as fmtMoney } from "@/lib/procurement";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +71,8 @@ function Header({ title, kicker, action }: { title: string; kicker: string; acti
 export function CashBankView({ entity, workspaceId }: { entity: CbEntity; workspaceId: string }) {
   if (entity.kind === "accounts") return <AccountsView workspaceId={workspaceId} />;
   if (entity.kind === "reconciliation") return <ReconciliationView workspaceId={workspaceId} />;
+  // #43 (BS New 3): laporan mutasi kas & bank dengan ekspor Excel/PDF.
+  if (entity.kind === "reports") return <ReportsView workspaceId={workspaceId} />;
   return <LedgerView entity={entity} workspaceId={workspaceId} />;
 }
 
@@ -380,6 +387,59 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
 
 /* ----------------------------------- ledger ---------------------------------- */
 
+/** #42 (BS New 3): jurnal yang sudah diposting untuk sebuah transaksi kas/bank. */
+function JournalPanel({
+  entryId,
+  workspaceId,
+  lang,
+}: {
+  entryId: string | null;
+  workspaceId: string;
+  lang: string;
+}) {
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["cb-journal-lines", entryId],
+    queryFn: () => fetchJournalLines(workspaceId, entryId!),
+    enabled: Boolean(entryId),
+  });
+  if (!entryId) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("No journal linked to this transaction.", "Tidak ada jurnal terkait transaksi ini.")}
+      </p>
+    );
+  }
+  if (isLoading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{t("Account", "Akun")}</TableHead>
+          <TableHead className="text-right">{t("Debit", "Debit")}</TableHead>
+          <TableHead className="text-right">{t("Credit", "Kredit")}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {data.map((l) => (
+          <TableRow key={l.line_no}>
+            <TableCell>
+              <span className="font-medium">{l.account_code}</span>{" "}
+              <span className="text-muted-foreground">{l.account_name ?? ""}</span>
+            </TableCell>
+            <TableCell className="text-right">
+              {l.debit ? fmtMoney(Number(l.debit), lang) : "—"}
+            </TableCell>
+            <TableCell className="text-right">
+              {l.credit ? fmtMoney(Number(l.credit), lang) : "—"}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
 function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: string }) {
   const { lang } = useI18n();
   const qc = useQueryClient();
@@ -396,6 +456,10 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
   const [open, setOpen] = useState(false);
   const [attachment, setAttachment] = useState("");
   const [proofUrl, setProofUrl] = useState<string | null>(null);
+  // #42 (BS New 3): detail + koreksi + pembatalan transaksi.
+  const [detail, setDetail] = useState<CbTransaction | null>(null);
+  const [editing, setEditing] = useState<CbTransaction | null>(null);
+  const [removing, setRemoving] = useState<CbTransaction | null>(null);
 
   const [form, setForm] = useState({
     trx_date: today(),
@@ -471,15 +535,8 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
       if (!account) throw new Error(t("Select a cash / bank account.", "Pilih akun kas / bank."));
       const counterpart = accounts.find((a) => a.code === form.counterpart_code) ?? null;
       const gl = glAccounts.find((a) => a.code === form.category_code);
-      const seq =
-        (
-          await countWorkspaceRows({
-            data: { table: "cb_transactions", workspaceId, filters: { trx_type: type } },
-          })
-        ).count ?? 0;
-      const prefix = type === "in" ? "CI" : type === "out" ? "CO" : "CTR";
-      await createCbTransaction(workspaceId, {
-        trx_no: nextTrxNumber(prefix, seq + 1),
+      const input = {
+        trx_no: editing?.trx_no ?? "",
         trx_date: form.trx_date,
         trx_type: type,
         account,
@@ -492,11 +549,30 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
         memo: form.memo,
         attachment_url: type === "out" ? attachment || null : null,
         amount: Number(form.amount) || 0,
-      });
+      };
+      // #42: mengoreksi transaksi = jurnal lama dibalik (storno) + jurnal baru,
+      // jadi buku besar tetap menyimpan jejak kesalahan dan koreksinya.
+      if (editing) {
+        await updateCbTransaction(workspaceId, editing, input);
+        return;
+      }
+      const seq =
+        (
+          await countWorkspaceRows({
+            data: { table: "cb_transactions", workspaceId, filters: { trx_type: type } },
+          })
+        ).count ?? 0;
+      const prefix = type === "in" ? "CI" : type === "out" ? "CO" : "CTR";
+      await createCbTransaction(workspaceId, { ...input, trx_no: nextTrxNumber(prefix, seq + 1) });
     },
     onSuccess: () => {
-      toast.success(t("Transaction posted.", "Transaksi tercatat."));
+      toast.success(
+        editing
+          ? t("Transaction corrected; the previous journal was reversed.", "Transaksi dikoreksi; jurnal lama dibalik.")
+          : t("Transaction posted.", "Transaksi tercatat."),
+      );
       setOpen(false);
+      setEditing(null);
       setForm({ ...form, amount: "", memo: "", reference: "", contact_name: "" });
       setAttachment("");
       qc.invalidateQueries({ queryKey: ["cb-trx"] });
@@ -505,13 +581,67 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
     onError: (e: Error) => toast.error(e.message),
   });
 
+  /** #42: batalkan transaksi - jurnalnya dibalik, barisnya dihapus dari daftar. */
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (!removing) return;
+      await deleteCbTransaction(workspaceId, removing);
+    },
+    onSuccess: () => {
+      toast.success(
+        t("Transaction cancelled; the journal was reversed.", "Transaksi dibatalkan; jurnalnya dibalik."),
+      );
+      setRemoving(null);
+      setDetail(null);
+      qc.invalidateQueries({ queryKey: ["cb-trx"] });
+      qc.invalidateQueries({ queryKey: ["acc"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  /** #42: buka form koreksi dengan nilai transaksi yang ada. */
+  function startEdit(r: CbTransaction) {
+    setEditing(r);
+    setForm({
+      trx_date: r.trx_date,
+      account_code: r.account_code,
+      counterpart_code: r.counterpart_account_code ?? "",
+      category_code: r.category_account_code ?? "",
+      contact_name: r.contact_name ?? "",
+      method: r.method,
+      reference: r.reference ?? "",
+      memo: r.memo ?? "",
+      amount: String(r.amount ?? ""),
+    });
+    setAttachment(r.attachment_url ?? "");
+    setDetail(null);
+    setOpen(true);
+  }
+
+  function startCreate() {
+    setEditing(null);
+    setForm({
+      trx_date: today(),
+      account_code: "",
+      counterpart_code: "",
+      category_code: "",
+      contact_name: "",
+      method: "cash",
+      reference: "",
+      memo: "",
+      amount: "",
+    });
+    setAttachment("");
+    setOpen(true);
+  }
+
   return (
     <div className="space-y-5">
       <Header
         kicker={t("Cash & Bank", "Kas & Bank")}
         title={lang === "id" ? entity.id_ : entity.en}
         action={
-          <Button variant="navy" onClick={() => setOpen(true)}>
+          <Button variant="navy" onClick={startCreate}>
             <Plus /> {t("Create New", "Buat Baru")}
           </Button>
         }
@@ -579,18 +709,19 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
               <TableHead>{type === "transfer" ? t("Destination", "Tujuan") : t("Category", "Kategori")}</TableHead>
               <TableHead>{t("Contact / Reference", "Kontak / Referensi")}</TableHead>
               <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
+              <TableHead className="w-28 text-right">{t("Actions", "Aksi")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center">
+                <TableCell colSpan={8} className="py-12 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : current.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
                   {t("No transaction in this period.", "Belum ada transaksi pada periode ini.")}
                 </TableCell>
               </TableRow>
@@ -624,6 +755,20 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
                       {formatMoney(Number(r.amount))}
                     </span>
                   </TableCell>
+                  {/* #42 (BS New 3): detail + jurnal, koreksi, dan pembatalan (storno). */}
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDetail(r)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(r)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setRemoving(r)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -649,13 +794,20 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {t("New", "Baru")} {lang === "id" ? TRX_LABEL[type].id_ : TRX_LABEL[type].en}
+              {editing ? "" : `${t("New", "Baru")} `}
+              {lang === "id" ? TRX_LABEL[type].id_ : TRX_LABEL[type].en}
+              {editing ? ` · ${editing.trx_no}` : ""}
             </DialogTitle>
             <DialogDescription>
-              {t(
-                "The journal entry is posted automatically when you save.",
-                "Jurnal otomatis dibuat saat transaksi disimpan.",
-              )}
+              {editing
+                ? t(
+                    "Saving reverses the old journal and posts a new one, so the correction stays auditable.",
+                    "Menyimpan akan membalik jurnal lama dan membuat jurnal baru, sehingga koreksi tetap terekam.",
+                  )
+                : t(
+                    "The journal entry is posted automatically when you save.",
+                    "Jurnal otomatis dibuat saat transaksi disimpan.",
+                  )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -763,11 +915,87 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
             </Field>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                setEditing(null);
+              }}
+            >
               {t("Cancel", "Batal")}
             </Button>
             <Button variant="navy" disabled={create.isPending} onClick={() => create.mutate()}>
               {create.isPending && <Loader2 className="animate-spin" />} {t("Save", "Simpan")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* #42 (BS New 3): detail transaksi beserta jurnal otomatisnya. */}
+      <Dialog open={Boolean(detail)} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detail?.trx_no}</DialogTitle>
+            <DialogDescription>
+              {t("Transaction detail and its automatic journal entry.", "Detail transaksi dan jurnal otomatisnya.")}
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label={t("Date", "Tanggal")}>{detail.trx_date}</Field>
+                <Field label={t("Account", "Akun")}>{detail.account_name ?? detail.account_code}</Field>
+                <Field label={type === "transfer" ? t("Destination", "Tujuan") : t("Category", "Kategori")}>
+                  {type === "transfer"
+                    ? (detail.counterpart_account_name ?? detail.counterpart_account_code ?? "—")
+                    : (detail.category_account_name ?? detail.category_account_code ?? "—")}
+                </Field>
+                <Field label={t("Amount", "Nilai")}>{formatMoney(Number(detail.amount))}</Field>
+                <Field label={t("Contact", "Kontak")}>{detail.contact_name || "—"}</Field>
+                <Field label={t("Reference", "Referensi")}>{detail.reference || "—"}</Field>
+                <Field label={t("Method", "Metode")}>{detail.method}</Field>
+                <Field label={t("Memo", "Catatan")}>{detail.memo || "—"}</Field>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t("Journal", "Jurnal")}
+                </p>
+                <JournalPanel entryId={detail.journal_entry_id ?? null} workspaceId={workspaceId} lang={lang} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetail(null)}>
+              {t("Close", "Tutup")}
+            </Button>
+            <Button variant="navy" onClick={() => detail && startEdit(detail)}>
+              <Pencil /> {t("Edit", "Ubah")}
+            </Button>
+            <Button variant="destructive" onClick={() => detail && setRemoving(detail)}>
+              <Trash2 /> {t("Cancel transaction", "Batalkan transaksi")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* #42 (BS New 3): pembatalan tidak menghapus jurnal, tapi membaliknya. */}
+      <Dialog open={Boolean(removing)} onOpenChange={(v) => !v && setRemoving(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("Cancel this transaction?", "Batalkan transaksi ini?")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "The transaction is removed from this list and its journal is reversed, so the ledger keeps the audit trail.",
+                "Transaksi dihapus dari daftar ini dan jurnalnya dibalik, sehingga buku besar tetap menyimpan jejak audit.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoving(null)}>
+              {t("Keep transaction", "Jangan batalkan")}
+            </Button>
+            <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>
+              {remove.isPending && <Loader2 className="animate-spin" />} {t("Cancel transaction", "Batalkan")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -958,6 +1186,232 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
 }
 
 /* ----------------------------------- shared ---------------------------------- */
+
+/**
+ * #43 (BS New 3): laporan mutasi kas & bank — ringkasan masuk/keluar/transfer,
+ * filter akun/jenis/status, dan ekspor Excel/PDF.
+ */
+function ReportsView({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const formatMoney = (v: number) => fmtMoney(v, lang);
+
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(today());
+  const [accountFilter, setAccountFilter] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState(ALL);
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [term, setTerm] = useState("");
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["cb-accounts", workspaceId],
+    queryFn: () => fetchCbAccounts(workspaceId),
+  });
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["cb-report", workspaceId, from, to],
+    queryFn: () => fetchCbTransactions(workspaceId, { from, to }),
+  });
+
+  const filtered = useMemo(() => {
+    const s = term.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (accountFilter !== ALL && r.account_code !== accountFilter && r.counterpart_account_code !== accountFilter)
+        return false;
+      if (typeFilter !== ALL && r.trx_type !== typeFilter) return false;
+      if (statusFilter === "reconciled" && !r.is_reconciled) return false;
+      if (statusFilter === "open" && r.is_reconciled) return false;
+      if (!s) return true;
+      return [r.trx_no, r.account_name, r.contact_name, r.reference, r.memo, r.category_account_name]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(s));
+    });
+  }, [rows, accountFilter, typeFilter, statusFilter, term]);
+
+  const totalIn = filtered.filter((r) => r.trx_type === "in").reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalOut = filtered.filter((r) => r.trx_type === "out").reduce((s, r) => s + Number(r.amount || 0), 0);
+  const totalTransfer = filtered
+    .filter((r) => r.trx_type === "transfer")
+    .reduce((s, r) => s + Number(r.amount || 0), 0);
+
+  const build = (): TableExport => ({
+    filename: `laporan-kas-bank-${from}-${to}`,
+    title: t("Cash & Bank Report", "Laporan Kas & Bank"),
+    subtitle: `${from} — ${to}`,
+    summary: [
+      [t("Money in", "Kas masuk"), formatMoney(totalIn)],
+      [t("Money out", "Kas keluar"), formatMoney(totalOut)],
+      [t("Net cash flow", "Arus kas bersih"), formatMoney(totalIn - totalOut)],
+      [t("Transfers", "Transfer"), formatMoney(totalTransfer)],
+    ],
+    headers: [
+      t("Date", "Tanggal"),
+      t("Number", "Nomor"),
+      t("Type", "Jenis"),
+      t("Account", "Akun"),
+      t("Category / Destination", "Kategori / Tujuan"),
+      t("Contact", "Kontak"),
+      t("Reference", "Referensi"),
+      t("Status", "Status"),
+      t("Amount", "Nilai"),
+    ],
+    numericColumns: [8],
+    orientation: "landscape",
+    rows: filtered.map((r) => [
+      r.trx_date,
+      r.trx_no,
+      lang === "id" ? TRX_LABEL[r.trx_type].id_ : TRX_LABEL[r.trx_type].en,
+      r.account_name ?? r.account_code,
+      r.category_account_name ?? r.counterpart_account_name ?? "—",
+      r.contact_name ?? "",
+      r.reference ?? "",
+      r.is_reconciled ? t("Reconciled", "Terrekonsiliasi") : t("Open", "Belum"),
+      Number(r.amount || 0),
+    ]),
+  });
+
+  const runExport = async (kind: "xlsx" | "pdf") => {
+    try {
+      const payload = build();
+      if (!payload.rows.length) {
+        toast.error(t("Nothing to export.", "Tidak ada data untuk diekspor."));
+        return;
+      }
+      if (kind === "xlsx") await exportTableXlsx(payload);
+      else await exportTablePdf(payload);
+    } catch {
+      toast.error(t("Export failed.", "Ekspor gagal."));
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <Header
+        kicker={t("Cash & Bank", "Kas & Bank")}
+        title={t("Cash & Bank Report", "Laporan Kas & Bank")}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => runExport("xlsx")}>
+              <Sheet /> Excel
+            </Button>
+            <Button variant="outline" onClick={() => runExport("pdf")}>
+              <FileDown /> PDF
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <StatCard label={t("Money in", "Kas masuk")} value={formatMoney(totalIn)} />
+        <StatCard label={t("Money out", "Kas keluar")} value={formatMoney(totalOut)} />
+        <StatCard label={t("Net cash flow", "Arus kas bersih")} value={formatMoney(totalIn - totalOut)} highlight />
+        <StatCard label={t("Transfers", "Transfer")} value={formatMoney(totalTransfer)} />
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            className="w-56 pl-9"
+            placeholder={t("Search…", "Cari…")}
+          />
+        </div>
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+        <Select value={accountFilter} onValueChange={setAccountFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t("All accounts", "Semua akun")}</SelectItem>
+            {accounts.map((a) => (
+              <SelectItem key={a.code} value={a.code}>
+                {a.code} — {a.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t("All types", "Semua jenis")}</SelectItem>
+            <SelectItem value="in">{lang === "id" ? TRX_LABEL.in.id_ : TRX_LABEL.in.en}</SelectItem>
+            <SelectItem value="out">{lang === "id" ? TRX_LABEL.out.id_ : TRX_LABEL.out.en}</SelectItem>
+            <SelectItem value="transfer">
+              {lang === "id" ? TRX_LABEL.transfer.id_ : TRX_LABEL.transfer.en}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t("All status", "Semua status")}</SelectItem>
+            <SelectItem value="reconciled">{t("Reconciled", "Terrekonsiliasi")}</SelectItem>
+            <SelectItem value="open">{t("Not reconciled", "Belum rekonsiliasi")}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12">#</TableHead>
+              <TableHead>{t("Date", "Tanggal")}</TableHead>
+              <TableHead>{t("Number", "Nomor")}</TableHead>
+              <TableHead>{t("Type", "Jenis")}</TableHead>
+              <TableHead>{t("Account", "Akun")}</TableHead>
+              <TableHead>{t("Category / Destination", "Kategori / Tujuan")}</TableHead>
+              <TableHead>{t("Status", "Status")}</TableHead>
+              <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-12 text-center text-sm text-muted-foreground">
+                  {t("No transaction matches these filters.", "Tidak ada transaksi sesuai filter.")}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.slice(0, 500).map((r, i) => (
+                <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell>{r.trx_date}</TableCell>
+                  <TableCell className="font-medium">{r.trx_no}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {lang === "id" ? TRX_LABEL[r.trx_type].id_ : TRX_LABEL[r.trx_type].en}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{r.account_name ?? r.account_code}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.category_account_name ?? r.counterpart_account_name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.is_reconciled ? t("Reconciled", "Terrekonsiliasi") : t("Open", "Belum")}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">{formatMoney(Number(r.amount || 0))}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

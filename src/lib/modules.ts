@@ -133,6 +133,8 @@ const MODULE_DEFS: AppModule[] = [
       s("cash-out", "Cash Out", "Kas Keluar"),
       s("transfers", "Fund Transfers", "Transfer Dana"),
       s("reconciliation", "Reconciliation", "Rekonsiliasi Bank"),
+      // #43 (BS New 3): laporan mutasi kas & bank + ekspor Excel/PDF.
+      s("reports", "Cash & Bank Report", "Laporan Kas & Bank"),
     ],
   },
   {
@@ -153,6 +155,11 @@ const MODULE_DEFS: AppModule[] = [
       s("profit-loss", "Profit & Loss", "Laba Rugi"),
       s("cash-flow", "Cash Flow Statement", "Laporan Arus Kas"),
       s("equity-changes", "Changes in Equity", "Perubahan Ekuitas"),
+      // #45 (BS New 3): subledger piutang/hutang.
+      s("ar-card", "AR Card", "Kartu Piutang"),
+      s("ap-card", "AP Card", "Kartu Hutang"),
+      s("ar-aging", "AR Aging", "Umur Piutang"),
+      s("ap-aging", "AP Aging", "Umur Hutang"),
       s("period-closing", "Period Closing", "Tutup Periode"),
     ],
   },
