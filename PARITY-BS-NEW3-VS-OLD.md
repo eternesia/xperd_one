@@ -201,6 +201,41 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 24 (2026-09-30) — perbaikan "menu Team & Roles tidak ke-update"
+
+Laporan pengguna: halaman **Team & Access** tidak pernah menampilkan/menyimpan
+perubahan peran, sehingga menu tidak ikut berubah. Ditelusuri dengan menjalankan
+aplikasi sungguhan (bukan membaca kode): panel **Role Access** berhenti di
+`Loading…` dan konsol browser menampilkan
+`Error: Unknown column 'code' in 'order clause'`.
+
+**Akar masalah.** Lapisan data generik (`listWorkspaceRows`) memakai
+`ORDER BY \`code\`` sebagai default, padahal **31 dari 88 tabel** di whitelist
+`COLS` tidak punya kolom `code` (`workspace_role_access`, `cb_transactions`,
+`sls_documents`, `crm_scheduled_posts`, `omnix_stores`, …). Untuk tabel seperti
+itu query selalu gagal → daftar/panel kosong atau berhenti di state loading.
+Ini juga menjelaskan mengapa izin yang tersimpan tidak pernah terlihat.
+
+| File | Perubahan |
+|---|---|
+| `src/lib/data.functions.ts` | Kolom urut default kini dipilih dari kolom yang **benar-benar ada**: `orderBy` eksplisit → `code` → `created_at` → `id`. Semua pemanggil (termasuk yang belum punya `orderBy`) langsung ikut aman |
+| `src/routes/app/w.$workspaceId.team.tsx` | `orderBy: "created_at"` eksplisit pada pemuatan matriks; tambahan `data-testid` per modul (`role-access-module-<id>`) dan per baris izin (`role-access-line-<key>`) + `aria-label` pada tiap checkbox (`<key>:<role>:view|edit`) |
+| `src/components/ui/checkbox.tsx`, `switch.tsx` | **Bug ARIA**: nilai TINYINT MySQL (1/0) diteruskan mentah ke Radix sehingga `aria-checked="1"`/`"0"` — tidak valid, dibaca sebagai unchecked oleh pembaca layar & alat uji. Kini dinormalisasi ke boolean (nilai `undefined`/uncontrolled dan `"indeterminate"` tetap diteruskan) |
+| `e2e/team-roles.spec.ts` *(baru)* | Matriks Role Access harus termuat (regresi "Loading…" selamanya), memuat modul baru (CRM, Omnix), lalu ubah→simpan→muat ulang→tetap tersimpan, ditutup dengan mengembalikan nilai semula |
+| `e2e/team-role-enforcement.spec.ts` *(baru)* | Rantai penuh #58/#59: admin membuat user `viewer` → mencabut akses modul **Tax** (dashboard + 4 submodul) → kartu Tax hilang dari launcher viewer, dan membuka `/app/w/<ws>/tax` ditolak ("Module access restricted"); selesai itu izin dikembalikan dan anggota dihapus |
+
+**Verifikasi:** `tsc` 0 error, `npm run build` sukses, dan suite e2e **38 lulus /
+0 gagal** (2,6 menit) — termasuk seluruh spec akuntansi, dokumen, CRM, Omnix,
+Qalling, dan HR yang ikut memakai lapisan data yang sama. DB dev dikembalikan ke
+kondisi setara default (matriks tersimpan dengan nilai bawaan, satu anggota owner).
+
+### Ronde 23 (2026-09-30) — hapus spec uji Meta (integrasi Meta ditunda)
+
+Atas permintaan pemilik produk, `e2e/meta-guards.spec.ts` dihapus karena
+integrasi Meta (#55) ditunda. Penjaga endpoint tetap ada di kode dan cara
+memeriksanya secara manual dipindahkan ke `META-SETUP.md` §5 (curl untuk hook
+cron 403/200 dan callback OAuth 400, plus cek panel UI tidak membocorkan token).
+
 ### Ronde 22 (2026-09-30) — uji **instalasi bersih** (migrate + seed + e2e di DB kosong)
 
 Selama ini seluruh verifikasi dilakukan pada DB dev yang sudah terisi bertahap,

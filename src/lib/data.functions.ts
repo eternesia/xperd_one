@@ -173,7 +173,20 @@ export const listWorkspaceRows = createServerFn({ method: "POST" })
       }
     }
 
-    const orderBy = data.orderBy && COLS[table].includes(data.orderBy) ? `\`${data.orderBy}\`` : "`code`";
+    // Kolom urut default. `code` hanya ada di sebagian tabel (master data) —
+    // tabel seperti `workspace_role_access`, `cb_transactions`, `sls_documents`
+    // tidak punya `code`, dan dulu ORDER BY `code` menghasilkan
+    // "Unknown column 'code' in 'order clause'" sehingga daftar/panel gagal
+    // dimuat (mis. matriks Role Access di halaman Team).
+    const allowed = COLS[table];
+    const orderBy =
+      data.orderBy && allowed.includes(data.orderBy)
+        ? `\`${data.orderBy}\``
+        : allowed.includes("code")
+          ? "`code`"
+          : allowed.includes("created_at")
+            ? "`created_at`"
+            : "`id`";
     const orderDir = data.orderDir === "desc" ? "DESC" : "ASC";
     const limit = Math.min(Math.max(Number(data.limit) || 200, 1), 5000);
     const offset = Math.max(Number(data.offset) || 0, 0);

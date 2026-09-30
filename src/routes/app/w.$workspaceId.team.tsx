@@ -386,7 +386,13 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
     if (!workspaceId) return;
     setLoading(true);
     const data = await listWorkspaceRows({
-      data: { table: "workspace_role_access", workspaceId, limit: 500 },
+      data: {
+        table: "workspace_role_access",
+        workspaceId,
+        orderBy: "created_at",
+        orderDir: "asc",
+        limit: 500,
+      },
     });
     const existing = new Map((data?.rows ?? []).map((r) => [`${r.role}:${r.module_id}`, r as AccessRow]));
     const next: AccessRow[] = [];
@@ -464,7 +470,7 @@ function RoleAccessPanel({ workspaceId }: { workspaceId?: string }) {
         ) : (
           <Accordion type="multiple" className="px-4 sm:px-6">
             {modules.map((module) => (
-              <AccordionItem key={module.id} value={module.id}>
+              <AccordionItem key={module.id} value={module.id} data-testid={`role-access-module-${module.id}`}>
                 <AccordionTrigger className="gap-3 py-4 hover:no-underline">
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-secondary">
@@ -524,7 +530,7 @@ function PermissionLine({
   onToggle: (role: AccessRole, moduleId: string, key: "can_view" | "can_edit", value: boolean) => void;
 }) {
   return (
-    <div className="rounded-md border border-border bg-background p-3">
+    <div className="rounded-md border border-border bg-background p-3" data-testid={`role-access-line-${accessKey}`}>
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
         {icon}
         {label}
@@ -538,6 +544,7 @@ function PermissionLine({
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Checkbox
+                    aria-label={`${accessKey}:${role}:view`}
                     checked={row?.can_view ?? false}
                     onCheckedChange={(value) => onToggle(role, accessKey, "can_view", Boolean(value))}
                   />
@@ -545,6 +552,7 @@ function PermissionLine({
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Checkbox
+                    aria-label={`${accessKey}:${role}:edit`}
                     checked={row?.can_edit ?? false}
                     disabled={!row?.can_view}
                     onCheckedChange={(value) => onToggle(role, accessKey, "can_edit", Boolean(value))}
