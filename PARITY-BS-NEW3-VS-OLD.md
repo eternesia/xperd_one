@@ -69,7 +69,7 @@
 | 54 | **Social Accounts multi-akun + Post Scheduler**: banyak akun per platform, jadwal mingguan/bulanan, "Post now", auto-publish | `components/app/CrmSocial.tsx` (682), migrations `0007` (`crm_social_accounts`, `crm_scheduled_posts`), `0008` | ❌ | 2 tabel baru; penjadwalan butuh cron (pola `INTEROP-BOILERPLATE.md`) |
 | 55 | **Integrasi Meta App**: App ID/Secret (kolom disembunyikan dari browser), Facebook Login → Pages + Instagram, OAuth `state` nonce, `publishing` claim supaya tidak dobel-publish | `lib/meta-social.functions.ts` (`saveMetaApp`, `startMetaConnect`, `disconnectMeta`, `publishPostNow`), `lib/meta-publish.server.ts`, `routes/api/public/meta/callback.ts`, `routes/api/public/hooks/social-publish.ts`, migration `0008` (`crm_meta_settings`, `crm_social_tokens`) | ❌ | **Keputusan**: butuh Meta App milik user + app di-publish; token hanya boleh dibaca server fn (padanan `service_role`) |
 | 56 | **Social Dashboard**: jumlah akun/post, grafik mingguan, per akun, akan publish, kegagalan terakhir | `CrmSocial.tsx` (`SocialDashboardView`) | ❌ | — |
-| 57 | **Submodul CRM baru & penataan ulang**: `social-dashboard`, `social-accounts`, `post-scheduler`, `tenders`, `doc-library`; submodul "CRM Dashboard" dihapus (digabung ke dashboard modul); alert dokumen kedaluwarsa ≤30 hari di dashboard; tabel CRM (kontak, broadcast, campaigns, targets, templates) dapat search + pagination | `lib/modules.ts`, `components/app/CrmViews.tsx`, `CrmOutreach.tsx`, `CrmInsights.tsx` | ⚠️ | Old punya 10 submodul CRM (Batch 1); ini mengubah daftarnya → sesuaikan, jangan timpa `modules.ts` mentah |
+| 57 | **Submodul CRM baru & penataan ulang**: `social-dashboard`, `social-accounts`, `post-scheduler`, `tenders`, `doc-library`; submodul "CRM Dashboard" dihapus (digabung ke dashboard modul); alert dokumen kedaluwarsa ≤30 hari di dashboard; tabel CRM (kontak, broadcast, campaigns, targets, templates) dapat search + pagination | `lib/modules.ts`, `components/app/CrmViews.tsx`, `CrmOutreach.tsx`, `CrmInsights.tsx` | ⚠️ **sebagian** (Ronde 12–13) | `tenders` selesai (Ronde 12). **Ronde 13**: search + pagination di Kontak, Broadcast, Kampanye, Target, Template + alert dokumen kedaluwarsa ≤30 hari di dasbor CRM. **Belum**: submodul `doc-library` (butuh #51) dan `social-*` (butuh #54). Catatan: New 3 ternyata **masih** memakai submodul `dashboard` CRM — Old juga, jadi tidak ada yang dihapus |
 | 62 | **Panduan pengguna**: 3 entri baru (Tender Checklist, Pustaka Dokumen, Template Isian Panitia) | `lib/guide.ts` | ⚠️ **1/3** (Ronde 12) | Entri Tender Checklist sudah ditambahkan (3 langkah bilingual); entri Pustaka Dokumen & Template menunggu #51/#52 |
 
 ## C. Akses & UI (±900 baris)
@@ -200,7 +200,17 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61). Berikutnya batch **3B CRM/Tender** (#50–57, #62) yang masih menunggu keputusan penyimpanan berkas & kredensial Meta.
 
-### Ronde 12 (terbaru, 2026-09-30) — #50 checklist tender, #53 kop surat, #62 sebagian
+### Ronde 13 (terbaru, 2026-09-30) — #57 pencarian/paginasi tabel CRM + alert dokumen kedaluwarsa
+
+| File | Isi |
+|---|---|
+| `src/components/app/CrmViews.tsx` | **Kontak Pelanggan**: `SearchInput` (kode, nama, PIC, email, telepon, kota) + paginasi 25/hal + pesan "tidak ada yang cocok" |
+| `src/components/app/CrmOutreach.tsx` | **Broadcast** dan **Kampanye Sosial**: pencarian + paginasi 10/hal, pesan kosong dibedakan antara "belum ada data" dan "tidak ada yang cocok" |
+| `src/components/app/CrmInsights.tsx` | **Target Sales** dan **Template Pesan**: pencarian + paginasi (tabel memakai `TableSkeletonRows` saat memuat); komponen baru `ExpiringDocsAlert` di dasbor CRM — menampilkan dokumen Pustaka Dokumen yang kedaluwarsa atau habis dalam ≤30 hari (tidak tampil selama pustaka kosong) |
+
+Verifikasi: `tsc` 0 error, `build` sukses. Belum: uji manual pencarian/paginasi pada workspace dengan data banyak, dan memastikan alert muncul setelah Pustaka Dokumen (#51) terisi.
+
+### Ronde 12 (2026-09-30) — #50 checklist tender, #53 kop surat, #62 sebagian
 
 | File | Isi |
 |---|---|

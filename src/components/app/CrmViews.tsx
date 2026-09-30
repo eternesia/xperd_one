@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
+import { PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
 import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
 // #50 (BS New 3): checklist dokumen tender.
@@ -568,6 +569,7 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
 
 function ContactsView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
+  const [term, setTerm] = useState("");
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["crm-contacts", workspaceId],
     queryFn: async () => {
@@ -586,9 +588,18 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
     },
   });
 
+  const visibleContacts = useSearchFilter(rows, term, (r) => [r.code, r.name, r.contact_name, r.email, r.phone, r.city]);
+  const pager = usePagination(visibleContacts);
+
   return (
     <div className="space-y-6">
-      <PageHeader kicker="QALLING CRM" title={lang === "id" ? "Kontak Pelanggan" : "Customer Contacts"} />
+      <PageHeader kicker="QALLING CRM" title={lang === "id" ? "Kontak Pelanggan" : "Customer Contacts"}>
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={lang === "id" ? "Cari kontak…" : "Search contacts…"}
+        />
+      </PageHeader>
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -603,14 +614,24 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(isLoading || rows.length === 0) && (
+              {(isLoading || visibleContacts.length === 0) && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    {isLoading ? (lang === "id" ? "Memuat…" : "Loading…") : lang === "id" ? "Belum ada pelanggan." : "No customers yet."}
+                    {isLoading
+                      ? lang === "id"
+                        ? "Memuat…"
+                        : "Loading…"
+                      : term.trim()
+                        ? lang === "id"
+                          ? "Tidak ada kontak yang cocok."
+                          : "No contact matches your search."
+                        : lang === "id"
+                          ? "Belum ada pelanggan."
+                          : "No customers yet."}
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((r) => (
+              {pager.items.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell className="font-medium">{r.code}</TableCell>
                   <TableCell>{r.name}</TableCell>
@@ -622,6 +643,7 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
       <p className="flex items-center gap-2 text-xs text-muted-foreground">

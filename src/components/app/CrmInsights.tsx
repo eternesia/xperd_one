@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import { Copy, Plus, ShieldAlert, Target, Trash2, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
+import { PaginationBar, SearchInput, TableSkeletonRows, usePagination, useSearchFilter } from "@/components/app/ui-states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +57,52 @@ interface DashLead {
 function daysSince(iso: string | null) {
   if (!iso) return 0;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+/**
+ * #57 (BS New 3): peringatan dokumen tender yang sudah kedaluwarsa atau habis
+ * dalam ≤30 hari. Sumbernya Pustaka Dokumen (#51); panel ini tidak tampil
+ * selama pustaka masih kosong.
+ */
+function ExpiringDocsAlert({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const { data: docs = [] } = useQuery({
+    queryKey: ["crm-doc-library", workspaceId],
+    queryFn: async () => {
+      const data = (await listWorkspaceRows({
+        data: { table: "crm_doc_library", workspaceId, orderBy: "expiry_date", orderDir: "asc", limit: 500 },
+      })) as { rows: Record<string, unknown>[] };
+      return (data.rows ?? []).map((r) => ({
+        name: String(r.name ?? ""),
+        expiry_date: (r.expiry_date as string | null) ?? null,
+      }));
+    },
+  });
+
+  const list = docs.filter((d) => {
+    if (!d.expiry_date) return false;
+    const days = (new Date(d.expiry_date).getTime() - Date.now()) / 86_400_000;
+    return days <= 30;
+  });
+  if (list.length === 0) return null;
+
+  return (
+    <Card className="border-destructive/60">
+      <CardContent className="flex flex-wrap items-start gap-3 p-4">
+        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-destructive">
+            {lang === "id"
+              ? `${list.length} dokumen tender kedaluwarsa / habis dalam 30 hari`
+              : `${list.length} tender documents expired / expiring within 30 days`}
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            {list.map((d) => `${d.name} (${d.expiry_date})`).join(" · ")}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
@@ -129,6 +176,8 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <Header kicker="QALLING CRM" title={lang === "id" ? "Dasbor CRM" : "CRM Dashboard"} />
+
+      <ExpiringDocsAlert workspaceId={workspaceId} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label={lang === "id" ? "Nilai pipeline" : "Pipeline value"} value={fmtIDR(stats.pipeline)} />
@@ -251,8 +300,10 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const month = new Date().toISOString().slice(0, 7);
   const [form, setForm] = useState({ id: "", owner_name: "", period_month: month, target_amount: 0, notes: "" });
+  // #57: pencarian + paginasi tabel bersama.
+  const [term, setTerm] = useState("");
 
-  const { data: targets = [] } = useQuery({
+  const { data: targets = [], isLoading: targetsLoading } = useQuery({
     queryKey: ["crm-targets", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
@@ -287,6 +338,9 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
       .filter((l) => (l.owner_name ?? "") === owner && (l.stage_changed_at ?? "").slice(0, 7) === period.slice(0, 7))
       .reduce((s, l) => s + Number(l.estimated_value), 0);
 
+  const visibleTargets = useSearchFilter(targets, term, (r) => [r.owner_name, r.period_month, r.notes]);
+  const pager = usePagination(visibleTargets);
+
   const save = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -316,6 +370,11 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <Header kicker="QALLING CRM" title={lang === "id" ? "Target Sales" : "Sales Targets"}>
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={lang === "id" ? "Cari sales/periode…" : "Search owner/period…"}
+        />
         <Button
           variant="navy"
           onClick={() => {
@@ -341,14 +400,15 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {targets.length === 0 && (
+              {targetsLoading && <TableSkeletonRows columns={6} />}
+              {!targetsLoading && visibleTargets.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                     {lang === "id" ? "Belum ada target." : "No targets yet."}
                   </TableCell>
                 </TableRow>
               )}
-              {targets.map((t) => {
+              {pager.items.map((t) => {
                 const got = realized(t.owner_name, t.period_month);
                 const pct = t.target_amount ? Math.min(100, Math.round((got / Number(t.target_amount)) * 100)) : 0;
                 return (
@@ -373,6 +433,7 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
               })}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
 
@@ -424,6 +485,8 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ id: "", name: "", channel: "whatsapp", body: "" });
+  // #57: pencarian + paginasi daftar bersama.
+  const [term, setTerm] = useState("");
 
   const { data: rows = [] } = useQuery({
     queryKey: ["crm-templates", workspaceId],
@@ -462,9 +525,17 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const visibleTemplates = useSearchFilter(rows, term, (r) => [r.name, r.channel, r.body]);
+  const pager = usePagination(visibleTemplates, 10);
+
   return (
     <div className="space-y-6">
       <Header kicker="QALLING CRM" title={lang === "id" ? "Template Pesan" : "Message Templates"}>
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={lang === "id" ? "Cari template…" : "Search templates…"}
+        />
         <Button
           variant="navy"
           onClick={() => {
@@ -477,16 +548,20 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
       </Header>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {rows.length === 0 && (
+        {visibleTemplates.length === 0 && (
           <Card className="md:col-span-2 xl:col-span-3">
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              {lang === "id"
-                ? "Belum ada template. Gunakan {{name}} untuk menyisipkan nama penerima."
-                : "No templates yet. Use {{name}} to insert the recipient name."}
+              {term.trim()
+                ? lang === "id"
+                  ? "Tidak ada template yang cocok."
+                  : "No template matches your search."
+                : lang === "id"
+                  ? "Belum ada template. Gunakan {{name}} untuk menyisipkan nama penerima."
+                  : "No templates yet. Use {{name}} to insert the recipient name."}
             </CardContent>
           </Card>
         )}
-        {rows.map((t) => (
+        {pager.items.map((t) => (
           <Card key={t.id}>
             <CardContent className="space-y-3 p-5">
               <div className="flex items-start justify-between gap-2">
@@ -527,6 +602,14 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
           </Card>
         ))}
       </div>
+
+      {visibleTemplates.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <PaginationBar p={pager} />
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

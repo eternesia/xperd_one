@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
+import { PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
@@ -109,6 +110,11 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
       });
     },
   });
+
+  // #57: pencarian + paginasi daftar broadcast.
+  const [term, setTerm] = useState("");
+  const visibleRows = useSearchFilter(rows, term, (r) => [r.name, r.channel, r.status, r.message]);
+  const pager = usePagination(visibleRows, 10);
 
   const { data: recipients = [] } = useQuery({
     queryKey: ["crm-broadcast-recipients", activeId],
@@ -250,6 +256,7 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("Broadcast", "Broadcast Pesan")}>
+        <SearchInput value={term} onChange={setTerm} placeholder={t("Search broadcasts…", "Cari broadcast…")} />
         <Button variant="navy" onClick={() => setOpen(true)}>
           <Plus /> {t("New broadcast", "Broadcast baru")}
         </Button>
@@ -271,14 +278,18 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(isLoading || rows.length === 0) && (
+              {(isLoading || visibleRows.length === 0) && (
                 <TableRow>
                   <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                    {isLoading ? t("Loading…", "Memuat…") : t("No broadcasts yet.", "Belum ada broadcast.")}
+                    {isLoading
+                      ? t("Loading…", "Memuat…")
+                      : term.trim()
+                        ? t("No broadcast matches your search.", "Tidak ada broadcast yang cocok.")
+                        : t("No broadcasts yet.", "Belum ada broadcast.")}
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((r, i) => (
+              {pager.items.map((r, i) => (
                 <TableRow key={r.id} className={activeId === r.id ? "bg-muted/50" : undefined}>
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{r.name}</TableCell>
@@ -301,6 +312,7 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
 
@@ -678,6 +690,17 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
     [rows],
   );
 
+  // #57: pencarian + paginasi daftar kampanye.
+  const [term, setTerm] = useState("");
+  const visibleRows = useSearchFilter(rows, term, (r) => [
+    r.name,
+    r.objective,
+    r.status,
+    r.owner_name,
+    (r.platforms ?? []).join(" "),
+  ]);
+  const pager = usePagination(visibleRows, 10);
+
   const save = useMutation({
     mutationFn: async (v: CampaignForm) => {
       const payload = {
@@ -722,6 +745,7 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("Social Campaigns", "Kampanye Sosial")}>
+        <SearchInput value={term} onChange={setTerm} placeholder={t("Search campaigns…", "Cari kampanye…")} />
         <Button
           variant="navy"
           onClick={() => {
@@ -770,14 +794,18 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(isLoading || rows.length === 0) && (
+              {(isLoading || visibleRows.length === 0) && (
                 <TableRow>
                   <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                    {isLoading ? t("Loading…", "Memuat…") : t("No campaigns yet.", "Belum ada kampanye.")}
+                    {isLoading
+                      ? t("Loading…", "Memuat…")
+                      : term.trim()
+                        ? t("No campaign matches your search.", "Tidak ada kampanye yang cocok.")
+                        : t("No campaigns yet.", "Belum ada kampanye.")}
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((r, i) => (
+              {pager.items.map((r, i) => (
                 <TableRow key={r.id}>
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{r.name}</TableCell>
@@ -826,6 +854,7 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
 
