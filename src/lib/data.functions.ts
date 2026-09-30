@@ -34,7 +34,7 @@ const WORKSPACE_TABLES = new Set([
 const COLS: Record<string, string[]> = {
   md_categories: ["id", "workspace_id", "code", "name", "description", "is_active", "created_at", "updated_at"],
   md_uoms: ["id", "workspace_id", "code", "name", "is_active", "created_at", "updated_at"],
-  md_items: ["id", "workspace_id", "code", "name", "item_type", "category_code", "uom_code", "barcode", "cost_price", "sell_price", "min_stock", "is_active", "created_at", "updated_at"],
+  md_items: ["id", "workspace_id", "code", "name", "item_type", "category_code", "uom_code", "barcode", "cost_price", "sell_price", "min_stock", "is_stocked", "billing_cycle", "expense_account_code", "is_active", "created_at", "updated_at"],
   md_customers: ["id", "workspace_id", "code", "name", "contact_name", "email", "phone", "address", "city", "tax_id", "credit_limit", "is_active", "created_at", "updated_at"],
   md_suppliers: ["id", "workspace_id", "code", "name", "contact_name", "email", "phone", "address", "city", "tax_id", "payment_terms", "is_active", "created_at", "updated_at"],
   md_warehouses: ["id", "workspace_id", "code", "name", "pic_name", "city", "address", "is_active", "created_at", "updated_at"],

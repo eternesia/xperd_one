@@ -38,6 +38,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import type { MDEntity, MDField } from "@/lib/master-data";
+import { NON_STOCK_ITEM_TYPES } from "@/lib/master-data";
 
 type Row = Record<string, unknown>;
 
@@ -49,6 +50,65 @@ function emptyForm(entity: MDEntity): Row {
     out[f.key] = f.defaultValue ?? (f.type === "boolean" ? true : f.type === "number" ? 0 : "");
   });
   return out;
+}
+
+/** #41: field kondisional (barcode, min. stok, siklus penagihan) mengikuti tipe item. */
+function isVisible(field: MDField, values: Row) {
+  if (!field.showWhen) return true;
+  return field.showWhen.values.includes(String(values[field.showWhen.key] ?? ""));
+}
+
+/** #41: dropdown yang diisi dari tabel master lain (kategori, satuan ukur, dll.). */
+function ReferenceSelect({
+  field,
+  workspaceId,
+  value,
+  onChange,
+}: {
+  field: MDField;
+  workspaceId: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["md-ref", field.refTable, workspaceId],
+    enabled: Boolean(field.refTable),
+    queryFn: async () => {
+      const res = await listWorkspaceRows({
+        data: {
+          table: field.refTable!,
+          workspaceId,
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 500,
+          filters: { is_active: 1 },
+        },
+      });
+      return (res?.rows ?? []) as unknown as { code: string; name: string }[];
+    },
+  });
+
+  return (
+    <Select value={value} onValueChange={onChange} disabled={isLoading}>
+      <SelectTrigger>
+        <SelectValue placeholder={isLoading ? t("Loading…", "Memuat…") : t("Select…", "Pilih…")} />
+      </SelectTrigger>
+      <SelectContent>
+        {!data.length && (
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            {t("No master records yet.", "Belum ada data master.")}
+          </div>
+        )}
+        {data.map((o) => (
+          <SelectItem key={o.code} value={o.code}>
+            {o.code} · {o.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; workspaceId: string }) {
@@ -67,6 +127,7 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
   const fileRef = useRef<HTMLInputElement>(null);
 
   const columns = useMemo(() => entity.fields.filter((f) => f.inTable), [entity]);
+  const visibleFields = useMemo(() => entity.fields.filter((f) => isVisible(f, form)), [entity, form]);
   const queryKey = ["md", entity.table, workspaceId, page, pageSize, search];
 
   const { data, isLoading } = useQuery({
@@ -92,11 +153,66 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
   const total = data?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  /** #41: prefix kode berjalan, mengikuti tipe item bila entity mendefinisikannya. */
+  const prefixOf = (values: Row) => {
+    const cfg = entity.codePrefixByType;
+    if (cfg) return cfg.map[String(values[cfg.field] ?? "")] ?? entity.codePrefix ?? "";
+    return entity.codePrefix ?? "";
+  };
+
+  /** #41: kode berurutan berikutnya (mis. ITM-0007) dari kode tertinggi yang ada. */
+  const nextCode = async (prefix: string) => {
+    if (!prefix) return "";
+    const res = await listWorkspaceRows({
+      data: {
+        table: entity.table,
+        workspaceId,
+        search: `${prefix}-`,
+        orderBy: "code",
+        orderDir: "desc",
+        limit: 100,
+      },
+    });
+    const seq = ((res?.rows ?? []) as unknown as { code?: string }[]).reduce((max, r) => {
+      const c = String(r.code ?? "");
+      if (!c.startsWith(`${prefix}-`)) return max;
+      return Math.max(max, Number(c.slice(prefix.length + 1)) || 0);
+    }, 0);
+    return `${prefix}-${String(seq + 1).padStart(4, "0")}`;
+  };
+
+  /**
+   * #41: satu pintu untuk perubahan form supaya field turunan tetap konsisten —
+   * tipe item menentukan `is_stocked` dan mematikan min. stok/barcode, dan prefix
+   * kode ikut berubah (ITM/SRV/SFT/SUB) saat tipenya diganti.
+   */
+  const setField = (key: string, value: unknown) => {
+    setForm((prev) => {
+      const next: Row = { ...prev, [key]: value };
+      if (entity.table === "md_items" && key === "item_type") {
+        const stocked = !NON_STOCK_ITEM_TYPES.includes(String(value));
+        next.is_stocked = stocked;
+        if (!stocked) {
+          next.min_stock = 0;
+          next.barcode = "";
+        }
+        if (!editingId) {
+          void nextCode(prefixOf(next)).then((c) => {
+            if (c) setForm((cur) => ({ ...cur, code: c }));
+          });
+        }
+      }
+      return next;
+    });
+  };
+
   const save = useMutation({
     mutationFn: async (values: Row) => {
       const payload: Row = { workspace_id: workspaceId };
       entity.fields.forEach((f) => {
-        const v = values[f.key];
+        // #41: field yang disembunyikan (mis. min. stok untuk jasa) dikembalikan ke default
+        const hidden = !isVisible(f, values);
+        const v = hidden ? f.defaultValue : values[f.key];
         if (f.type === "number") payload[f.key] = Number(v) || 0;
         else if (f.type === "boolean") payload[f.key] = Boolean(v);
         else payload[f.key] = v === "" || v === undefined ? null : v;
@@ -240,9 +356,14 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
           <Button
             variant="navy"
             onClick={() => {
+              const blank = emptyForm(entity);
               setEditingId(null);
-              setForm(emptyForm(entity));
+              setForm(blank);
               setOpen(true);
+              // #41: kode item dibuat otomatis, jadi langsung diisi saat form dibuka
+              void nextCode(prefixOf(blank)).then((c) => {
+                if (c) setForm((cur) => ({ ...cur, code: c }));
+              });
             }}
           >
             <Plus /> {t("New", "Tambah")}
@@ -373,28 +494,29 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
               save.mutate(form);
             }}
           >
-            {entity.fields.map((f) => (
+            {visibleFields.map((f) => (
               <div key={f.key} className={f.type === "textarea" ? "space-y-2 sm:col-span-2" : "space-y-2"}>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {label(f)} {f.required && <span className="text-destructive">*</span>}
+                  {label(f)} {f.required && !f.readOnly && <span className="text-destructive">*</span>}
                 </Label>
                 {f.type === "textarea" ? (
                   <Textarea
                     rows={3}
                     value={String(form[f.key] ?? "")}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    onChange={(e) => setField(f.key, e.target.value)}
                   />
                 ) : f.type === "boolean" ? (
                   <div className="flex h-10 items-center">
                     <Switch
                       checked={Boolean(form[f.key])}
-                      onCheckedChange={(v) => setForm({ ...form, [f.key]: v })}
+                      disabled={f.readOnly}
+                      onCheckedChange={(v) => setField(f.key, v)}
                     />
                   </div>
                 ) : f.type === "select" ? (
                   <Select
                     value={String(form[f.key] ?? "")}
-                    onValueChange={(v) => setForm({ ...form, [f.key]: v })}
+                    onValueChange={(v) => setField(f.key, v)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -407,13 +529,25 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
                       ))}
                     </SelectContent>
                   </Select>
+                ) : f.type === "reference" ? (
+                  <ReferenceSelect
+                    field={f}
+                    workspaceId={workspaceId}
+                    value={String(form[f.key] ?? "")}
+                    onChange={(v) => setField(f.key, v)}
+                  />
                 ) : (
                   <Input
                     type={f.type === "number" ? "number" : "text"}
-                    required={f.required}
+                    required={f.required && !f.readOnly}
+                    readOnly={f.readOnly}
+                    className={f.readOnly ? "bg-muted font-medium" : undefined}
                     value={String(form[f.key] ?? "")}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    onChange={(e) => setField(f.key, e.target.value)}
                   />
+                )}
+                {(lang === "id" ? f.helpId : f.helpEn) && (
+                  <p className="text-xs text-muted-foreground">{lang === "id" ? f.helpId : f.helpEn}</p>
                 )}
               </div>
             ))}

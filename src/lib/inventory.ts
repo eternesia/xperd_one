@@ -189,9 +189,36 @@ export interface MovementInput {
   notes?: string | null;
 }
 
+/**
+ * #41: kode item yang bukan persediaan (jasa, lisensi, langganan) — item seperti
+ * ini tidak boleh membuat pergerakan stok. `item_type` dipakai sebagai penentu
+ * kedua selama `is_stocked` belum bisa diatur dari UI Master Data.
+ */
+async function nonStockedCodes(workspaceId: string, codes: string[]) {
+  const unique = [...new Set(codes.filter(Boolean))];
+  if (!unique.length) return new Set<string>();
+  const items = (await fetchMdItems({ data: { workspaceId, codes: unique } })) as
+    | { code: string; item_type: string | null; is_stocked: number | boolean | null }[]
+    | null;
+  return new Set(
+    (items ?? [])
+      .filter(
+        (i) =>
+          i.is_stocked === 0 ||
+          i.is_stocked === false ||
+          (i.item_type ?? "goods") !== "goods",
+      )
+      .map((i) => i.code),
+  );
+}
+
 export async function insertMovements(workspaceId: string, rows: MovementInput[]) {
+  const skip = await nonStockedCodes(
+    workspaceId,
+    rows.map((r) => r.item_code),
+  );
   const payload = rows
-    .filter((r) => r.item_code && Math.abs(Number(r.qty) || 0) > 0.000001)
+    .filter((r) => r.item_code && !skip.has(r.item_code) && Math.abs(Number(r.qty) || 0) > 0.000001)
     .map((r) => ({
       workspace_id: workspaceId,
       movement_date: r.movement_date,

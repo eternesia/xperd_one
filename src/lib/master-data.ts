@@ -1,4 +1,4 @@
-export type FieldType = "text" | "number" | "textarea" | "boolean" | "select";
+export type FieldType = "text" | "number" | "textarea" | "boolean" | "select" | "reference";
 
 export interface MDField {
   key: string;
@@ -9,6 +9,14 @@ export interface MDField {
   options?: { value: string; en: string; id_: string }[];
   inTable?: boolean;
   defaultValue?: string | number | boolean;
+  /** #41: untuk type "reference" — tabel master yang mengisi dropdown (kode aktif). */
+  refTable?: MDTable;
+  /** #41: field hanya tampil/disimpan bila field lain bernilai salah satu dari ini. */
+  showWhen?: { key: string; values: string[] };
+  /** #41: field terisi otomatis, tidak bisa diketik manual. */
+  readOnly?: boolean;
+  helpEn?: string;
+  helpId?: string;
 }
 
 export type MDTable =
@@ -27,11 +35,18 @@ export interface MDEntity {
   en: string;
   id_: string;
   fields: MDField[];
+  /** #41: prefix kode otomatis berurutan (mis. ITM-0007). */
+  codePrefix?: string;
+  /** #41: prefix per nilai sebuah field (mis. item_type goods/service). */
+  codePrefixByType?: { field: string; map: Record<string, string> };
 }
 
 const active: MDField = { key: "is_active", en: "Active", id_: "Aktif", type: "boolean", defaultValue: true, inTable: true };
 const code: MDField = { key: "code", en: "Code", id_: "Kode", type: "text", required: true, inTable: true };
 const name: MDField = { key: "name", en: "Name", id_: "Nama", type: "text", required: true, inTable: true };
+
+/** #41: item jasa/lisensi/langganan tidak pernah masuk stok fisik. */
+export const NON_STOCK_ITEM_TYPES = ["service", "software_license", "subscription"];
 
 export const MASTER_DATA_ENTITIES: MDEntity[] = [
   {
@@ -39,8 +54,13 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
     table: "md_items",
     en: "Items",
     id_: "Item",
+    codePrefix: "ITM",
+    codePrefixByType: {
+      field: "item_type",
+      map: { goods: "ITM", service: "SRV", software_license: "SFT", subscription: "SUB" },
+    },
     fields: [
-      code,
+      { ...code, readOnly: true, helpEn: "Generated automatically", helpId: "Dibuat otomatis berurutan" },
       name,
       {
         key: "item_type",
@@ -52,14 +72,47 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
         options: [
           { value: "goods", en: "Goods", id_: "Barang" },
           { value: "service", en: "Service", id_: "Jasa" },
+          { value: "software_license", en: "Software Licence", id_: "Lisensi Software" },
+          { value: "subscription", en: "Subscription (SaaS)", id_: "Langganan (SaaS)" },
         ],
       },
-      { key: "category_code", en: "Category", id_: "Kategori", type: "text", inTable: true },
-      { key: "uom_code", en: "UoM", id_: "Satuan", type: "text", inTable: true },
-      { key: "barcode", en: "Barcode", id_: "Barcode", type: "text" },
+      { key: "category_code", en: "Category", id_: "Kategori", type: "reference", refTable: "md_categories", inTable: true },
+      { key: "uom_code", en: "UoM", id_: "Satuan", type: "reference", refTable: "md_uoms", inTable: true },
+      {
+        key: "billing_cycle",
+        en: "Billing Cycle",
+        id_: "Siklus Penagihan",
+        type: "select",
+        defaultValue: "one_time",
+        showWhen: { key: "item_type", values: ["software_license", "subscription"] },
+        options: [
+          { value: "one_time", en: "One time", id_: "Sekali bayar" },
+          { value: "monthly", en: "Monthly", id_: "Bulanan" },
+          { value: "quarterly", en: "Quarterly", id_: "Triwulan" },
+          { value: "yearly", en: "Yearly", id_: "Tahunan" },
+        ],
+      },
+      { key: "barcode", en: "Barcode", id_: "Barcode", type: "text", showWhen: { key: "item_type", values: ["goods"] } },
       { key: "cost_price", en: "Cost Price", id_: "Harga Pokok", type: "number", defaultValue: 0, inTable: true },
       { key: "sell_price", en: "Sell Price", id_: "Harga Jual", type: "number", defaultValue: 0, inTable: true },
-      { key: "min_stock", en: "Min. Stock", id_: "Stok Minimum", type: "number", defaultValue: 0 },
+      {
+        key: "min_stock",
+        en: "Min. Stock",
+        id_: "Stok Minimum",
+        type: "number",
+        defaultValue: 0,
+        showWhen: { key: "item_type", values: ["goods"] },
+      },
+      {
+        key: "is_stocked",
+        en: "Tracked in stock",
+        id_: "Dicatat sebagai stok",
+        type: "boolean",
+        defaultValue: true,
+        readOnly: true,
+        helpEn: "Services, licences and subscriptions are never stocked.",
+        helpId: "Jasa, lisensi, dan langganan tidak memiliki stok fisik.",
+      },
       active,
     ],
   },
@@ -68,6 +121,7 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
     table: "md_categories",
     en: "Categories",
     id_: "Kategori",
+    codePrefix: "CAT",
     fields: [code, name, { key: "description", en: "Description", id_: "Deskripsi", type: "textarea", inTable: true }, active],
   },
   {
@@ -82,6 +136,7 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
     table: "md_customers",
     en: "Customers",
     id_: "Pelanggan",
+    codePrefix: "CUS",
     fields: [
       code,
       name,
@@ -100,6 +155,7 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
     table: "md_suppliers",
     en: "Suppliers",
     id_: "Pemasok",
+    codePrefix: "SUP",
     fields: [
       code,
       name,
@@ -118,6 +174,7 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
     table: "md_warehouses",
     en: "Warehouses",
     id_: "Gudang",
+    codePrefix: "WH",
     fields: [
       code,
       name,
