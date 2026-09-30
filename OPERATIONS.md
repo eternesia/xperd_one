@@ -66,7 +66,16 @@ migrasi ikut naik saat deploy. Port aplikasi di-bind ke localhost
 * * * * * curl -fsS -H "x-webhook-secret: $SOCIAL_PUBLISH_SECRET" http://127.0.0.1:3000/api/public/hooks/social-publish >/dev/null
 ```
 
-## 4. Berkas & cadangan
+## 4. CI
+
+`.github/workflows/test.yml` menjalankan urutan yang sama seperti di lokal pada
+DB **kosong** (service container MySQL 8.4): `tsc --noEmit` → `npm run build` →
+`npm run db:setup` → install Chrome → Playwright. DB selalu baru agar celah
+fixture (mis. tenant tanpa paket atau add-on yang belum di-seed) gagal keras dan
+tidak berubah menjadi spec yang ter-skip tanpa disadari. Workflow lain
+(`build.yml`, `deploy*.yml`) tetap mengurus build & deploy image.
+
+## 5. Berkas & cadangan
 
 - Berkas unggahan (pustaka dokumen, lampiran tender, bukti kas keluar, logo,
   kop surat) disimpan di `STORAGE_DIR` — dev `./storage`, produksi volume
@@ -75,7 +84,7 @@ migrasi ikut naik saat deploy. Port aplikasi di-bind ke localhost
 - `db_apply_log` mencatat migration/seed yang sudah diterapkan; jangan dihapus
   sembarangan atau `migrate` akan mencoba menerapkan ulang file lama.
 
-## 5. Sebelum mengubah kode
+## 6. Sebelum mengubah kode
 
 - Tabel & kolom baru untuk lapisan data generik **wajib** ditambahkan ke
   `WORKSPACE_TABLES` + `COLS` (`src/lib/data.functions.ts`) atau `PCOLS`
