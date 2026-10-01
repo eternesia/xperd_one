@@ -77,7 +77,7 @@ interface AccessRow {
 }
 
 function TeamPage() {
-  const { activeWorkspace, pkg, tenant, refresh } = useApp();
+  const { activeWorkspace, pkg, tenant, refresh, workspaceRole, accessLoading } = useApp();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ fullName: "", email: "", phone: "", password: "", role: "staff" });
@@ -243,6 +243,28 @@ function TeamPage() {
     }
     toast.success("Member removed");
     await load();
+  }
+
+  // BS New 4: halaman Team hanya untuk owner/admin — staff & viewer melihat
+  // halaman “Access restricted” (server fn sudah menolak tulis, ini menutup
+  // tampilan daftar anggota & matriks izin).
+  if (!accessLoading && workspaceRole !== "owner" && workspaceRole !== "admin") {
+    return (
+      <div className="mx-auto max-w-md px-5 py-16 text-center">
+        <ShieldCheck className="mx-auto h-8 w-8 text-gold" />
+        <h1 className="mt-3 text-lg font-semibold text-foreground">Access restricted</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Only workspace owners and admins can manage the team.
+        </p>
+        <Link
+          to="/app/w/$workspaceId"
+          params={{ workspaceId: activeWorkspace?.id ?? "" }}
+          className="mt-4 inline-flex text-sm font-medium text-gold"
+        >
+          Back to all modules
+        </Link>
+      </div>
+    );
   }
 
   return (

@@ -201,6 +201,34 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 26 (2026-10-01) — update roles/teams dari **BS New 4**
+
+Versi baru (`Xperd One Business Suite New 4`) memuat perubahan di area peran/tim.
+Perbandingan folder New 3 → New 4 (migrasi `drizzle/0016`–`0017`, `app-context`,
+`team.tsx`, `w.$workspaceId.index.tsx`, `journal.ts`, `ProcurementTable.tsx`) lalu
+dipetakan ke Old:
+
+| Update New 4 | Status di Old |
+|---|---|
+| **Halaman Team hanya untuk owner/admin** — staff/viewer melihat layar “Access restricted” | ✅ **diporting**: penjaga di `src/routes/app/w.$workspaceId.team.tsx` memakai `workspaceRole`/`accessLoading` dari app context |
+| **Kartu utilitas launcher** (Team, Settings, Billing, Backup) disembunyikan untuk non-manager | ✅ **diporting**: `LAUNCHER_UTILITIES.filter(() => isManager)` di `src/routes/app/w.$workspaceId.index.tsx` |
+| **Anggota yang diundang tidak memiliki tenant** → tenant diambil dari workspace tempat ia menjadi anggota (sebelumnya `tenant = null` sehingga batas paket/add-on salah) | ✅ **sudah setara**: `getAppShellData` Old sejak awal menyeleksi tenant `owner_id = ? OR EXISTS (workspace_members …)`, jadi fix New 4 tidak perlu apa-apa lagi |
+| **RLS `0016`** (anggota tenant boleh membaca baris tenant) & **`0017`** (rekan satu workspace saling boleh membaca profil) | ✅ **sudah setara secara aturan**: Old tidak memakai RLS; pembacaan lewat server fn — `getAppShellData` (tenant) dan `listProfilesByIds` (profil, cukup keanggotaan workspace, bukan hanya admin) |
+| `__root.tsx` (`ErrorComponentProps`), versi `@tanstack/*`, `supabase/types.ts` | ⏭️ tidak relevan untuk Old (berkas generated/versi router) |
+| **`journal.ts` + `ProcurementTable.tsx`**: PPh 21/23 pada AP Invoice kini diposting ke akun hutang **per jenis pajak** (`md_taxes.account_code`, nama “Hutang PPh 23”) alih-alih satu akun `whtPayable` global | 🔜 **belum diporting** (perubahan akuntansi terpisah) — lihat catatan di bawah |
+
+**Verifikasi:** `tsc` 0 error, `npm run build` sukses, suite e2e **38 lulus /
+0 gagal**. Spec `team-role-enforcement` diperluas: user `viewer` tidak melihat
+kartu menu `/team`, `/settings`, `/billing`, `/maintenance` dan halaman
+`/app/w/<ws>/team` menampilkan “Access restricted”, sementara owner/admin tetap
+bisa mengelola tim & mengubah matriks izin.
+
+**Belum diporting (dilaporkan, menunggu keputusan):** pemisahan akun hutang PPh
+per jenis pajak pada AP Invoice (`journal.ts` + `ProcurementTable.tsx` New 4).
+Old masih mengkredit satu akun `2200 Hutang Pajak` untuk seluruh PPh pada AP
+Invoice; data `md_taxes.account_code` sudah tersedia sehingga perubahan ini bisa
+diporting menyusul (butuh verifikasi jurnal + tes).
+
 ### Ronde 25 (2026-09-30) — menyamakan halaman Team & Access dengan versi Lovable
 
 Pertanyaan pemilik produk: “halaman `/app/w/<ws>/team` sudah sama seperti di

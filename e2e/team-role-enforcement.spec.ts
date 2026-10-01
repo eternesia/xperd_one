@@ -74,6 +74,17 @@ test("ROLES: cabut akses modul untuk viewer → menu & rute ikut berubah", async
   await expect(viewer.getByText(/Module access restricted|Akses modul dibatasi/i).first()).toBeVisible({
     timeout: 60_000,
   });
+
+  // BS New 4: menu pengelolaan workspace (Team, Settings, Billing, Backup)
+  // tidak ditampilkan untuk peran staff/viewer…
+  await viewer.goto(`/app/w/${ws}`);
+  await expect(viewer.getByRole("link", { name: /Sales & POS/ }).first()).toBeVisible({ timeout: 60_000 });
+  for (const path of ["/team", "/settings", "/billing", "/maintenance"]) {
+    await expect(viewer.locator(`a[href$="${path}"]`)).toHaveCount(0);
+  }
+  // …dan halaman Team-nya sendiri dibatasi untuk non-owner/admin.
+  await viewer.goto(`/app/w/${ws}/team`);
+  await expect(viewer.getByText(/Access restricted|Akses dibatasi/i).first()).toBeVisible({ timeout: 60_000 });
   await viewerCtx.close();
 
   /* ---------- 4. kembalikan izin & hapus anggota (idempoten) ---------- */
