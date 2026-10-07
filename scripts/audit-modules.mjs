@@ -33,6 +33,15 @@ const BASE = (process.env.AUDIT_BASE_URL ?? "http://127.0.0.1:3999").replace(/\/
 const EMAIL = process.env.AUDIT_EMAIL ?? "";
 const PASSWORD = process.env.AUDIT_PASSWORD ?? "";
 const ONLY = process.env.AUDIT_ONLY ?? "";
+/**
+ * Route tambahan (di luar `src/lib/modules.ts`) untuk diaudit, mis. submodul
+ * yang baru ada di aplikasi tujuan:
+ *   AUDIT_EXTRA_ROUTES=master-data/currencies,accounting/fx-revaluation,xpro/projects
+ */
+const EXTRA_ROUTES = (process.env.AUDIT_EXTRA_ROUTES ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const HEADLESS = process.env.AUDIT_HEADFUL !== "1";
 
 const host = new URL(BASE).host;
@@ -127,6 +136,12 @@ async function auditWorkspace(page, result) {
   const shotsDir = path.join(path.dirname(outFile), `${host}-shots`);
   await mkdir(shotsDir, { recursive: true });
 
+  const moduleIds = new Set(modules.map((m) => m.id));
+  const extras = EXTRA_ROUTES.map((r) => {
+    const [module, submodule] = r.split("/");
+    return { module, submodule, path: `/app/w/${ws}/${r}` };
+  }).filter((r) => r.module && (r.submodule || !moduleIds.has(r.module)));
+
   for (const mod of modules) {
     if (ONLY && !mod.id.includes(ONLY)) continue;
     const routes = [
@@ -146,11 +161,26 @@ async function auditWorkspace(page, result) {
       }
     }
   }
+
+  for (const route of extras) {
+    const label = `${route.module}${route.submodule ? `/${route.submodule}` : ""}`;
+    try {
+      await page.goto(`${BASE}${route.path}`, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      await page.waitForTimeout(1400);
+      const fp = await fingerprint(page);
+      result.pages.push({ path: route.path, module: route.module, submodule: route.submodule, extra: true, ...fp });
+      await page.screenshot({ path: path.join(shotsDir, `extra_${label.replace(/\//g, "_")}.png`) }).catch(() => {});
+    } catch (err) {
+      result.pages.push({ path: route.path, module: route.module, submodule: route.submodule, extra: true, error: String(err).slice(0, 160) });
+    }
+  }
 }
 
 async function compare(files) {
   const [a, b] = await Promise.all(files.map(async (f) => JSON.parse(await readFile(f, "utf8"))));
-  const byPath = (doc) => new Map(doc.pages.map((p) => [p.path, p]));
+  // Workspace id tiap aplikasi berbeda → samakan dulu agar path bisa dibandingkan.
+  const norm = (p) => p.replace(/\/app\/w\/[^/?#]+/, "/app/w/__WS__");
+  const byPath = (doc) => new Map(doc.pages.map((p) => [norm(p.path), p]));
   const ma = byPath(a);
   const mb = byPath(b);
   const paths = [...new Set([...ma.keys(), ...mb.keys()])].sort();

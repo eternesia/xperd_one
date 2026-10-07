@@ -47,14 +47,51 @@ Keluaran tersimpan di `audit/` (di-*gitignore*): `<host>-<tanggal>.json` +
 
 | Audit | Cakupan | Hasil |
 |---|---|---|
-| `xperd-one.lovable.app` | 6 halaman publik (`/`, `/products`, `/pricing`, `/register`, `/auth`, `/qalling`) | ✅ terdokumentasi di `audit/xperd-one.lovable.app-*.json` |
-| Old lokal | **114 halaman** (12 modul + seluruh submodul + halaman publik) | ✅ `audit/127.0.0.1-*.json` + tangkapan layar per halaman |
-| Banding publik (live vs Old) | 6 halaman | ✅ sama, kecuali **satu** temuan: halaman `/` di live punya tombol **“Dismiss”** yang tidak ada di Old (banner/konsen?) — perlu diverifikasi |
+| `xperd-one.lovable.app` (publik) | 6 halaman publik (`/`, `/products`, `/pricing`, `/register`, `/auth`, `/qalling`) | ✅ terdokumentasi di `audit/xperd-one.lovable.app-*.json` |
+| `xperd-one.lovable.app` (login) | **118 halaman** = 114 route modul/submodul (daftar dari `modules.ts` Old) + 4 route baru (`master-data/currencies`, `master-data/exchange-rates`, `accounting/fx-revaluation`, `xpro/projects`) | ⚠️ **112 halaman area workspace tertutup akses** — lihat §3.1 |
+| Old lokal | **114 halaman** (12 modul + seluruh submodul + halaman publik) | ✅ `audit/127.0.0.1-*.json` + tangkapan layar; **0 halaman error, 0 console error**, 9 halaman kosong karena data dev terbatas |
+| Banding publik (live vs Old) | 6 halaman | ✅ sama, kecuali halaman `/` di live punya tombol **“Dismiss”** yang tidak ada di Old (banner/ajakan; perlu ditelusuri) |
 
-⛔ **Blokir**: tab “Register online” di aplikasi live bukan pendaftaran akun
-instan (“Our team activates your organisation and sends your login credentials”),
-jadi **area workspace live hanya bisa diaudit dengan akun uji**. Yang dibutuhkan:
-satu akun (owner/admin) tenant demo di `xperd-one.lovable.app`.
+### 3.1 Audit live dengan akun uji — hasil & hambatan
+
+Audit sudah berjalan dengan akun yang diberikan. Temuan:
+
+1. **Akun itu bukan owner/admin** di tenant live “ETERNETSIA — Digital Niaga
+   International”. Halaman `/app/w/<ws>/team` di live menjawab
+   **“Access restricted — Only workspace owners and admins can manage the team.”**
+   → ini **konfirmasi langsung dari app live** bahwa penjaga owner/admin untuk
+   halaman Team (yang kita porting di ronde 26) memang perilaku Lovable.
+2. **Seluruh modul terkunci untuk peran akun itu** —
+   `"Module access restricted — Your role does not have access to this module."`
+   Jadi 112 halaman area workspace tidak bisa dipakai untuk audit perilaku
+   (hanya `/team`, `/settings`, `/billing`, `/maintenance`, dan halaman publik).
+3. **Struktur modul baru terkonfirmasi ada di app live** (bukan hanya di kode
+   ekspor): `/master-data/currencies`, `/master-data/exchange-rates`,
+   `/accounting/fx-revaluation`, dan `/xpro/projects` semuanya merespons
+   (terkunci akses, bukan “module not found”).
+4. `crm/dashboard` tidak menghasilkan “modul tidak ditemukan” — perlu
+   diverifikasi ulang **setelah akses modul dibuka** (di New 8 submodul ini sudah
+   tidak ada; kemungkinan route masih hidup tetapi item menunya dihapus).
+
+**Agar audit per modul live bisa jalan, akun uji perlu akses modul.** Pilihannya:
+
+- **A. Diberi akses oleh owner tenant** (paling cepat): login sebagai owner di
+  live → **Team & Access → tab “Role Access”** → pada peran yang dipakai akun uji
+  (admin/staff/viewer) centang **View** untuk modul-modulnya → **Save**. Setelah
+  itu jalankan kembali:
+
+  ```bash
+  AUDIT_BASE_URL=https://xperd-one.lovable.app \
+  AUDIT_EMAIL=<akun uji> AUDIT_PASSWORD=<password> \
+  AUDIT_EXTRA_ROUTES=master-data/currencies,master-data/exchange-rates,accounting/fx-revaluation,xpro/projects \
+  AUDIT_OUT=audit/lovable-live-audit.json node scripts/audit-modules.mjs
+  ```
+
+- **B. Gunakan akun owner/admin tenant** (yang punya akses modul penuh).
+
+Setelah salah satu tersedia, `--compare` akan menghasilkan daftar selisih
+per modul secara otomatis (judul, tombol, header tabel, kontrol form).
+
 
 ## 4. Analisis struktural modul (Old vs New 8)
 
