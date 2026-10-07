@@ -37,3 +37,6 @@ dist-ssr
 test-results
 playwright-report
 
+
+# Hasil audit perilaku (scripts/audit-modules.mjs) — artefak, bukan sumber.
+audit/
