@@ -3,6 +3,9 @@ import {
   fetchJournalSourceCredits,
   fetchMdItems,
   postJournalEntry,
+  postVatClosing as postVatClosingFn,
+  previewVatClosing as previewVatClosingFn,
+  type VatClosingPreview,
 } from "@/lib/ledger.functions";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { movingAverageCosts } from "@/lib/inventory";
@@ -35,6 +38,21 @@ export const JOURNAL_ACCOUNTS = {
   serviceExpense: { account_code: "5200", account_name: "Beban Jasa & Profesional" },
   /** #38: PPh yang kita potong dari tagihan supplier dan wajib disetor */
   whtPayable: { account_code: "2200", account_name: "Hutang Pajak" },
+  /**
+   * Ronde 28 (BS New 8): akun hasil tutup buku PPN. 1410 menampung lebih bayar
+   * yang dikompensasi ke bulan berikutnya, 2110 menampung kurang bayar yang
+   * harus disetor ke kas negara.
+   */
+  vatOverpaid: { account_code: "1410", account_name: "PPN Lebih Bayar" },
+  vatPayable: { account_code: "2110", account_name: "Hutang PPN" },
+  /**
+   * Ronde 29 (BS New 8): selisih kurs. `fxGain`/`fxLoss` untuk selisih yang
+   * sudah terealisasi saat pelunasan, `fxUnreal*` untuk revaluasi akhir periode.
+   */
+  fxGain: { account_code: "4900", account_name: "Laba Selisih Kurs" },
+  fxLoss: { account_code: "6900", account_name: "Rugi Selisih Kurs" },
+  fxUnrealGain: { account_code: "4910", account_name: "Laba Selisih Kurs Belum Terealisasi" },
+  fxUnrealLoss: { account_code: "6910", account_name: "Rugi Selisih Kurs Belum Terealisasi" },
 };
 
 interface JLine {
@@ -45,12 +63,40 @@ interface JLine {
   credit: number;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Ronde 29 (BS New 8): konversi baris dokumen (mata uang dokumen) ke mata uang
+ * dasar memakai kurs dokumen. Selisih pembulatan sen ditempelkan ke baris
+ * terbesar di sisi yang kurang supaya jurnal tetap balance.
+ */
+function toBaseLines(lines: JLine[], rate: number): JLine[] {
+  if (!rate || Math.abs(rate - 1) < 1e-9) return lines;
+  const out = lines.map((l) => ({ ...l, debit: round2(l.debit * rate), credit: round2(l.credit * rate) }));
+  const diff = round2(out.reduce((s, l) => s + l.debit - l.credit, 0));
+  if (Math.abs(diff) > 0) {
+    const side: "debit" | "credit" = diff > 0 ? "credit" : "debit";
+    const target = out.reduce((best, l) => (l[side] > best[side] ? l : best), out[0]);
+    target[side] = round2(target[side] + Math.abs(diff));
+  }
+  return out;
+}
+
 async function postJournal(
   workspaceId: string,
-  doc: { id: string; doc_number: string; doc_date: string; doc_type: string; supplier_name?: string | null },
+  doc: {
+    id: string;
+    doc_number: string;
+    doc_date: string;
+    doc_type: string;
+    supplier_name?: string | null;
+    /** Ronde 29 (BS New 8): kurs dokumen → jurnal selalu dalam mata uang dasar. */
+    exchange_rate?: number | null;
+  },
   memo: string,
-  lines: JLine[],
+  rawLines: JLine[],
 ) {
+  const lines = toBaseLines(rawLines, Number(doc.exchange_rate ?? 1) || 1);
   const clean = lines.filter((l) => l.debit > 0.0001 || l.credit > 0.0001);
   if (!clean.length) return;
   const totalDebit = clean.reduce((s, l) => s + l.debit, 0);
@@ -176,16 +222,37 @@ export async function assertFundsMapping(workspaceId: string, funds: FundsAccoun
  */
 export async function postPaymentJournal(
   workspaceId: string,
-  doc: Pick<PrcDoc, "id" | "doc_number" | "doc_date" | "doc_type" | "supplier_name"> & { total: number },
+  doc: Pick<PrcDoc, "id" | "doc_number" | "doc_date" | "doc_type" | "supplier_name"> & {
+    total: number;
+    exchange_rate?: number | null;
+  },
   funds?: FundsAccount,
-  options: { advance?: boolean } = {},
+  options: { advance?: boolean; invoiceRate?: number | null } = {},
 ) {
   const memo = `${options.advance ? "Down payment" : "Payment"} ${doc.doc_number}${doc.supplier_name ? ` · ${doc.supplier_name}` : ""}`;
   const cash = resolveFunds(funds);
   const debitAcc = options.advance ? JOURNAL_ACCOUNTS.advancePurchase : JOURNAL_ACCOUNTS.payable;
-  await postJournal(workspaceId, doc, memo, [
-    { ...debitAcc, description: memo, debit: Number(doc.total), credit: 0 },
-    { ...cash, description: memo, debit: 0, credit: Number(doc.total) },
+  const amount = Number(doc.total);
+  const payRate = Number(doc.exchange_rate ?? 1) || 1;
+  const invRate = options.advance ? payRate : Number(options.invoiceRate ?? payRate) || payRate;
+  if (Math.abs(invRate - payRate) < 1e-9) {
+    await postJournal(workspaceId, doc, memo, [
+      { ...debitAcc, description: memo, debit: amount, credit: 0 },
+      { ...cash, description: memo, debit: 0, credit: amount },
+    ]);
+    return;
+  }
+  // Ronde 29 (BS New 8): selisih kurs realisasi (PSAK 10) — hutang dibersihkan
+  // memakai kurs invoice, kas keluar memakai kurs tanggal bayar.
+  const payable = round2(amount * invRate);
+  const paid = round2(amount * payRate);
+  const diff = round2(payable - paid);
+  await postJournal(workspaceId, { ...doc, exchange_rate: 1 }, memo, [
+    { ...debitAcc, description: memo, debit: payable, credit: 0 },
+    { ...cash, description: memo, debit: 0, credit: paid },
+    diff > 0
+      ? { ...JOURNAL_ACCOUNTS.fxGain, description: `${memo} · selisih kurs`, debit: 0, credit: diff }
+      : { ...JOURNAL_ACCOUNTS.fxLoss, description: `${memo} · selisih kurs`, debit: -diff, credit: 0 },
   ]);
 }
 
@@ -324,6 +391,8 @@ interface SalesDocRef {
   tax_amount?: number;
   total?: number;
   withholding_amount?: number;
+  /** Ronde 29 (BS New 8): kurs dokumen (mata uang dasar per 1 unit dokumen). */
+  exchange_rate?: number | null;
 }
 
 export interface SalesJournalLineInput {
@@ -393,14 +462,31 @@ export async function postReceiptJournal(
   workspaceId: string,
   doc: SalesDocRef,
   funds?: FundsAccount,
-  options: { advance?: boolean } = {},
+  options: { advance?: boolean; invoiceRate?: number | null } = {},
 ) {
   const memo = `${options.advance ? "Down payment" : "Receipt"} ${doc.doc_number}${doc.customer_name ? ` · ${doc.customer_name}` : ""}`;
   const cash = resolveFunds(funds);
   const creditAcc = options.advance ? JOURNAL_ACCOUNTS.advanceSales : JOURNAL_ACCOUNTS.receivable;
-  await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name } as never, memo, [
-    { ...cash, description: memo, debit: Number(doc.total ?? 0), credit: 0 },
-    { ...creditAcc, description: memo, debit: 0, credit: Number(doc.total ?? 0) },
+  const amount = Number(doc.total ?? 0);
+  const rcpRate = Number(doc.exchange_rate ?? 1) || 1;
+  const invRate = options.advance ? rcpRate : Number(options.invoiceRate ?? rcpRate) || rcpRate;
+  if (Math.abs(invRate - rcpRate) < 1e-9) {
+    await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name } as never, memo, [
+      { ...cash, description: memo, debit: amount, credit: 0 },
+      { ...creditAcc, description: memo, debit: 0, credit: amount },
+    ]);
+    return;
+  }
+  // Ronde 29 (BS New 8): selisih kurs realisasi atas pelunasan piutang valas.
+  const received = round2(amount * rcpRate);
+  const cleared = round2(amount * invRate);
+  const diff = round2(received - cleared);
+  await postJournal(workspaceId, { ...doc, supplier_name: doc.customer_name, exchange_rate: 1 } as never, memo, [
+    { ...cash, description: memo, debit: received, credit: 0 },
+    { ...creditAcc, description: memo, debit: 0, credit: cleared },
+    diff > 0
+      ? { ...JOURNAL_ACCOUNTS.fxGain, description: `${memo} · selisih kurs`, debit: 0, credit: diff }
+      : { ...JOURNAL_ACCOUNTS.fxLoss, description: `${memo} · selisih kurs`, debit: -diff, credit: 0 },
   ]);
 }
 
@@ -455,6 +541,26 @@ export async function lockPeriod(
 export async function unlockPeriod(workspaceId: string, id: string) {
   await deleteWorkspaceRow({ data: { table: "acc_period_locks", workspaceId, id } });
 }
+
+/* --------------------------- Tutup buku PPN (Ronde 28) --------------------- */
+
+/**
+ * Pratinjau tutup PPN satu masa (SPT Masa PPN): PPN Keluaran (2100) vs PPN
+ * Masukan (1400), ditambah lebih bayar lama (1410) yang dikompensasi. Aturan
+ * uangnya identik dengan BS New 8 dan dijalankan di server dalam satu transaksi
+ * MySQL (tanpa trigger):
+ *   selisih > 0 → kurang bayar → Cr Hutang PPN (2110)
+ *   selisih < 0 → lebih bayar  → Dr PPN Lebih Bayar (1410)
+ */
+export async function previewVatClosing(workspaceId: string, period: string): Promise<VatClosingPreview> {
+  return previewVatClosingFn({ data: { workspaceId, period } });
+}
+
+export async function postVatClosing(workspaceId: string, period: string): Promise<VatClosingPreview> {
+  return postVatClosingFn({ data: { workspaceId, period } });
+}
+
+export type { VatClosingPreview };
 
 /* ------------------------------- Uang muka (#37) --------------------------- */
 

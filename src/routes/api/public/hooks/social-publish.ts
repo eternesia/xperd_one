@@ -3,7 +3,7 @@
  *
  * Old tidak punya scheduler internal, jadi endpoint ini dipanggil oleh cron
  * eksternal (systemd timer, container cron, atau layanan scheduler) — polanya
- * sama dengan `INTEROP-BOILERPLATE.md`.
+ * sama dengan `docs/INTEROP-BOILERPLATE.md`.
  *
  * Keamanan: bila `SOCIAL_PUBLISH_SECRET` diset, pemanggil harus mengirim
  * `x-webhook-secret` atau `?secret=` yang sama.

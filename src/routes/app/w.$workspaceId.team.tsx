@@ -20,6 +20,8 @@ import {
   useSearchFilter,
 } from "@/components/app/ui-states";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Ronde 31 (BS New 8/10): tab Workspace Access (matriks user × workspace).
+import { AccessMatrixPanel } from "@/components/app/AccessMatrixPanel";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Select,
@@ -284,8 +286,14 @@ function TeamPage() {
       </div>
 
       <Tabs defaultValue="users" className="mt-6">
-        <TabsList className="grid w-full grid-cols-2 sm:w-fit">
-          <TabsTrigger value="users">Users</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 sm:w-fit" data-testid="team-tabs">
+          <TabsTrigger value="users" data-testid="team-tab-users">
+            Users
+          </TabsTrigger>
+          {/* Ronde 31 (BS New 8/10): matriks siapa boleh membuka workspace mana. */}
+          <TabsTrigger value="workspace-access" data-testid="team-tab-workspace-access">
+            Workspace Access
+          </TabsTrigger>
           <TabsTrigger value="access">Role Access</TabsTrigger>
         </TabsList>
 
@@ -568,6 +576,10 @@ function TeamPage() {
               </form>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="workspace-access" className="pt-4">
+          <AccessMatrixPanel workspaceId={activeWorkspace?.id} onChanged={() => void load()} />
         </TabsContent>
 
         <TabsContent value="access" className="pt-4">

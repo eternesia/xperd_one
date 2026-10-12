@@ -34,6 +34,24 @@ export const DEFAULT_COA: { code: string; name: string; account_type: string }[]
   { code: "6100", name: "Beban Penyusutan", account_type: "expense" },
   { code: "6200", name: "Beban Gaji & Tunjangan", account_type: "expense" },
   { code: "6210", name: "Beban BPJS Perusahaan", account_type: "expense" },
+  // Ronde 29 (BS New 8): selisih kurs — realisasi (4900/6900) & belum terealisasi (4910/6910).
+  { code: "4900", name: "Laba Selisih Kurs", account_type: "revenue" },
+  { code: "4910", name: "Laba Selisih Kurs Belum Terealisasi", account_type: "revenue" },
+  { code: "6900", name: "Rugi Selisih Kurs", account_type: "expense" },
+  { code: "6910", name: "Rugi Selisih Kurs Belum Terealisasi", account_type: "expense" },
+];
+
+/** Ronde 29 (BS New 8): mata uang awal tiap workspace; IDR = mata uang dasar. */
+const DEFAULT_CURRENCIES = [
+  { code: "IDR", name: "Rupiah Indonesia", symbol: "Rp", decimals: 0, is_base: 1 },
+  { code: "USD", name: "US Dollar", symbol: "$", decimals: 2, is_base: 0 },
+  { code: "SGD", name: "Singapore Dollar", symbol: "S$", decimals: 2, is_base: 0 },
+  { code: "EUR", name: "Euro", symbol: "€", decimals: 2, is_base: 0 },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥", decimals: 0, is_base: 0 },
+  { code: "CNY", name: "Chinese Yuan", symbol: "¥", decimals: 2, is_base: 0 },
+  { code: "AUD", name: "Australian Dollar", symbol: "A$", decimals: 2, is_base: 0 },
+  { code: "GBP", name: "Pound Sterling", symbol: "£", decimals: 2, is_base: 0 },
+  { code: "MYR", name: "Malaysian Ringgit", symbol: "RM", decimals: 2, is_base: 0 },
 ];
 
 const DEFAULT_UOMS = [
@@ -86,6 +104,12 @@ export async function seedWorkspaceDefaults(workspaceId: string) {
   await upsert(
     "md_uoms",
     DEFAULT_UOMS.map((u) => ({ workspace_id: workspaceId, ...u, is_active: 1 })),
+    ["workspace_id", "code"],
+  );
+  // Ronde 29 (BS New 8): mata uang awal (IDR dasar) untuk workspace baru.
+  await upsert(
+    "md_currencies",
+    DEFAULT_CURRENCIES.map((c) => ({ workspace_id: workspaceId, ...c, is_active: 1 })),
     ["workspace_id", "code"],
   );
   await upsert(

@@ -32,7 +32,7 @@ test("HR: payroll run generates payslips and posts the journal", async ({ page }
   }
 
   // --- buat draft payroll -------------------------------------------------
-  await page.getByRole("button", { name: /Process payroll/ }).click();
+  await page.getByRole("button", { name: /Run payroll|Process payroll|Jalankan payroll|Proses payroll/ }).click();
   await expect(dialog).toBeVisible({ timeout: 30_000 });
   await dialog.locator('input[type="month"]').fill(PERIOD);
   await dialog.getByRole("button", { name: "Generate" }).click();

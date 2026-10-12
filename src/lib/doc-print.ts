@@ -131,7 +131,21 @@ function totalsRows(doc: PrcDoc, lang: string, labels: Record<string, string>, a
   <tr><td class="right muted">${esc(labels.discount)}</td><td class="right">${money(doc.discount_amount, lang)}</td></tr>
   <tr><td class="right muted">${esc(labels.tax)}</td><td class="right">${money(doc.tax_amount, lang)}</td></tr>
   <tr><td class="right" style="font-weight:700;color:${accent};border-top:1px solid #d8dce4;padding-top:9px">${esc(labels.total)} (${esc(doc.currency)})</td>
-      <td class="right" style="font-weight:700;color:${accent};border-top:1px solid #d8dce4;padding-top:9px">${money(doc.total, lang)}</td></tr>`;
+      <td class="right" style="font-weight:700;color:${accent};border-top:1px solid #d8dce4;padding-top:9px">${money(doc.total, lang)}</td></tr>${fxRows(doc, lang, labels)}`;
+}
+
+/**
+ * Ronde 29 (BS New 8): dokumen valas juga menampilkan kurs yang dipakai dan
+ * ekuivalennya dalam mata uang dasar.
+ */
+function fxRows(doc: PrcDoc, lang: string, labels: Record<string, string>) {
+  const rate = Number((doc as { exchange_rate?: number | null }).exchange_rate ?? 1) || 1;
+  if (rate === 1) return "";
+  const id = lang === "id";
+  const base = Math.round((Number(doc.total) || 0) * rate * 100) / 100;
+  return `
+  <tr><td class="right muted">${esc(labels.exchangeRate ?? (id ? "Kurs" : "Exchange rate"))}</td><td class="right">${num(rate, lang)}</td></tr>
+  <tr><td class="right muted">${esc(labels.baseEquivalent ?? (id ? "Ekuivalen mata uang dasar" : "Base currency equivalent"))}</td><td class="right">${money(base, lang)}</td></tr>`;
 }
 
 function companyBlock(c: DocCompany) {

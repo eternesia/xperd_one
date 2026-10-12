@@ -267,3 +267,169 @@ export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
     );
     return { ok: true };
   });
+
+/* ------------------- Matriks akses workspace (Ronde 31) ------------------- */
+// Parity tab “Workspace Access” di BS New 8/10: satu tabel user × workspace
+// untuk mengatur siapa boleh membuka workspace mana (owner tenant selalu boleh).
+
+export interface AccessMatrixUser {
+  userId: string;
+  fullName: string | null;
+  email: string | null;
+  /** workspaceId → role */
+  roles: Record<string, string>;
+}
+
+export interface AccessMatrix {
+  ownerId: string | null;
+  workspaces: { id: string; name: string }[];
+  /** workspace yang boleh diubah oleh pemanggil (owner/admin di workspace itu) */
+  manageable: string[];
+  users: AccessMatrixUser[];
+}
+
+export const getAccessMatrix = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { workspaceId: string }) => {
+    if (!data?.workspaceId) throw new Error("Workspace is required");
+    return data;
+  })
+  .handler(async ({ data, context }): Promise<AccessMatrix> => {
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
+    const ws = await executeOne<{ tenant_id: string }>(
+      "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+      [data.workspaceId],
+    );
+    if (!ws) throw new Error("Workspace not found");
+
+    const tenant = await executeOne<{ owner_id: string | null }>(
+      "SELECT owner_id FROM tenants WHERE id = ? LIMIT 1",
+      [ws.tenant_id],
+    );
+    const isTenantOwner = !!tenant?.owner_id && tenant.owner_id === context.userId;
+
+    const workspaces = await execute<{ id: string; name: string }>(
+      "SELECT id, name FROM workspaces WHERE tenant_id = ? ORDER BY name",
+      [ws.tenant_id],
+    );
+    const workspaceIds = (workspaces ?? []).map((w) => w.id);
+    if (!workspaceIds.length) {
+      return { ownerId: tenant?.owner_id ?? null, workspaces: [], manageable: [], users: [] };
+    }
+
+    const placeholders = workspaceIds.map(() => "?").join(", ");
+    const members = await execute<{ workspace_id: string; user_id: string; role: string }>(
+      `SELECT workspace_id, user_id, role FROM workspace_members WHERE workspace_id IN (${placeholders})`,
+      workspaceIds,
+    );
+
+    // Pemanggil boleh mengubah workspace tempat ia owner/admin; pemilik tenant
+    // (pemilik perusahaan) selalu boleh mengubah semua workspace tenant-nya.
+    const myAdminWs = (members ?? [])
+      .filter((row) => row.user_id === context.userId && ["owner", "admin"].includes(row.role))
+      .map((row) => row.workspace_id);
+    if (!isTenantOwner && myAdminWs.length === 0) throw new Error("Forbidden");
+    const manageable = isTenantOwner ? workspaceIds : myAdminWs;
+
+    const userIds = [...new Set((members ?? []).map((row) => row.user_id))];
+    // Pemilik perusahaan = pemilik tenant (skema Old: `tenants.owner_id`).
+    const ownerId = tenant?.owner_id ?? null;
+    if (ownerId && !userIds.includes(ownerId)) userIds.push(ownerId);
+    if (!userIds.length) {
+      return { ownerId, workspaces: workspaces ?? [], manageable, users: [] };
+    }
+
+    const userPlaceholders = userIds.map(() => "?").join(", ");
+    const profiles = await execute<{ id: string; full_name: string | null; email: string | null }>(
+      `SELECT id, full_name, email FROM profiles WHERE id IN (${userPlaceholders})`,
+      userIds,
+    );
+    const profileById = new Map((profiles ?? []).map((row) => [row.id, row]));
+
+    return {
+      ownerId,
+      workspaces: workspaces ?? [],
+      manageable,
+      users: userIds.map((id) => ({
+        userId: id,
+        fullName: profileById.get(id)?.full_name ?? null,
+        email: profileById.get(id)?.email ?? null,
+        roles: Object.fromEntries(
+          (members ?? []).filter((row) => row.user_id === id).map((row) => [row.workspace_id, row.role]),
+        ),
+      })),
+    };
+  });
+
+/** Set/hapus peran user pada satu workspace dari matriks akses. */
+export const setWorkspaceAccess = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { targetUserId: string; targetWorkspaceId: string; role: "none" | "admin" | "staff" | "viewer" }) => {
+    if (!data?.targetUserId || !data.targetWorkspaceId) throw new Error("Missing user or workspace");
+    if (!["none", "admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    // Semantik mengikuti BS New 10 persis: tidak bisa mengubah akses sendiri,
+    // pemilik tenant selalu boleh, selain itu harus owner/admin di workspace itu.
+    if (data.targetUserId === context.userId) throw new Error("You cannot change your own access");
+
+    const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
+    const ws = await executeOne<{ tenant_id: string }>(
+      "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+      [data.targetWorkspaceId],
+    );
+    if (!ws) throw new Error("Workspace not found");
+
+    const tenant = await executeOne<{ owner_id: string | null }>(
+      "SELECT owner_id FROM tenants WHERE id = ? LIMIT 1",
+      [ws.tenant_id],
+    );
+    if (tenant?.owner_id === data.targetUserId) {
+      throw new Error("The company owner always has access to every workspace");
+    }
+
+    let allowed = tenant?.owner_id === context.userId;
+    if (!allowed) {
+      const me = await executeOne<{ role: string }>(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
+        [data.targetWorkspaceId, context.userId],
+      );
+      allowed = !!me && ["owner", "admin"].includes(me.role);
+    }
+    if (!allowed) throw new Error("Forbidden");
+
+    // Target harus memang bagian dari perusahaan ini (anggota salah satu workspace tenant).
+    const tenantWorkspaces = await execute<{ id: string }>(
+      "SELECT id FROM workspaces WHERE tenant_id = ?",
+      [ws.tenant_id],
+    );
+    const ids = (tenantWorkspaces ?? []).map((w) => w.id);
+    if (!ids.length) throw new Error("User is not part of this company");
+    const placeholders = ids.map(() => "?").join(", ");
+    const belongs = await execute<{ workspace_id: string; role: string }>(
+      `SELECT workspace_id, role FROM workspace_members
+        WHERE user_id = ? AND workspace_id IN (${placeholders})`,
+      [data.targetUserId, ...ids],
+    );
+    if (!belongs?.length) throw new Error("User is not part of this company");
+    const current = belongs.find((b) => b.workspace_id === data.targetWorkspaceId);
+    if (current?.role === "owner") throw new Error("Workspace owners cannot be changed here");
+
+    if (data.role === "none") {
+      if (!current) return { ok: true };
+      await execute("DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?", [
+        data.targetWorkspaceId,
+        data.targetUserId,
+      ]);
+      return { ok: true };
+    }
+
+    await execute(
+      `INSERT INTO workspace_members (id, workspace_id, user_id, role)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE role = VALUES(role)`,
+      [uuid(), data.targetWorkspaceId, data.targetUserId, data.role],
+    );
+    return { ok: true };
+  });

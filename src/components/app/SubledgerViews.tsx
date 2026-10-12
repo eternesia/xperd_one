@@ -27,6 +27,18 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Ronde 29 (BS New 8): "USD 1.000,00 @ 15.800" untuk dokumen valas; kosong
+ * untuk dokumen bermata uang dasar.
+ */
+function fxLabel(r: { currency?: string | null; foreign_amount?: number; exchange_rate?: number }, lang: string) {
+  if (!r.currency || Number(r.exchange_rate ?? 1) === 1) return "";
+  const loc = lang === "id" ? "id-ID" : "en-US";
+  const amt = Number(r.foreign_amount ?? 0).toLocaleString(loc, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rate = Number(r.exchange_rate ?? 1).toLocaleString(loc, { maximumFractionDigits: 4 });
+  return `${r.currency} ${amt} @ ${rate}`;
+}
+
 function Head({ kicker, title, right }: { kicker: string; title: string; right?: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -152,11 +164,12 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
       t("Document", "Dokumen"),
       t("Type", "Jenis"),
       t("Due", "Jatuh tempo"),
+      t("Foreign amount", "Nilai valas"),
       t("Debit", "Debit"),
       t("Credit", "Kredit"),
       t("Balance", "Saldo"),
     ],
-    numericColumns: [5, 6, 7],
+    numericColumns: [6, 7, 8],
     orientation: "landscape",
     rows: rows.map((r) => [
       r.date,
@@ -164,6 +177,7 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
       r.doc_number,
       lang === "id" ? (DOC_LABEL[r.doc_type]?.id_ ?? r.doc_type) : (DOC_LABEL[r.doc_type]?.en ?? r.doc_type),
       r.due_date ?? "",
+      fxLabel(r, lang),
       r.debit || "",
       r.credit || "",
       r.balance,
@@ -217,6 +231,7 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
               <TableHead>{t("Document", "Dokumen")}</TableHead>
               <TableHead>{t("Type", "Jenis")}</TableHead>
               <TableHead>{t("Due", "Jatuh tempo")}</TableHead>
+              <TableHead className="text-right">{t("Foreign amount", "Nilai valas")}</TableHead>
               <TableHead className="text-right">{t("Debit", "Debit")}</TableHead>
               <TableHead className="text-right">{t("Credit", "Kredit")}</TableHead>
               <TableHead className="text-right">{t("Balance", "Saldo")}</TableHead>
@@ -225,14 +240,14 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center">
+                <TableCell colSpan={10} className="py-10 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !rows.length && (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                   {t("No movements in this period.", "Belum ada mutasi pada periode ini.")}
                 </TableCell>
               </TableRow>
@@ -249,6 +264,7 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
                     : (DOC_LABEL[r.doc_type]?.en ?? r.doc_type)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{r.due_date ?? "—"}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground">{fxLabel(r, lang) || "—"}</TableCell>
                 <TableCell className="text-right">{r.debit ? formatMoney(r.debit, lang) : "—"}</TableCell>
                 <TableCell className="text-right">{r.credit ? formatMoney(r.credit, lang) : "—"}</TableCell>
                 <TableCell className="text-right font-medium">{formatMoney(r.balance, lang)}</TableCell>

@@ -1,4 +1,4 @@
-export type FieldType = "text" | "number" | "textarea" | "boolean" | "select" | "reference";
+export type FieldType = "text" | "number" | "textarea" | "boolean" | "select" | "reference" | "date";
 
 export interface MDField {
   key: string;
@@ -27,6 +27,9 @@ export type MDTable =
   | "md_suppliers"
   | "md_warehouses"
   | "md_taxes"
+  // Ronde 29 (BS New 8): master mata uang & kurs.
+  | "md_currencies"
+  | "md_exchange_rates"
   | "md_accounts";
 
 export interface MDEntity {
@@ -236,6 +239,80 @@ export const MASTER_DATA_ENTITIES: MDEntity[] = [
       { key: "rate", en: "Rate (%)", id_: "Tarif (%)", type: "number", defaultValue: 0, inTable: true },
       { key: "account_code", en: "GL Account", id_: "Akun GL", type: "text", inTable: true },
       { key: "description", en: "Description", id_: "Keterangan", type: "textarea" },
+      active,
+    ],
+  },
+  // Ronde 29 (BS New 8): mata uang & kurs. `rate` = nilai mata uang dasar untuk
+  // 1 unit mata uang tersebut.
+  {
+    submoduleId: "currencies",
+    table: "md_currencies",
+    en: "Currencies",
+    id_: "Mata Uang",
+    fields: [
+      { ...code, helpEn: "ISO code, e.g. USD", helpId: "Kode ISO, contoh USD" },
+      name,
+      { key: "symbol", en: "Symbol", id_: "Simbol", type: "text", inTable: true },
+      {
+        key: "decimals",
+        en: "Decimals",
+        id_: "Angka Desimal",
+        type: "number",
+        defaultValue: 2,
+        inTable: true,
+        helpEn: "2 for USD/EUR, 0 for IDR and JPY.",
+        helpId: "2 untuk USD/EUR, 0 untuk IDR dan JPY.",
+      },
+      {
+        key: "is_base",
+        en: "Base currency",
+        id_: "Mata Uang Dasar",
+        type: "boolean",
+        defaultValue: false,
+        inTable: true,
+        helpEn: "The currency all reports are presented in. Only one per workspace.",
+        helpId: "Mata uang pelaporan keuangan. Hanya satu per workspace.",
+      },
+      active,
+    ],
+  },
+  {
+    submoduleId: "exchange-rates",
+    table: "md_exchange_rates",
+    en: "Exchange Rates",
+    id_: "Kurs Mata Uang",
+    codePrefix: "FX",
+    fields: [
+      { ...code, readOnly: true, helpEn: "Generated automatically", helpId: "Dibuat otomatis berurutan" },
+      { ...name, en: "Label", id_: "Keterangan" },
+      { key: "currency_code", en: "Currency", id_: "Mata Uang", type: "reference", refTable: "md_currencies", required: true, inTable: true },
+      { key: "rate_date", en: "Rate Date", id_: "Tanggal Kurs", type: "date", required: true, inTable: true },
+      {
+        key: "rate_type",
+        en: "Rate Type",
+        id_: "Jenis Kurs",
+        type: "select",
+        defaultValue: "transaction",
+        inTable: true,
+        options: [
+          { value: "transaction", en: "Transaction rate", id_: "Kurs Transaksi" },
+          { value: "tax", en: "Tax rate (KMK)", id_: "Kurs Pajak (KMK)" },
+          { value: "closing", en: "Closing rate", id_: "Kurs Penutupan" },
+        ],
+      },
+      {
+        key: "rate",
+        en: "Rate",
+        id_: "Nilai Kurs",
+        type: "number",
+        defaultValue: 0,
+        required: true,
+        inTable: true,
+        helpEn: "Base currency value of one unit of the selected currency.",
+        helpId: "Nilai satu unit mata uang tersebut dalam mata uang dasar.",
+      },
+      { key: "source", en: "Source", id_: "Sumber", type: "text", inTable: true },
+      { key: "notes", en: "Notes", id_: "Catatan", type: "textarea" },
       active,
     ],
   },

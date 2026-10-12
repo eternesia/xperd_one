@@ -16,7 +16,7 @@
  *      `Response`, jadi bisa dipasang di `src/server.ts` (sekarang), atau
  *      dipindah ke route Nitro/TanStack server route tanpa mengubah isi modul.
  *
- * Cara mengaktifkan (semua opsional, lihat INTEROP-BOILERPLATE.md):
+ * Cara mengaktifkan (semua opsional, lihat docs/INTEROP-BOILERPLATE.md):
  *
  *   PUBLIC_LEAD_API_ENABLED=true
  *   PUBLIC_LEAD_API_KEYS=<workspaceId>:<apiKey>[,<workspaceId>:<apiKey>...]

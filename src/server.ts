@@ -51,7 +51,7 @@ export default {
     // Integrasi pihak ketiga — OPSIONAL / BOILERPLATE, bukan fitur wajib.
     // Kedua handler mengembalikan 404 selama env flag belum diisi
     // (PUBLIC_LEAD_API_ENABLED / CRON_API_ENABLED), jadi perilaku default
-    // aplikasi tidak berubah. Lihat INTEROP-BOILERPLATE.md.
+    // aplikasi tidak berubah. Lihat docs/INTEROP-BOILERPLATE.md.
     // ---------------------------------------------------------------------
     const path = new URL(request.url).pathname;
     if (path === "/api/public/leads") return handlePublicLeadRequest(request);

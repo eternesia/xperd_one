@@ -47,7 +47,7 @@ const PAGE_SIZES = [10, 25, 50, 100];
 function emptyForm(entity: MDEntity): Row {
   const out: Row = {};
   entity.fields.forEach((f) => {
-    out[f.key] = f.defaultValue ?? (f.type === "boolean" ? true : f.type === "number" ? 0 : "");
+    out[f.key] = f.defaultValue ?? (f.type === "boolean" ? true : f.type === "number" ? 0 : f.type === "date" ? new Date().toISOString().slice(0, 10) : "");
   });
   return out;
 }
@@ -309,6 +309,15 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
       return opt ? (lang === "id" ? opt.id_ : opt.en) : "—";
     }
     if (f.type === "number") return new Intl.NumberFormat(lang === "id" ? "id-ID" : "en-US").format(Number(v ?? 0));
+    // Ronde 29 (BS New 8): field tanggal (mis. Tanggal Kurs) tampil terformat.
+    if (f.type === "date")
+      return v
+        ? new Date(String(v)).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })
+        : "—";
     return v ? String(v) : "—";
   }
 
@@ -497,7 +506,8 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
             {visibleFields.map((f) => (
               <div key={f.key} className={f.type === "textarea" ? "space-y-2 sm:col-span-2" : "space-y-2"}>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {label(f)} {f.required && !f.readOnly && <span className="text-destructive">*</span>}
+                  {/* Ronde 31 (parity live): field berkode otomatis tetap menampilkan tanda wajib ("Code *"). */}
+                  {label(f)} {f.required && <span className="text-destructive">*</span>}
                 </Label>
                 {f.type === "textarea" ? (
                   <Textarea
@@ -538,7 +548,7 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
                   />
                 ) : (
                   <Input
-                    type={f.type === "number" ? "number" : "text"}
+                    type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
                     required={f.required && !f.readOnly}
                     readOnly={f.readOnly}
                     className={f.readOnly ? "bg-muted font-medium" : undefined}

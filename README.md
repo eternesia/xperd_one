@@ -19,11 +19,13 @@ npm run test:e2e                           # Playwright (perlu app di :3999)
 
 | Dokumen | Isi |
 |---|---|
-| `OPERATIONS.md` | Referensi variabel `.env`, perintah harian, deploy produksi, cron, cadangan |
-| `META-SETUP.md` | Langkah mengaktifkan integrasi Meta (Facebook Page & Instagram) |
-| `PARITY-BS-NEW3-VS-OLD.md` | Checklist + riwayat porting dari Business Suite New 3 (per ronde) |
-| `INTEROP-BOILERPLATE.md` | Pola endpoint publik/hook untuk integrasi eksternal |
-| `SLIPP-HR-PORTING.md` | Catatan porting modul HR (Slipp HR) |
+| [`PRD.md`](docs/PRD.md) | Tujuan produk; project ini adalah porting Lovable → produksi (MySQL) |
+| [`DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md) | Aturan dev: perilaku harus sama dengan xperd-one.lovable.app |
+| [`OPERATIONS.md`](docs/OPERATIONS.md) | Referensi variabel `.env`, perintah harian, deploy produksi, cron, cadangan |
+| [`META-SETUP.md`](docs/META-SETUP.md) | Langkah mengaktifkan integrasi Meta (Facebook Page & Instagram) |
+| [`PARITY-BS-NEW3-VS-OLD.md`](docs/PARITY-BS-NEW3-VS-OLD.md) | Checklist + riwayat porting dari Business Suite New 3 (per ronde) |
+| [`INTEROP-BOILERPLATE.md`](docs/INTEROP-BOILERPLATE.md) | Pola endpoint publik/hook untuk integrasi eksternal |
+| [`SLIPP-HR-PORTING.md`](docs/SLIPP-HR-PORTING.md) | Catatan porting modul HR (Slipp HR) |
 
 ## Aturan pengembangan singkat
 

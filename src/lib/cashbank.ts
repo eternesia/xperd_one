@@ -94,6 +94,32 @@ export function nextTrxNumber(prefix: string, seq: number) {
   return `${prefix}/${ym}/${String(seq).padStart(4, "0")}`;
 }
 
+/**
+ * Ronde 30 (parity BS New 10): nomor transaksi berikutnya dihitung dari
+ * **nomor tertinggi** yang pernah dipakai pada bulan berjalan, bukan dari
+ * jumlah baris. Jurnal koreksi (storno) memakai `trx_type` yang sama dengan
+ * transaksi aslinya sehingga cara lama menghitungnya ikut terhitung dan nomor
+ * yang dihasilkan bisa bentrok dengan nomor yang sudah ada.
+ */
+export async function peekNextTrxNumber(workspaceId: string, prefix: string) {
+  const d = new Date();
+  const ym = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const res = await listWorkspaceRows({
+    data: {
+      table: "cb_transactions",
+      workspaceId,
+      search: `${prefix}/${ym}/`,
+      limit: 5000,
+    },
+  });
+  let max = 0;
+  for (const row of (res?.rows ?? []) as unknown as { trx_no: string }[]) {
+    const seq = Number(String(row.trx_no ?? "").split("/").pop());
+    if (Number.isFinite(seq) && seq > max) max = seq;
+  }
+  return nextTrxNumber(prefix, max + 1);
+}
+
 export async function fetchCbAccounts(workspaceId: string) {
   const data = await fetchCbAccountsFn({ data: { workspaceId } });
   return (data ?? []) as unknown as CbAccount[];
@@ -402,7 +428,11 @@ export interface SettlementInput {
   direction: CbTrxType;
   docNumber: string;
   docDate: string;
+  /** nilai penyelesaian dalam mata uang dasar */
   amount: number;
+  /** Ronde 29 (BS New 8): nilai valas — dipakai bila rekening memang valas */
+  foreignAmount?: number;
+  currency?: string | null;
   contactName?: string | null;
   reference?: string | null;
   /** akun kontrol (piutang/hutang/uang muka) yang dilunasi transaksi ini */
@@ -419,12 +449,18 @@ export interface SettlementInput {
  * **tidak** ada jurnal baru (hanya baris buku kas).
  */
 export async function recordSettlementCashTransaction(workspaceId: string, input: SettlementInput) {
-  const amount = Number(input.amount) || 0;
+  let amount = Number(input.amount) || 0;
   if (!input.accountCode || amount <= 0) return;
 
   const accounts = await fetchCbAccounts(workspaceId);
   const account = accounts.find((a) => a.code === input.accountCode);
   if (!account) return;
+  // Ronde 29 (BS New 8): rekening valas mencatat saldonya dalam mata uang itu,
+  // bukan dalam mata uang dasar.
+  if (input.currency && account.currency && account.currency === input.currency && input.foreignAmount != null) {
+    amount = Number(input.foreignAmount) || 0;
+    if (amount <= 0) return;
+  }
 
   // idempoten: dokumen yang disimpan ulang tidak boleh dihitung dua kali
   const found = await listWorkspaceRows({

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Loader2, Pencil, Plus, Printer, Search, Trash2, Upload } from "lucide-react";
+import { Download, Eye, Loader2, Pencil, Plus, Printer, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -1549,7 +1549,7 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
         )}
       >
         <Button variant="navy" onClick={() => setNewOpen(true)}>
-          <Plus /> {t("Process payroll", "Proses payroll")}
+          <Plus /> {t("Run payroll", "Jalankan payroll")}
         </Button>
       </Header>
 
@@ -1558,7 +1558,7 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("Run", "Nomor")}</TableHead>
+                <TableHead>{t("Number", "Nomor")}</TableHead>
                 <TableHead>{t("Period", "Periode")}</TableHead>
                 <TableHead>{t("Pay date", "Tanggal bayar")}</TableHead>
                 <TableHead className="text-right">{t("Employees", "Karyawan")}</TableHead>
@@ -1599,6 +1599,16 @@ function PayrollView({ workspaceId }: { workspaceId: string }) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setOpenRun(r);
+                      }}
+                    >
+                      <Eye className="h-4 w-4" /> {t("Open", "Buka")}
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -1833,13 +1843,14 @@ function TaxBpjsView({ workspaceId }: { workspaceId: string }) {
   const bpjsCo = sum("bpjs_company");
   const pph = sum("pph21");
   const gross = sum("gross");
+  const taxable = sum("taxable_gross");
   const net = sum("net_pay");
 
   return (
     <div className="space-y-5">
       <Header
         eyebrow="SLIPP HR"
-        title={t("BPJS & PPh 21", "BPJS & PPh 21")}
+        title={t("BPJS & PPh 21 Recap", "Rekap BPJS & PPh 21")}
         desc={t(
           "Monthly recap per employee for depositing BPJS contributions and PPh 21.",
           "Rekap bulanan per karyawan untuk menyetor iuran BPJS dan PPh 21.",
@@ -1885,25 +1896,26 @@ function TaxBpjsView({ workspaceId }: { workspaceId: string }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("Employee", "Karyawan")}</TableHead>
-                <TableHead>PTKP</TableHead>
-                <TableHead className="text-right">{t("Gross", "Bruto")}</TableHead>
+                <TableHead>NPWP</TableHead>
+                <TableHead>PTKP / TER</TableHead>
+                <TableHead className="text-right">{t("Taxable gross", "Bruto pajak")}</TableHead>
+                <TableHead className="text-right">PPh 21</TableHead>
                 <TableHead className="text-right">BPJS {t("employee", "karyawan")}</TableHead>
                 <TableHead className="text-right">BPJS {t("company", "perusahaan")}</TableHead>
-                <TableHead className="text-right">PPh 21</TableHead>
                 <TableHead className="text-right">{t("Net", "Bersih")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center">
+                  <TableCell colSpan={8} className="py-8 text-center">
                     <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && !slips.length && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                     {t("No payroll yet.", "Belum ada payroll.")}
                   </TableCell>
                 </TableRow>
@@ -1913,23 +1925,24 @@ function TaxBpjsView({ workspaceId }: { workspaceId: string }) {
                   <TableCell>
                     <span className="font-mono text-xs">{s.employee_code}</span> · {s.employee_name}
                   </TableCell>
+                  <TableCell className="text-xs">{s.npwp || "—"}</TableCell>
                   <TableCell>
-                    {s.ptkp_status} <span className="text-muted-foreground">({s.ter_category} {s.ter_rate}%)</span>
+                    {s.ptkp_status} / {s.ter_category} {s.ter_rate}%
                   </TableCell>
-                  <TableCell className="text-right">{fmtIDR(s.gross)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(toNum(s.taxable_gross))}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(s.pph21)}</TableCell>
                   <TableCell className="text-right">{fmtIDR(s.bpjs_employee)}</TableCell>
                   <TableCell className="text-right">{fmtIDR(s.bpjs_company)}</TableCell>
-                  <TableCell className="text-right">{fmtIDR(s.pph21)}</TableCell>
                   <TableCell className="text-right font-medium">{fmtIDR(s.net_pay)}</TableCell>
                 </TableRow>
               ))}
               {slips.length > 0 && (
                 <TableRow className="font-semibold">
-                  <TableCell colSpan={2}>{t("Total", "Jumlah")}</TableCell>
-                  <TableCell className="text-right">{fmtIDR(gross)}</TableCell>
+                  <TableCell colSpan={3}>{t("Total", "Jumlah")}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(taxable)}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(pph)}</TableCell>
                   <TableCell className="text-right">{fmtIDR(bpjsEmp)}</TableCell>
                   <TableCell className="text-right">{fmtIDR(bpjsCo)}</TableCell>
-                  <TableCell className="text-right">{fmtIDR(pph)}</TableCell>
                   <TableCell className="text-right">{fmtIDR(net)}</TableCell>
                 </TableRow>
               )}

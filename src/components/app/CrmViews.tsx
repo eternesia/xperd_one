@@ -615,6 +615,7 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">#</TableHead>
                 <TableHead>{lang === "id" ? "Kode" : "Code"}</TableHead>
                 <TableHead>{lang === "id" ? "Nama" : "Name"}</TableHead>
                 <TableHead>PIC</TableHead>
@@ -626,7 +627,7 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || visibleContacts.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     {isLoading
                       ? lang === "id"
                         ? "Memuat…"
@@ -641,8 +642,9 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
                   </TableCell>
                 </TableRow>
               )}
-              {pager.items.map((r) => (
+              {pager.items.map((r, i) => (
                 <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{pager.start + i + 1}</TableCell>
                   <TableCell className="font-medium">{r.code}</TableCell>
                   <TableCell>{r.name}</TableCell>
                   <TableCell>{r.contact_name ?? "—"}</TableCell>
@@ -725,6 +727,8 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
   });
 
   const leadName = (id: string | null) => leads.find((l) => l.id === id)?.name ?? "—";
+  // Parity live: Follow Ups memakai kolom # dan paginasi.
+  const pager = usePagination(rows);
 
   return (
     <div className="space-y-6">
@@ -739,6 +743,7 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">#</TableHead>
                 <TableHead>{lang === "id" ? "Jadwal" : "Due"}</TableHead>
                 <TableHead>{lang === "id" ? "Jenis" : "Type"}</TableHead>
                 <TableHead>{lang === "id" ? "Judul" : "Subject"}</TableHead>
@@ -751,13 +756,14 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || rows.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                     {isLoading ? (lang === "id" ? "Memuat…" : "Loading…") : lang === "id" ? "Belum ada aktivitas." : "No activities yet."}
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((r) => (
+              {pager.items.map((r, i) => (
                 <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{pager.start + i + 1}</TableCell>
                   <TableCell>{r.due_at ? new Date(r.due_at).toLocaleString() : "—"}</TableCell>
                   <TableCell className="capitalize">{r.activity_type}</TableCell>
                   <TableCell>{r.subject}</TableCell>
@@ -779,6 +785,7 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
 

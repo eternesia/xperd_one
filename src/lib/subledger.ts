@@ -23,6 +23,10 @@ export interface SubledgerEntry {
   credit: number;
   balance: number;
   status: string;
+  /** Ronde 29 (BS New 8): valas dokumen — `debit`/`credit`/`balance` dalam mata uang dasar. */
+  currency?: string | null;
+  foreign_amount?: number;
+  exchange_rate?: number;
 }
 
 export interface AgingRow {
@@ -43,8 +47,17 @@ interface RawDoc {
   due_date: string | null;
   status: string;
   total: number | null;
+  /** Ronde 29 (BS New 8): dokumen valas — nilai buku dikonversi ke mata uang dasar. */
+  currency?: string | null;
+  exchange_rate?: number | null;
   customer_name?: string | null;
   supplier_name?: string | null;
+}
+
+/** Nilai buku selalu dalam mata uang dasar: total valas × kurs dokumen. */
+function baseAmount(d: RawDoc) {
+  const rate = Number(d.exchange_rate ?? 1) || 1;
+  return Math.round((Number(d.total) || 0) * rate * 100) / 100;
 }
 
 const OPEN = (s: string) => s !== "draft" && s !== "cancelled";
@@ -90,7 +103,7 @@ export function buildCard(side: SubledgerSide, docs: RawDoc[], partnerFilter?: s
 
   const running = new Map<string, number>();
   return rows.map(({ doc, partner }) => {
-    const amount = Number(doc.total) || 0;
+    const amount = baseAmount(doc);
     const isIncrease = increase.includes(doc.doc_type);
     const next = (running.get(partner) ?? 0) + (isIncrease ? amount : -amount);
     running.set(partner, next);
@@ -105,6 +118,9 @@ export function buildCard(side: SubledgerSide, docs: RawDoc[], partnerFilter?: s
       credit: isIncrease ? 0 : amount,
       balance: next,
       status: doc.status,
+      currency: doc.currency ?? null,
+      foreign_amount: Number(doc.total) || 0,
+      exchange_rate: Number(doc.exchange_rate ?? 1) || 1,
     };
   });
 }
@@ -125,7 +141,7 @@ export function buildAging(side: SubledgerSide, docs: RawDoc[], asOf: string): A
     const partner = (side === "ar" ? d.customer_name : d.supplier_name) || "—";
     if (d.doc_date > asOf) continue;
     const bucket = byPartner.get(partner) ?? { invoices: [], settle: 0 };
-    const amount = Number(d.total) || 0;
+    const amount = baseAmount(d);
     if (increase.includes(d.doc_type)) bucket.invoices.push({ due: d.due_date || d.doc_date, open: amount });
     else bucket.settle += amount;
     byPartner.set(partner, bucket);

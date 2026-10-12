@@ -391,6 +391,7 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">#</TableHead>
                 <TableHead>{lang === "id" ? "Periode" : "Period"}</TableHead>
                 <TableHead>{lang === "id" ? "Sales" : "Owner"}</TableHead>
                 <TableHead className="text-right">Target</TableHead>
@@ -400,19 +401,20 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {targetsLoading && <TableSkeletonRows columns={6} />}
+              {targetsLoading && <TableSkeletonRows columns={7} />}
               {!targetsLoading && visibleTargets.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     {lang === "id" ? "Belum ada target." : "No targets yet."}
                   </TableCell>
                 </TableRow>
               )}
-              {pager.items.map((t) => {
+              {pager.items.map((t, idx) => {
                 const got = realized(t.owner_name, t.period_month);
                 const pct = t.target_amount ? Math.min(100, Math.round((got / Number(t.target_amount)) * 100)) : 0;
                 return (
                   <TableRow key={t.id}>
+                    <TableCell className="text-muted-foreground">{pager.start + idx + 1}</TableCell>
                     <TableCell>{t.period_month.slice(0, 7)}</TableCell>
                     <TableCell>{t.owner_name}</TableCell>
                     <TableCell className="text-right">{fmtIDR(Number(t.target_amount))}</TableCell>

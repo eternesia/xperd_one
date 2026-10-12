@@ -30,7 +30,7 @@ test("OMNIX: completing an order charges the wallet and top up needs approval", 
 
   /* ---------- 2. buat pesanan lalu selesaikan (biaya dipotong) ---------- */
   await page.goto(`/app/w/${ws}/omnix/orders`);
-  const createButton = page.getByRole("button", { name: /Tambah pesanan|Add order/ });
+  const createButton = page.getByRole("button", { name: /New order|Pesanan baru|Tambah pesanan/ });
   await expect(createButton).toBeVisible({ timeout: 60_000 });
 
   const existing = page.getByRole("row").filter({ hasText: ORDER_NO }).first();
@@ -67,7 +67,7 @@ test("OMNIX: completing an order charges the wallet and top up needs approval", 
   /* ---------- 4. pengajuan top up menunggu persetujuan ---------- */
   const afterBalance = money(await balance.innerText());
   await page.getByTestId("omnix-topup-amount").fill(String(TOPUP));
-  await page.getByRole("button", { name: /Kirim pengajuan|Submit request/ }).click();
+  await page.getByRole("button", { name: /^(Top up|Kirim pengajuan|Submit request)$/ }).click();
   await expect(page.getByText(/menunggu Super Admin|waiting for Super Admin/).first()).toBeVisible({
     timeout: 60_000,
   });
@@ -75,8 +75,12 @@ test("OMNIX: completing an order charges the wallet and top up needs approval", 
   /* ---------- 5. Super Admin menyetujui → saldo bertambah ---------- */
   await page.goto("/app-admin/addons");
   // Pilih baris pengajuan dengan nominal yang baru dibuat (bukan baris lain).
+  // Baris pengajuan = satu-satunya baris yang punya tombol Setujui; filter nominal
+  // saja bisa cocok dengan baris katalog add-on yang harganya memuat "50.000"
+  // (mis. XPro Rp 750.000), sehingga tombolnya tidak ada di baris itu.
   const pendingRow = page
     .getByRole("row")
+    .filter({ has: page.getByRole("button", { name: /^Setujui$/ }) })
     .filter({ hasText: new RegExp(`${String(TOPUP).slice(0, 2)}[.\\s]?000`) })
     .first();
   await expect(pendingRow).toBeVisible({ timeout: 60_000 });

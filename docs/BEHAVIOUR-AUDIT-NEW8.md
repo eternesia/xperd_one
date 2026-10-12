@@ -127,19 +127,19 @@ Kolom **Bukti** diisi tautan tangkapan layar/berkas hasil audit.
 
 | # | Modul | Struktur submodul | Label EN/ID | Tombol & aksi | Dialog/form | Validasi | Angka/laporan | Status | Bukti |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Master Data | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
+| 1 | Master Data | ✅ sama (10 submodule, termasuk `currencies` & `exchange-rates`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ Ronde 29 | `e2e/accounting-fx-documents.spec.ts` |
 | 2 | Procurement (PR→PO→GR→AP→Payment→Return) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 3 | Inventory | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 4 | Sales & POS | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 5 | Cash & Bank | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
-| 6 | Accounting | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
+| 6 | Accounting | ✅ sama (14 submodule, termasuk `fx-revaluation`) | ✅ | ⚠️ `ReportActions` New 8 = dead code; panel kunci periode Old ≡ `PeriodLockPanel` | ✅ | ✅ | ✅ (uang tutup PPN + revaluasi kurs diuji) | ✅ Ronde 28 & 29 | `e2e/accounting-vat-closing.spec.ts`, `e2e/accounting-fx-revaluation.spec.ts`, `e2e/accounting-fx-documents.spec.ts` |
 | 7 | Fixed Assets | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 8 | Tax | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 9 | Reporting | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 10 | CRM (Qalling) | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | n/a | ⛔ perlu akun live | |
 | 11 | Slipp HR | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
 | 12 | Omnix | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⛔ perlu akun live | |
-| 13 | Xpro Projects (**baru**) | ❌ belum ada di Old | | | | | | ⛔ menunggu keputusan | |
+| 13 | Xpro Projects (**baru**) | ❌ belum ada di Old | | | | | | ⛔ menunggu keputusan — **New 10 menambah fase 2** (tim, tugas/Gantt, biaya, dokumen, laporan progres/BAST); rincian di [`PARITY-BS-NEW10-VS-OLD.md`](PARITY-BS-NEW10-VS-OLD.md) | |
 | 14 | Utilitas: Team & Access, Settings, Billing, Maintenance, Guide | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | n/a | ⛔ perlu akun live | |
 | 15 | Marketing site (`_site`) | ✅ | ✅ | ⚠️ `/` tombol “Dismiss” | ✅ | ✅ | n/a | ⚠️ 1 temuan kecil | `audit/*-shots/` |
 
@@ -149,11 +149,15 @@ Kolom **Bukti** diisi tautan tangkapan layar/berkas hasil audit.
    lalu `--compare` dengan hasil audit Old untuk daftar selisih otomatis.
 2. **Porting non-uang dulu** (aman, tidak butuh keputusan): tab **Workspace
    Access** matriks, **audit trail**, penghapusan `crm/dashboard`.
-3. **Butuh keputusan pemilik produk** (menyentuh jurnal/uang): **multi-currency**
-   (mata uang & kurs pada dokumen) dan **revaluasi kurs** (`fx-revaluation`) —
-   termasuk akun selisih kurs, sumber kurs, dan periode revaluasi.
+3. **Multi-currency & revaluasi kurs: SELESAI (Ronde 29)** atas keputusan pemilik
+   produk “samakan dengan BS New 8 terbaru” — master `currencies`/`exchange-rates`,
+   kolom kurs dokumen, konversi jurnal ke mata uang dasar, selisih kurs realisasi,
+   revaluasi kurs + jurnal balik otomatis, subledger & cetakan valas.
 4. **Xpro Projects fase 1** — menunggu keputusan apakah modul diaktifkan di Old.
 5. Setiap item: ikuti Definition of Done di
    [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) §7, perbarui
    [`PARITY-BS-NEW3-VS-OLD.md`](PARITY-BS-NEW3-VS-OLD.md), lalu commit
    `feat|fix|docs|test(scope)`.
+6. **Acuan kode terbaru = BS New 10** (2026-10-12). Selisihnya terhadap New 8
+   hanya XPro fase 2 + perbaikan penomoran kas/bank (sudah diporting, Ronde 30) —
+   lihat [`PARITY-BS-NEW10-VS-OLD.md`](PARITY-BS-NEW10-VS-OLD.md).

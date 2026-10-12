@@ -20,8 +20,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 // #45 (BS New 3): Kartu AR/AP & Aging (subledger) — komponen terpisah.
 import { AgingView, SubledgerCardView } from "@/components/app/SubledgerViews";
+// Ronde 29 (BS New 8): revaluasi kurs akhir periode.
+import { FxRevaluationView } from "@/components/app/FxRevaluationView";
 // #46 (BS New 3): kunci periode akuntansi.
-import { fetchPeriodLocks, lockPeriod, periodOfDate, unlockPeriod, type PeriodLockType } from "@/lib/journal";
+// Ronde 28 (BS New 8): tutup buku PPN satu masa (SPT Masa PPN).
+import {
+  fetchPeriodLocks,
+  lockPeriod,
+  periodOfDate,
+  postVatClosing,
+  previewVatClosing,
+  unlockPeriod,
+  type PeriodLockType,
+} from "@/lib/journal";
 // #48 (BS New 3): laporan keuangan formal (kop, skontro, tanda tangan, ekspor).
 import { useApp } from "@/lib/app-context";
 import {
@@ -1061,7 +1072,6 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
               title: t("STATEMENT OF CASH FLOWS", "LAPORAN ARUS KAS"),
               periodLabel: periodRangeLabel(from, to, lang),
               layout: "stafel",
-              orientation: "landscape",
               columns: [t("Cash in", "Kas masuk"), t("Cash out", "Kas keluar"), t("Net", "Bersih")],
               sections: [
                 {
@@ -1205,7 +1215,6 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
               title: t("STATEMENT OF CHANGES IN EQUITY", "LAPORAN PERUBAHAN EKUITAS"),
               periodLabel: periodRangeLabel(from, to, lang),
               layout: "stafel",
-              orientation: "landscape",
               columns: [
                 t("Opening balance", "Saldo awal"),
                 t("Movement", "Mutasi"),
@@ -1310,6 +1319,100 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
 }
 
 /* ----------------------------- period closing ----------------------------- */
+
+/**
+ * Ronde 28 (BS New 8): Tutup Buku PPN (SPT Masa PPN). Mengkompensasi PPN
+ * Keluaran (2100) dengan PPN Masukan (1400) di akhir bulan; selisihnya ke
+ * Hutang PPN (2110, kurang bayar) atau PPN Lebih Bayar (1410, dikompensasi).
+ * Aturan uang ada di server (`postVatClosing`) dalam satu transaksi MySQL.
+ */
+function VatClosingPanel({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const qc = useQueryClient();
+  const [period, setPeriod] = useState(() => today().slice(0, 7));
+  const { data: p, isLoading } = useQuery({
+    queryKey: ["vat-closing", workspaceId, period],
+    queryFn: () => previewVatClosing(workspaceId, period),
+    enabled: /^\d{4}-\d{2}$/.test(period),
+  });
+  const post = useMutation({
+    mutationFn: () => postVatClosing(workspaceId, period),
+    onSuccess: () => {
+      toast.success(t("VAT closing journal posted", "Jurnal tutup buku PPN diposting"));
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const fm = (n: number) => formatMoney(n, lang);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4" data-testid="vat-closing-panel">
+      <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
+        {t("VAT Closing (SPT Masa PPN)", "Tutup Buku PPN (SPT Masa PPN)")}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t(
+          "Offsets Output VAT against Input VAT at month end. The balance goes to VAT Payable (underpaid) or VAT Overpaid (carried forward).",
+          "Mengkompensasi PPN Keluaran dengan PPN Masukan di akhir bulan. Selisih masuk ke Hutang PPN (kurang bayar) atau PPN Lebih Bayar (dikompensasi ke bulan berikutnya).",
+        )}
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="grid gap-1">
+          <Label className="text-xs">{t("Period", "Periode")}</Label>
+          <Input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="h-9 w-[150px]"
+            data-testid="vat-closing-period"
+          />
+        </div>
+        <Button
+          variant="navy"
+          className="h-9"
+          onClick={() => post.mutate()}
+          disabled={!p || p.alreadyClosed || post.isPending}
+          data-testid="vat-closing-post"
+        >
+          {post.isPending && <Loader2 className="animate-spin" />}{" "}
+          {p?.alreadyClosed ? t("Already closed", "Sudah ditutup") : t("Post VAT closing", "Posting tutup PPN")}
+        </Button>
+      </div>
+      {isLoading ? (
+        <p className="mt-4 text-sm text-muted-foreground">{t("Loading…", "Memuat…")}</p>
+      ) : p ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-4" data-testid="vat-closing-metrics">
+          {(
+            [
+              ["vatOut", t("Output VAT (2100)", "PPN Keluaran (2100)"), p.vatOut],
+              ["vatIn", t("Input VAT (1400)", "PPN Masukan (1400)"), p.vatIn],
+              ["carriedOverpaid", t("Overpaid carried (1410)", "Lebih bayar lalu (1410)"), p.carriedOverpaid],
+              [
+                "net",
+                p.net >= 0 ? t("VAT payable (2110)", "Hutang PPN (2110)") : t("Overpaid (1410)", "Lebih bayar (1410)"),
+                Math.abs(p.net),
+              ],
+            ] as [string, string, number][]
+          ).map(([key, label, v]) => (
+            <div key={key} className="rounded-lg border border-border p-3" data-testid={`vat-closing-${key}`}>
+              <div className="text-xs text-muted-foreground">{label}</div>
+              <div className="mt-1 font-semibold tabular-nums">{fm(Number(v))}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {p?.alreadyClosed && (
+        <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+          {t(
+            `VAT for ${p.period} is already closed.`,
+            `PPN periode ${p.period} sudah ditutup.`,
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
@@ -1419,16 +1522,19 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
         <StatementSection title={t("Expense accounts to close", "Akun beban yang ditutup")} rows={expense} total={totalExpense} />
       </div>
 
+      {/* Ronde 28 (BS New 8): tutup PPN satu masa pajak. */}
+      <VatClosingPanel workspaceId={workspaceId} />
+
       {/* #46 (BS New 3): kunci periode akuntansi. */}
       <div className="space-y-4 rounded-2xl border border-border bg-card p-4">
         <div>
           <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
-            {t("Period locks", "Kunci periode")}
+            {t("Period lock", "Kunci Periode")}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
-              "Locked periods reject new journals — documents, cash/bank, payroll and manual entries alike.",
-              "Periode yang dikunci menolak jurnal baru — baik dari dokumen, kas/bank, payroll, maupun jurnal manual.",
+              "Once a month is locked, no document can post, change or delete a journal entry in it.",
+              "Setelah satu bulan dikunci, tidak ada dokumen yang bisa mencatat, mengubah atau menghapus jurnal di bulan itu.",
             )}
           </p>
         </div>
@@ -1439,74 +1545,83 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
         )}
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
-            <Label className="text-xs">{t("Period", "Periode")}</Label>
+            <Label className="text-xs">{t("Month", "Bulan")}</Label>
             <Input
               type="month"
               value={lockValue}
               onChange={(e) => setLockValue(e.target.value)}
               className="h-9 w-[150px]"
+              data-testid="period-lock-period"
             />
           </div>
           <div className="grid gap-1">
-            <Label className="text-xs">{t("Type", "Jenis")}</Label>
+            <Label className="text-xs">{t("Lock type", "Jenis kunci")}</Label>
             <Select value={lockType} onValueChange={(v) => setLockType(v as PeriodLockType)}>
-              <SelectTrigger className="h-9 w-[160px]">
+              <SelectTrigger className="h-9 w-[160px]" data-testid="period-lock-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="soft">{t("Soft close", "Tutup sementara")}</SelectItem>
-                <SelectItem value="hard">{t("Hard lock", "Kunci keras")}</SelectItem>
+                <SelectItem value="soft">{t("Soft close (review)", "Tutup sementara (review)")}</SelectItem>
+                <SelectItem value="hard">{t("Hard lock (final)", "Kunci penuh (final)")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid min-w-[180px] flex-1 gap-1">
             <Label className="text-xs">{t("Note", "Catatan")}</Label>
-            <Input value={lockNote} onChange={(e) => setLockNote(e.target.value)} className="h-9" />
+            <Input value={lockNote} onChange={(e) => setLockNote(e.target.value)} className="h-9" data-testid="period-lock-note" />
           </div>
           <Button
             variant="navy"
             className="h-9"
             disabled={addLock.isPending || !lockValue}
             onClick={() => addLock.mutate()}
+            data-testid="period-lock-submit"
           >
             {addLock.isPending && <Loader2 className="animate-spin" />} {t("Lock period", "Kunci periode")}
           </Button>
         </div>
-        {!!locks.length && (
-          <Table>
-            <TableHeader>
+        {/* Parity live/BS New 8-10: tabel riwayat selalu tampil, termasuk saat kosong. */}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("Period", "Periode")}</TableHead>
+              <TableHead>{t("Type", "Jenis")}</TableHead>
+              <TableHead>{t("Note", "Catatan")}</TableHead>
+              <TableHead className="w-16" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {locks.length === 0 && (
               <TableRow>
-                <TableHead>{t("Period", "Periode")}</TableHead>
-                <TableHead>{t("Type", "Jenis")}</TableHead>
-                <TableHead>{t("Note", "Catatan")}</TableHead>
-                <TableHead className="w-16" />
+                <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                  {t("No locked period yet.", "Belum ada periode yang dikunci.")}
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {locks.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">{l.period}</TableCell>
-                  <TableCell>
-                    <Badge variant={l.lock_type === "hard" ? "destructive" : "secondary"}>
-                      {l.lock_type === "hard" ? t("Hard", "Keras") : t("Soft", "Sementara")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{l.note || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={removeLock.isPending}
-                      onClick={() => removeLock.mutate(l.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+            )}
+            {locks.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell className="font-medium">{l.period}</TableCell>
+                <TableCell>
+                  <Badge variant={l.lock_type === "hard" ? "destructive" : "secondary"}>
+                    {l.lock_type === "hard" ? t("Hard lock", "Kunci penuh") : t("Soft close", "Tutup sementara")}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{l.note || "—"}</TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={removeLock.isPending}
+                    onClick={() => removeLock.mutate(l.id)}
+                    data-testid={`period-lock-remove-${l.period}`}
+                  >
+                    {t("Reopen", "Buka")}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -1885,6 +2000,9 @@ export function AccountingView({ entity, workspaceId }: { entity: AccEntity; wor
       return <AgingView side="ap" workspaceId={workspaceId} />;
     case "period-closing":
       return <PeriodClosingView workspaceId={workspaceId} />;
+    // Ronde 29 (BS New 8): revaluasi kurs pos moneter valas.
+    case "fx-revaluation":
+      return <FxRevaluationView workspaceId={workspaceId} />;
     default:
       return null;
   }

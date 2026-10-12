@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link2, Loader2, Pencil, Plus, Receipt, Trash2, Wallet } from "lucide-react";
+import { CheckCircle2, Link2, Loader2, Pencil, Plus, Receipt, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -426,7 +426,7 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
               setOpen(true);
             }}
           >
-            <Plus /> {t("Add order", "Tambah pesanan")}
+            <Plus /> {t("New order", "Pesanan baru")}
           </Button>
         }
       />
@@ -457,15 +457,16 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
                 <TableHead>{t("Order No.", "No. Pesanan")}</TableHead>
                 <TableHead>{t("Buyer", "Pembeli")}</TableHead>
                 <TableHead className="text-right">Gross</TableHead>
-                <TableHead className="text-right">{t("Fee", "Biaya")}</TableHead>
+                <TableHead className="text-right">Net</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Omnix fee</TableHead>
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {pager.items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
                     {t("No orders yet.", "Belum ada pesanan.")}
                   </TableCell>
                 </TableRow>
@@ -477,22 +478,28 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
                   <TableCell className="font-mono text-xs">{order.order_no}</TableCell>
                   <TableCell>{order.buyer_name ?? "—"}</TableCell>
                   <TableCell className="text-right">{fmtIDR(Number(order.gross_amount))}</TableCell>
-                  <TableCell className="text-right">
-                    {Number(order.omnix_fee) > 0 ? fmtIDR(Number(order.omnix_fee)) : order.fee_charged ? "0" : "—"}
-                  </TableCell>
+                  <TableCell className="text-right">{fmtIDR(Number(order.net_amount))}</TableCell>
                   <TableCell>
-                    <AdminSelect
-                      className="h-8 w-32 text-xs"
-                      value={order.status}
-                      onChange={(value) => setStatus.mutate({ id: order.id, status: value })}
-                    >
-                      {OMNIX_ORDER_STATUS.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </AdminSelect>
+                    {order.fee_charged || order.status === "cancelled" ? (
+                      <Badge variant={order.status === "completed" ? "secondary" : "outline"}>
+                        {order.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                        {order.status}
+                      </Badge>
+                    ) : (
+                      <AdminSelect
+                        className="h-8 w-32 text-xs"
+                        value={order.status}
+                        onChange={(value) => setStatus.mutate({ id: order.id, status: value })}
+                      >
+                        {OMNIX_ORDER_STATUS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </AdminSelect>
+                    )}
                   </TableCell>
+                  <TableCell className="text-right">{order.fee_charged ? fmtIDR(Number(order.omnix_fee)) : "—"}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="icon"
@@ -721,8 +728,15 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
             <AdminField label={t("Note", "Catatan")}>
               <Input value={note} onChange={(e) => setNote(e.target.value)} />
             </AdminField>
+            <div className="flex flex-wrap gap-1">
+              {[50000, 100000, 350000, 1000000].map((v) => (
+                <Button key={v} size="sm" variant="outline" onClick={() => setAmount(String(v))}>
+                  {fmtIDR(v)}
+                </Button>
+              ))}
+            </div>
             <Button variant="navy" disabled={topup.isPending} onClick={() => topup.mutate()}>
-              {topup.isPending && <Loader2 className="animate-spin" />} {t("Submit request", "Kirim pengajuan")}
+              {topup.isPending && <Loader2 className="animate-spin" />} {t("Top up", "Top up")}
             </Button>
             <p className="text-xs text-muted-foreground">
               {t(
@@ -752,7 +766,7 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
               onClick={() => bundle.mutate()}
             >
               {bundle.isPending && <Loader2 className="animate-spin" />}
-              {bundleActive ? t("Extend after expiry", "Perpanjang setelah habis") : t("Buy bundle", "Beli paket")}
+              {bundleActive ? t("Extend after expiry", "Perpanjang setelah habis") : t("Buy from balance", "Beli dari saldo")}
             </Button>
           </CardContent>
         </Card>
@@ -769,9 +783,9 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
                 <TableHead>{t("Date", "Tanggal")}</TableHead>
                 <TableHead>{t("Type", "Jenis")}</TableHead>
                 <TableHead>{t("Note", "Catatan")}</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
                 <TableHead className="text-right">{t("Balance", "Saldo")}</TableHead>
-                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -787,6 +801,9 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
                   <TableCell className="text-xs">{new Date(row.created_at).toLocaleString("id-ID")}</TableCell>
                   <TableCell className="capitalize">{row.kind}</TableCell>
                   <TableCell className="text-xs">{row.note ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "posted" ? "secondary" : "outline"}>{row.status}</Badge>
+                  </TableCell>
                   <TableCell
                     className={`text-right ${Number(row.amount) < 0 ? "text-destructive" : ""}`}
                   >
@@ -794,9 +811,6 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
                   </TableCell>
                   <TableCell className="text-right">
                     {row.balance_after === null ? "—" : fmtIDR(Number(row.balance_after))}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={row.status === "posted" ? "secondary" : "outline"}>{row.status}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -813,10 +827,138 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
+/* ------------------------------- dasbor ------------------------------- */
+
+/** Ringkasan saldo Omnix (dipakai dasbor; parity BS New 10). */
+function WalletStrip({ workspaceId }: { workspaceId: string }) {
+  const { t } = useT();
+  const walletFn = useServerFn(getOmnixWallet);
+  const { data: wallet } = useQuery<OmnixWalletView | null>({
+    queryKey: ["omnix-wallet", workspaceId],
+    queryFn: async () => walletFn({ data: { workspaceId } }),
+  });
+  const endsAt = wallet?.bundle_ends_at ? new Date(wallet.bundle_ends_at) : null;
+  const active = Boolean(
+    endsAt && endsAt.getTime() > Date.now() && Number(wallet?.bundle_used) < Number(wallet?.bundle_quota),
+  );
+  const low = !active && Number(wallet?.balance ?? 0) < OMNIX_FEE_PER_ORDER * 100;
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 text-sm ${
+        low ? "border-destructive/50 bg-destructive/5" : "border-border bg-card"
+      }`}
+    >
+      <Wallet className="h-4 w-4 text-gold" />
+      <span>
+        {t("Balance", "Saldo")}: <b data-testid="omnix-balance">{fmtIDR(Number(wallet?.balance ?? 0))}</b>
+      </span>
+      {active ? (
+        <Badge variant="secondary">
+          {t("Bundle", "Paket")}: {Number(wallet?.bundle_used ?? 0).toLocaleString("id-ID")}/
+          {Number(wallet?.bundle_quota ?? 0).toLocaleString("id-ID")}
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground">
+          {t(`Pay per transaction Rp${OMNIX_FEE_PER_ORDER}`, `Bayar per transaksi Rp${OMNIX_FEE_PER_ORDER}`)}
+        </span>
+      )}
+      {low && (
+        <span className="font-medium text-destructive">{t("Low balance — top up now", "Saldo menipis — segera top up")}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Dasbor Omni-channel (parity BS New 10): toko terhubung, pesanan berjalan &
+ * selesai, penjualan kotor, bersih setelah fee, penjualan per channel, dan
+ * total biaya Omnix yang sudah terpotong.
+ */
+export function OmnixDashboard({ workspaceId }: { workspaceId: string }) {
+  const { t } = useT();
+  const { data: orders = [] } = useOrders(workspaceId);
+  const { data: stores = [] } = useStores(workspaceId);
+  const stats = useMemo(() => {
+    const done = orders.filter((o) => o.status === "completed");
+    const byCh: Record<string, { n: number; gross: number }> = {};
+    done.forEach((o) => {
+      byCh[o.channel] ??= { n: 0, gross: 0 };
+      byCh[o.channel].n++;
+      byCh[o.channel].gross += Number(o.gross_amount);
+    });
+    return {
+      gross: done.reduce((s, o) => s + Number(o.gross_amount), 0),
+      net: done.reduce((s, o) => s + Number(o.net_amount), 0),
+      fee: done.reduce((s, o) => s + Number(o.omnix_fee), 0),
+      done: done.length,
+      open: orders.filter((o) => ["pending", "processing", "shipped"].includes(o.status)).length,
+      byCh,
+    };
+  }, [orders]);
+  const maxG = Math.max(1, ...Object.values(stats.byCh).map((v) => v.gross));
+  return (
+    <div className="space-y-5">
+      <Header
+        title={t("Omni-channel Dashboard", "Dasbor Omni-channel")}
+        desc={t(
+          "All your marketplace and food-delivery stores in one place.",
+          "Semua toko marketplace dan food delivery dalam satu dasbor.",
+        )}
+      />
+      <WalletStrip workspaceId={workspaceId} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {(
+          [
+            [t("Connected stores", "Toko terhubung"), String(stores.length)],
+            [t("Open orders", "Pesanan berjalan"), String(stats.open)],
+            [t("Completed orders", "Pesanan selesai"), String(stats.done)],
+            [t("Gross sales", "Penjualan kotor"), fmtIDR(stats.gross)],
+            [t("Net after fees", "Bersih setelah fee"), fmtIDR(stats.net)],
+          ] as const
+        ).map(([l, v]) => (
+          <Card key={l}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{l}</p>
+              <p className="mt-1 text-xl font-semibold text-navy dark:text-primary-foreground">{v}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("Sales per channel", "Penjualan per channel")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {Object.keys(stats.byCh).length === 0 && (
+            <p className="text-sm text-muted-foreground">{t("No completed orders yet.", "Belum ada pesanan selesai.")}</p>
+          )}
+          {Object.entries(stats.byCh).map(([ch, v]) => (
+            <div key={ch} className="text-sm">
+              <div className="flex justify-between">
+                <span>
+                  {omnixChannelName(ch)} · {v.n}
+                </span>
+                <span>{fmtIDR(v.gross)}</span>
+              </div>
+              <div className="mt-1 h-2 rounded bg-muted">
+                <div className="h-2 rounded bg-gold" style={{ width: `${(v.gross / maxG) * 100}%` }} />
+              </div>
+            </div>
+          ))}
+          <p className="pt-2 text-xs text-muted-foreground">
+            {t("Omnix fees charged", "Biaya Omnix terpotong")}: {fmtIDR(stats.fee)}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 /* --------------------------------- dispatcher -------------------------------- */
 
 export function OmnixView({ submoduleId, workspaceId }: { submoduleId: string; workspaceId: string }) {
   const { lang } = useI18n();
+  if (submoduleId === "dashboard" || submoduleId === "") return <OmnixDashboard workspaceId={workspaceId} />;
   if (submoduleId === "stores") return <StoresView workspaceId={workspaceId} />;
   if (submoduleId === "orders") return <OrdersView workspaceId={workspaceId} />;
   if (submoduleId === "shipping") return <OmnixShippingView workspaceId={workspaceId} />;

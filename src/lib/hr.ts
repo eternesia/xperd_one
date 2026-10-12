@@ -5,7 +5,7 @@
  *
  * Porting Batch 2: disalin apa adanya dari ekspor `Xperd One Business Suite New 2`
  * (`src/lib/hr.ts`). Modul ini murni perhitungan — tidak ada I/O maupun Supabase —
- * sehingga bisa dipakai langsung di Old. Lihat SLIPP-HR-PORTING.md.
+ * sehingga bisa dipakai langsung di Old. Lihat docs/SLIPP-HR-PORTING.md.
  */
 
 export const PTKP_STATUSES = ["TK/0", "TK/1", "TK/2", "TK/3", "K/0", "K/1", "K/2", "K/3"] as const;

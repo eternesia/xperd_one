@@ -3,6 +3,7 @@ import {
   BarChart3,
   BookOpenCheck,
   Boxes,
+  Briefcase,
   Building2,
   Cog,
   Database,
@@ -60,6 +61,9 @@ const MODULE_DEFS: AppModule[] = [
       s("suppliers", "Suppliers", "Pemasok"),
       s("warehouses", "Warehouses", "Gudang"),
       s("taxes", "Tax Rates", "Master Pajak"),
+      // Ronde 29 (BS New 8): master mata uang & kurs.
+      s("currencies", "Currencies", "Mata Uang"),
+      s("exchange-rates", "Exchange Rates", "Kurs Mata Uang"),
       s("coa", "Chart of Accounts", "Bagan Akun"),
     ],
   },
@@ -162,6 +166,8 @@ const MODULE_DEFS: AppModule[] = [
       s("ar-aging", "AR Aging", "Umur Piutang"),
       s("ap-aging", "AP Aging", "Umur Hutang"),
       s("period-closing", "Period Closing", "Tutup Periode"),
+      // Ronde 29 (BS New 8): revaluasi kurs akhir periode (PSAK 10).
+      s("fx-revaluation", "FX Revaluation", "Revaluasi Kurs"),
     ],
   },
   {
@@ -297,6 +303,25 @@ const MODULE_DEFS: AppModule[] = [
       s("components", "Salary Components", "Komponen Gaji"),
       s("payroll", "Payroll & Payslips", "Payroll & Slip Gaji"),
       s("tax-bpjs", "BPJS & PPh 21", "BPJS & PPh 21"),
+    ],
+  },
+  // Ronde 33 (BS New 10): add-on XPro — Proyek & Kontrak, Milestone, RAB,
+  // tagihan termin/BAST. Diporting apa adanya (termasuk BAST → draft AR Invoice).
+  {
+    id: "xpro",
+    en: "XPro",
+    id_: "XPro",
+    descEn: "Projects, milestones, budget (RAB) and progress billing (add-on).",
+    descId: "Proyek, milestone, RAB, dan tagihan termin/BAST (add-on).",
+    icon: Briefcase,
+    tone: "violet",
+    phase: 4,
+    addon: "xpro",
+    submodules: [
+      s("projects", "Projects & Contracts", "Proyek & Kontrak"),
+      s("milestones", "Milestones & Tasks", "Tahapan & Tugas"),
+      s("budget", "Project Budget (RAB)", "Rencana Anggaran Biaya"),
+      s("billing", "Progress Billing & BAST", "Tagihan Termin & BAST"),
     ],
   },
 ];

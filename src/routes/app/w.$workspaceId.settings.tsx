@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Ronde 31 (BS New 8/10): tab Audit Trail di halaman Settings.
+import { AuditTrailView } from "@/components/app/AuditTrailView";
 import { updateWorkspaceSettings } from "@/lib/platform.functions";
 import { DEFAULT_WORKSPACE_LOGO } from "@/lib/brand";
 import { DOC_TEMPLATES, buildDocHtml, type DocTemplate } from "@/lib/doc-print";
@@ -234,6 +237,18 @@ function SettingsPage() {
       <p className="text-sm text-muted-foreground">
         {tenant?.name} · {pkg?.name}
       </p>
+
+      {/* Ronde 31 (BS New 8/10): General | Audit Trail. */}
+      <Tabs defaultValue="general" className="mt-6">
+        <TabsList data-testid="settings-tabs">
+          <TabsTrigger value="general" data-testid="settings-tab-general">
+            {lang === "id" ? "Umum" : "General"}
+          </TabsTrigger>
+          <TabsTrigger value="audit" data-testid="settings-tab-audit">
+            Audit Trail
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="general" className="mt-6">
 
       <Card className="mt-6">
         <CardHeader>
@@ -582,6 +597,11 @@ function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="audit" className="mt-6">
+          <AuditTrailView workspaceId={workspaceId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -30,6 +30,8 @@ export interface PrcDoc {
   reference: string | null;
   status: PrcStatus;
   currency: string;
+  /** Ronde 29 (BS New 8): mata uang dasar per 1 satuan `currency` saat dokumen dibuat. */
+  exchange_rate?: number | null;
   subtotal: number;
   discount_amount: number;
   tax_amount: number;

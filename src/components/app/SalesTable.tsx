@@ -18,6 +18,8 @@ import { toast } from "sonner";
 
 import { ItemPicker } from "@/components/app/ItemPicker";
 import { CashBankPicker, PartyPicker, WarehousePicker } from "@/components/app/Pickers";
+// Ronde 29 (BS New 8): mata uang dokumen + kurs.
+import { CurrencyFields } from "@/components/app/CurrencyFields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -126,6 +128,9 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
     bank_gl_code: "",
     reference: "",
     notes: "",
+    // Ronde 29 (BS New 8): mata uang dokumen + kurs ke mata uang dasar.
+    currency: "IDR",
+    exchange_rate: 1,
   });
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
 
@@ -287,6 +292,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
       bank_gl_code: "",
       reference: "",
       notes: "",
+      currency: "IDR",
+      exchange_rate: 1,
     });
   };
 
@@ -323,6 +330,9 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             bank_account_name: entity.showBank ? header.bank_account_name || null : null,
             reference: header.reference || null,
             status: docStatus,
+            // Ronde 29 (BS New 8): total dokumen tetap dalam mata uang dokumen.
+            currency: header.currency || "IDR",
+            exchange_rate: Number(header.exchange_rate) || 1,
             subtotal: totals.subtotal,
             discount_amount: totals.discount,
             tax_amount: totals.tax,
@@ -427,6 +437,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           tax_amount: totals.tax,
           withholding_amount: totals.withholding,
           total: totals.total,
+          exchange_rate: Number(header.exchange_rate) || 1,
         };
         const journalLines = usable.map((l) => ({
           item_code: l.item_code || null,
@@ -455,7 +466,12 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         if (entity.docType === "sales_receipt") {
           // #37: receipt tanpa dokumen sumber = uang muka (down payment)
           const isAdvance = !sourceDoc;
-          await postReceiptJournal(workspaceId, journalDoc, funds ?? undefined, { advance: isAdvance });
+          // Ronde 29 (BS New 8): pelunasan valas memakai kurs invoice untuk
+          // membersihkan piutang; selisihnya ke akun selisih kurs realisasi.
+          await postReceiptJournal(workspaceId, journalDoc, funds ?? undefined, {
+            advance: isAdvance,
+            invoiceRate: sourceDoc ? Number(sourceDoc.exchange_rate ?? 1) || 1 : null,
+          });
           if (isAdvance) {
             await saveWorkspaceRow({
               data: { table: "sls_documents", workspaceId, id: docId, data: { advance_kind: "advance" } },
@@ -468,6 +484,9 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             docNumber: doc_number,
             docDate: header.doc_date,
             amount: totals.total,
+            // Ronde 29 (BS New 8): rekening valas mencatat nilai valasnya sendiri.
+            foreignAmount: totals.total,
+            currency: header.currency || "IDR",
             contactName: header.customer_name || null,
             reference: sourceDoc?.doc_number ?? header.reference ?? null,
             controlAccountCode: isAdvance ? "2400" : "1200",
@@ -606,6 +625,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         bank_gl_code: txt("bank_gl_code"),
         reference: doc.reference ?? "",
         notes: doc.notes ?? "",
+        currency: doc.currency ?? "IDR",
+        exchange_rate: Number(doc.exchange_rate ?? 1) || 1,
       });
       setLines(
         draftLines.length
@@ -1078,6 +1099,16 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                     }
                   />
                 </Field>
+              )}
+              {entity.docType !== "delivery_order" && (
+                <CurrencyFields
+                  workspaceId={workspaceId}
+                  currency={header.currency}
+                  rate={Number(header.exchange_rate) || 1}
+                  date={header.doc_date}
+                  lang={lang}
+                  onChange={(c) => setHeader((h) => ({ ...h, ...c }))}
+                />
               )}
               <Field label={t("Reference", "Referensi")}>
                 <Input

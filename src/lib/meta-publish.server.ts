@@ -5,7 +5,7 @@
  * - server fn `publishPostNow` (tombol "Posting sekarang" di UI), dan
  * - hook `/api/public/hooks/social-publish` yang dipanggil cron/scheduler
  *   eksternal untuk memproses postingan yang jatuh tempo (pola di
- *   `INTEROP-BOILERPLATE.md`).
+ *   `docs/INTEROP-BOILERPLATE.md`).
  *
  * Hanya boleh diimpor dari kode server: memakai access token Meta.
  */

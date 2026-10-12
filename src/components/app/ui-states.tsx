@@ -167,7 +167,14 @@ export function Pagination({
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={t("Previous page", "Halaman sebelumnya")}
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="min-w-[70px] text-center text-muted-foreground">
@@ -177,6 +184,7 @@ export function Pagination({
           variant="outline"
           size="icon"
           className="h-8 w-8"
+          aria-label={t("Next page", "Halaman berikutnya")}
           disabled={page >= totalPages}
           onClick={() => onPage(page + 1)}
         >
@@ -200,7 +208,7 @@ export function usePagination<T>(rows: T[], initial = 25) {
 
 /** Bar paginasi yang terikat ke hasil `usePagination`. */
 export function PaginationBar({ p }: { p: ReturnType<typeof usePagination<unknown>> }) {
-  if (p.total === 0) return null;
+  // Parity live: bar tetap tampil walau daftar kosong ("Showing 0-0 of 0").
   return (
     <Pagination
       page={p.page}

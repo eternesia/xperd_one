@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { countWorkspaceRows, deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
+import { deleteWorkspaceRow, saveWorkspaceRow } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import { fetchAccounts } from "@/lib/accounting";
@@ -32,7 +32,7 @@ import {
   fetchCbAccounts,
   fetchCbTransactions,
   fetchJournalLines,
-  nextTrxNumber,
+  peekNextTrxNumber,
   PAYMENT_METHODS,
   TRX_LABEL,
   TRX_TONE,
@@ -558,14 +558,10 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
         await updateCbTransaction(workspaceId, editing, input);
         return;
       }
-      const seq =
-        (
-          await countWorkspaceRows({
-            data: { table: "cb_transactions", workspaceId, filters: { trx_type: type } },
-          })
-        ).count ?? 0;
+      // Ronde 30 (parity BS New 10): nomor dari urutan tertinggi yang sudah ada.
       const prefix = type === "in" ? "CI" : type === "out" ? "CO" : "CTR";
-      await createCbTransaction(workspaceId, { ...input, trx_no: nextTrxNumber(prefix, seq + 1) });
+      const trxNo = await peekNextTrxNumber(workspaceId, prefix);
+      await createCbTransaction(workspaceId, { ...input, trx_no: trxNo });
     },
     onSuccess: () => {
       toast.success(
@@ -711,7 +707,8 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
               <TableHead>{type === "transfer" ? t("Destination", "Tujuan") : t("Category", "Kategori")}</TableHead>
               <TableHead>{t("Contact / Reference", "Kontak / Referensi")}</TableHead>
               <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
-              <TableHead className="w-28 text-right">{t("Actions", "Aksi")}</TableHead>
+              {/* Parity BS New 8/10 + live: kolom aksi tanpa judul (live: header kosong). */}
+              <TableHead className="w-28" />
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -201,6 +201,421 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 34 (2026-10-12) — menutup sisa selisih pasca add-on aktif (paginasi, `#`, dasbor Omnix, tabel Omnix/HR)
+
+Lanjutan metode live-first dari daftar “Sisa selisih setelah add-on aktif” di
+Ronde 33. Setiap item dibuktikan dulu lewat dump DOM (`scripts/audit-page-detail.mjs`)
+sebelum diubah, supaya tidak ada perbaikan atas dasar artefak alat audit.
+
+| # | Selisih (live vs Old) | Perbaikan di Old |
+|---|---|---|
+| 1 | `crm/contacts`, `crm/follow-ups`, `crm/targets`: live punya kolom **`#`** | kolom `#` + `pager.start + i + 1` ditambahkan (colSpan ikut naik) |
+| 2 | Toolbar paginasi: tombol prev/next live punya `aria-label` **“Previous page/Next page”**, dan live tetap menampilkan “Showing 0-0 of 0” saat data kosong | `Pagination` (ui-states) diberi `aria-label` dan `PaginationBar` **selalu dirender** (early-return `total === 0` dihapus) — berlaku untuk semua tabel, bukan hanya CRM |
+| 3 | `omnix` (index modul): live = dasbor **“Omni-channel Dashboard”**, Old = placeholder “Phase 4” | `OmnixDashboard` diporting dari BS New 10 (kicker `OMNIX`, strip saldo + peringatan saldo menipis, 5 KPI: toko terhubung/order berjalan/order selesai/penjualan kotor/bersih setelah fee, kartu “Sales per channel” ber-progress bar + baris “Omnix fees charged”) dan dipasang di rute index modul |
+| 4 | `omnix/orders`: live `Date|Channel|Order No.|Buyer|Gross|**Net**|Status|**Omnix fee**` + tombol **“New order”**; Old `…|Gross|**Fee**|Status|` + tombol “Add order” | kolom `Net` ditambah, `Omnix fee` dipindah ke kanan Status, label tombol jadi **“New order”**; sel status ikut aturan live: setelah tertagih/dibatalkan berubah jadi **badge** (tidak bisa diubah lagi) |
+| 5 | `omnix/wallet`: live `Date|Type|Note|**Status**|Amount|Balance`, tombol preset **Rp 50.000/100.000/350.000/1.000.000** + **“Top up”** + **“Buy from balance”**; Old urutan berbeda, tanpa preset, label “Submit request”/“Buy bundle” | urutan kolom disamakan, tombol preset top up ditambah, label diselaraskan |
+| 6 | `hr/payroll`: header hidup **“Number”** (Old “Run”), tombol **“Run payroll”** (Old “Process payroll”), aksi baris **“Open”** | ketiganya diselaraskan; aksi baris `Open` ditambah di samping ikon hapus (fungsi Old yang tetap dipertahankan) |
+| 7 | `hr/tax-bpjs`: live `Employee|NPWP|PTKP / TER|Taxable gross|PPh 21|BPJS employee|BPJS company`, judul **“BPJS & PPh 21 Recap”** | kolom NPWP + Taxable gross ditambah, urutan disamakan, judul diubah, baris total mengikuti kolom baru. Tombol “Print payslips” **tetap** (fitur Old yang tidak ada di live) |
+| 8 | `hr` (dasbor) menampilkan periode **“January 2000”** | **bukan bug kode**: ada baris `hr_payroll_runs` periode `2000-01` (`PAY/200001`) sisa fixture e2e `e2e/hr-payroll.spec.ts` yang tidak terhapus karena run sebelumnya terputus. Baris itu dibersihkan dari DB dev; kode default periode dashboard (`new Date()`) sudah benar |
+| 9 | `crm/doc-library`: laporan awal menyebut live = tabel, Old = grid kartu | **selisih palsu**: kode Old (`CrmDocLibrary.tsx`) **sudah** memakai tabel yang sama (`# | Document | Category | Number | Valid until | Status | File`) + `PaginationBar`; yang terlihat di dump kemarin adalah *empty state* karena workspace dev belum punya satu dokumen pun. Dibuktikan dengan menyemai fixture 2 dokumen → **header, isi baris, KPI, dan filter kategori identik** dengan live, lalu fixture dihapus. Spec baru `e2e/crm-doc-library.spec.ts` menjaga bukti ini (fixture via SQL, dibersihkan di akhir) |
+| 10 | Spec `e2e/accounting-fx-documents.spec.ts` gagal (`dialog` tidak menutup) | **bukan regresi kode**: db dev berisi akun kas/bank `2011 · Test` (buatan uji manual) dengan `gl_account_code = NULL`; karena kode `2011` paling awal, picker memilih opsi **pertama** = akun itu dan submit ditolak guard *“Select a cash/bank account with a GL mapping first”*. Helper `pick()` di spec kini menerima `optionRe` dan memilih akun **yang punya mapping** (`Bank Operasional`), bukan opsi pertama |
+
+#### Bukti verifikasi
+
+- `npx tsc --noEmit` → **0 error**; `npm run build` → **sukses**.
+- Dump DOM ulang (`ROUTES="omnix,omnix/orders,omnix/wallet,hr,hr/payroll,hr/tax-bpjs,crm/contacts,crm/targets,crm/follow-ups"`):
+  **semua header kini identik** dengan live. Sisa beda hanya **tambahan milik Old**
+  (kolom aksi `""`, kolom `Net`, tombol `Print payslips`, tombol hapus) — jadi
+  Old = superset, bukan kehilangan fitur.
+- `npx playwright test` → **46 lulus / 0 gagal** (45 + spec `crm-doc-library`).
+  Ekspektasi spec disesuaikan dengan label baru (`New order`, `Top up`,
+  `Run payroll`), dan picker akun kas/bank spec FX tidak lagi bergantung pada
+  opsi pertama.
+
+> **Catatan metode:** `scripts/audit-page-detail.mjs` memotong daftar tombol dengan
+> `.slice(-18)`, sehingga halaman berdata banyak (mis. `omnix/orders`) tampak
+> “tidak punya tombol header”. Jangan simpulkan selisih hanya dari daftar tombol —
+> cek teks halaman atau grep labelnya. **Pelajaran kedua:** halaman yang merender
+> tabel hanya bila ada data (mis. `crm/doc-library`) akan terbaca “tanpa header”
+> saat workspace uji kosong — semai fixture dulu sebelum menyimpulkan ada selisih
+> layout, dan buat spec yang mengunci bukti itu.
+
+### Ronde 31 (2026-10-12) — **Audit Trail**, tab Settings, tanda wajib master data & tab **Workspace Access**
+
+Ronde ini menutup selisih yang ditemukan dengan **pola live-first**: setiap
+perubahan dibandingkan dengan `https://xperd-one.lovable.app` (kredensial sama,
+metode di [`PARITY-METHOD-LIVE-FIRST.md`](PARITY-METHOD-LIVE-FIRST.md)) — bukan
+dengan cara membaca kode ekspor Lovable.
+
+| # | Selisih yang ditemukan | Perbaikan di Old |
+|---|---|---|
+| 1 | New 8/10 menulis jejak audit tiap perubahan data (`audit_logs`); Old tidak punya | `db/migrations/015_audit_trail.sql` — tabel `audit_logs` (workspace, table_name, record_id, action, doc_ref, changed_fields/old_data/new_data JSON, actor_id, actor_email, created_at) + 3 indeks. **Tanpa trigger**: baris ditulis lapisan aplikasi |
+| 2 | — (lanjutan) | `src/lib/audit.functions.ts` (18 tabel teraudit, `auditDocRef`, `auditChangedFields` yang mengabaikan `updated_at`, `listAuditLogs` dengan filter tabel/aksi/pencarian/tanggal + paginasi, hanya untuk owner/admin) dan `logAudit()` di `data.functions.ts` yang dipanggil `saveWorkspaceRow`, `deleteWorkspaceRow`, `upsertWorkspaceRows` (snapshot `before` = `SELECT *`) |
+| 3 | — (UI) | `src/components/app/AuditTrailView.tsx`: tabel #/Waktu/Pengguna/Aksi/Data/Referensi/Kolom berubah + dialog detail “Kolom / Sebelum / Sesudah”, `data-testid="audit-trail-view"` |
+| 4 | Live punya **tab Audit Trail di halaman Settings** | `src/routes/app/w.$workspaceId.settings.tsx` dibungkus `Tabs` (`settings-tab-general`, `settings-tab-audit`) |
+| 5 | Live memberi tanda wajib `Code *` pada field read-only hasil otomatis; Old menyembunyikannya (`f.required && !f.readOnly`) | `MasterDataTable.tsx` menampilkan asterisk untuk semua field `required` (ditemukan lewat `audit-dialog-parity` modul master-data: live `Code *` vs Old `Code`) |
+| 6 | Live punya **tab `Workspace Access`** di halaman Team (matriks user × workspace); tidak terlihat di `parity-report.md` karena halaman `/team` sudah ✅ | `AccessMatrixPanel.tsx` + server fn `getAccessMatrix`/`setWorkspaceAccess` + tab ketiga di `w.$workspaceId.team.tsx` |
+
+#### Tab Workspace Access — hasil pembandingan langsung dengan live
+
+Dibandingkan dengan membuka halaman lalu mengklik tiap `[role="tab"]` (skrip
+sekali pakai, dihapus setelah dipakai):
+
+| | live | Old (sebelum) | Old (sesudah) |
+|---|---|---|---|
+| Tab | `Users \| Workspace Access \| Role Access` | `Users \| Role Access` | `Users \| Workspace Access \| Role Access` |
+| Header tabel | `No \| Pengguna \| <nama workspace…>` | tidak ada | `No \| Pengguna \| <nama workspace…>` |
+| Baris pemilik | `Ibrahim` + badge `Pemilik` + sel `Semua akses` | — | idem |
+| Sel user biasa | select peran `Tidak ada akses / Admin / Staff / Viewer` | — | idem |
+
+Temuan penting: **label panel itu Bahasa Indonesia walaupun UI sekitarnya
+berbahasa Inggris** (`# | User | Joined | Role | Actions`). Karena itu komponen
+Old sengaja **tidak** memakai `useI18n` untuk panel ini — parity menuntut salinan
+apa adanya. Server fn-nya mengikuti semantik New 10 persis: tidak bisa mengubah
+akses sendiri, pemilik tenant (dari `tenants.owner_id`, **bukan**
+`workspaces.owner_id`) selalu boleh dan tidak bisa diubah, target harus anggota
+perusahaan yang sama, dan peran `owner` tidak bisa diubah dari sini.
+
+#### Verifikasi Ronde 31
+
+- `npx tsc --noEmit` → **0 error**; `npm run build` → **sukses**;
+  `npm run migrate` → `015_audit_trail.sql` diterapkan (tabel 12 kolom).
+- `audit-dialog-parity.mjs --module` untuk procurement, sales, accounting,
+  fixed-asset, tax, reporting → **18 ✅ struktur form sama, 0 ⚠️**.
+- Suite e2e **44 lulus / 0 gagal** (42 → 44), termasuk spec baru:
+  - `e2e/audit-trail.spec.ts` — buat item master data lewat UI → baris audit
+    `INSERT`; ubah lewat UI → baris `UPDATE` + daftar kolom berubah; tab Audit
+    Trail menampilkan jejaknya; fixture dibersihkan.
+  - `e2e/team-workspace-access.spec.ts` — 3 tab dengan urutan & label seperti
+    live; baris pemilik terkunci (`Semua akses`, tanpa select); ubah peran user
+    uji `Staff → Viewer` tersimpan di DB dan tetap setelah reload; pilihan
+    “Tidak ada akses” mencabut keanggotaan.
+
+### Ronde 33 (2026-10-12) — modul add-on **XPro** diporting apa adanya dari BS New 10
+
+Temuan penting pembuka ronde: **add-on di live DNICORP sudah aktif semua** (dulu
+terkunci). Verifikasi langsung ke 40 halaman add-on: `40 AKTIF · 0 terkunci`, jadi
+CRM/Slipp HR/Omnix/XPro sekarang **bisa dibandingkan dengan live**, bukan hanya
+dengan kode ekspor.
+
+Perbandingan form add-on vs live (skrip `audit-dialog-parity.mjs --module …`):
+
+| Modul | Form “New” |
+|---|---|
+| CRM (14 submodul) | ✅ 7 sama · 0 beda |
+| Slipp HR (7) | ✅ 4 sama · 0 beda |
+| Omnix (6) | ✅ `stores` sama; `orders` tombol live **disabled** (saldo wallet Rp 0) |
+| **XPro (4)** | ⛔ **belum ada di Old** → diporting di ronde ini |
+| Manufacturing (4) | kedua sisi “Phase 4 / Being prepared” ✅ |
+| Maintenance | Backup & Restore ada di kedua sisi ✅ |
+
+#### Yang diporting (XPro fase 1 + 2, `XproViews.tsx` + `XproDetail.tsx`)
+
+| Berkas | Isi |
+|---|---|
+| `db/migrations/016_xpro.sql` *(baru)* | 9 tabel: `prj_projects`, `prj_milestones`, `prj_budget_lines`, `prj_billings`, `prj_members`, `prj_tasks`, `prj_expenses`, `prj_documents`, `prj_progress_reports` + baris katalog add-on `xpro` (Rp750.000/bulan). `COLLATE=utf8mb4_unicode_ci` supaya FK ke `workspaces.id` cocok |
+| `src/lib/data.functions.ts` | 9 tabel didaftarkan di **dua** tempat (`WORKSPACE_TABLES` + `COLS`) |
+| `src/lib/modules.ts` | modul `xpro` (ikon `Briefcase`, tone violet, `addon: "xpro"`) + submodul `projects`, `milestones`, `budget`, `billing` |
+| `src/components/app/XproViews.tsx` *(baru)* | dasbor proyek (KPI kontrak/RAB/ditagih, grafik recharts, kesehatan proyek, daftar tugas) + Projects & Contracts, Milestones & Tasks (bobot %), RAB per kategori, Progress Billing & BAST |
+| `src/components/app/XproDetail.tsx` *(baru)* | detail proyek 7 tab: Tasks, Gantt (skala hari/minggu/bulan), Team, Expenses (realisasi vs RAB), Documents (unggah/unduh), Progress reports (cetak LPP), Invoices & payments |
+| `src/routes/app/w.$workspaceId.$moduleId.index.tsx`, `…$submoduleId.index.tsx` | dispatch dasbor & layar submodul XPro |
+
+Perilaku yang dipertahankan **sama persis** dengan referensi:
+
+- progres fisik proyek = Σ(bobot × progres) / Σ(bobot);
+- BAST hanya bisa *Approve* bila sudah ada **laporan progres disetujui**;
+- **“Issue AR” membuat draft AR Invoice sebesar nilai BAST neto retensi, TANPA
+  jurnal** (posting terjadi saat invoice di-submit di Sales) — sesuai permintaan
+  pemilik produk: “tiru New 10 seperti apa adanya”;
+- nilai uang (kontrak, RAB, tagihan) hanya tampil untuk owner/admin; peran lain
+  hanya melihat progres & tugasnya sendiri.
+
+Satu-satunya penyesuaian lapisan data: Supabase → server fn MySQL Old
+(`listWorkspaceRows`/`saveWorkspaceRow`/`deleteWorkspaceRow`) dan Supabase Storage →
+`uploadWorkspaceFile` + `/api/workspace-files`.
+
+Verifikasi: `tsc` 0 error; `npm run build` sukses; `npm run migrate` menerapkan
+`016_xpro.sql` (9 tabel + katalog add-on); perbandingan DOM live ↔ Old untuk
+`xpro`, `xpro/projects|milestones|budget|billing` **header tabel & label sama**;
+spec baru `e2e/xpro.spec.ts` membuktikan BAST 20% × Rp100.000.000 − retensi 5% =
+**Rp19.000.000** jadi draft AR (1 baris) **tanpa entri jurnal**, plus 7 tab detail
+proyek ada. Suite e2e **45 lulus / 0 gagal** (44 + spec XPro). Add-on XPro
+diaktifkan untuk tenant **dev** lewat fixture (`tenant_addons`, catatan
+`dev fixture XPro`) — bukan bagian migrasi, karena add-on adalah langganan
+berbayar.
+
+> **Pelajaran dari spec Omnix:** harga add-on XPro (Rp **750.000**) membuat locator
+> lama di `e2e/omnix.spec.ts` salah sasaran — filternya hanya `hasText: /50[.\s]?000/`
+> sehingga baris **katalog** “XPro Rp 750.000” ikut cocok (substring `50.000`) dan
+> `.first()` mengambil baris yang tidak punya tombol *Setujui* (spec lalu timeout).
+> Perbaikannya: saring juga `has: button “Setujui”`. Pelajaran umum — **jangan
+> memfilter baris hanya dengan pola nominal**; ikutkan kontrol yang khas baris itu.
+
+#### Sisa selisih setelah add-on aktif (bahan Ronde 34)
+
+Laporan parity setelah rekam ulang kedua sisi: **74 ✅ · 42 ⚠️ · 0 ❌ · 0 🎫**
+(add-on tidak lagi terkunci). Dari 42 ⚠️, yang **bukan** celah tetap sama seperti
+Ronde 31/32 (live kosong → `empty`, logo, launcher, `team`, nomor dokumen, dst.),
+sedangkan kandidat celah **nyata** yang baru terbaca karena add-on sudah aktif:
+
+| Halaman | Temuan | Tindakan |
+|---|---|---|
+| `crm` (index modul) | live menampilkan **dasbor CRM nyata**; Old masih placeholder “Phase 4” | ✅ diperbaiki di ronde ini: rute index modul kini memakai `CrmDashboardView` (komponen yang sudah ada, dipakai submodul `crm/dashboard`) |
+| `omnix` (index modul) | live punya dasbor “Omni-channel Dashboard” (saldo, order, gross sales, fee); Old masih placeholder “Phase 4” | ⛔ perlu port dasbor Omnix dari BS New 10 |
+| `crm/leads`, `contacts`, `targets`, `templates`, `follow-ups`, `campaigns`, `doc-library`, `tenders`, `broadcast` | live memakai **paginasi + kolom `#`** (dan sebagian filter combobox) yang belum ada di Old | perlu disamakan setelah dibuktikan dengan dump DOM — **sebagian besar ditutup di Ronde 34** (`contacts`/`targets`/`follow-ups` dapat `#` + paginasi; `doc-library` ternyata **sudah** tabel = selisih palsu) |
+| `omnix/orders` | live punya kolom **Net / Omnix fee** dan tombol “New order” (disabled saat saldo 0) | perlu disamakan |
+| `omnix/wallet` | live punya tombol preset **Top up Rp 50.000…Rp 1.000.000** + “Buy from balance” | perlu disamakan |
+| `hr/payroll`, `hr/tax-bpjs` | judul live “Payroll” / “BPJS & PPh 21 Recap”; Old “Payroll & Payslips” / “BPJS & PPh 21” | perlu disamakan |
+| `hr` (dasbor) | Old menampilkan periode **“January 2000”** padahal live “September 2026” | periksa default periode dasbor payroll (indikasi bug, bukan sekadar data) |
+
+### Ronde 32 (2026-10-12) — parity **aksi per baris & halaman detail dokumen** vs live
+
+Lanjutan metode live-first (Ronde 31): setelah UI daftar + form “New” sama,
+lapisan berikutnya diuji — **apa yang terjadi saat aksi baris diklik** (detail,
+ubah, cetak). Alat baru: `scripts/audit-row-actions.mjs` (aman untuk live: tombol
+destruktif tidak pernah diklik; baris empty-state dikecualikan; id & nomor dokumen
+dinormalisasi; beda yang sah karena status ditandai ℹ️ bukan ⚠️). Rincian aturan →
+[`PARITY-METHOD-LIVE-FIRST.md`](PARITY-METHOD-LIVE-FIRST.md) §11.
+
+| Hasil | Halaman |
+|---|---|
+| ✅ aksi baris + dialog/halaman detail + tombol + tampilan cetak sama | `master-data/items`, `master-data/customers`, `sales/sales-orders`, `sales/delivery-orders`, `sales/ar-invoices`, `procurement/purchase-orders`, `procurement/goods-receipts`, `accounting/journals`, `inventory/stock-in|stock-out|transfers|stock-opname`, `fixed-asset/assets`, `cash-bank/cash-in` |
+| ℹ️ sama (beda hanya karena status dokumen) | `procurement/purchase-requests` — baris dev Old masih `draft`, jadi `Edit draft`/`Delete` tampil; di BS New 10 pun dua tombol itu hanya untuk `status === "draft"` |
+| 🎫 belum bisa dibanding (salah satu sisi kosong / add-on terkunci) | `sales/quotations`, `sales/pos`, `crm/leads`, `hr/employees`, `cash-bank/cash-out` |
+
+**Celah nyata yang ditemukan: tidak ada** pada lapisan ini (0 ⚠️). Agar halaman
+yang kosong di dev tetap bisa dibanding, dokumen dev disalin sementara menjadi
+jenis/status yang sama dengan live (`reference = 'PARITY-TEMP'`), dibandingkan,
+lalu dihapus lagi — data dev sudah kembali persis seperti semula (28 quotation,
+1 sales order, 1 delivery order, 1 purchase request).
+
+Verifikasi: `tsc` 0 error (tidak ada perubahan kode aplikasi di ronde ini); bukti
+mentah `audit/row-actions-parity.json`.
+
+### Ronde 31 (2026-10-12) — **Audit Trail + parity live-first** (`xperd-one.lovable.app`)
+
+Ronde ini memakai cara kerja baru yang diminta pemilik produk: **setiap modul
+dibandingkan dengan aplikasi live (UI *dan* behaviour, kredensial sama)**, bukan
+dengan membayangkan kode ekspor Lovable. Metodenya didokumentasikan terpisah di
+[`PARITY-METHOD-LIVE-FIRST.md`](PARITY-METHOD-LIVE-FIRST.md).
+
+#### 1. Fitur baru: Audit Trail (dari BS New 8/10)
+
+| Berkas | Isi |
+|---|---|
+| `db/migrations/015_audit_trail.sql` | tabel `audit_logs` (workspace, tabel, record, aksi, `doc_ref`, `changed_fields`/`old_data`/`new_data` JSON, aktor, waktu) + 3 indeks + FK. **Tanpa trigger** — barisnya ditulis lapisan aplikasi (aturan repo: logika uang/status di `transaction()`, bukan di DB) |
+| `src/lib/audit.functions.ts` *(baru)* | `AUDITED_TABLES` (18 tabel), `REF_COLUMNS`/`auditDocRef()` (referensi dokumen yang dibaca manusia), `auditChangedFields()` (mengabaikan `updated_at`), `listAuditLogs` (hanya owner/admin; filter tabel/aksi/pencarian/rentang tanggal + paginasi) |
+| `src/lib/data.functions.ts` | `logAudit()` dipanggil dari `saveWorkspaceRow` (INSERT/UPDATE dengan snapshot `before`), `deleteWorkspaceRow`, dan `upsertWorkspaceRows` |
+| `src/components/app/AuditTrailView.tsx` *(baru)* | tab Audit Trail: pencarian, filter, tabel (Waktu/Pengguna/Aksi/Data/Referensi/Kolom berubah), dialog detail **Field / Sebelum / Sesudah** |
+| `src/routes/app/w.$workspaceId.settings.tsx` | halaman Settings kini bertab: **General \| Audit Trail** (parity live) |
+| `e2e/audit-trail.spec.ts` *(baru)* | buat item → tercatat `INSERT`; ubah item → tercatat `UPDATE` + daftar kolom berubah; dialog detail memuat nilai sebelum/sesudah; fixture dibersihkan lewat SQL |
+
+#### 2. Fitur baru: tab **Workspace Access** (matriks user × workspace)
+
+Live punya 3 tab di halaman Team & Access: `Users | Workspace Access | Role Access`.
+Tab kedua (matriks siapa boleh membuka workspace mana) **tidak ada** di Old — dan
+tidak akan pernah terlihat di `parity-report.md` karena halaman `/team` sudah ✅.
+
+| Berkas | Isi |
+|---|---|
+| `src/lib/team.functions.ts` | `getAccessMatrix` (tenant + workspace + anggota + `manageable`) dan `setWorkspaceAccess` (`admin`/`staff`/`viewer`/`none`). Semantik persis BS New 10: tidak boleh mengubah akses sendiri; pemilik tenant selalu boleh; selain itu harus owner/admin di workspace itu; target harus bagian perusahaan; peran `owner` tidak bisa diubah dari sini; `none` = hapus keanggotaan |
+| `src/components/app/AccessMatrixPanel.tsx` *(baru)* | kartu “Matriks Akses Workspace” + pencarian + tabel user × workspace: badge `Pemilik` (Crown) & `Semua akses` untuk pemilik, badge peran untuk sel terkunci, `Select` peran untuk sel yang boleh diubah |
+| `src/routes/app/w.$workspaceId.team.tsx` | tab ketiga `workspace-access` (urutan sama dengan live) + `TabsList` 3 kolom |
+| `e2e/team-workspace-access.spec.ts` *(baru)* | urutan tab, header tabel, baris pemilik terkunci, ubah peran via UI → tersimpan di DB, `Tidak ada akses` menghapus keanggotaan (fixture ditambah/dihapus lewat SQL agar idempoten) |
+
+**Temuan penting (jangan “dirapikan”):** label panel ini di live **Bahasa Indonesia
+hardcoded** (`No | Pengguna | Pemilik | Semua akses | Tidak ada akses`) walau tab
+lain di halaman yang sama berbahasa Inggris. Komponen Old sengaja **tidak** memakai
+`useI18n` supaya sama persis dengan live.
+
+#### 3. Perbaikan parity hasil perbandingan DOM (bukan dugaan)
+
+| Halaman | Temuan dari live | Perbaikan |
+|---|---|---|
+| `master-data/items`, `master-data/exchange-rates` | label field wajib yang read-only tetap `Code *` (`required=true, readonly=true`) | `MasterDataTable.tsx`: tanda `*` mengikuti `required` saja (dulu `required && !readOnly`) |
+| `accounting/period-closing` | judul “Period lock”, deskripsi “Once a month is locked…”, opsi **“Hard lock (final)”**, label form **Month / Lock type**, badge **“Hard lock”**, aksi baris **“Reopen”** (teks), dan tabel riwayat **selalu tampil** dengan empty state “No locked period yet.” | semua disamakan; tabel kini selalu dirender (dulu hanya bila ada kunci) |
+| `cash-bank/cash-in`, `cash-out`, `transfers` | kolom aksi **tanpa judul** (`<TableHead className="w-28" />`) | header “Actions” dihapus (perilaku tombol tidak berubah) |
+
+#### 4. Hasil perbandingan per modul (Ronde 30–31)
+
+- Form/dialog (`scripts/audit-dialog-parity.mjs`): master-data **10/10 sama**,
+  procurement/sales/cash-bank/inventory sama, accounting/fixed-asset/tax/reporting
+  **18 ✅ 0 ⚠️**.
+- Halaman (`scripts/audit-parity.mjs report`): **116 halaman** — 63 ✅ · 17 ⚠️ ·
+  0 ❌ · 36 🎫 add-on. Setelah Ronde 31, sisa ⚠️ yang tersisa adalah **bukan celah**:
+  beda **data** (live kosong: POS/quotations/inventory dashboard/settings logo/
+  launcher trial) dan artefak pengumpul sidik jari (tombol `aria-label` vs `title`,
+  `Dismiss` bawaan Lovable, nomor dokumen otomatis). Dua pengecualian yang nyata
+  (period-closing & kolom aksi kas/bank) sudah diperbaiki di §3.
+
+Verifikasi: `npx tsc --noEmit` **0 error**, `npm run build` sukses, `npm run migrate`
+(015 diterapkan), suite e2e **44 lulus / 0 gagal** (40 sebelumnya + audit-trail +
+workspace-access + …).
+
+### Ronde 29 (2026-10-08) — **multi-currency & revaluasi kurs** dari BS New 8
+
+Keputusan pemilik produk: *“pokoknya samakan dengan Xperd One Business Suite New 8
+yang terbaru”* → seluruh rantai fitur valas New 8 diporting apa adanya (bukan
+dibuat aturan baru). Ini melengkapi sisa terakhir selisih modul Akuntansi
+(Ronde 28) dan master data.
+
+| Bagian New 8 | Status di Old |
+|---|---|
+| `db/migrations/0018_multi_currency_master.sql` — tabel `md_currencies`, `md_exchange_rates` | ✅ `db/migrations/014_multi_currency.sql` (MySQL; idempoten `CREATE TABLE IF NOT EXISTS` + `WHERE NOT EXISTS`) |
+| `0019_document_exchange_rate.sql` — `exchange_rate` pada dokumen penjualan & pembelian | ✅ kolom `DECIMAL(18,6) DEFAULT 1` di `sls_documents`/`prc_documents` |
+| `lib/currency.ts` — `fetchCurrencies`, `fetchBaseCurrency`, `getExchangeRate`, `toBaseAmount`, `formatCurrency` | ✅ diporting; data lewat server fn (`listWorkspaceRows`), bukan Supabase |
+| `components/app/CurrencyFields.tsx` (mata uang + kurs, auto-isi dari Master Kurs, boleh ditimpa) | ✅ diporting + `data-testid` (`doc-currency`, `doc-exchange-rate`) |
+| `CurrencyFields` di form Sales & Procurement | ✅ Sales (semua kecuali Delivery Order) & Procurement (semua) |
+| `postJournal()` mengonversi baris dokumen ke mata uang dasar (`toBaseLines`) | ✅ di `lib/journal.ts` (`toBaseLines`, pembulatan sen ditempel ke baris terbesar) |
+| Selisih kurs **realisasi** saat pelunasan (`postPaymentJournal`/`postReceiptJournal` memakai kurs invoice untuk membersihkan hutang/piutang, kurs tanggal bayar untuk kas) | ✅ idem, plus opsi `invoiceRate` |
+| `lib/fx-revaluation.ts` + `FxRevaluationView.tsx` + submodule `accounting/fx-revaluation` | ✅ server fn `previewFxRevaluation`/`postFxRevaluation` (satu transaksi MySQL: penjagaan periode, duplikat, akun COA, jurnal revaluasi **+ jurnal balik otomatis** keesokan hari) |
+| Submodule master `currencies` & `exchange-rates` (+ field tipe `date` di master data) | ✅ `modules.ts`, `master-data.ts`, dukungan field tanggal di `MasterDataTable.tsx` |
+| COA `4900/4910` (laba) & `6900/6910` (rugi) selisih kurs | ✅ `DEFAULT_COA` + backfill migrasi 014 |
+| `subledger.ts`: nilai buku = total valas × kurs dokumen + label `USD 1.000,00 @ 15.850` | ✅ diporting (kartu AR/AP & aging) |
+| `doc-print.ts`: `fxRows` (kurs + ekuivalen mata uang dasar) | ✅ diporting |
+| `cashbank.ts`: rekening valas mencatat saldonya dalam mata uang rekening (`foreignAmount`/`currency`) | ✅ `recordSettlementCashTransaction` + dikirim dari form Sales/Procurement |
+
+#### Aturan uang yang dipakai (persis New 8, semua di level aplikasi — tanpa trigger)
+
+```text
+Dokumen valas: total dokumen tetap dalam mata uang dokumen.
+  Jurnal = setiap baris × kurs dokumen (toBaseLines), pembulatan sen ke baris terbesar.
+Pelunasan valas (realisasi):
+  payable/piutang dibersihkan = jumlah valas × kurs INVOICE
+  kas masuk/keluar            = jumlah valas × kurs tanggal bayar
+  selisih > 0 → Kr 4900 Laba Selisih Kurs   |  selisih < 0 → Dr 6900 Rugi Selisih Kurs
+Revaluasi kurs akhir periode (kurs penutupan; fallback kurs transaksi bila kosong):
+  piutang & kas/bank valas : diff = (nilai valas × kurs penutupan) − nilai buku
+  hutang valas             : kenaikan nilai bergerak di sisi KREDIT
+  laba belum terealisasi → Kr 4910 ; rugi belum terealisasi → Dr 6910
+  jurnal revaluasi (JV/FXR/<YYYYMM>) + jurnal BALIK otomatis keesokan hari
+  (JV/FXR-REV/<YYYYMM>) dibuat dalam satu transaksi yang sama.
+  Ditolak bila: periode (revaluasi/balik) terkunci, periode sudah pernah diposting,
+  tidak ada selisih, atau akun 4910/6910 belum ada di COA.
+```
+
+#### Verifikasi
+
+- `npx tsc --noEmit` → **0 error**; `npm run build` → **sukses**; `npm run migrate` →
+  migrasi `014_multi_currency.sql` diterapkan (9 mata uang + 4 akun FX di-backfill
+  untuk workspace lama; kolom kurs ada di kedua tabel dokumen).
+- Suite e2e **41 lulus / 0 gagal** (39 sebelumnya + 2 spec valas baru).
+- **Uji uang nyata** (DB dev; angka harapan dihitung ulang dengan SQL):
+  - `e2e/accounting-fx-documents.spec.ts` — AR Invoice **1.000 USD @ 15.000** (kurs
+    terisi otomatis dari Master Kurs) → jurnal `Dr 1200 15.000.000 / Cr 4000 15.000.000`
+    (mata uang dasar); Receipt **1.000 USD @ 15.500** → `Dr 1010 15.500.000 /
+    Cr 1200 15.000.000 / Cr 4900 500.000` (selisih kurs realisasi).
+  - `e2e/accounting-fx-revaluation.spec.ts` — piutang valas 1.000 USD (kurs buku
+    15.000, kurs penutupan 16.000) → selisih 1.000.000; posting menghasilkan
+    `Dr 1200 1.000.000 / Cr 4910 1.000.000` plus jurnal balik **2000-10-01**
+    (kebalikan) sehingga saldo 1200 kembali ke 15.000.000 dan 4910 kembali 0;
+    periode yang sudah diposting tidak bisa diposting ulang.
+  - Semua fixture uji dibersihkan lagi dari DB dev.
+
+**Catatan:** migrasi repo ini dijalankan sekali oleh runner (`db_apply_log`), jadi
+`ALTER TABLE … ADD COLUMN` tidak perlu penjaga `IF NOT EXISTS` (sama seperti
+migrasi 007/010/012 yang sudah ada).
+
+### Ronde 30 (2026-10-12) — perbaikan penomoran transaksi kas/bank dari **BS New 10**
+
+`Xperd One Business Suite New 10` (=== New 8 + XPro fase 2) juga memperbaiki satu
+bug di kas/bank: nomor transaksi dihitung dari **jumlah baris**
+(`count(trx_type) + 1`), sehingga jurnal koreksi/storno ikut terhitung dan — lebih
+serius — **menghapus satu baris membuat nomor berikutnya dipakai ulang** sehingga
+bentrok dengan nomor yang masih ada (`trx_no` juga kunci idempotensi
+`recordSettlementCashTransaction`). New 10 mengambil **nomor tertinggi** bulan
+berjalan lalu +1.
+
+| Berkas | Perubahan |
+|---|---|
+| `src/lib/cashbank.ts` | **`peekNextTrxNumber(workspaceId, prefix)`** — baca transaksi bulan berjalan lewat `listWorkspaceRows`, ambil sekuens tertinggi, kembalikan `prefix/YYYYMM/NNNN` berikutnya |
+| `src/components/app/CashBankViews.tsx` | pembuatan transaksi memakai `peekNextTrxNumber` (bukan `countWorkspaceRows` + `nextTrxNumber`) |
+| `e2e/cash-bank-trx-number.spec.ts` *(baru)* | regresi: buat 3 kas masuk → hapus yang tengah → buat 1 lagi → nomor baru = tertinggi + 1, tidak ada nomor ganda (fixture dibersihkan) |
+
+Verifikasi: `tsc` 0 error, `build` sukses, spec baru lulus. Analisis lengkap New 10
+vs Old ada di [`PARITY-BS-NEW10-VS-OLD.md`](PARITY-BS-NEW10-VS-OLD.md).
+
+### Ronde 28 (2026-10-08) — modul **Akuntansi**: tutup buku PPN (SPT Masa PPN) dari **BS New 8**
+
+Fokus permintaan pemilik produk: *samakan UI dan behaviour modul Akuntansi dengan
+BS New 8.* Perbandingan dilakukan berkas-per-berkas (`AccountingViews.tsx`,
+`lib/journal.ts`, `lib/accounting.ts`, `lib/subledger.ts`, `lib/financial-statement.ts`,
+`lib/modules.ts`) antara Old dan `Xperd One Business Suite New 8`.
+
+**Hasil perbandingan:** hanya tiga hal yang berbeda, dua sudah ditutup di ronde ini:
+
+| Selisih New 8 | Status |
+|---|---|
+| **`VatClosingPanel` + `previewVatClosing`/`postVatClosing`** (baru) | ✅ **diporting** — panel di layar Tutup Periode + aturan uang di server (lihat di bawah) |
+| **Orientasi cetak laporan Arus Kas & Perubahan Ekuitas**: `orientation: "landscape"` **dihapus** oleh New 8 (jadi portrait/default) | ✅ **diporting** — dua baris `orientation` dihapus dari `AccountingViews.tsx` (Laba Rugi, Neraca, Buku Besar, Neraca Saldo tetap landscape) |
+| **`fx-revaluation`** (submodule Akuntansi baru) + master `currencies`/`exchange-rates` + kolom mata uang di dokumen/subledger | 🔜 **belum** — satu kesatuan fitur multi-currency; butuh keputusan pemilik produk (lihat catatan) |
+
+**Yang ternyata sudah setara** (tidak perlu diubah): `PeriodLockPanel` New 8 ≡
+panel kunci periode Old (#46 — field Bulan/Jenis/Catatan + tabel kunci yang sama;
+New 8 hanya memindahkannya jadi komponen sendiri), `StatementActions` +
+`useStatementEntity` (#48) ≡ `ReportActions` (dan `ReportActions` di New 8 **tidak
+dipakai sama sekali** — dead code), `lib/financial-statement.ts` **identik**
+100%, penjaga periode terkunci di server (`postJournalEntry` Old ≡
+`assertPeriodOpen` New 8), serta `ensureAccounts`/`postSystemJournal` New 8 yang
+padanannya sudah ada di Old (COA di-seed `provisioning.server.ts`; penulisan
+jurnal per modul).
+
+#### Aturan uang tutup PPN (diporting apa adanya dari New 8)
+
+Semua di **level aplikasi dalam satu transaksi MySQL** (`transaction()` di
+`src/lib/ledger.functions.ts`) — **tanpa trigger/stored function**, sesuai aturan
+repo:
+
+```text
+periode = YYYY-MM, tanggal tutup = hari terakhir bulan itu
+vatIn   = max(0,  saldo 1400 PPN Masukan   s.d. tanggal tutup)   # debit − kredit
+vatOut  = max(0, −saldo 2100 PPN Keluaran  s.d. tanggal tutup)
+carried = max(0,  saldo 1410 PPN Lebih Bayar s.d. tanggal tutup)  # kompensasi bulan lalu
+net     = vatOut − vatIn − carried
+
+jurnal (entry_no JV/PPN-<periode>, source_type vat_closing, is_auto=1):
+  Dr 2100 PPN Keluaran        vatOut
+  Kr 1400 PPN Masukan         vatIn
+  Kr 1410 PPN Lebih Bayar     carried
+  net > 0  → Kr 2110 Hutang PPN        net          (kurang bayar)
+  net < 0  → Dr 1410 PPN Lebih Bayar   −net         (lebih bayar, dikompensasi)
+```
+
+Penjagaan: periode **terkunci (soft/hard)** ditolak (`SELECT … FOR UPDATE` pada
+`acc_period_locks`), satu periode hanya boleh ditutup **sekali** (`alreadyClosed`),
+tidak ada saldo PPN → ditolak, dan **keempat akun harus ada di COA workspace**
+kalau tidak → pesan jelas (bukan posting ke akun kosong).
+
+#### File yang berubah
+
+| File | Isi |
+|---|---|
+| `src/lib/ledger.functions.ts` | server fn baru **`previewVatClosing`** (hitung 1400/2100/1410 + deteksi sudah ditutup) & **`postVatClosing`** (satu transaksi: cek kunci, cek duplikat, cek akun, tulis entri + baris), plus `VAT_CLOSING_ACCOUNTS`, `lastDayOfPeriod()`, tipe `VatClosingPreview` |
+| `src/lib/journal.ts` | akun `vatOverpaid` (1410) & `vatPayable` (2110); wrapper klien `previewVatClosing()` / `postVatClosing()` + re-export tipe |
+| `src/components/app/AccountingViews.tsx` | komponen **`VatClosingPanel`** di layar Tutup Periode (pemilih bulan, 4 kartu angka, tombol *Posting tutup PPN* → *Sudah ditutup*), `data-testid` panel VAT & panel kunci periode; 2 × `orientation: "landscape"` dihapus (parity cetak) |
+| `e2e/accounting-vat-closing.spec.ts` *(baru)* | spec uang: fixture jurnal PPN di MySQL dev + UI, harapan dihitung ulang dari SQL, 3 skenario (kurang bayar / lebih bayar / kompensasi lebih bayar lama) + 2 penjagaan (tanpa saldo, periode terkunci), membersihkan dirinya sendiri |
+
+#### Verifikasi
+
+- `npx tsc --noEmit` → **0 error**; `npm run build` → **sukses**.
+- Suite e2e **39 lulus / 0 gagal** (38 sebelumnya + spec tutup PPN).
+- **Uji uang nyata** (lewat UI, DB dev, angka harapan dihitung independen dengan SQL):
+  - kurang bayar 550.000 → jurnal `Dr 2100 1.650.000 / Kr 1400 1.100.000 / Kr 2110 550.000` (balance), saldo 1400 & 2100 jadi **0**, 2110 = −550.000;
+  - lebih bayar 1.000.000 → `Dr 2100 1.000.000 / Kr 1400 2.000.000 / Dr 1410 1.000.000`, saldo 1410 = +1.000.000;
+  - kompensasi bulan berikutnya → `Dr 2100 500.000 / Kr 1400 200.000 / Kr 1410 1.000.000 (kompensasi) / Dr 1410 700.000`, saldo 1410 tinggal 700.000;
+  - periode terkunci → posting ditolak & **tidak ada** jurnal yang terbentuk; tutup dua kali → tombol mati + tetap hanya satu jurnal per periode.
+  - Semua fixture uji dihapus kembali dari DB dev (9 jurnal).
+
+**Belum diporting (butuh keputusan pemilik produk): multi-currency + revaluasi
+kurs (`fx-revaluation`).** Ini bukan satu panel, melainkan satu rangkaian:
+master `currencies` & `exchange-rates`, kolom mata uang/kurs/`foreign_amount` pada
+dokumen (`sls_documents`, `prc_documents`) dan subledger, `lib/currency.ts`,
+`CurrencyFields.tsx`, `lib/fx-revaluation.ts`, `FxRevaluationView.tsx`, serta
+migration `0018`/`0019` New 8. Yang harus diputuskan lebih dulu: **sumber kurs**
+(manual/API), **akun selisih kurs (laba/rugi)**, dan **periode revaluasi** —
+menyentuh perhitungan jurnal sehingga wajib disetujui pemilik produk
+(`DEVELOPMENT_GUIDE.md` §2).
+
 ### Ronde 26 (2026-10-01) — update roles/teams dari **BS New 4**
 
 Versi baru (`Xperd One Business Suite New 4`) memuat perubahan di area peran/tim.

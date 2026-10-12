@@ -16,6 +16,7 @@ import { CrmView } from "@/components/app/CrmViews";
 // #63 (BS New 3): modul add-on Omnix.
 import { OmnixView } from "@/components/app/OmnixViews";
 import { HrView } from "@/components/app/HrViews";
+import { XproView } from "@/components/app/XproViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-context";
@@ -174,6 +175,11 @@ function SubModuleBody({
   if (moduleId === "hr") {
     // Batch 2 (Slipp HR): layar per submodule (PTKP/TER, departemen, jabatan, dst).
     return <HrView submoduleId={submoduleId} workspaceId={workspaceId} />;
+  }
+
+  // Ronde 33 (BS New 10): XPro — proyek & kontrak, milestone, RAB, BAST.
+  if (moduleId === "xpro") {
+    return <XproView submoduleId={submoduleId} workspaceId={workspaceId} />;
   }
 
   return (
