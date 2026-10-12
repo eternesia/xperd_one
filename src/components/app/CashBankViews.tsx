@@ -102,6 +102,8 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyAccount);
+  // Ronde 35 (parity BS New 10): akun yang sedang dibuka buku mutasinya (ikon mata).
+  const [statement, setStatement] = useState<CbAccount | null>(null);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["cb-accounts", workspaceId],
@@ -254,7 +256,11 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
               </TableRow>
             ) : (
               rows.map((r, i) => (
-                <TableRow key={r.account.id}>
+                <TableRow
+                  key={r.account.id}
+                  className="cursor-pointer"
+                  onClick={() => setStatement(r.account)}
+                >
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-medium">{r.account.code}</TableCell>
                   <TableCell>
@@ -272,8 +278,17 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{r.account.gl_account_code ?? "—"}</TableCell>
                   <TableCell className="text-right font-semibold">{formatMoney(r.balance)}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        aria-label={t("Account statement", "Buku mutasi")}
+                        onClick={() => setStatement(r.account)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(r.account)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -383,7 +398,153 @@ function AccountsView({ workspaceId }: { workspaceId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AccountStatementDialog
+        workspaceId={workspaceId}
+        account={statement}
+        openingBalance={Number(statement?.opening_balance ?? 0)}
+        onClose={() => setStatement(null)}
+      />
     </div>
+  );
+}
+
+/* --------------------------- account statement (mutasi) --------------------------- */
+
+/**
+ * Ronde 35 (parity BS New 10): buku mutasi satu akun kas/bank — dibuka dari ikon
+ * mata atau klik baris di daftar akun. Menampilkan tiap mutasi beserta akun
+ * lawannya dan saldo berjalan sejak saldo awal akun.
+ */
+function AccountStatementDialog({
+  workspaceId,
+  account,
+  openingBalance,
+  onClose,
+}: {
+  workspaceId: string;
+  account: CbAccount | null;
+  openingBalance: number;
+  onClose: () => void;
+}) {
+  const { lang } = useI18n();
+  const t = (en: string, id: string) => (lang === "id" ? id : en);
+  const formatMoney = (v: number) => fmtMoney(v, lang);
+  const [from, setFrom] = useState(monthStart());
+  const [to, setTo] = useState(today());
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ["cb-statement", workspaceId, account?.code, from, to],
+    queryFn: () => fetchCbTransactions(workspaceId, { from, to }),
+    enabled: Boolean(account),
+  });
+
+  const lines = useMemo(() => {
+    if (!account) return [];
+    const relevant = rows
+      .filter((r) => r.account_code === account.code || r.counterpart_account_code === account.code)
+      .sort((a, b) => a.trx_date.localeCompare(b.trx_date) || a.trx_no.localeCompare(b.trx_no));
+    let balance = openingBalance;
+    return relevant.map((r) => {
+      const incoming =
+        r.trx_type === "in" || (r.trx_type === "transfer" && r.counterpart_account_code === account.code);
+      const amount = Number(r.amount) || 0;
+      balance += incoming ? amount : -amount;
+      const contra =
+        r.trx_type === "transfer"
+          ? incoming
+            ? (r.account_name ?? r.account_code)
+            : (r.counterpart_account_name ?? r.counterpart_account_code ?? "—")
+          : (r.category_account_name ?? r.category_account_code ?? "—");
+      return { row: r, incoming, amount, balance, contra };
+    });
+  }, [rows, account, openingBalance]);
+
+  const totalIn = lines.filter((l) => l.incoming).reduce((s, l) => s + l.amount, 0);
+  const totalOut = lines.filter((l) => !l.incoming).reduce((s, l) => s + l.amount, 0);
+
+  return (
+    <Dialog open={Boolean(account)} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>
+            {t("Account statement", "Buku mutasi")} — {account?.name}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              "Every movement with its source document and the ledger account it hits.",
+              "Setiap mutasi beserta dokumen sumber dan akun buku besar lawannya.",
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label={t("Money in", "Kas masuk")} value={formatMoney(totalIn)} />
+          <StatCard label={t("Money out", "Kas keluar")} value={formatMoney(totalOut)} />
+          <StatCard
+            label={t("Closing balance", "Saldo akhir")}
+            value={formatMoney(lines.length ? lines[lines.length - 1]!.balance : openingBalance)}
+            highlight
+          />
+        </div>
+
+        <div className="max-h-[50vh] overflow-auto rounded-xl border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Date", "Tanggal")}</TableHead>
+                <TableHead>{t("Number", "Nomor")}</TableHead>
+                <TableHead>{t("Description", "Keterangan")}</TableHead>
+                <TableHead>{t("Contra account", "Akun lawan")}</TableHead>
+                <TableHead className="text-right">{t("In", "Masuk")}</TableHead>
+                <TableHead className="text-right">{t("Out", "Keluar")}</TableHead>
+                <TableHead className="text-right">{t("Balance", "Saldo")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : lines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                    {t("No movement in this period.", "Belum ada mutasi pada periode ini.")}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                lines.map((l) => (
+                  <TableRow key={l.row.id}>
+                    <TableCell>{l.row.trx_date}</TableCell>
+                    <TableCell className="font-medium">{l.row.trx_no}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {l.row.memo || [l.row.contact_name, l.row.reference].filter(Boolean).join(" · ") || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{l.contra}</TableCell>
+                    <TableCell className="text-right">{l.incoming ? formatMoney(l.amount) : "—"}</TableCell>
+                    <TableCell className="text-right">{l.incoming ? "—" : formatMoney(l.amount)}</TableCell>
+                    <TableCell className="text-right font-semibold">{formatMoney(l.balance)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            {t("Close", "Tutup")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
