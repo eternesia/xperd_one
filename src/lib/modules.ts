@@ -246,7 +246,10 @@ const MODULE_DEFS: AppModule[] = [
     phase: 4,
     addon: "qalling",
     submodules: [
-      s("dashboard", "Dashboard", "Dasbor"),
+      // Catatan (Ronde 35): submodul `dashboard` SENGAJA tidak didaftarkan di sini.
+      // Halaman indeks modul sudah merender dasbor CRM yang sama, sehingga
+      // mendaftarkannya akan memunculkan dua menu "Dashboard" di sidebar.
+      // Rujukan BS New 10 juga tidak punya submodul `dashboard` untuk CRM.
       s("leads", "Leads", "Prospek"),
       s("pipeline", "Pipeline", "Pipeline"),
       s("contacts", "Contacts", "Kontak"),

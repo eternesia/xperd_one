@@ -941,7 +941,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
           </DialogHeader>
           {detail && (
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
                 <Field label={t("Date", "Tanggal")}>{detail.trx_date}</Field>
                 <Field label={t("Account", "Akun")}>{detail.account_name ?? detail.account_code}</Field>
                 <Field label={type === "transfer" ? t("Destination", "Tujuan") : t("Category", "Kategori")}>
@@ -955,12 +955,18 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
                 <Field label={t("Method", "Metode")}>{detail.method}</Field>
                 <Field label={t("Memo", "Catatan")}>{detail.memo || "—"}</Field>
               </div>
-              <div>
+              <div className="rounded-xl border border-border p-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t("Journal", "Jurnal")}
+                  {t("Journal posting", "Jurnal terposting")}
                 </p>
                 <JournalPanel entryId={detail.journal_entry_id ?? null} workspaceId={workspaceId} lang={lang} />
               </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Best practice: correct a posted transaction with an edit (auto reversal + corrected entry) or cancel it, rather than removing history.",
+                  "Praktik terbaik: koreksi transaksi terposting lewat Ubah (jurnal balik + jurnal koreksi) atau Batalkan, bukan menghapus riwayat.",
+                )}
+              </p>
             </div>
           )}
           <DialogFooter>
@@ -1087,7 +1093,14 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
         },
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cb-trx"] }),
+    onSuccess: () => {
+      // Penting: `is_reconciled` dibaca tabel dari query `cb-trx-recon`, bukan
+      // `cb-trx` — invalidasi ber-prefix TIDAK menjangkau key lain, jadi keduanya
+      // harus di-invalidate (sama seperti rujukan New 10). Tanpa ini centang
+      // tersimpan di DB tetapi tabel tidak pernah refetch (terlihat "tidak jalan").
+      void qc.invalidateQueries({ queryKey: ["cb-trx"] });
+      void qc.invalidateQueries({ queryKey: ["cb-trx-recon"] });
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -1182,7 +1195,9 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
                 <TableRow key={r.id}>
                   <TableCell>
                     <Checkbox
-                      checked={r.is_reconciled}
+                      // MySQL mengembalikan 0/1; Radix butuh boolean eksplisit.
+                      checked={Boolean(r.is_reconciled)}
+                      aria-label={`${t("Reconciled", "Terekonsiliasi")} ${r.trx_no}`}
                       onCheckedChange={(v) => toggle.mutate({ id: r.id, value: Boolean(v) })}
                     />
                   </TableCell>

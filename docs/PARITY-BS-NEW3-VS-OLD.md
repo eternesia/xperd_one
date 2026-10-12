@@ -201,6 +201,22 @@ average)**, plus **#39 sebagian** (akun 1450) karena dibutuhkan #36.
 3. Uji manual UI: pilih PPh 23 di satu baris → pastikan total turun dan jurnal AR berisi Dr 1450; buat DO → pastikan `inv_movements.unit_cost` = rata-rata bergerak, bukan harga jual; buat Sales Receipt tanpa dokumen sumber → pastikan jurnal Cr 2400 dan barisnya ber-`advance_kind='advance'`.
 4. Lanjutan 3A sudah **habis**: #47 selesai (ui-states) dan `recordSettlementCashTransaction` selesai. Batch **3C (akses & UI) juga selesai** (#58, #59, #60, #61), dan batch **3B (CRM & Tender) kini selesai** kecuali #55 yang butuh App Meta milik user. Berikutnya batch **3D**: Omnix (#63), Qalling standalone (#64), tag produk tenant/invoice (#65) — ketiganya butuh keputusan bisnis.
 
+### Ronde 35 (2026-10-12) — temuan uji mandiri user: menu CRM ganda, gaya jurnal kas/bank, centang rekonsiliasi
+
+Tiga temuan dari uji mandiri user (rating per halaman) yang diperbaiki di ronde ini:
+
+| # | Temuan | Akar masalah | Perbaikan |
+|---|---|---|---|
+| 1 | CRM punya **dua menu “Dashboard”** di sidebar | `modules.ts` masih mendaftarkan submodul `dashboard` untuk CRM, padahal halaman indeks modul sudah merender dasbor CRM yang sama (BS New 10 **tidak** punya submodul ini) | submodul `dashboard` dihapus dari daftar CRM; rute `crm/dashboard` **tetap** berfungsi lewat dispatcher (deep link lama tidak rusak). Sidebar kini: Dashboard, Leads, Pipeline, Contacts, Follow Ups, … (satu Dashboard) |
+| 2 | `Cash In Show`, `Cash Out`, `Fund Transfers Show`: **gaya blok jurnal hilang** | Old merender `<div>` polos + judul “Journal/Jurnal”; referensi membungkusnya dengan `rounded-xl border border-border p-3` dan judul **“Journal posting”** + catatan praktik terbaik | blok jurnal disamakan dengan referensi (bingkai, judul, catatan praktik terbaik) dan grid field detail diberi `text-sm` |
+| 3 | `Reconciliation` — **centang “OK” tidak berjalan** (Severe) | `toggle` hanya meng-invalidate query key `["cb-trx"]`, sedangkan tabel rekonsiliasi membaca `["cb-trx-recon", …]`. Invalidasi **ber-prefix tidak menjangkau key lain**, jadi centang tersimpan di DB tetapi tabel tidak pernah refetch → tampak “tidak jalan”. Referensi meng-invalidate keduanya | invalidasi `["cb-trx"]` **dan** `["cb-trx-recon"]`; nilai checkbox dari MySQL (0/1) dibuat boolean eksplisit + `aria-label` |
+
+Bukti: `tsc` 0 error, `build` sukses. Spec baru:
+`e2e/cash-bank-reconciliation.spec.ts` (centang → DB `is_reconciled=1` + `reconciled_at` terisi **dan** kotak centang di UI ikut berubah; dilepas → kembali 0/null) dan
+`e2e/cash-bank-detail-journal.spec.ts` (blok jurnal berbingkai + judul “Journal posting” + catatan praktik terbaik tampil di dialog detail).
+
+> **Pelajaran:** `queryClient.invalidateQueries({ queryKey: ["a"] })` **bukan** pencocokan awalan string — ia mencocokkan elemen key satu per satu, jadi key `["a-b", …]` TIDAK ikut ter-invalidate. Gejalanya menipu: mutasi sukses (200, DB berubah) tetapi UI tidak berubah sehingga terlihat seperti tombol “tidak berfungsi”. Cek query key yang **dibaca** komponen, bukan hanya yang ditulis mutasi.
+
 ### Ronde 34 (2026-10-12) — menutup sisa selisih pasca add-on aktif (paginasi, `#`, dasbor Omnix, tabel Omnix/HR)
 
 Lanjutan metode live-first dari daftar “Sisa selisih setelah add-on aktif” di
