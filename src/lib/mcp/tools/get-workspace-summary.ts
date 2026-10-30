@@ -5,7 +5,8 @@ import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 export default defineTool({
   name: "get_workspace_summary",
   title: "Workspace summary",
-  description: "Get a high-level summary of one workspace: tenant, package, status, and trial info.",
+  description:
+    "Get a high-level summary of one workspace: tenant, package, status, and trial info.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace UUID to summarize."),
   },
@@ -40,7 +41,12 @@ export default defineTool({
       tenant: tenant ?? null,
       package: pkg ?? null,
       trial_days_left: tenant?.trial_ends_at
-        ? Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        ? Math.max(
+            0,
+            Math.ceil(
+              (new Date(tenant.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+            ),
+          )
         : null,
     };
     return {

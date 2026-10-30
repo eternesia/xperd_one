@@ -605,13 +605,11 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
         ))}
       </div>
 
-      {visibleTemplates.length > 0 && (
-        <Card>
-          <CardContent className="p-0">
-            <PaginationBar p={pager} />
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-0">
+          <PaginationBar p={pager} />
+        </CardContent>
+      </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

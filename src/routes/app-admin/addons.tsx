@@ -19,89 +19,17 @@ import {
   adminSetTenantAddonStatus,
   adminUpsertTenantAddon,
 } from "@/lib/addons.functions";
-// #63 (BS New 3): review top up saldo Omnix (khusus Super Admin).
-import { listOmnixTopups, omnixReviewTopup, type OmnixTopupRow } from "@/lib/omnix.functions";
 import { useServerFn } from "@tanstack/react-start";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AddonTierCatalog } from "@/components/app/AddonTierCatalog";
+import { AddonOptionCatalog } from "@/components/app/AddonOptionCatalog";
+import { listAddonTiers } from "@/lib/addon-catalog.functions";
+import { TablePager, TableSearch, usePaged } from "@/components/app/admin-table";
 
 export const Route = createFileRoute("/app-admin/addons")({
   component: AddonsPage,
 });
-
-/**
- * #63: pengajuan top up saldo Omnix menunggu verifikasi Super Admin.
- * Saldo hanya bertambah saat disetujui (transaksi di `omnixReviewTopup`).
- */
-function OmnixTopupReview() {
-  const qc = useQueryClient();
-  const listFn = useServerFn(listOmnixTopups);
-  const reviewFn = useServerFn(omnixReviewTopup);
-  const { data: pending = [] } = useQuery<OmnixTopupRow[]>({
-    queryKey: ["omnix-topups"],
-    queryFn: async () => listFn({ data: {} }),
-  });
-
-  const review = useMutation({
-    mutationFn: (input: { ledgerId: string; approve: boolean }) => reviewFn({ data: input }),
-    onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ["omnix-topups"] });
-      toast.success(result.status === "posted" ? "Top up disetujui" : "Top up ditolak");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  if (pending.length === 0) return null;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Omnix · Top up menunggu verifikasi ({pending.length})</CardTitle>
-      </CardHeader>
-      <CardContent className="overflow-x-auto p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tenant</TableHead>
-              <TableHead className="text-right">Nominal</TableHead>
-              <TableHead>Catatan</TableHead>
-              <TableHead>Diajukan</TableHead>
-              <TableHead className="w-48" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pending.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{row.tenant_name ?? row.tenant_id}</TableCell>
-                <TableCell className="text-right">{fmtIDR(Number(row.amount))}</TableCell>
-                <TableCell className="text-xs">{row.note ?? "—"}</TableCell>
-                <TableCell className="text-xs">{new Date(row.created_at).toLocaleString("id-ID")}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="navy"
-                      disabled={review.isPending}
-                      onClick={() => review.mutate({ ledgerId: row.id, approve: true })}
-                    >
-                      Setujui
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={review.isPending}
-                      onClick={() => review.mutate({ ledgerId: row.id, approve: false })}
-                    >
-                      Tolak
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
 
 interface AddonForm {
   id?: string;
@@ -130,7 +58,8 @@ function AddonsPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<AddonForm>(EMPTY);
-  const [grant, setGrant] = useState({ tenant_id: "", addon_id: "", status: "active", ends_at: "" });
+  const [grant, setGrant] = useState({ tenant_id: "", addon_id: "", tier_id: "", status: "active", ends_at: "" });
+  const { data: tiers = [] } = useQuery({ queryKey: ["addon-tiers"], queryFn: () => listAddonTiers() });
 
   const { data: addons = [] } = useQuery({
     queryKey: ["admin-addons"],
@@ -160,6 +89,11 @@ function AddonsPage() {
       return (rows ?? []) as any[];
     },
   });
+
+  const subPg = usePaged(
+    subs,
+    (r) => `${tenants.find((t) => t.id === r.tenant_id)?.name ?? ""} ${addons.find((a) => a.id === r.addon_id)?.name ?? ""} ${r.status}`,
+  );
 
   const saveAddon = useMutation({
     mutationFn: async (v: AddonForm) => {
@@ -194,6 +128,8 @@ function AddonsPage() {
   const grantAddon = useMutation({
     mutationFn: async () => {
       const addon = addons.find((a) => a.id === grant.addon_id);
+      const tier = tiers.find((t) => t.id === grant.tier_id && t.addon_id === grant.addon_id && t.is_active);
+      if (grant.tier_id && !tier) throw new Error("Tier unavailable");
       await adminUpsertTenantAddon({
         data: {
           tenantId: grant.tenant_id,
@@ -201,13 +137,15 @@ function AddonsPage() {
           status: grant.status,
           startsAt: todayISO(),
           endsAt: grant.ends_at || undefined,
-          monthlyPrice: Number(addon?.monthly_price ?? 0),
+          tierId: tier?.id ?? null,
+          monthlyPrice: Number(tier?.monthly_price ?? addon?.monthly_price ?? 0),
         },
       });
     },
     onSuccess: () => {
       toast.success("Add-on assigned");
-      setGrant({ tenant_id: "", addon_id: "", status: "active", ends_at: "" });
+      setGrant({ tenant_id: "", addon_id: "", tier_id: "", status: "active", ends_at: "" });
+      qc.invalidateQueries({ queryKey: ["workspace-entitlements"] });
       qc.invalidateQueries({ queryKey: ["admin-tenant-addons"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -242,6 +180,28 @@ function AddonsPage() {
         </Button>
       </div>
 
+      <Tabs defaultValue="tiers" className="space-y-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="tiers">Tiers</TabsTrigger>
+          <TabsTrigger value="options">Optional extras</TabsTrigger>
+          <TabsTrigger value="catalog">Catalog</TabsTrigger>
+          <TabsTrigger value="tenants">Tenant add-ons</TabsTrigger>
+        </TabsList>
+        <TabsContent value="tiers">
+          <Card>
+            <CardContent className="pt-6">
+              <AddonTierCatalog addons={addons} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="options">
+          <Card>
+            <CardContent className="pt-6">
+              <AddonOptionCatalog />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="catalog">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -301,13 +261,15 @@ function AddonsPage() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
 
+        <TabsContent value="tenants">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Tenant activation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-6">
             <AdminField label="Tenant">
               <AdminSelect value={grant.tenant_id} onChange={(v) => setGrant({ ...grant, tenant_id: v })}>
                 <option value="">Select tenant</option>
@@ -319,13 +281,25 @@ function AddonsPage() {
               </AdminSelect>
             </AdminField>
             <AdminField label="Add-on">
-              <AdminSelect value={grant.addon_id} onChange={(v) => setGrant({ ...grant, addon_id: v })}>
+              <AdminSelect value={grant.addon_id} onChange={(v) => setGrant({ ...grant, addon_id: v, tier_id: "" })}>
                 <option value="">Select add-on</option>
                 {addons.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
+              </AdminSelect>
+            </AdminField>
+            <AdminField label="Tier">
+              <AdminSelect value={grant.tier_id} onChange={(v) => setGrant({ ...grant, tier_id: v })}>
+                <option value="">Legacy / flat</option>
+                {tiers
+                  .filter((t) => t.addon_id === grant.addon_id && t.is_active)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · {fmtIDR(t.monthly_price)}
+                    </option>
+                  ))}
               </AdminSelect>
             </AdminField>
             <AdminField label="Status">
@@ -350,6 +324,7 @@ function AddonsPage() {
             </div>
           </div>
 
+          <div className="mb-4 p-4"><TableSearch value={subPg.query} onChange={subPg.setQuery} placeholder="Cari tenant atau add-on…" /></div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -369,10 +344,15 @@ function AddonsPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {subs.map((s) => (
+              {subPg.rows.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{tenantName(s.tenant_id)}</TableCell>
-                  <TableCell>{addonName(s.addon_id)}</TableCell>
+                  <TableCell>
+                    {addonName(s.addon_id)}
+                    <p className="text-xs text-muted-foreground">
+                      {tiers.find((t) => t.id === s.tier_id)?.name ?? "Legacy / flat"}
+                    </p>
+                  </TableCell>
                   <TableCell className="text-right">{fmtIDR(Number(s.monthly_price))}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {s.starts_at} → {s.ends_at ?? "∞"}
@@ -395,10 +375,12 @@ function AddonsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...subPg} />
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
-      <OmnixTopupReview />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl">

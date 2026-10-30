@@ -42,6 +42,7 @@ import {
   type CbTransaction,
   type CbTrxType,
 } from "@/lib/cashbank";
+import { matchesCbAccount } from "@/lib/cashbank-filter";
 import { exportTablePdf, exportTableXlsx, type TableExport } from "@/lib/report-export";
 import { formatMoney as fmtMoney } from "@/lib/procurement";
 import { cn } from "@/lib/utils";
@@ -442,7 +443,7 @@ function AccountStatementDialog({
   const lines = useMemo(() => {
     if (!account) return [];
     const relevant = rows
-      .filter((r) => r.account_code === account.code || r.counterpart_account_code === account.code)
+      .filter((r) => matchesCbAccount(r, account.code))
       .sort((a, b) => a.trx_date.localeCompare(b.trx_date) || a.trx_no.localeCompare(b.trx_no));
     let balance = openingBalance;
     return relevant.map((r) => {
@@ -652,7 +653,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
   const filtered = useMemo(() => {
     const s = term.trim().toLowerCase();
     return rows.filter((r) => {
-      if (accountFilter !== ALL && r.account_code !== accountFilter && r.counterpart_account_code !== accountFilter)
+      if (accountFilter !== ALL && !matchesCbAccount(r, accountFilter))
         return false;
       if (!s) return true;
       return [r.trx_no, r.account_name, r.contact_name, r.reference, r.memo, r.category_account_name]
@@ -727,7 +728,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
     onSuccess: () => {
       toast.success(
         editing
-          ? t("Transaction corrected; the previous journal was reversed.", "Transaksi dikoreksi; jurnal lama dibalik.")
+          ? t("Transaction corrected with a reversing entry.", "Transaksi dikoreksi dengan jurnal pembalik.")
           : t("Transaction posted.", "Transaksi tercatat."),
       );
       setOpen(false);
@@ -748,7 +749,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
     },
     onSuccess: () => {
       toast.success(
-        t("Transaction cancelled; the journal was reversed.", "Transaksi dibatalkan; jurnalnya dibalik."),
+        t("Transaction cancelled and reversed.", "Transaksi dibatalkan dan dijurnal balik."),
       );
       setRemoving(null);
       setDetail(null);
@@ -961,8 +962,8 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
             <DialogDescription>
               {editing
                 ? t(
-                    "Saving reverses the old journal and posts a new one, so the correction stays auditable.",
-                    "Menyimpan akan membalik jurnal lama dan membuat jurnal baru, sehingga koreksi tetap terekam.",
+                    "The original journal is reversed and a corrected entry is posted, so the audit trail stays intact.",
+                    "Jurnal lama dibalik dan jurnal koreksi dibuat, sehingga jejak audit tetap utuh.",
                   )
                 : t(
                     "The journal entry is posted automatically when you save.",
@@ -1097,7 +1098,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
           <DialogHeader>
             <DialogTitle>{detail?.trx_no}</DialogTitle>
             <DialogDescription>
-              {t("Transaction detail and its automatic journal entry.", "Detail transaksi dan jurnal otomatisnya.")}
+              {t("Transaction detail and its ledger impact.", "Detail transaksi dan dampaknya di buku besar.")}
             </DialogDescription>
           </DialogHeader>
           {detail && (
@@ -1151,8 +1152,8 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
             <DialogTitle>{t("Cancel this transaction?", "Batalkan transaksi ini?")}</DialogTitle>
             <DialogDescription>
               {t(
-                "The transaction is removed from this list and its journal is reversed, so the ledger keeps the audit trail.",
-                "Transaksi dihapus dari daftar ini dan jurnalnya dibalik, sehingga buku besar tetap menyimpan jejak audit.",
+                "A reversing journal entry is posted first, so the ledger balances stay correct and the history is preserved.",
+                "Jurnal pembalik dibuat lebih dulu, sehingga saldo buku besar tetap benar dan riwayat tersimpan.",
               )}
             </DialogDescription>
           </DialogHeader>
@@ -1227,7 +1228,7 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
   const scoped = useMemo(
     () =>
       rows.filter(
-        (r) => accountCode === ALL || r.account_code === accountCode || r.counterpart_account_code === accountCode,
+        (r) => accountCode === ALL || matchesCbAccount(r, accountCode),
       ),
     [rows, accountCode],
   );
@@ -1411,7 +1412,7 @@ function ReportsView({ workspaceId }: { workspaceId: string }) {
   const filtered = useMemo(() => {
     const s = term.trim().toLowerCase();
     return rows.filter((r) => {
-      if (accountFilter !== ALL && r.account_code !== accountFilter && r.counterpart_account_code !== accountFilter)
+      if (accountFilter !== ALL && !matchesCbAccount(r, accountFilter))
         return false;
       if (typeFilter !== ALL && r.trx_type !== typeFilter) return false;
       if (statusFilter === "reconciled" && !r.is_reconciled) return false;

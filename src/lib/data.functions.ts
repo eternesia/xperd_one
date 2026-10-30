@@ -46,6 +46,10 @@ const WORKSPACE_TABLES = new Set([
   // XPro (migration 016, Ronde 33) — modul add-on proyek & kontrak dari BS New 10.
   "prj_projects", "prj_milestones", "prj_budget_lines", "prj_billings",
   "prj_members", "prj_tasks", "prj_expenses", "prj_documents", "prj_progress_reports",
+  // Ronde 36 (migration 017) — kolom Kanban XPro per proyek (BS New 11).
+  "prj_board_columns",
+  // Ronde 38 (migration 018) — Qalling Ideas & Media Library (BS New 11).
+  "crm_idea_columns", "crm_ideas", "crm_media",
 ]);
 
 // Per-table column whitelist (used to build SQL identifiers safely).
@@ -103,10 +107,14 @@ const COLS: Record<string, string[]> = {
   prj_tasks: ["id", "workspace_id", "project_id", "milestone_id", "name", "assignee", "start_date", "due_date", "progress_pct", "status", "created_at", "updated_at"],
   prj_expenses: ["id", "workspace_id", "project_id", "expense_date", "category", "description", "vendor", "amount", "reference", "created_at", "updated_at"],
   prj_documents: ["id", "workspace_id", "project_id", "name", "category", "file_path", "file_size", "mime_type", "created_at", "updated_at"],
+  prj_board_columns: ["id", "workspace_id", "project_id", "key", "name", "color", "is_done", "sort_order", "created_at", "updated_at"],
+  crm_idea_columns: ["id", "workspace_id", "name", "position", "created_at", "updated_at"],
+  crm_ideas: ["id", "workspace_id", "column_id", "title", "body", "created_at", "updated_at"],
+  crm_media: ["id", "workspace_id", "name", "file_path", "mime_type", "size_bytes", "created_by", "created_at", "updated_at"],
   prj_progress_reports: ["id", "workspace_id", "project_id", "report_no", "report_date", "period_label", "progress_pct", "work_done", "issues", "next_plan", "photos", "status", "created_at", "updated_at"],
   crm_tender_template_versions: ["id", "workspace_id", "template_id", "version", "template_path", "template_name", "size", "created_at"],
   crm_social_accounts: ["id", "workspace_id", "platform", "account_name", "handle", "profile_url", "webhook_url", "status", "external_id", "source", "created_at", "updated_at"],
-  crm_scheduled_posts: ["id", "workspace_id", "title", "caption", "media_url", "account_ids", "scheduled_at", "status", "last_error", "published_at", "results", "created_at", "updated_at"],
+  crm_scheduled_posts: ["id", "workspace_id", "title", "caption", "media_url", "media_paths", "account_ids", "scheduled_at", "status", "last_error", "published_at", "results", "external_id", "source", "permalinks", "created_at", "updated_at"],
   omnix_stores: ["id", "workspace_id", "channel", "store_name", "shop_ref", "status", "last_sync_at", "created_at", "updated_at"],
   omnix_orders: ["id", "workspace_id", "store_id", "channel", "order_no", "buyer_name", "order_date", "status", "items", "gross_amount", "marketplace_fee", "net_amount", "omnix_fee", "fee_charged", "courier", "tracking_no", "packing_status", "packed_at", "picked_up_at", "completed_at", "created_at", "updated_at"],
   crm_broadcasts: ["id", "workspace_id", "name", "channel", "message", "status", "scheduled_at", "sent_at", "total_recipients", "sent_count", "failed_count", "created_by", "created_at", "updated_at"],
@@ -148,6 +156,9 @@ export interface ListRowsInput {
   limit?: number;
   offset?: number;
 }
+
+/** Tabel Qalling yang kuotanya ditegakkan saat tulis (padanan trigger `enforce_qalling_quota`). */
+const QALLING_QUOTA_TABLES = new Set(["crm_social_accounts", "crm_media", "crm_scheduled_posts"]);
 
 export const listWorkspaceRows = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
@@ -369,6 +380,10 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
     if (data.id) {
       const cols = cleanColumns(table, Object.keys(data.data ?? {}), new Set(["id", "workspace_id"]));
       if (!cols.length) throw new Error("No valid columns to update");
+      if (QALLING_QUOTA_TABLES.has(table)) {
+        const { enforceWorkspaceWriteQuota } = await import("@/lib/qalling-quota.server");
+        await enforceWorkspaceWriteQuota(table, data.workspaceId, data.data ?? {}, data.id);
+      }
       const before = AUDITED_TABLE_SET.has(table)
         ? ((await executeOne<Record<string, unknown>>(
             `SELECT * FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`,
@@ -392,6 +407,10 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
       payload[c] = data.data[c];
     }
     const cols = Object.keys(payload);
+    if (QALLING_QUOTA_TABLES.has(table)) {
+      const { enforceWorkspaceWriteQuota } = await import("@/lib/qalling-quota.server");
+      await enforceWorkspaceWriteQuota(table, data.workspaceId, payload);
+    }
     await execute(
       `INSERT INTO \`${table}\` (\`${cols.join("`,`")}\`) VALUES (${cols.map(() => "?").join(", ")})`,
       cols.map((c) => payload[c]),
@@ -410,6 +429,8 @@ export interface DeleteRowInput {
    * removed, even if the client-side guard is bypassed.
    */
   requireStatus?: string;
+  /** Status yang TIDAK boleh dihapus (mis. penawaran `cancelled`). */
+  forbidStatus?: string;
 }
 
 export const deleteWorkspaceRow = createServerFn({ method: "POST" })
@@ -426,6 +447,15 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
           [data.id, data.workspaceId],
         )) ?? null)
       : null;
+    if (data.forbidStatus) {
+      const r = await result(
+        `DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ? AND \`status\` <> ?`,
+        [data.id, data.workspaceId, data.forbidStatus],
+      );
+      if (r.affectedRows === 0) throw new Error(`Rows with status ${data.forbidStatus} cannot be deleted.`);
+      if (before) await logAudit(execute, context, table, "DELETE", before, null);
+      return { ok: true };
+    }
     const res = data.requireStatus
       ? await result(`DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ? AND \`status\` = ?`, [
           data.id,
@@ -567,6 +597,11 @@ export const upsertWorkspaceRows = createServerFn({ method: "POST" })
       };
       for (const c of cleanColumns(table, Object.keys(row), omit)) payload[c] = row[c];
       const cols = Object.keys(payload);
+      if (QALLING_QUOTA_TABLES.has(table)) {
+        const { enforceWorkspaceWriteQuota } = await import("@/lib/qalling-quota.server");
+        const exists = await executeOne(`SELECT 1 AS ok FROM \`${table}\` WHERE id = ?`, [payload.id]);
+        await enforceWorkspaceWriteQuota(table, data.workspaceId, payload, exists ? String(payload.id) : null);
+      }
       const before = audited
         ? ((await executeOne<Record<string, unknown>>(
             `SELECT * FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`,

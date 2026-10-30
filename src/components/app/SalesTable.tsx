@@ -3,6 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
+  Copy,
+  RefreshCw,
   ChevronRight,
   Eye,
   FileInput,
@@ -42,7 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
+import { countWorkspaceRows, deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
 import { isAmountSettlement } from "@/lib/sales";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -112,6 +114,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
   const [open, setOpen] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingStatus, setEditingStatus] = useState<PrcStatus | null>(null);
   const [sourceId, setSourceId] = useState<string>("");
   const [sourceLines, setSourceLines] = useState<SlsLine[]>([]);
   const [sourceOpenTotal, setSourceOpenTotal] = useState(0);
@@ -280,6 +283,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
     setSourceOpenTotal(0);
     setIsDraft(false);
     setEditingId(null);
+    setEditingStatus(null);
     setHeader({
       doc_number: "",
       doc_date: new Date().toISOString().slice(0, 10),
@@ -299,7 +303,14 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
 
   const create = useMutation({
     mutationFn: async () => {
-      const docStatus: PrcStatus = isDraft ? "draft" : entity.openStatus;
+      // Mengedit penawaran yang sudah dikirim mempertahankan statusnya — penawaran tetap bisa diedit
+      // walau SO sudah dibuat darinya (New 11).
+      const docStatus: PrcStatus =
+        editingId && entity.docType === "quotation"
+          ? (editingStatus ?? entity.openStatus)
+          : isDraft
+            ? "draft"
+            : entity.openStatus;
       const sourceDoc = sourceDocs.find((d) => d.id === sourceId) ?? null;
       const doc_number = header.doc_number.trim() || nextDocNumber(entity.prefix, total + 1);
 
@@ -609,6 +620,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
       }
 
       setEditingId(doc.id);
+      setEditingStatus(doc.status);
       setIsDraft(true);
       setSourceId(doc.source_document_id ?? "");
       setSourceLines(upstreamLines);
@@ -651,16 +663,193 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
 
   const remove = useMutation({
     mutationFn: async (doc: SlsDoc) => {
-      // #10 (BS New): hanya draft yang boleh dihapus — dijaga lagi di server.
-      if (doc.status !== "draft") {
-        throw new Error(t("Only draft documents can be deleted.", "Hanya dokumen berstatus Draf yang dapat dihapus."));
+      // Penawaran tidak punya jurnal/mutasi stok → boleh dihapus di tahap mana pun kecuali dibatalkan (New 11).
+      const isQuotation = entity.docType === "quotation";
+      if (doc.status === "cancelled" || (!isQuotation && doc.status !== "draft")) {
+        throw new Error(
+          isQuotation
+            ? t("Cancelled quotations cannot be deleted.", "Penawaran yang dibatalkan tidak dapat dihapus.")
+            : t("Only draft documents can be deleted.", "Hanya dokumen berstatus Draf yang dapat dihapus."),
+        );
       }
-      await deleteWorkspaceRow({
-        data: { table: "sls_documents", workspaceId, id: doc.id, requireStatus: "draft" },
-      });
+      try {
+        await deleteWorkspaceRow({
+          data: isQuotation
+            ? { table: "sls_documents", workspaceId, id: doc.id, forbidStatus: "cancelled" }
+            : { table: "sls_documents", workspaceId, id: doc.id, requireStatus: "draft" },
+        });
+      } catch {
+        throw new Error(t("This document is no longer a draft and cannot be deleted.", "Dokumen ini sudah bukan Draf dan tidak dapat dihapus."));
+      }
     },
     onSuccess: () => {
       toast.success(t("Deleted", "Terhapus"));
+      void qc.invalidateQueries({ queryKey: ["sls"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const copyLinesOf = async (documentIds: string[]) => {
+    const r = await listWorkspaceRows({
+      data: { table: "sls_document_lines", workspaceId, inFilters: { document_id: documentIds }, orderBy: "line_no", orderDir: "asc", limit: 5000 },
+    });
+    return (r?.rows ?? []) as unknown as SlsLine[];
+  };
+  const cloneLine = (l: SlsLine, i: number) => ({
+    line_no: i + 1,
+    item_code: l.item_code,
+    description: l.description,
+    qty: l.qty,
+    uom_code: l.uom_code,
+    unit_price: l.unit_price,
+    discount: l.discount,
+    tax_rate: l.tax_rate,
+    tax_code: (l as unknown as { tax_code?: string | null }).tax_code ?? null,
+    line_total: l.line_total,
+  });
+
+  // Duplikat penawaran sebagai draf baru dengan nomor dokumen baru.
+  const copyQuotation = useMutation({
+    mutationFn: async (doc: SlsDoc) => {
+      const srcLines = await copyLinesOf([doc.id]);
+      const raw = (
+        (await listWorkspaceRows({ data: { table: "sls_documents", workspaceId, filters: { id: doc.id }, limit: 1 } }))?.rows ?? []
+      )[0] as Record<string, unknown> | undefined;
+      const created = await saveWorkspaceRow({
+        data: {
+          table: "sls_documents",
+          workspaceId,
+          data: {
+            doc_type: doc.doc_type,
+            doc_number: nextDocNumber(entity.prefix, total + 1),
+            doc_date: new Date().toISOString().slice(0, 10),
+            due_date: doc.due_date,
+            customer_code: doc.customer_code,
+            customer_name: doc.customer_name,
+            warehouse_code: doc.warehouse_code,
+            reference: doc.reference,
+            currency: doc.currency,
+            exchange_rate: doc.exchange_rate ?? 1,
+            status: "draft",
+            subtotal: doc.subtotal,
+            discount_amount: doc.discount_amount,
+            tax_amount: doc.tax_amount,
+            withholding_amount: (raw?.withholding_amount as number) ?? 0,
+            total: doc.total,
+            notes: doc.notes,
+          },
+        },
+      });
+      const newId = created.id;
+      if (srcLines.length)
+        await upsertWorkspaceRows({
+          data: { table: "sls_document_lines", workspaceId, rows: srcLines.map((l, i) => ({ document_id: newId, ...cloneLine(l, i) })) },
+        });
+    },
+    onSuccess: () => {
+      toast.success(t("Quotation duplicated as a new draft.", "Penawaran diduplikat sebagai draf baru."));
+      void qc.invalidateQueries({ queryKey: ["sls"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Tagihan SaaS bulanan: salin baris SaaS dari faktur AR terakhir tiap pelanggan menjadi faktur DRAF bulan ini.
+  // Tidak ada jurnal di sini — pengguna meninjau draf lalu mengonfirmasinya lewat alur AR biasa.
+  const generateSaas = useMutation({
+    mutationFn: async () => {
+      const now = new Date();
+      const period = now.toISOString().slice(0, 7);
+      const tag = `SAAS-${period}`;
+      const lookback = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10);
+      const monthStart = `${period}-01`;
+
+      const items = ((await listWorkspaceRows({ data: { table: "md_items", workspaceId, limit: 5000 } }))?.rows ?? []) as {
+        code: string;
+        item_type: string | null;
+        category_code: string | null;
+        billing_cycle: string | null;
+      }[];
+      const saasCodes = new Set(
+        items
+          .filter(
+            (it) =>
+              (it.item_type === "subscription" || it.item_type === "software_license" || /saas/i.test(it.category_code ?? "")) &&
+              (!it.billing_cycle || /month|bulan/i.test(it.billing_cycle)),
+          )
+          .map((it) => it.code),
+      );
+      if (!saasCodes.size) throw new Error(t("No SaaS/subscription items found in Master Item.", "Belum ada item SaaS/langganan di Master Item."));
+
+      const docs = ((
+        await listWorkspaceRows({
+          data: { table: "sls_documents", workspaceId, filters: { doc_type: "ar_invoice" }, ranges: { doc_date: { gte: lookback } }, orderBy: "doc_date", orderDir: "desc", limit: 5000 },
+        })
+      )?.rows ?? []) as unknown as (SlsDoc & { bank_account_code?: string | null; bank_account_name?: string | null })[];
+      const all = docs.filter((d) => d.status !== "cancelled");
+      const done = new Set(all.filter((d) => d.reference === tag || (d.notes ?? "").includes(tag)).map((d) => d.customer_code));
+      const latest = new Map<string, (typeof all)[number]>();
+      for (const d of all) {
+        if (!d.customer_code || d.doc_date >= monthStart || done.has(d.customer_code) || latest.has(d.customer_code)) continue;
+        latest.set(d.customer_code, d);
+      }
+      if (!latest.size) return 0;
+
+      const srcLines = await copyLinesOf([...latest.values()].map((d) => d.id));
+      const count = (await countWorkspaceRows({ data: { table: "sls_documents", workspaceId, filters: { doc_type: "ar_invoice" } } })).count;
+      let seq = count + 1;
+      const due = new Date(now.getTime() + 14 * 86_400_000).toISOString().slice(0, 10);
+      let created = 0;
+
+      for (const src of latest.values()) {
+        const ls = srcLines.filter((l) => (l as unknown as { document_id: string }).document_id === src.id && l.item_code && saasCodes.has(l.item_code));
+        if (!ls.length) continue;
+        let subtotal = 0, discount = 0, tax = 0, withholding = 0;
+        for (const l of ls) {
+          const c = computeLine({ qty: Number(l.qty) || 0, unit_price: Number(l.unit_price) || 0, discount: Number(l.discount) || 0, tax_rate: Number(l.tax_rate) || 0 });
+          subtotal += c.gross;
+          discount += Number(l.discount) || 0;
+          if (isWithholdingTax(taxByCode.get((l as unknown as { tax_code?: string }).tax_code ?? ""))) withholding += c.tax;
+          else tax += c.tax;
+        }
+        const doc = await saveWorkspaceRow({
+          data: {
+            table: "sls_documents",
+            workspaceId,
+            data: {
+              doc_type: "ar_invoice",
+              doc_number: nextDocNumber(entity.prefix, seq++),
+              doc_date: now.toISOString().slice(0, 10),
+              due_date: due,
+              customer_code: src.customer_code,
+              customer_name: src.customer_name,
+              reference: tag,
+              currency: src.currency,
+              exchange_rate: src.exchange_rate ?? 1,
+              bank_account_code: src.bank_account_code ?? null,
+              bank_account_name: src.bank_account_name ?? null,
+              status: "draft",
+              subtotal,
+              discount_amount: discount,
+              tax_amount: tax,
+              withholding_amount: withholding,
+              total: subtotal - discount + tax - withholding,
+              notes: t(`Monthly SaaS billing ${period}`, `Tagihan SaaS bulanan ${period}`),
+            },
+          },
+        });
+        await upsertWorkspaceRows({
+          data: { table: "sls_document_lines", workspaceId, rows: ls.map((l, i) => ({ document_id: doc.id, ...cloneLine(l, i) })) },
+        });
+        created++;
+      }
+      return created;
+    },
+    onSuccess: (n) => {
+      toast.success(
+        n
+          ? t(`${n} draft SaaS invoice(s) created for this month.`, `${n} draf faktur SaaS bulan ini dibuat.`)
+          : t("All SaaS customers are already billed this month.", "Semua pelanggan SaaS sudah ditagih bulan ini."),
+      );
       void qc.invalidateQueries({ queryKey: ["sls"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -680,15 +869,29 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             {total} {t("documents", "dokumen")}
           </p>
         </div>
-        <Button
-          variant="navy"
-          onClick={() => {
-            resetForm();
-            setOpen(true);
-          }}
-        >
-          <Plus /> {t("Create New", "Buat Baru")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {entity.docType === "ar_invoice" && (
+            <Button
+              variant="outline"
+              disabled={generateSaas.isPending}
+              onClick={() => {
+                if (confirm(t("Generate this month's SaaS invoices as drafts?", "Buat faktur SaaS bulan ini sebagai draf?"))) generateSaas.mutate();
+              }}
+            >
+              {generateSaas.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {t("Generate SaaS Monthly", "Generate SaaS Bulanan")}
+            </Button>
+          )}
+          <Button
+            variant="navy"
+            onClick={() => {
+              resetForm();
+              setOpen(true);
+            }}
+          >
+            <Plus /> {t("Create New", "Buat Baru")}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3">
@@ -817,7 +1020,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                   </TableCell>
                 )}
                 <TableCell className="text-right">
-                  {row.status === "draft" && (
+                  {(row.status === "draft" || (entity.docType === "quotation" && row.status !== "cancelled")) && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -825,6 +1028,19 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                       onClick={() => void editDraft(row)}
                     >
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {entity.docType === "quotation" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Duplicate quotation", "Duplikat penawaran")}
+                      disabled={copyQuotation.isPending}
+                      onClick={() => {
+                        if (confirm(t(`Duplicate ${row.doc_number} as a new draft?`, `Duplikat ${row.doc_number} sebagai draf baru?`))) copyQuotation.mutate(row);
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
                     </Button>
                   )}
                   <Button asChild variant="ghost" size="icon" aria-label={t("Preview", "Pratinjau")}>
@@ -855,7 +1071,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                       <Printer className="h-4 w-4" />
                     </Link>
                   </Button>
-                  {row.status === "draft" && (
+                  {(row.status === "draft" || (entity.docType === "quotation" && row.status !== "cancelled")) && (
                     <Button
                       variant="ghost"
                       size="icon"

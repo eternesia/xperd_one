@@ -15,6 +15,8 @@ import { adminList, adminSave } from "@/lib/platform.functions";
 import { AdminSelect } from "@/components/app/admin-ui";
 import { useSession } from "@/hooks/use-session";
 
+import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/tickets")({
   component: TicketsPage,
 });
@@ -85,6 +87,8 @@ function TicketsPage() {
   const active = tickets.find((t) => t.id === activeId) ?? null;
   const openCount = tickets.filter((t) => t.status === "open").length;
 
+  const pg = usePaged(tickets, rowText);
+
   return (
     <div className="space-y-6">
       <header>
@@ -104,6 +108,7 @@ function TicketsPage() {
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
+          <div className="border-b border-border p-4"><TableSearch value={pg.query} onChange={pg.setQuery} /></div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -121,7 +126,7 @@ function TicketsPage() {
               {!isLoading && tickets.length === 0 && (
                 <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">No tickets yet.</TableCell></TableRow>
               )}
-              {tickets.map((t) => (
+              {pg.rows.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>
                     <p className="font-medium text-navy">{t.ticket_no}</p>
@@ -146,6 +151,7 @@ function TicketsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

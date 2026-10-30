@@ -76,6 +76,10 @@ services:
       # Reach the compose `mysql` service over the internal network (overrides .env)
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
+      # Uji e2e: pengiriman email lewat penyedia API diarahkan ke server tiruan milik spec (host:4599).
+      EMAIL_API_BASE_BREVO: "http://host.docker.internal:4599"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     depends_on:

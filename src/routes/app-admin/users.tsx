@@ -23,6 +23,8 @@ import {
   type AdminUserRow,
 } from "@/lib/admin-users.functions";
 
+import { TablePager, usePaged } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/users")({
   component: AdminUsersPage,
 });
@@ -111,6 +113,8 @@ function AdminUsersPage() {
     );
   }, [usersQ.data, search]);
 
+  const pg = usePaged(rows);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -160,7 +164,7 @@ function AdminUsersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((u) => {
+                pg.rows.map((u) => {
                   const isAdmin = u.platformRoles.includes("admin");
                   return (
                     <TableRow key={u.userId}>
@@ -219,6 +223,7 @@ function AdminUsersPage() {
               )}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

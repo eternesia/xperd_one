@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   redirect,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -13,6 +14,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { VisitorTracker } from "@/components/VisitorTracker";
 import { I18nProvider } from "@/lib/i18n";
 import { isQallingHost, isQallingPath } from "@/lib/qalling";
 
@@ -114,7 +116,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Poppins:wght@300;400;500;600;700;800&display=swap",
       },
       {
         rel: "stylesheet",
@@ -129,12 +131,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // Permukaan Qalling punya identitas sendiri (tema biru, font Manrope, favicon) — sama seperti New 11.
+  const isQalling = useRouterState({ select: (s) => s.location.pathname.startsWith("/qalling") });
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        <link rel="icon" type="image/png" href={isQalling ? "/qalling-favicon.png" : "/xperd-favicon.png"} />
       </head>
-      <body>
+      <body className={isQalling ? "qalling-theme" : undefined}>
         {children}
         <Scripts />
       </body>
@@ -148,6 +153,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
+        <VisitorTracker />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
         <Toaster richColors position="top-center" />

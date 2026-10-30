@@ -47,6 +47,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'customer') ON DUPLICATE KEY UPDATE role = VALUES(role)",
         [uuid(), newUserId],
       );
+      const { assertUserQuota } = await import("@/lib/qalling-quota.server");
+      await assertUserQuota(data.workspaceId, newUserId);
       await conn.execute(
         "INSERT INTO workspace_members (id, workspace_id, user_id, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE role = VALUES(role)",
         [uuid(), data.workspaceId, newUserId, data.role],
@@ -259,6 +261,9 @@ export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
     );
     if (Number(belongs?.c ?? 0) === 0) throw new Error("That user does not belong to this organisation");
 
+    const { assertUserQuota } = await import("@/lib/qalling-quota.server");
+
+    await assertUserQuota(data.workspaceId, data.targetUserId);
     await execute(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role)
        VALUES (?, ?, ?, ?)
@@ -425,6 +430,9 @@ export const setWorkspaceAccess = createServerFn({ method: "POST" })
       return { ok: true };
     }
 
+    const { assertUserQuota } = await import("@/lib/qalling-quota.server");
+
+    await assertUserQuota(data.targetWorkspaceId, data.targetUserId);
     await execute(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role)
        VALUES (?, ?, ?, ?)

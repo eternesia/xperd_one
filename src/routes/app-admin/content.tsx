@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
+import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
 
 export const Route = createFileRoute("/app-admin/content")({
   component: ContentPage,
@@ -101,6 +102,10 @@ function ContentPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [site, setSite] = useState<"xperd" | "qalling">("xperd");
+  const siteItems = items.filter((c) => (site === "qalling") === c.section.startsWith("qalling."));
+  const pg = usePaged(siteItems, rowText);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -113,7 +118,7 @@ function ContentPage() {
         <Button
           variant="gold"
           onClick={() => {
-            setForm(EMPTY);
+            setForm({ ...EMPTY, section: site === "qalling" ? "qalling.home" : "home" });
             setOpen(true);
           }}
         >
@@ -122,6 +127,19 @@ function ContentPage() {
       </header>
 
       <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+          <div className="flex gap-2">
+            {(["xperd", "qalling"] as const).map((k) => (
+              <Button key={k} size="sm" variant={site === k ? "gold" : "outline"} onClick={() => setSite(k)}>
+                {k === "xperd" ? "Website XPERD" : "Website Qalling"} ({items.filter((c) => (k === "qalling") === c.section.startsWith("qalling.")).length})
+              </Button>
+            ))}
+          </div>
+          <TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari konten…" />
+        </div>
+        <p className="px-4 pt-3 text-xs text-muted-foreground">
+          Konten Qalling memakai awalan section <code>qalling.</code> (mis. qalling.hero, qalling.kontak).
+        </p>
         <CardContent className="overflow-x-auto p-0">
           <Table>
             <TableHeader>
@@ -139,12 +157,12 @@ function ContentPage() {
                   <TableCell colSpan={5} className="text-sm text-muted-foreground">Loading…</TableCell>
                 </TableRow>
               )}
-              {!isLoading && items.length === 0 && (
+              {!isLoading && siteItems.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-sm text-muted-foreground">No content entries yet.</TableCell>
                 </TableRow>
               )}
-              {items.map((c) => (
+              {pg.rows.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell>
                     <p className="font-medium text-navy">{c.section}</p>
@@ -202,6 +220,7 @@ function ContentPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

@@ -27,7 +27,12 @@ export default defineTool({
       [workspace_id, String(limit), String(offset)],
     );
     return {
-      content: [{ type: "text", text: JSON.stringify({ items: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ items: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2),
+        },
+      ],
       structuredContent: { items: rows ?? [], total: Number(countRow?.c ?? 0) },
     };
   },

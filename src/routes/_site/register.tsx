@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionHeading } from "@/components/site/Section";
 import { getPublicSignupPackages, submitRegistration } from "@/lib/setup.functions";
+import { startSignup, verifySignupOtp, resendSignupOtp } from "@/lib/signup.functions";
 import { formatIDR, INDUSTRIES } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -164,6 +166,14 @@ function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [regId, setRegId] = useState<string | null>(null);
+  const [signupEmail, setSignupEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
+  const [activated, setActivated] = useState<string | null>(null);
+  const startSignupFn = useServerFn(startSignup);
+  const verifyFn = useServerFn(verifySignupOtp);
+  const resendFn = useServerFn(resendSignupOtp);
 
   const { data: packages } = useQuery({
     queryKey: ["signup-packages"],
@@ -187,8 +197,7 @@ function RegisterPage() {
     setErrors({});
     setSubmitting(true);
     const values = parsed.data;
-    try {
-      await submitRegistration({
+    const payload = {
         data: {
           company_name: values.company_name,
           contact_name: values.contact_name,
@@ -201,18 +210,106 @@ function RegisterPage() {
           package_code: packageCode,
           billing_cycle: billing,
         },
-      });
-      setSubmitting(false);
+    };
+    try {
+      // Paket swalayan → OTP email; paket lain (sales) tetap masuk antrean pendaftaran.
+      if (["one-starter", "one-professional"].includes(packageCode)) {
+        const res = await startSignupFn(payload);
+        setSignupEmail(values.email);
+        setSubmitting(false);
+        if (res.otpSent) {
+          setRegId(res.registrationId);
+          toast.success(lang === "id" ? "Kode OTP dikirim ke email Anda." : "OTP code sent to your email.");
+          return;
+        }
+      } else {
+        await submitRegistration(payload);
+        setSubmitting(false);
+      }
     } catch (err) {
       setSubmitting(false);
-      toast.error(
-        err instanceof Error && err.message.includes("duplicate") ? c.toastSubdomainTaken : c.toastSubmitFailed,
-      );
+      const msg = err instanceof Error ? err.message : "";
+      toast.error(msg.includes("duplicate") ? c.toastSubdomainTaken : msg || c.toastSubmitFailed);
       return;
     }
 
     setDone(true);
     toast.success(c.toastSuccess);
+  }
+
+  async function handleVerify(event: React.FormEvent) {
+    event.preventDefault();
+    if (!regId) return;
+    setSubmitting(true);
+    try {
+      const r = await verifyFn({ data: { registrationId: regId, code: otp.trim(), password } });
+      setActivated(r.trialEndsAt);
+      toast.success(lang === "id" ? "Akun aktif! Silakan masuk." : "Account active! Please sign in.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!regId) return;
+    try {
+      await resendFn({ data: { registrationId: regId } });
+      toast.success(lang === "id" ? "Kode baru dikirim." : "New code sent.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  if (activated) {
+    return (
+      <Section className="py-24">
+        <div className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-10 text-center">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-gold" />
+          <h1 className="mt-6 text-2xl text-navy">{lang === "id" ? "Akun trial Anda aktif" : "Your trial account is active"}</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {lang === "id"
+              ? `Trial berlaku hingga ${activated}. Masuk dengan ${signupEmail}.`
+              : `Trial until ${activated}. Sign in with ${signupEmail}.`}
+          </p>
+          <Button className="mt-8" variant="navy" onClick={() => navigate({ to: "/auth", search: {} as never })}>
+            {lang === "id" ? "Masuk sekarang" : "Sign in now"}
+          </Button>
+        </div>
+      </Section>
+    );
+  }
+
+  if (regId) {
+    return (
+      <Section className="py-24">
+        <form onSubmit={handleVerify} className="mx-auto max-w-md space-y-5 rounded-2xl border border-border bg-card p-8">
+          <ShieldCheck className="h-10 w-10 text-gold" />
+          <h1 className="text-2xl text-navy">{lang === "id" ? "Verifikasi email" : "Verify your email"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {lang === "id"
+              ? `Masukkan 6 digit kode yang kami kirim ke ${signupEmail}, lalu buat kata sandi.`
+              : `Enter the 6-digit code sent to ${signupEmail}, then create a password.`}
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="otp">{lang === "id" ? "Kode OTP" : "OTP code"}</Label>
+            <Input id="otp" inputMode="numeric" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))} className="text-center text-2xl tracking-[0.5em]" required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pw">{lang === "id" ? "Kata sandi (min. 8 karakter)" : "Password (min. 8 chars)"}</Label>
+            <Input id="pw" type="password" autoComplete="new-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          <Button type="submit" variant="navy" className="w-full" disabled={submitting || otp.length !== 6}>
+            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {lang === "id" ? "Aktifkan akun" : "Activate account"}
+          </Button>
+          <button type="button" onClick={handleResend} className="w-full text-xs text-muted-foreground hover:text-gold">
+            {lang === "id" ? "Tidak menerima kode? Kirim ulang" : "Didn't get it? Resend code"}
+          </button>
+        </form>
+      </Section>
+    );
   }
 
   if (done) {

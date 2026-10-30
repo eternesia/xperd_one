@@ -12,25 +12,48 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Link2, Loader2, Pencil, Plus, Receipt, Trash2, Wallet } from "lucide-react";
+import { CheckCircle2, Package, Plus, RefreshCw, Store, Trash2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
-import { PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { WalletPanel } from "@/components/app/WalletPanel";
+import {
+  PaginationBar,
+  SearchInput,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
+import {
+  deleteWorkspaceRow,
+  listWorkspaceRows,
+  saveWorkspaceRow,
+  upsertWorkspaceRows,
+} from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import {
   OMNIX_BUNDLE,
   OMNIX_CHANNELS,
   OMNIX_FEE_PER_ORDER,
-  OMNIX_MIN_TOPUP,
   OMNIX_ORDER_STATUS,
   omnixChannelName,
   packLabel,
@@ -40,7 +63,6 @@ import {
   listOmnixChannelSettings,
   listOmnixLedger,
   omnixBuyBundle,
-  omnixRequestTopup,
   omnixSetOrderStatus,
   type OmnixLedgerRow,
   type OmnixWalletView,
@@ -86,7 +108,15 @@ function useT() {
   return { lang, t: (en: string, id: string) => (lang === "id" ? id : en) };
 }
 
-function Header({ title, desc, action }: { title: string; desc?: string; action?: React.ReactNode }) {
+function Header({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -104,7 +134,13 @@ function useStores(workspaceId: string) {
     queryKey: ["omnix-stores", workspaceId],
     queryFn: async () => {
       const data = await listWorkspaceRows({
-        data: { table: "omnix_stores", workspaceId, orderBy: "created_at", orderDir: "asc", limit: 500 },
+        data: {
+          table: "omnix_stores",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "asc",
+          limit: 500,
+        },
       });
       return (data?.rows ?? []) as unknown as OmnixStore[];
     },
@@ -116,7 +152,13 @@ function useOrders(workspaceId: string) {
     queryKey: ["omnix-orders", workspaceId],
     queryFn: async () => {
       const data = await listWorkspaceRows({
-        data: { table: "omnix_orders", workspaceId, orderBy: "order_date", orderDir: "desc", limit: 2000 },
+        data: {
+          table: "omnix_orders",
+          workspaceId,
+          orderBy: "order_date",
+          orderDir: "desc",
+          limit: 2000,
+        },
       });
       return (data?.rows ?? []) as unknown as OmnixOrder[];
     },
@@ -124,150 +166,108 @@ function useOrders(workspaceId: string) {
 }
 
 /* ------------------------------- Koneksi toko ------------------------------- */
+// Padanan New 11 (xperd-new.lovable.app): kartu toko, tanpa ubah — hanya tambah & hapus.
 
 function StoresView({ workspaceId }: { workspaceId: string }) {
-  const { lang, t } = useT();
+  const { t } = useT();
   const qc = useQueryClient();
   const { data: stores = [] } = useStores(workspaceId);
   const settingsFn = useServerFn(listOmnixChannelSettings);
-  const { data: settings = [] } = useQuery({
+  const { data: keys = [] } = useQuery({
     queryKey: ["omnix-settings", workspaceId],
     queryFn: async () => settingsFn({ data: { workspaceId } }),
   });
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ id: "", channel: "shopee", store_name: "", shop_ref: "" });
-
-  const validated = useMemo(
-    () => new Set(settings.filter((s) => s.status === "validated").map((s) => s.channel)),
-    [settings],
-  );
-
+  const [form, setForm] = useState({ channel: "shopee", store_name: "", shop_ref: "" });
   const save = useMutation({
     mutationFn: async () => {
-      if (!validated.has(form.channel)) {
+      if (!form.store_name.trim())
+        throw new Error(t("Store name is required", "Nama toko wajib diisi"));
+      const cfg = keys.find((k) => k.channel === form.channel);
+      if (cfg?.status !== "validated")
         throw new Error(
           t(
-            "Channel keys are not validated yet — set them under API Settings first.",
-            "Kunci kanal belum tervalidasi — isi dulu di Pengaturan API.",
+            "Set & validate this channel's API keys in Settings first",
+            "Isi & validasi kunci API channel ini di menu Pengaturan terlebih dulu",
           ),
         );
-      }
-      const payload = {
-        channel: form.channel,
-        store_name: form.store_name.trim(),
-        shop_ref: form.shop_ref.trim() || null,
-        status: "connected",
-        last_sync_at: sqlDateTime(),
-      };
-      if (form.id) {
-        await saveWorkspaceRow({ data: { table: "omnix_stores", workspaceId, id: form.id, data: payload } });
-      } else {
-        await upsertWorkspaceRows({
-          data: { table: "omnix_stores", workspaceId, rows: [{ id: crypto.randomUUID(), ...payload }] },
-        });
-      }
+      await saveWorkspaceRow({
+        data: {
+          table: "omnix_stores",
+          workspaceId,
+          data: { ...form, status: "connected", last_sync_at: sqlDateTime() },
+        },
+      });
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["omnix-stores", workspaceId] });
+      toast.success(t("Store added", "Toko ditambahkan"));
       setOpen(false);
-      toast.success(t("Store saved", "Toko disimpan"));
+      setForm({ channel: "shopee", store_name: "", shop_ref: "" });
+      void qc.invalidateQueries({ queryKey: ["omnix-stores"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const remove = useMutation({
+  const del = useMutation({
     mutationFn: async (id: string) => {
       await deleteWorkspaceRow({ data: { table: "omnix_stores", workspaceId, id } });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["omnix-stores", workspaceId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["omnix-stores"] }),
     onError: (e: Error) => toast.error(e.message),
   });
-
   return (
     <div className="space-y-5">
       <Header
         title={t("Store Connections", "Koneksi Toko")}
         desc={t(
-          "Connect each marketplace store. A store can only be added once the channel keys are validated under API Settings.",
-          "Hubungkan tiap toko marketplace. Toko hanya bisa ditambahkan setelah kunci kanal tervalidasi di Pengaturan API.",
+          "Register each store. Live login to marketplaces requires official partner API approval per channel; until then orders can be entered or imported manually.",
+          "Daftarkan setiap toko. Login langsung ke marketplace membutuhkan persetujuan API partner resmi per channel; sampai saat itu pesanan dapat diinput atau diimpor manual.",
         )}
         action={
-          <Button
-            variant="navy"
-            onClick={() => {
-              setForm({ id: "", channel: "shopee", store_name: "", shop_ref: "" });
-              setOpen(true);
-            }}
-          >
+          <Button variant="navy" onClick={() => setOpen(true)}>
             <Plus /> {t("Add store", "Tambah toko")}
           </Button>
         }
       />
-
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Channel</TableHead>
-                <TableHead>{t("Store", "Toko")}</TableHead>
-                <TableHead>{t("Shop ref", "Ref toko")}</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>{t("Last sync", "Sinkron terakhir")}</TableHead>
-                <TableHead className="w-24" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stores.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    <Link2 className="mx-auto mb-2 h-6 w-6 text-gold" />
-                    {t("No store connected yet.", "Belum ada toko terhubung.")}
-                  </TableCell>
-                </TableRow>
-              )}
-              {stores.map((store) => (
-                <TableRow key={store.id}>
-                  <TableCell>{omnixChannelName(store.channel)}</TableCell>
-                  <TableCell className="font-medium">{store.store_name}</TableCell>
-                  <TableCell className="font-mono text-xs">{store.shop_ref ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant={store.status === "connected" ? "secondary" : "outline"}>{store.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {store.last_sync_at ? new Date(store.last_sync_at).toLocaleString("id-ID") : "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setForm({
-                          id: store.id,
-                          channel: store.channel,
-                          store_name: store.store_name,
-                          shop_ref: store.shop_ref ?? "",
-                        });
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => remove.mutate(store.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {stores.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t("No stores yet.", "Belum ada toko.")}</p>
+        )}
+        {stores.map((s) => (
+          <Card key={s.id}>
+            <CardContent className="flex items-start justify-between gap-3 p-4">
+              <div className="flex gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/20 text-gold-foreground">
+                  <Store className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="font-semibold">{s.store_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {omnixChannelName(s.channel)}
+                    {s.shop_ref ? ` · ${s.shop_ref}` : ""}
+                  </p>
+                  <Badge variant="outline" className="mt-2 text-[10px]">
+                    {s.status === "connected"
+                      ? t("Connected", "Terhubung")
+                      : t("Awaiting API", "Menunggu API")}
+                  </Badge>
+                </div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={t("Delete store", "Hapus toko")}
+                onClick={() => confirm(t("Delete store?", "Hapus toko?")) && del.mutate(s.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form.id ? t("Edit store", "Ubah toko") : t("Add store", "Tambah toko")}</DialogTitle>
+            <DialogTitle>{t("Add store", "Tambah toko")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <AdminField label="Channel">
@@ -275,25 +275,27 @@ function StoresView({ workspaceId }: { workspaceId: string }) {
                 {OMNIX_CHANNELS.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
-                    {validated.has(c.id) ? " ✓" : ""}
                   </option>
                 ))}
               </AdminSelect>
             </AdminField>
             <AdminField label={t("Store name", "Nama toko")}>
-              <Input value={form.store_name} onChange={(e) => setForm({ ...form, store_name: e.target.value })} />
+              <Input
+                data-testid="omnix-store-name"
+                value={form.store_name}
+                onChange={(e) => setForm({ ...form, store_name: e.target.value })}
+              />
             </AdminField>
-            <AdminField label={t("Shop reference", "Ref toko (opsional)")}>
-              <Input value={form.shop_ref} onChange={(e) => setForm({ ...form, shop_ref: e.target.value })} />
+            <AdminField label={t("Shop ID / username", "Shop ID / username")}>
+              <Input
+                data-testid="omnix-store-ref"
+                value={form.shop_ref}
+                onChange={(e) => setForm({ ...form, shop_ref: e.target.value })}
+              />
             </AdminField>
           </div>
           <DialogFooter>
-            <Button
-              variant="navy"
-              disabled={!form.store_name.trim() || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              {save.isPending && <Loader2 className="animate-spin" />}
+            <Button variant="navy" onClick={() => save.mutate()} disabled={save.isPending}>
               {t("Save", "Simpan")}
             </Button>
           </DialogFooter>
@@ -303,150 +305,121 @@ function StoresView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/* -------------------------------- Transaksi -------------------------------- */
+/* ---------------------------------- Pesanan ---------------------------------- */
 
 function OrdersView({ workspaceId }: { workspaceId: string }) {
-  const { lang, t } = useT();
+  const { t } = useT();
   const qc = useQueryClient();
   const { data: orders = [] } = useOrders(workspaceId);
   const { data: stores = [] } = useStores(workspaceId);
   const setStatusFn = useServerFn(omnixSetOrderStatus);
-  const [term, setTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [fs, setFs] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    id: "",
-    channel: "shopee",
+  const empty = {
+    store_id: "",
     order_no: "",
     buyer_name: "",
-    order_date: sqlDateTime().slice(0, 10),
-    gross_amount: 0,
-    marketplace_fee: 0,
+    item: "",
+    qty: "1",
+    gross: "",
+    fee: "",
     courier: "",
     tracking_no: "",
-  });
-
-  const filtered = useSearchFilter(
-    orders.filter((o) => statusFilter === "all" || o.status === statusFilter),
-    term,
-    (o) => [o.order_no, o.buyer_name, o.tracking_no, o.channel],
-  );
-  const pager = usePagination(filtered);
+  };
+  const [form, setForm] = useState(empty);
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["omnix-orders"] });
+    void qc.invalidateQueries({ queryKey: ["omnix-wallet"] });
+    void qc.invalidateQueries({ queryKey: ["omnix-ledger"] });
+  };
 
   const save = useMutation({
     mutationFn: async () => {
-      const gross = Number(form.gross_amount) || 0;
-      const marketFee = Number(form.marketplace_fee) || 0;
-      const payload = {
-        channel: form.channel,
-        order_no: form.order_no.trim(),
-        buyer_name: form.buyer_name.trim() || null,
-        order_date: form.order_date ? `${form.order_date} 00:00:00` : sqlDateTime(),
-        gross_amount: gross,
-        marketplace_fee: marketFee,
-        net_amount: gross - marketFee,
-        courier: form.courier.trim() || null,
-        tracking_no: form.tracking_no.trim() || null,
-        store_id: stores.find((s) => s.channel === form.channel)?.id ?? null,
-      };
-      if (form.id) {
-        await saveWorkspaceRow({ data: { table: "omnix_orders", workspaceId, id: form.id, data: payload } });
-      } else {
-        await upsertWorkspaceRows({
+      const store = stores.find((s) => s.id === form.store_id);
+      if (!store) throw new Error(t("Pick a store", "Pilih toko"));
+      if (!form.order_no.trim())
+        throw new Error(t("Order number is required", "No. pesanan wajib diisi"));
+      const gross = Number(form.gross) || 0;
+      const fee = Number(form.fee) || 0;
+      await saveWorkspaceRow({
+        data: {
+          table: "omnix_orders",
+          workspaceId,
           data: {
-            table: "omnix_orders",
-            workspaceId,
-            rows: [{ id: crypto.randomUUID(), status: "pending", ...payload }],
+            store_id: store.id,
+            channel: store.channel,
+            order_no: form.order_no.trim(),
+            buyer_name: form.buyer_name || null,
+            items: JSON.stringify([{ name: form.item, qty: Number(form.qty) || 1 }]),
+            gross_amount: gross,
+            marketplace_fee: fee,
+            net_amount: gross - fee,
+            status: "pending",
+            courier: form.courier || null,
+            tracking_no: form.tracking_no.trim() || null,
+            order_date: sqlDateTime(),
           },
-        });
-      }
+        },
+      });
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["omnix-orders", workspaceId] });
+      toast.success(t("Order added", "Pesanan ditambahkan"));
       setOpen(false);
-      toast.success(t("Order saved", "Pesanan disimpan"));
+      setForm(empty);
+      refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) =>
       setStatusFn({ data: { workspaceId, orderId: id, status } }),
-    onSuccess: (result, variables) => {
-      void qc.invalidateQueries({ queryKey: ["omnix-orders", workspaceId] });
-      void qc.invalidateQueries({ queryKey: ["omnix-wallet", workspaceId] });
-      void qc.invalidateQueries({ queryKey: ["omnix-ledger", workspaceId] });
-      if (variables.status === "completed") {
+    onSuccess: (_d, v) => {
+      if (v.status === "completed")
         toast.success(
-          result.fee > 0
-            ? t(
-                `Completed · Rp${result.fee.toLocaleString("id-ID")} charged — balance Rp${result.balance.toLocaleString("id-ID")}`,
-                `Selesai · biaya Rp${result.fee.toLocaleString("id-ID")} dipotong — saldo Rp${result.balance.toLocaleString("id-ID")}`,
-              )
-            : t("Completed · charged to the bundle quota", "Selesai · memakai kuota paket"),
+          t("Completed — fee charged from balance", "Selesai — biaya dipotong dari saldo"),
         );
-      } else {
-        toast.success(t("Order updated", "Pesanan diperbarui"));
-      }
+      refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
-      await deleteWorkspaceRow({ data: { table: "omnix_orders", workspaceId, id } });
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["omnix-orders", workspaceId] }),
-    onError: (e: Error) => toast.error(e.message),
-  });
-
+  const rows = orders.filter(
+    (o) =>
+      (fs === "all" || o.status === fs) &&
+      `${o.order_no} ${o.buyer_name ?? ""}`.toLowerCase().includes(q.toLowerCase()),
+  );
   return (
     <div className="space-y-5">
       <Header
         title={t("Transactions", "Transaksi")}
         desc={t(
-          `Manually record marketplace orders. Completing an order charges Rp${OMNIX_FEE_PER_ORDER.toLocaleString("id-ID")} from the Omnix wallet (or uses the active bundle quota).`,
-          `Catat pesanan marketplace secara manual. Menyelesaikan pesanan akan memotong Rp${OMNIX_FEE_PER_ORDER.toLocaleString("id-ID")} dari saldo Omnix (atau memakai kuota paket aktif).`,
+          "Orders from every channel. Each order marked Completed deducts Rp25 (or 1 bundle quota) automatically.",
+          "Pesanan dari semua channel. Setiap pesanan berstatus Selesai otomatis memotong Rp25 (atau 1 kuota paket).",
         )}
         action={
-          <Button
-            variant="navy"
-            onClick={() => {
-              setForm({
-                id: "",
-                channel: "shopee",
-                order_no: "",
-                buyer_name: "",
-                order_date: sqlDateTime().slice(0, 10),
-                gross_amount: 0,
-                marketplace_fee: 0,
-                courier: "",
-                tracking_no: "",
-              });
-              setOpen(true);
-            }}
-          >
+          <Button variant="navy" onClick={() => setOpen(true)} disabled={!stores.length}>
             <Plus /> {t("New order", "Pesanan baru")}
           </Button>
         }
       />
-
+      <WalletStrip workspaceId={workspaceId} />
       <div className="flex flex-wrap gap-2">
-        <SearchInput
-          value={term}
-          onChange={setTerm}
-          placeholder={t("Search order / buyer / resi…", "Cari pesanan / pembeli / resi…")}
+        <Input
+          className="w-64"
+          placeholder={t("Search order / buyer", "Cari pesanan / pembeli")}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
         />
-        <AdminSelect className="w-40" value={statusFilter} onChange={setStatusFilter}>
-          <option value="all">{t("All statuses", "Semua status")}</option>
-          {OMNIX_ORDER_STATUS.map((status) => (
-            <option key={status} value={status}>
-              {status}
+        <AdminSelect value={fs} onChange={setFs} className="w-44">
+          <option value="all">{t("All status", "Semua status")}</option>
+          {OMNIX_ORDER_STATUS.map((s) => (
+            <option key={s} value={s}>
+              {s}
             </option>
           ))}
         </AdminSelect>
       </div>
-
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <Table>
@@ -460,100 +433,72 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
                 <TableHead className="text-right">Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Omnix fee</TableHead>
-                <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pager.items.length === 0 && (
+              {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
-                    {t("No orders yet.", "Belum ada pesanan.")}
+                  <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                    {t("No orders.", "Belum ada pesanan.")}
                   </TableCell>
                 </TableRow>
               )}
-              {pager.items.map((order) => (
-                <TableRow key={order.id}>
-                  <TableCell className="text-xs">{String(order.order_date).slice(0, 10)}</TableCell>
-                  <TableCell>{omnixChannelName(order.channel)}</TableCell>
-                  <TableCell className="font-mono text-xs">{order.order_no}</TableCell>
-                  <TableCell>{order.buyer_name ?? "—"}</TableCell>
-                  <TableCell className="text-right">{fmtIDR(Number(order.gross_amount))}</TableCell>
-                  <TableCell className="text-right">{fmtIDR(Number(order.net_amount))}</TableCell>
+              {rows.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell className="whitespace-nowrap">
+                    {new Date(`${String(o.order_date).replace(" ", "T")}Z`).toLocaleDateString(
+                      "id-ID",
+                    )}
+                  </TableCell>
+                  <TableCell>{omnixChannelName(o.channel)}</TableCell>
+                  <TableCell className="font-mono text-xs">{o.order_no}</TableCell>
+                  <TableCell>{o.buyer_name}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(Number(o.gross_amount))}</TableCell>
+                  <TableCell className="text-right">{fmtIDR(Number(o.net_amount))}</TableCell>
                   <TableCell>
-                    {order.fee_charged || order.status === "cancelled" ? (
-                      <Badge variant={order.status === "completed" ? "secondary" : "outline"}>
-                        {order.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
-                        {order.status}
+                    {o.fee_charged || o.status === "cancelled" ? (
+                      <Badge variant={o.status === "completed" ? "secondary" : "outline"}>
+                        {o.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                        {o.status}
                       </Badge>
                     ) : (
                       <AdminSelect
-                        className="h-8 w-32 text-xs"
-                        value={order.status}
-                        onChange={(value) => setStatus.mutate({ id: order.id, status: value })}
+                        value={o.status}
+                        onChange={(v) => setStatus.mutate({ id: o.id, status: v })}
+                        className="h-8 w-36"
                       >
-                        {OMNIX_ORDER_STATUS.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
+                        {OMNIX_ORDER_STATUS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
                           </option>
                         ))}
                       </AdminSelect>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">{order.fee_charged ? fmtIDR(Number(order.omnix_fee)) : "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setForm({
-                          id: order.id,
-                          channel: order.channel,
-                          order_no: order.order_no,
-                          buyer_name: order.buyer_name ?? "",
-                          order_date: String(order.order_date).slice(0, 10),
-                          gross_amount: Number(order.gross_amount),
-                          marketplace_fee: Number(order.marketplace_fee),
-                          courier: order.courier ?? "",
-                          tracking_no: order.tracking_no ?? "",
-                        });
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      disabled={Boolean(order.fee_charged)}
-                      title={
-                        order.fee_charged
-                          ? t("Already charged — cannot delete", "Sudah tertagih — tidak bisa dihapus")
-                          : t("Delete", "Hapus")
-                      }
-                      onClick={() => remove.mutate(order.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {o.fee_charged ? fmtIDR(Number(o.omnix_fee)) : "-"}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <PaginationBar p={pager} />
         </CardContent>
       </Card>
-
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>{form.id ? t("Edit order", "Ubah pesanan") : t("Add order", "Tambah pesanan")}</DialogTitle>
+            <DialogTitle>{t("New order", "Pesanan baru")}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
-            <AdminField label="Channel">
-              <AdminSelect value={form.channel} onChange={(v) => setForm({ ...form, channel: v })}>
-                {OMNIX_CHANNELS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+            <AdminField label={t("Store", "Toko")}>
+              <AdminSelect
+                value={form.store_id}
+                onChange={(v) => setForm({ ...form, store_id: v })}
+              >
+                <option value="">—</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.store_name} ({omnixChannelName(s.channel)})
                   </option>
                 ))}
               </AdminSelect>
@@ -572,43 +517,51 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
                 onChange={(e) => setForm({ ...form, buyer_name: e.target.value })}
               />
             </AdminField>
-            <AdminField label={t("Date", "Tanggal")}>
+            <AdminField label={t("Item", "Produk")}>
               <Input
-                type="date"
-                value={form.order_date}
-                onChange={(e) => setForm({ ...form, order_date: e.target.value })}
+                value={form.item}
+                onChange={(e) => setForm({ ...form, item: e.target.value })}
               />
             </AdminField>
-            <AdminField label="Gross">
+            <AdminField label="Qty">
+              <Input
+                type="number"
+                value={form.qty}
+                onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              />
+            </AdminField>
+            <AdminField label={t("Gross amount", "Total kotor")}>
               <Input
                 data-testid="omnix-order-gross"
                 type="number"
-                value={form.gross_amount}
-                onChange={(e) => setForm({ ...form, gross_amount: Number(e.target.value) })}
+                value={form.gross}
+                onChange={(e) => setForm({ ...form, gross: e.target.value })}
               />
             </AdminField>
-            <AdminField label={t("Marketplace fee", "Fee marketplace")}>
+            <AdminField label={t("Marketplace fee", "Potongan marketplace")}>
               <Input
                 data-testid="omnix-order-fee"
                 type="number"
-                value={form.marketplace_fee}
-                onChange={(e) => setForm({ ...form, marketplace_fee: Number(e.target.value) })}
+                value={form.fee}
+                onChange={(e) => setForm({ ...form, fee: e.target.value })}
               />
             </AdminField>
             <AdminField label={t("Courier", "Kurir")}>
-              <Input value={form.courier} onChange={(e) => setForm({ ...form, courier: e.target.value })} />
+              <Input
+                value={form.courier}
+                onChange={(e) => setForm({ ...form, courier: e.target.value })}
+                placeholder="J&T, SPX, JNE…"
+              />
             </AdminField>
-            <AdminField label="Resi">
-              <Input value={form.tracking_no} onChange={(e) => setForm({ ...form, tracking_no: e.target.value })} />
+            <AdminField label={t("Waybill / resi", "No. resi")}>
+              <Input
+                value={form.tracking_no}
+                onChange={(e) => setForm({ ...form, tracking_no: e.target.value })}
+              />
             </AdminField>
           </div>
           <DialogFooter>
-            <Button
-              variant="navy"
-              disabled={!form.order_no.trim() || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              {save.isPending && <Loader2 className="animate-spin" />}
+            <Button variant="navy" onClick={() => save.mutate()} disabled={save.isPending}>
               {t("Save", "Simpan")}
             </Button>
           </DialogFooter>
@@ -621,15 +574,11 @@ function OrdersView({ workspaceId }: { workspaceId: string }) {
 /* ----------------------------- Saldo & Tagihan ----------------------------- */
 
 function WalletView({ workspaceId }: { workspaceId: string }) {
-  const { lang, t } = useT();
+  const { t } = useT();
   const qc = useQueryClient();
   const walletFn = useServerFn(getOmnixWallet);
   const ledgerFn = useServerFn(listOmnixLedger);
-  const topupFn = useServerFn(omnixRequestTopup);
   const bundleFn = useServerFn(omnixBuyBundle);
-  const [amount, setAmount] = useState(String(OMNIX_MIN_TOPUP));
-  const [note, setNote] = useState("Transfer manual");
-
   const { data: wallet } = useQuery<OmnixWalletView | null>({
     queryKey: ["omnix-wallet", workspaceId],
     queryFn: async () => walletFn({ data: { workspaceId } }),
@@ -638,143 +587,107 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["omnix-ledger", workspaceId],
     queryFn: async () => ledgerFn({ data: { workspaceId, limit: 100 } }),
   });
-
+  const tenantId = wallet?.tenant_id;
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["omnix-wallet", workspaceId] });
-    void qc.invalidateQueries({ queryKey: ["omnix-ledger", workspaceId] });
+    void qc.invalidateQueries({ queryKey: ["omnix-wallet"] });
+    void qc.invalidateQueries({ queryKey: ["omnix-ledger"] });
+    void qc.invalidateQueries({ queryKey: ["wallet"] });
   };
-
-  const topup = useMutation({
-    mutationFn: async () => topupFn({ data: { workspaceId, amount: Number(amount), note } }),
-    onSuccess: () => {
-      refresh();
-      toast.success(t("Top up requested — waiting for Super Admin", "Top up diajukan — menunggu Super Admin"));
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const bundle = useMutation({
     mutationFn: async () => bundleFn({ data: { workspaceId } }),
     onSuccess: () => {
+      toast.success(t("Bundle activated", "Paket bulanan aktif"));
       refresh();
-      toast.success(t("Bundle activated", "Paket diaktifkan"));
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
   const endsAt = wallet?.bundle_ends_at ? new Date(wallet.bundle_ends_at) : null;
-  const bundleActive = Boolean(endsAt && endsAt.getTime() > Date.now() && Number(wallet?.bundle_used) < Number(wallet?.bundle_quota));
-  const remaining = Math.max(0, Number(wallet?.bundle_quota ?? 0) - Number(wallet?.bundle_used ?? 0));
-
+  const active = Boolean(
+    endsAt &&
+    endsAt.getTime() > Date.now() &&
+    Number(wallet?.bundle_used) < Number(wallet?.bundle_quota),
+  );
   return (
     <div className="space-y-5">
       <Header
         title={t("Balance & Billing", "Saldo & Tagihan")}
         desc={t(
-          `Omnix charges Rp${OMNIX_FEE_PER_ORDER.toLocaleString("id-ID")} per completed order. The monthly bundle (Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")}) covers ${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} orders for ${OMNIX_BUNDLE.days} days.`,
-          `Omnix menagih Rp${OMNIX_FEE_PER_ORDER.toLocaleString("id-ID")} per pesanan selesai. Paket bulanan (Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")}) mencakup ${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} pesanan selama ${OMNIX_BUNDLE.days} hari.`,
+          "Deposit balance; every completed transaction is deducted automatically.",
+          "Deposit saldo; setiap transaksi selesai dipotong otomatis.",
         )}
       />
-
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardContent className="p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Balance", "Saldo")}</p>
+          <CardContent className="space-y-3 p-5">
+            <p className="text-xs text-muted-foreground">
+              {t("Current balance", "Saldo saat ini")}
+            </p>
             <p
               data-testid="omnix-balance"
-              className="mt-1 text-2xl font-semibold text-navy dark:text-primary-foreground"
+              className="text-3xl font-semibold text-navy dark:text-primary-foreground"
             >
               {fmtIDR(Number(wallet?.balance ?? 0))}
             </p>
           </CardContent>
         </Card>
-        <Card className={bundleActive ? "border-emerald-500/50" : ""}>
-          <CardContent className="p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Package", "Paket")}</p>
-            <p className="mt-1 text-lg font-semibold">{bundleActive ? t("Active", "Aktif") : t("Not active", "Tidak aktif")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {bundleActive && endsAt
-                ? `${remaining.toLocaleString("id-ID")} ${t("orders left", "pesanan tersisa")} · ${endsAt.toLocaleDateString("id-ID")}`
-                : `${t("Quota", "Kuota")} ${Number(wallet?.bundle_quota ?? 0).toLocaleString("id-ID")}`}
+        <Card>
+          <CardContent className="space-y-2 p-5">
+            <p className="flex items-center gap-2 font-semibold">
+              <RefreshCw className="h-4 w-4 text-gold" />{" "}
+              {t("Pay as you go", "Bayar per transaksi")}
+            </p>
+            <p className="text-2xl font-semibold">
+              Rp25{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                / {t("completed transaction", "transaksi selesai")}
+              </span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {t("Default. No monthly fee.", "Default. Tanpa biaya bulanan.")}
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-5">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Charged orders", "Pesanan tertagih")}</p>
-            <p className="mt-1 text-2xl font-semibold">
-              {ledger.filter((row) => row.kind === "charge").length.toLocaleString("id-ID")}
+        <Card className={active ? "border-gold" : ""}>
+          <CardContent className="space-y-2 p-5">
+            <p className="flex items-center gap-2 font-semibold">
+              <Package className="h-4 w-4 text-gold" /> {t("Monthly bundle", "Paket bulanan")}
             </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Wallet className="h-4 w-4 text-gold" /> {t("Request top up", "Ajukan top up")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <AdminField label={t("Amount (Rp)", "Nominal (Rp)")}>
-              <Input
-                data-testid="omnix-topup-amount"
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </AdminField>
-            <AdminField label={t("Note", "Catatan")}>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} />
-            </AdminField>
-            <div className="flex flex-wrap gap-1">
-              {[50000, 100000, 350000, 1000000].map((v) => (
-                <Button key={v} size="sm" variant="outline" onClick={() => setAmount(String(v))}>
-                  {fmtIDR(v)}
-                </Button>
-              ))}
-            </div>
-            <Button variant="navy" disabled={topup.isPending} onClick={() => topup.mutate()}>
-              {topup.isPending && <Loader2 className="animate-spin" />} {t("Top up", "Top up")}
-            </Button>
+            <p className="text-2xl font-semibold">
+              {fmtIDR(OMNIX_BUNDLE.price)}{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                / 20.000 {t("trx", "trx")} / 30 {t("days", "hari")}
+              </span>
+            </p>
+            {active ? (
+              <p className="text-sm">
+                {t("Active until", "Aktif s.d.")} {endsAt?.toLocaleDateString("id-ID")} ·{" "}
+                {t("used", "terpakai")} {Number(wallet?.bundle_used ?? 0).toLocaleString("id-ID")}/
+                {Number(wallet?.bundle_quota ?? 0).toLocaleString("id-ID")}
+              </p>
+            ) : (
+              <Button
+                variant="gold"
+                onClick={() => bundle.mutate()}
+                disabled={bundle.isPending || !tenantId}
+              >
+                {t("Buy from balance", "Beli dari saldo")}
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground">
               {t(
-                `Minimum Rp${OMNIX_MIN_TOPUP.toLocaleString("id-ID")}. Super Admin verifies the transfer before the balance increases.`,
-                `Minimal Rp${OMNIX_MIN_TOPUP.toLocaleString("id-ID")}. Super Admin memverifikasi transfer sebelum saldo bertambah.`,
+                "After quota runs out, Rp25/trx applies again.",
+                "Setelah kuota habis, kembali Rp25/trx.",
               )}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Receipt className="h-4 w-4 text-gold" /> {t("Monthly bundle", "Paket bulanan")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {t(
-                `${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} orders for Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")}, valid ${OMNIX_BUNDLE.days} days. Cheaper than ${Math.round(OMNIX_BUNDLE.price / OMNIX_BUNDLE.quota / 25 * 100) / 100}x the per-order fee.`,
-                `${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} pesanan seharga Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")}, berlaku ${OMNIX_BUNDLE.days} hari. Lebih murah dari tarif per pesanan.`,
-              )}
-            </p>
-            <Button
-              variant={bundleActive ? "outline" : "navy"}
-              disabled={bundle.isPending}
-              onClick={() => bundle.mutate()}
-            >
-              {bundle.isPending && <Loader2 className="animate-spin" />}
-              {bundleActive ? t("Extend after expiry", "Perpanjang setelah habis") : t("Buy from balance", "Beli dari saldo")}
-            </Button>
           </CardContent>
         </Card>
       </div>
-
+      {tenantId && <WalletPanel tenantId={tenantId} />}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("Wallet history", "Riwayat saldo")}</CardTitle>
+          <CardTitle className="text-base">
+            {t("Legacy Omnix history", "Riwayat lama Omnix")}
+          </CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
           <Table>
@@ -782,35 +695,39 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
               <TableRow>
                 <TableHead>{t("Date", "Tanggal")}</TableHead>
                 <TableHead>{t("Type", "Jenis")}</TableHead>
-                <TableHead>{t("Note", "Catatan")}</TableHead>
+                <TableHead>{t("Note", "Keterangan")}</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
+                <TableHead className="text-right">{t("Amount", "Nominal")}</TableHead>
                 <TableHead className="text-right">{t("Balance", "Saldo")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {ledger.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
-                    {t("No wallet activity yet.", "Belum ada aktivitas saldo.")}
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    —
                   </TableCell>
                 </TableRow>
               )}
-              {ledger.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-xs">{new Date(row.created_at).toLocaleString("id-ID")}</TableCell>
-                  <TableCell className="capitalize">{row.kind}</TableCell>
-                  <TableCell className="text-xs">{row.note ?? "—"}</TableCell>
+              {ledger.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell className="whitespace-nowrap">
+                    {new Date(l.created_at).toLocaleString("id-ID")}
+                  </TableCell>
+                  <TableCell>{l.kind}</TableCell>
+                  <TableCell>{l.note}</TableCell>
                   <TableCell>
-                    <Badge variant={row.status === "posted" ? "secondary" : "outline"}>{row.status}</Badge>
+                    <Badge variant={l.status === "posted" ? "secondary" : "outline"}>
+                      {l.status}
+                    </Badge>
                   </TableCell>
                   <TableCell
-                    className={`text-right ${Number(row.amount) < 0 ? "text-destructive" : ""}`}
+                    className={`text-right ${Number(l.amount) < 0 ? "text-destructive" : ""}`}
                   >
-                    {fmtIDR(Number(row.amount))}
+                    {fmtIDR(Number(l.amount))}
                   </TableCell>
                   <TableCell className="text-right">
-                    {row.balance_after === null ? "—" : fmtIDR(Number(row.balance_after))}
+                    {l.balance_after != null ? fmtIDR(Number(l.balance_after)) : "-"}
                   </TableCell>
                 </TableRow>
               ))}
@@ -818,18 +735,10 @@ function WalletView({ workspaceId }: { workspaceId: string }) {
           </Table>
         </CardContent>
       </Card>
-      <p className="text-xs text-muted-foreground">
-        {lang === "id"
-          ? "Biaya Omnix dipotong di level aplikasi saat pesanan diselesaikan (tanpa trigger database)."
-          : "Omnix fees are charged at application level when an order is completed (no database triggers)."}
-      </p>
     </div>
   );
 }
 
-/* ------------------------------- dasbor ------------------------------- */
-
-/** Ringkasan saldo Omnix (dipakai dasbor; parity BS New 10). */
 function WalletStrip({ workspaceId }: { workspaceId: string }) {
   const { t } = useT();
   const walletFn = useServerFn(getOmnixWallet);
@@ -839,7 +748,9 @@ function WalletStrip({ workspaceId }: { workspaceId: string }) {
   });
   const endsAt = wallet?.bundle_ends_at ? new Date(wallet.bundle_ends_at) : null;
   const active = Boolean(
-    endsAt && endsAt.getTime() > Date.now() && Number(wallet?.bundle_used) < Number(wallet?.bundle_quota),
+    endsAt &&
+    endsAt.getTime() > Date.now() &&
+    Number(wallet?.bundle_used) < Number(wallet?.bundle_quota),
   );
   const low = !active && Number(wallet?.balance ?? 0) < OMNIX_FEE_PER_ORDER * 100;
   return (
@@ -850,7 +761,8 @@ function WalletStrip({ workspaceId }: { workspaceId: string }) {
     >
       <Wallet className="h-4 w-4 text-gold" />
       <span>
-        {t("Balance", "Saldo")}: <b data-testid="omnix-balance">{fmtIDR(Number(wallet?.balance ?? 0))}</b>
+        {t("Balance", "Saldo")}:{" "}
+        <b data-testid="omnix-balance">{fmtIDR(Number(wallet?.balance ?? 0))}</b>
       </span>
       {active ? (
         <Badge variant="secondary">
@@ -859,11 +771,16 @@ function WalletStrip({ workspaceId }: { workspaceId: string }) {
         </Badge>
       ) : (
         <span className="text-muted-foreground">
-          {t(`Pay per transaction Rp${OMNIX_FEE_PER_ORDER}`, `Bayar per transaksi Rp${OMNIX_FEE_PER_ORDER}`)}
+          {t(
+            `Pay per transaction Rp${OMNIX_FEE_PER_ORDER}`,
+            `Bayar per transaksi Rp${OMNIX_FEE_PER_ORDER}`,
+          )}
         </span>
       )}
       {low && (
-        <span className="font-medium text-destructive">{t("Low balance — top up now", "Saldo menipis — segera top up")}</span>
+        <span className="font-medium text-destructive">
+          {t("Low balance — top up now", "Saldo menipis — segera top up")}
+        </span>
       )}
     </div>
   );
@@ -919,18 +836,24 @@ export function OmnixDashboard({ workspaceId }: { workspaceId: string }) {
           <Card key={l}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">{l}</p>
-              <p className="mt-1 text-xl font-semibold text-navy dark:text-primary-foreground">{v}</p>
+              <p className="mt-1 text-xl font-semibold text-navy dark:text-primary-foreground">
+                {v}
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{t("Sales per channel", "Penjualan per channel")}</CardTitle>
+          <CardTitle className="text-base">
+            {t("Sales per channel", "Penjualan per channel")}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {Object.keys(stats.byCh).length === 0 && (
-            <p className="text-sm text-muted-foreground">{t("No completed orders yet.", "Belum ada pesanan selesai.")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("No completed orders yet.", "Belum ada pesanan selesai.")}
+            </p>
           )}
           {Object.entries(stats.byCh).map(([ch, v]) => (
             <div key={ch} className="text-sm">
@@ -941,7 +864,10 @@ export function OmnixDashboard({ workspaceId }: { workspaceId: string }) {
                 <span>{fmtIDR(v.gross)}</span>
               </div>
               <div className="mt-1 h-2 rounded bg-muted">
-                <div className="h-2 rounded bg-gold" style={{ width: `${(v.gross / maxG) * 100}%` }} />
+                <div
+                  className="h-2 rounded bg-gold"
+                  style={{ width: `${(v.gross / maxG) * 100}%` }}
+                />
               </div>
             </div>
           ))}
@@ -956,9 +882,16 @@ export function OmnixDashboard({ workspaceId }: { workspaceId: string }) {
 
 /* --------------------------------- dispatcher -------------------------------- */
 
-export function OmnixView({ submoduleId, workspaceId }: { submoduleId: string; workspaceId: string }) {
+export function OmnixView({
+  submoduleId,
+  workspaceId,
+}: {
+  submoduleId: string;
+  workspaceId: string;
+}) {
   const { lang } = useI18n();
-  if (submoduleId === "dashboard" || submoduleId === "") return <OmnixDashboard workspaceId={workspaceId} />;
+  if (submoduleId === "dashboard" || submoduleId === "")
+    return <OmnixDashboard workspaceId={workspaceId} />;
   if (submoduleId === "stores") return <StoresView workspaceId={workspaceId} />;
   if (submoduleId === "orders") return <OrdersView workspaceId={workspaceId} />;
   if (submoduleId === "shipping") return <OmnixShippingView workspaceId={workspaceId} />;

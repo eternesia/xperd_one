@@ -24,6 +24,7 @@ npm run test:e2e                           # Playwright (perlu app di :3999)
 | [`OPERATIONS.md`](docs/OPERATIONS.md) | Referensi variabel `.env`, perintah harian, deploy produksi, cron, cadangan |
 | [`META-SETUP.md`](docs/META-SETUP.md) | Langkah mengaktifkan integrasi Meta (Facebook Page & Instagram) |
 | [`PARITY-BS-NEW3-VS-OLD.md`](docs/PARITY-BS-NEW3-VS-OLD.md) | Checklist + riwayat porting dari Business Suite New 3 (per ronde) |
+| [`PARITY-BS-NEW11-VS-OLD.md`](docs/PARITY-BS-NEW11-VS-OLD.md) | Pemetaan klaster fitur New 11 → Old + status per ronde (mulai Ronde 36) |
 | [`INTEROP-BOILERPLATE.md`](docs/INTEROP-BOILERPLATE.md) | Pola endpoint publik/hook untuk integrasi eksternal |
 | [`SLIPP-HR-PORTING.md`](docs/SLIPP-HR-PORTING.md) | Catatan porting modul HR (Slipp HR) |
 

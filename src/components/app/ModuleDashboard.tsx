@@ -1116,7 +1116,7 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
           </p>
           <div className="mt-4 divide-y divide-border">
             {balances.length === 0 && (
-              <p className="text-sm text-muted-foreground">{t("No account configured yet.", "Belum ada rekening.")}</p>
+              <p className="text-sm text-muted-foreground">{t("No account yet.", "Belum ada rekening.")}</p>
             )}
             {balances.map((account) => (
               <div key={account.account.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">

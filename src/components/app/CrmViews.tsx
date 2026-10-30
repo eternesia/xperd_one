@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Check, Construction, FileOutput, Loader2, Pencil, Plus, Search, Trash2, Upload, UserRound } from "lucide-react";
@@ -21,6 +22,10 @@ import { TenderView } from "@/components/app/CrmTender";
 import { PostSchedulerView, SocialAccountsView, SocialDashboardView } from "@/components/app/CrmSocial";
 // #51 (BS New 3): pustaka dokumen tender.
 import { DocLibraryView } from "@/components/app/CrmDocLibrary";
+import { MediaLibraryView } from "@/components/app/CrmMedia";
+import { CrmIdeasView } from "@/components/app/CrmIdeas";
+import { CrmInboxView } from "@/components/app/CrmInbox";
+import { CrmCommentsView, CrmAutomationsView } from "@/components/app/CrmInteractions";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
@@ -127,6 +132,11 @@ export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; wor
   if (submoduleId === "post-scheduler") return <PostSchedulerView workspaceId={workspaceId} />;
   if (submoduleId === "social-dashboard") return <SocialDashboardView workspaceId={workspaceId} />;
   // #51 (BS New 3): pustaka dokumen tender.
+  if (submoduleId === "media") return <MediaLibraryView workspaceId={workspaceId} />;
+  if (submoduleId === "inbox") return <CrmInboxView workspaceId={workspaceId} />;
+  if (submoduleId === "comments") return <CrmCommentsView workspaceId={workspaceId} />;
+  if (submoduleId === "automations") return <CrmAutomationsView workspaceId={workspaceId} />;
+  if (submoduleId === "ideas") return <CrmIdeasView workspaceId={workspaceId} />;
   if (submoduleId === "doc-library") return <DocLibraryView workspaceId={workspaceId} />;
   return <ComingSoon submoduleId={submoduleId} />;
 }
@@ -164,6 +174,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
       [r.code, r.name, r.company_name, r.email, r.phone, r.owner_name].some((v) => (v ?? "").toLowerCase().includes(q)),
     );
   }, [rows, term, mineOnly, me]);
+  const pager = usePagination(filtered);
 
   /** #18 (BS New): buat quotation dari lead langsung dari baris tabel. */
   async function convertLead(id: string) {
@@ -212,7 +223,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         if (email) seenEmail.add(email);
         if (digits) seenPhone.add(digits);
         payload.push({
-          code: nextLeadCode(rows.length + payload.length),
+          code: nextLeadCode(rows.map((r) => r.code), payload.length),
           name,
           company_name: pick("company", "perusahaan") || null,
           email: email || null,
@@ -248,7 +259,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
   const save = useMutation({
     mutationFn: async (v: LeadForm) => {
       const payload = {
-        code: v.code.trim() || nextLeadCode(rows.length),
+        code: v.code.trim() || nextLeadCode(rows.map((r) => r.code)),
         name: v.name.trim(),
         company_name: v.company_name || null,
         email: v.email || null,
@@ -317,7 +328,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         <Button
           variant="navy"
           onClick={() => {
-            setForm({ ...EMPTY_LEAD, code: nextLeadCode(rows.length), owner_name: me ?? "" });
+            setForm({ ...EMPTY_LEAD, code: nextLeadCode(rows.map((r) => r.code)), owner_name: me ?? "" });
             setOpen(true);
           }}
         >
@@ -356,9 +367,9 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((r, i) => (
+              {pager.items.map((r, i) => (
                 <TableRow key={r.id}>
-                  <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="text-muted-foreground">{pager.start + i + 1}</TableCell>
                   <TableCell className="font-medium">{r.code}</TableCell>
                   <TableCell>{r.name}</TableCell>
                   <TableCell>{r.company_name ?? "—"}</TableCell>
@@ -398,6 +409,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
               ))}
             </TableBody>
           </Table>
+          <PaginationBar p={pager} />
         </CardContent>
       </Card>
 
@@ -528,50 +540,103 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const STAGE_TONE: Record<string, { bar: string; bg: string; dot: string }> = {
+    new: { bar: "bg-info", bg: "bg-info/10", dot: "bg-info" },
+    contacted: { bar: "bg-chart-3", bg: "bg-chart-3/10", dot: "bg-chart-3" },
+    qualified: { bar: "bg-chart-5", bg: "bg-chart-5/10", dot: "bg-chart-5" },
+    proposal: { bar: "bg-warning", bg: "bg-warning/10", dot: "bg-warning" },
+    negotiation: { bar: "bg-gold", bg: "bg-gold/15", dot: "bg-gold" },
+    won: { bar: "bg-success", bg: "bg-success/10", dot: "bg-success" },
+    lost: { bar: "bg-destructive", bg: "bg-destructive/10", dot: "bg-destructive" },
+  };
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overStage, setOverStage] = useState<string | null>(null);
+
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title="Pipeline" />
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
-        {CRM_STAGES.map((stage) => {
-          const items = rows.filter((r) => r.stage === stage.id);
-          const total = items.reduce((a, b) => a + Number(b.estimated_value || 0), 0);
-          return (
-            <div key={stage.id} className="rounded-2xl border border-border bg-card p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
-                  {lang === "id" ? stage.id_ : stage.en}
-                </p>
-                <Badge variant="secondary">{items.length}</Badge>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">{fmtIDR(total)}</p>
-              <div className="mt-3 space-y-2">
-                {items.map((lead) => (
-                  <div key={lead.id} className="rounded-xl border border-border bg-background p-2.5">
-                    <p className="truncate text-sm font-medium text-navy dark:text-primary-foreground">{lead.name}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">{lead.company_name ?? lead.code}</p>
-                    <p className="mt-1 text-xs font-medium">{fmtIDR(Number(lead.estimated_value))}</p>
-                    <AdminSelect
-                      className="mt-2 h-8 text-xs"
-                      value={lead.stage}
-                      onChange={(v) => move.mutate({ id: lead.id, stage: v })}
-                    >
-                      {CRM_STAGES.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {lang === "id" ? s.id_ : s.en}
-                        </option>
-                      ))}
-                    </AdminSelect>
-                  </div>
-                ))}
-                {items.length === 0 && (
-                  <p className="py-4 text-center text-[11px] text-muted-foreground">
-                    {lang === "id" ? "Kosong" : "Empty"}
-                  </p>
+      <p className="text-xs text-muted-foreground">
+        {lang === "id" ? "Seret kartu ke kolom lain untuk memindahkan tahap." : "Drag a card to another column to change its stage."}
+      </p>
+      <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
+        <div className="flex min-w-max gap-4">
+          {CRM_STAGES.map((stage) => {
+            const tone = STAGE_TONE[stage.id] ?? STAGE_TONE.new;
+            const items = rows.filter((r) => r.stage === stage.id);
+            const total = items.reduce((a, b) => a + Number(b.estimated_value || 0), 0);
+            const isOver = overStage === stage.id;
+            return (
+              <div
+                key={stage.id}
+                onDragOver={(e) => { e.preventDefault(); setOverStage(stage.id); }}
+                onDragLeave={() => setOverStage((s) => (s === stage.id ? null : s))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData("text/plain") || dragId;
+                  setOverStage(null); setDragId(null);
+                  const lead = rows.find((r) => r.id === id);
+                  if (lead && lead.stage !== stage.id) move.mutate({ id: lead.id, stage: stage.id });
+                }}
+                className={cn(
+                  "flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-border transition-all",
+                  tone.bg,
+                  isOver && "ring-2 ring-gold",
                 )}
+              >
+                <div className={cn("h-1.5 w-full", tone.bar)} />
+                <div className="flex items-center justify-between px-4 pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("h-2.5 w-2.5 rounded-full", tone.dot)} />
+                    <p className="text-sm font-semibold text-navy dark:text-foreground">
+                      {lang === "id" ? stage.id_ : stage.en}
+                    </p>
+                  </div>
+                  <Badge variant="secondary">{items.length}</Badge>
+                </div>
+                <p className="px-4 text-xs font-medium text-muted-foreground">{fmtIDR(total)} · {stage.probability}%</p>
+                <div className="mt-3 min-h-[60vh] flex-1 space-y-2.5 px-3 pb-3">
+                  {items.map((lead) => (
+                    <div
+                      key={lead.id}
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDragId(lead.id); }}
+                      onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                      className={cn(
+                        "cursor-grab rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
+                        dragId === lead.id && "opacity-50",
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", tone.dot)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-navy dark:text-foreground">{lead.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{lead.company_name ?? lead.code}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">{fmtIDR(Number(lead.estimated_value))}</p>
+                      <AdminSelect
+                        className="mt-2 h-8 text-xs md:hidden"
+                        value={lead.stage}
+                        onChange={(v) => move.mutate({ id: lead.id, stage: v })}
+                      >
+                        {CRM_STAGES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {lang === "id" ? s.id_ : s.en}
+                          </option>
+                        ))}
+                      </AdminSelect>
+                    </div>
+                  ))}
+                  {items.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-border py-8 text-center text-[11px] text-muted-foreground">
+                      {lang === "id" ? "Letakkan kartu di sini" : "Drop cards here"}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -854,8 +919,8 @@ function ComingSoon({ submoduleId }: { submoduleId: string }) {
       </p>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">
         {lang === "id"
-          ? `Fitur ${submoduleId} (broadcast, WhatsApp gateway, dan campaign sosial) menyusul di tahap berikutnya Qalling.`
-          : `The ${submoduleId} tools (broadcast, WhatsApp gateway and social campaigns) arrive in the next Qalling rollout.`}
+          ? `Menu ${submoduleId} sedang disiapkan dan akan tersambung lewat Tebar pada tahap berikutnya.`
+          : `The ${submoduleId} menu is being prepared and will connect via Tebar in the next rollout.`}
       </p>
     </div>
   );

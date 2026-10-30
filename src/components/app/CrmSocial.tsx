@@ -1,216 +1,278 @@
-/**
- * #54–#56 (BS New 3): akun media sosial multi-akun, penjadwal postingan, dan
- * dasbor media sosial, plus kartu koneksi Meta App (#55).
- *
- * Catatan porting ke Old:
- * - Lapisan data memakai server fn Old (`listWorkspaceRows`, `saveWorkspaceRow`,
- *   `deleteWorkspaceRow`) bukan Supabase; App Secret & access token tetap hanya
- *   di server (`lib/meta-social.functions.ts`).
- * - Kolom `account_ids` bertipe JSON → disimpan sebagai string JSON.
- */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useRouter } from "@tanstack/react-router";
 import {
+  CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
   ExternalLink,
+  ImageIcon,
+  List,
+  Loader2,
   Lock,
   Plus,
+  RefreshCw,
   Send,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
-import { sqlDateTime, sqlDateTimeOrNull } from "@/lib/datetime";
+import { MediaPickerDialog, MediaThumb, useCrmMedia } from "@/components/app/CrmMedia";
+import {
+  PaginationBar,
+  SearchInput,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
+import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
+import { useApp } from "@/lib/app-context";
+import { accountsFull } from "@/lib/qalling-quota";
 import { CRM_SOCIAL_PLATFORMS } from "@/lib/crm";
 import { cn } from "@/lib/utils";
+import { getMetaSettings, publishPostNow, startMetaConnect } from "@/lib/meta-social.functions";
 import {
-  disconnectMeta,
-  getMetaSettings,
-  publishPostNow,
-  saveMetaApp,
-  startMetaConnect,
-  type MetaSettingsView,
-} from "@/lib/meta-social.functions";
+  disconnectTebarAccount,
+  getTebarStatus,
+  startTebarConnect,
+  syncTebarAccounts,
+  syncTebarPosts,
+} from "@/lib/tebar.functions";
 
-interface Account {
+/**
+ * Qalling **Social Accounts / Posts / Insights** — diporting dari BS New 11 `CrmSocial.tsx`:
+ * UI, field, dan alur disalin apa adanya; hanya lapisan datanya yang memakai server fn MySQL Old.
+ * Kuota tier belum ada (klaster wallet/entitlement menunggu keputusan pemilik produk), jadi tidak
+ * ada batas akun yang ditampilkan.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const rowsOf = (r: unknown) => ((r as { rows?: any[] } | undefined)?.rows ?? []) as any[];
+const jsonArr = (v: unknown): string[] => {
+  if (Array.isArray(v)) return v as string[];
+  if (typeof v === "string" && v.trim()) {
+    try {
+      const p = JSON.parse(v);
+      return Array.isArray(p) ? p : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+/** DATETIME UTC dari pool (`dateStrings`) → ISO supaya `new Date()` di browser benar. */
+const isoOf = (v: unknown): string => {
+  const d = new Date(String(v ?? "").replace(" ", "T") + "Z");
+  return Number.isFinite(d.getTime()) ? d.toISOString() : new Date(0).toISOString();
+};
+const normPost = (r: any): Post & { media_paths: string[] } => ({
+  id: String(r.id),
+  title: String(r.title ?? ""),
+  caption: String(r.caption ?? ""),
+  media_url: (r.media_url as string | null) ?? null,
+  media_paths: jsonArr(r.media_paths),
+  account_ids: jsonArr(r.account_ids),
+  scheduled_at: isoOf(r.scheduled_at),
+  status: String(r.status),
+  last_error: (r.last_error as string | null) ?? null,
+  source: String(r.source ?? "manual"),
+  permalinks: jsonArr(r.permalinks),
+});
+
+type Account = {
   id: string;
   platform: string;
   account_name: string;
   handle: string | null;
   profile_url: string | null;
   status: string;
-  source: string;
-}
-interface Post {
+  source?: string;
+};
+type Post = {
   id: string;
   title: string;
-  caption: string | null;
+  caption: string;
   media_url: string | null;
   account_ids: string[];
   scheduled_at: string;
   status: string;
   last_error?: string | null;
-}
+  source?: string;
+  permalinks?: string[];
+};
 
 const platformLabel = (id: string) => CRM_SOCIAL_PLATFORMS.find((p) => p.id === id)?.label ?? id;
-
-/** `account_ids` bisa datang sebagai array (JSON column) atau string. */
-function parseAccountIds(value: unknown): string[] {
-  if (Array.isArray(value)) return value as string[];
-  if (typeof value === "string" && value.trim()) {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      return Array.isArray(parsed) ? (parsed as string[]) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
 
 function useAccounts(workspaceId: string) {
   return useQuery({
     queryKey: ["crm-social-accounts", workspaceId],
     queryFn: async () => {
-      const data = await listWorkspaceRows({
-        data: { table: "crm_social_accounts", workspaceId, orderBy: "platform", orderDir: "asc", limit: 500 },
+      const res = await listWorkspaceRows({
+        data: {
+          table: "crm_social_accounts",
+          workspaceId,
+          orderBy: "platform",
+          orderDir: "asc",
+          limit: 500,
+        },
       });
-      return (data?.rows ?? []) as unknown as Account[];
+      return rowsOf(res) as Account[];
     },
   });
 }
 
-function useMetaSettings(workspaceId: string) {
+type MetaSettings = {
+  app_id: string;
+  app_name: string | null;
+  status: string;
+  last_error: string | null;
+  connected_at: string | null;
+  native_social_enabled: boolean;
+};
+
+export function useMetaSettings(workspaceId: string) {
   const fn = useServerFn(getMetaSettings);
   return useQuery({
     queryKey: ["crm-meta", workspaceId],
-    queryFn: async () => (await fn({ data: { workspaceId } })) as MetaSettingsView | null,
+    queryFn: async () => (await fn({ data: { workspaceId } })) as MetaSettings | null,
   });
 }
 
-function MetaConnectCard({ workspaceId }: { workspaceId: string }) {
+const TEBAR_PLATFORMS = [
+  { id: "instagram", label: "Instagram" },
+  { id: "facebook", label: "Facebook" },
+  { id: "tiktok", label: "TikTok" },
+  { id: "threads", label: "Threads" },
+  { id: "linkedin", label: "LinkedIn" },
+  { id: "x", label: "X" },
+  { id: "telegram", label: "Telegram" },
+  { id: "discord", label: "Discord" },
+];
+
+function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: number }) {
   const { lang } = useI18n();
   const id = lang === "id";
-  const t = (en: string, i: string) => (id ? i : en);
   const qc = useQueryClient();
-  const { data: meta } = useMetaSettings(workspaceId);
-  const [appId, setAppId] = useState("");
-  const [secret, setSecret] = useState("");
-  const saveFn = useServerFn(saveMetaApp);
-  const connectFn = useServerFn(startMetaConnect);
-  const discFn = useServerFn(disconnectMeta);
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["crm-meta", workspaceId] });
-    void qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] });
-  };
-
-  const verify = useMutation({
-    mutationFn: () => saveFn({ data: { workspaceId, appId: appId.trim(), appSecret: secret.trim() } }),
+  const statusFn = useServerFn(getTebarStatus);
+  const startFn = useServerFn(startTebarConnect);
+  const syncFn = useServerFn(syncTebarAccounts);
+  const { data: st } = useQuery({
+    queryKey: ["tebar-status", workspaceId],
+    queryFn: () => statusFn({ data: { workspaceId } }),
+  });
+  const sync = useMutation({
+    mutationFn: () => syncFn({ data: { workspaceId } }),
     onSuccess: (r) => {
-      refresh();
-      setSecret("");
-      if (r.status === "verified") toast.success(t(`Verified: ${r.appName}`, `Terverifikasi: ${r.appName}`));
-      else toast.error(r.lastError ?? t("Invalid app credentials", "App ID/Secret tidak valid"));
+      qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] });
+      toast.success(id ? `${r.count} akun tersinkron` : `${r.count} accounts synced`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const connect = useMutation({
-    mutationFn: () => connectFn({ data: { workspaceId, origin: window.location.origin } }),
+  const start = useMutation({
+    mutationFn: (platform?: string) => {
+      const u = new URL(window.location.href);
+      u.search = "";
+      return startFn({
+        data: {
+          workspaceId,
+          returnUrl: u.toString(),
+          platforms: platform ? [platform] : undefined,
+        },
+      });
+    },
     onSuccess: (r) => {
       window.location.href = r.url;
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const disc = useMutation({ mutationFn: () => discFn({ data: { workspaceId } }), onSuccess: refresh });
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const s = q.get("status");
+    if (!s || q.get("state") !== workspaceId) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (s === "connected") sync.mutate();
+    else
+      toast.error(
+        id
+          ? `Koneksi gagal: ${q.get("error") ?? "dibatalkan"}`
+          : `Connection failed: ${q.get("error") ?? "cancelled"}`,
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
 
-  const status = meta?.status ?? "none";
-  const badge =
-    status === "connected"
-      ? t("Connected", "Terhubung")
-      : status === "verified"
-        ? t("App verified", "App terverifikasi")
-        : status === "invalid"
-          ? t("Invalid", "Tidak valid")
-          : t("Not set", "Belum diatur");
-
+  const ready = st?.ready;
   return (
     <Card>
       <CardContent className="space-y-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="font-semibold">Meta (Facebook Page & Instagram)</p>
+            <p className="font-semibold">
+              {id ? "Hubungkan akun sosial" : "Connect social accounts"}
+            </p>
             <p className="text-xs text-muted-foreground">
-              {t(
-                "Enter App ID & App Secret from developers.facebook.com",
-                "Masukkan App ID & App Secret dari developers.facebook.com",
-              )}
+              {id
+                ? "Pilih platform, login dengan akun Anda, lalu izinkan akses. Tanpa App ID atau pendaftaran tambahan."
+                : "Pick a platform, sign in with your account and grant access. No App ID or extra signup needed."}
             </p>
           </div>
-          <Badge variant={status === "connected" ? "default" : "secondary"} className="gap-1">
-            {status === "connected" && <CheckCircle2 className="h-3 w-3" />} {badge}
+          <Badge variant={count ? "default" : "secondary"}>
+            {count} {id ? "terhubung" : "connected"}
           </Badge>
         </div>
-
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <AdminField label="App ID">
-            <Input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder={meta?.app_id ?? "1234567890"} />
-          </AdminField>
-          <AdminField label="App Secret">
-            <Input
-              type="password"
-              value={secret}
-              onChange={(e) => setSecret(e.target.value)}
-              placeholder={meta ? "••••••••" : ""}
-            />
-          </AdminField>
-          <Button onClick={() => verify.mutate()} disabled={verify.isPending || !appId || !secret}>
-            {verify.isPending ? t("Verifying…", "Memverifikasi…") : t("Save & Verify", "Simpan & Verifikasi")}
-          </Button>
-        </div>
-
-        {meta?.app_name && <p className="text-xs text-muted-foreground">App: {meta.app_name}</p>}
-        {meta?.last_error && <p className="text-xs text-destructive">{meta.last_error}</p>}
-
-        {(status === "verified" || status === "connected") && (
-          <div className="space-y-2 rounded-lg bg-secondary/40 p-3 text-xs text-muted-foreground">
-            <p>
-              {t(
-                "Add this URL under Facebook Login → Valid OAuth Redirect URIs:",
-                "Tambahkan URL ini di Facebook Login → Valid OAuth Redirect URIs:",
-              )}
-            </p>
-            <code className="block break-all text-foreground">
-              {typeof window !== "undefined" ? window.location.origin : ""}/api/public/meta/callback
-            </code>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button size="sm" onClick={() => connect.mutate()} disabled={connect.isPending}>
-                {status === "connected"
-                  ? t("Reconnect / add Pages", "Hubungkan ulang / tambah Page")
-                  : t("Connect with Facebook", "Hubungkan dengan Facebook")}
-              </Button>
-              {status === "connected" && (
-                <Button size="sm" variant="outline" onClick={() => disc.mutate()}>
-                  {t("Disconnect", "Putuskan")}
+        {st && !ready ? (
+          <p className="text-sm text-muted-foreground">
+            {id
+              ? "Fitur koneksi belum diaktifkan admin XPERD."
+              : "Connection is not enabled by XPERD admin yet."}
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {TEBAR_PLATFORMS.map((p) => (
+                <Button
+                  key={p.id}
+                  size="sm"
+                  variant="outline"
+                  disabled={start.isPending || !ready}
+                  onClick={() => start.mutate(p.id)}
+                >
+                  <Plus className="h-3 w-3" /> {p.label}
                 </Button>
-              )}
+              ))}
             </div>
-          </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => sync.mutate()}
+              disabled={sync.isPending || !ready}
+            >
+              {sync.isPending
+                ? id
+                  ? "Menyinkronkan..."
+                  : "Syncing..."
+                : id
+                  ? "Sinkronkan ulang"
+                  : "Resync"}
+            </Button>
+          </>
         )}
       </CardContent>
     </Card>
@@ -220,72 +282,159 @@ function MetaConnectCard({ workspaceId }: { workspaceId: string }) {
 export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const id = lang === "id";
-  const t = (en: string, i: string) => (id ? i : en);
   const qc = useQueryClient();
   const { data: accounts = [] } = useAccounts(workspaceId);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ platform: "instagram", account_name: "", handle: "", profile_url: "" });
-
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!form.account_name.trim()) throw new Error(t("Account name is required", "Nama akun wajib diisi"));
-      await upsertWorkspaceRows({
-        data: {
-          table: "crm_social_accounts",
-          workspaceId,
-          rows: [
-            {
-              id: crypto.randomUUID(),
-              platform: form.platform,
-              account_name: form.account_name.trim(),
-              handle: form.handle.trim() || null,
-              profile_url: form.profile_url.trim() || null,
-              status: "connected",
-              source: "manual",
-            },
-          ],
-        },
-      });
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] });
-      setOpen(false);
-      setForm({ platform: "instagram", account_name: "", handle: "", profile_url: "" });
-      toast.success(t("Account added", "Akun ditambahkan"));
+  const [pickOpen, setPickOpen] = useState(false);
+  const { data: nativeMeta } = useMetaSettings(workspaceId);
+  const nativeFn = useServerFn(startMetaConnect);
+  const nativeConnect = useMutation({
+    mutationFn: () => nativeFn({ data: { workspaceId, origin: window.location.origin } }),
+    onSuccess: (r) => {
+      window.location.href = r.url;
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const status = query.get("meta");
+    if (!status) return;
+    query.delete("meta");
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query.size ? `?${query}` : ""}`,
+    );
+    qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] });
+    qc.invalidateQueries({ queryKey: ["crm-meta", workspaceId] });
+    if (status === "ok") toast.success(id ? "Akun Meta terhubung." : "Meta accounts connected.");
+    else
+      toast.error(
+        id
+          ? "Koneksi Meta belum berhasil. Periksa izin aplikasi dan akun Tebar yang masih aktif."
+          : "Meta connection incomplete. Check app permissions and existing Tebar accounts.",
+      );
+  }, [workspaceId, qc, id]);
+  const tebarStatusFn = useServerFn(getTebarStatus);
+  const connectFn = useServerFn(startTebarConnect);
+  const { data: tebarSt } = useQuery({
+    queryKey: ["tebar-status", workspaceId],
+    queryFn: () => tebarStatusFn({ data: { workspaceId } }),
+  });
+  const connect = useMutation({
+    mutationFn: (platform: string) => {
+      const u = new URL(window.location.href);
+      u.search = "";
+      return connectFn({ data: { workspaceId, returnUrl: u.toString(), platforms: [platform] } });
+    },
+    onSuccess: (r) => {
+      window.location.href = r.url;
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const [form, setForm] = useState({
+    platform: "instagram",
+    account_name: "",
+    handle: "",
+    profile_url: "",
+  });
 
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!form.account_name.trim())
+        throw new Error(id ? "Nama akun wajib diisi" : "Account name is required");
+      await saveWorkspaceRow({
+        data: { table: "crm_social_accounts", workspaceId, data: { ...form } },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] });
+      setOpen(false);
+      setForm({ platform: "instagram", account_name: "", handle: "", profile_url: "" });
+      toast.success(id ? "Akun ditambahkan" : "Account added");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const discFn = useServerFn(disconnectTebarAccount);
   const remove = useMutation({
     mutationFn: async (accId: string) => {
+      if (accounts.find((x) => x.id === accId)?.source === "tebar") {
+        await discFn({ data: { workspaceId, accountId: accId } });
+        return;
+      }
       await deleteWorkspaceRow({ data: { table: "crm_social_accounts", workspaceId, id: accId } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-social-accounts", workspaceId] }),
   });
 
+  const { entitlements } = useApp();
+  const activeCount = accounts.filter((a) => a.status !== "disconnected").length;
+  const maxAccounts = entitlements.qalling?.limits.max_accounts ?? null;
+  const isFull = accountsFull(entitlements.qalling?.limits, activeCount);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-[0.28em] text-gold">QALLING CRM</p>
-          <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
-            {t("Social Accounts", "Akun Media Sosial")}
+          <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+          <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
+            {id ? "Akun Media Sosial" : "Social Accounts"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {t("Connect multiple accounts per platform.", "Hubungkan lebih dari satu akun per platform.")}
+            {id
+              ? "Hubungkan lebih dari satu akun per platform."
+              : "Connect multiple accounts per platform."}
           </p>
         </div>
-        <Button variant="navy" onClick={() => setOpen(true)}>
-          <Plus /> {t("Add Account", "Tambah Akun")}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() =>
+              isFull
+                ? toast.error(
+                    id
+                      ? `Kuota akun paket Anda penuh (${maxAccounts}). Upgrade paket untuk menambah akun.`
+                      : `Account quota full (${maxAccounts}). Upgrade to add more.`,
+                  )
+                : setPickOpen(true)
+            }
+            variant={isFull ? "outline" : "default"}
+          >
+            {isFull ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{" "}
+            {id ? "Tambah Akun" : "Add Account"}
+          </Button>
+          {maxAccounts != null && (
+            <span className="text-xs text-muted-foreground">
+              {activeCount}/{maxAccounts} {id ? "akun terpakai" : "accounts used"}
+            </span>
+          )}
+        </div>
       </div>
 
-      <MetaConnectCard workspaceId={workspaceId} />
+      <TebarConnectCard
+        workspaceId={workspaceId}
+        count={accounts.filter((a) => a.source === "tebar").length}
+      />
+      {nativeMeta?.native_social_enabled && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">Facebook & Instagram · Meta</p>
+            <Badge variant="outline">Beta</Badge>
+          </div>
+          <Button
+            variant="outline"
+            disabled={nativeConnect.isPending}
+            onClick={() => nativeConnect.mutate()}
+          >
+            <Plus className="size-4" />
+            {id ? "Hubungkan native" : "Connect natively"}
+          </Button>
+        </div>
+      )}
 
       {accounts.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {t("No accounts connected yet.", "Belum ada akun terhubung.")}
+            {id ? "Belum ada akun terhubung." : "No accounts connected yet."}
           </CardContent>
         </Card>
       ) : (
@@ -296,21 +445,28 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                 <div className="flex items-center justify-between">
                   <div className="flex gap-1">
                     <Badge variant="secondary">{platformLabel(a.platform)}</Badge>
-                    {a.source === "meta" ? (
+                    {a.source === "meta" || a.source === "tebar" ? (
                       <Badge className="gap-1">
                         <CheckCircle2 className="h-3 w-3" />
-                        {t("Connected", "Terhubung")}
+                        {id ? "Terhubung" : "Connected"}
                       </Badge>
                     ) : (
                       <Badge variant="outline">Manual</Badge>
                     )}
                   </div>
-                  <Button size="icon" variant="ghost" onClick={() => remove.mutate(a.id)} aria-label="Delete">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => remove.mutate(a.id)}
+                    aria-label="Delete"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="font-semibold text-navy dark:text-primary-foreground">{a.account_name}</p>
-                {a.handle && <p className="text-sm text-muted-foreground">@{a.handle.replace(/^@/, "")}</p>}
+                <p className="font-semibold">{a.account_name}</p>
+                {a.handle && (
+                  <p className="text-sm text-muted-foreground">@{a.handle.replace(/^@/, "")}</p>
+                )}
                 {a.profile_url && (
                   <a
                     href={a.profile_url}
@@ -318,7 +474,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-gold underline"
                   >
-                    {t("Open profile", "Buka profil")} <ExternalLink className="h-3 w-3" />
+                    {id ? "Buka profil" : "Open profile"} <ExternalLink className="h-3 w-3" />
                   </a>
                 )}
               </CardContent>
@@ -327,14 +483,63 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
         </div>
       )}
 
+      <Dialog open={pickOpen} onOpenChange={setPickOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{id ? "Pilih media sosial" : "Choose a social network"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {id
+              ? "Pilih platform, lalu login dan izinkan akses untuk menghubungkan akun."
+              : "Pick a platform, then sign in and grant access to connect."}
+          </p>
+          {tebarSt && !tebarSt.ready ? (
+            <p className="text-sm text-muted-foreground">
+              {id
+                ? "Fitur koneksi belum diaktifkan admin XPERD."
+                : "Connection is not enabled by XPERD admin yet."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {TEBAR_PLATFORMS.map((p) => (
+                <Button
+                  key={p.id}
+                  variant="outline"
+                  className="h-12"
+                  disabled={connect.isPending}
+                  onClick={() => connect.mutate(p.id)}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setPickOpen(false);
+                setOpen(true);
+              }}
+            >
+              {id ? "Tambah manual" : "Add manually"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("Add Account", "Tambah Akun")}</DialogTitle>
+            <DialogTitle>{id ? "Tambah Akun" : "Add Account"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <AdminField label="Platform">
-              <AdminSelect value={form.platform} onChange={(v) => setForm({ ...form, platform: v })}>
+              <AdminSelect
+                value={form.platform}
+                onChange={(v) => setForm({ ...form, platform: v })}
+              >
                 {CRM_SOCIAL_PLATFORMS.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}
@@ -342,13 +547,20 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                 ))}
               </AdminSelect>
             </AdminField>
-            <AdminField label={t("Account name", "Nama akun")}>
-              <Input value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} />
+            <AdminField label={id ? "Nama akun" : "Account name"}>
+              <Input
+                value={form.account_name}
+                onChange={(e) => setForm({ ...form, account_name: e.target.value })}
+              />
             </AdminField>
             <AdminField label="Username">
-              <Input value={form.handle} onChange={(e) => setForm({ ...form, handle: e.target.value })} placeholder="@brand" />
+              <Input
+                value={form.handle}
+                onChange={(e) => setForm({ ...form, handle: e.target.value })}
+                placeholder="@brand"
+              />
             </AdminField>
-            <AdminField label={t("Profile URL", "Link profil")}>
+            <AdminField label={id ? "Link profil" : "Profile URL"}>
               <Input
                 value={form.profile_url}
                 onChange={(e) => setForm({ ...form, profile_url: e.target.value })}
@@ -357,8 +569,8 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
             </AdminField>
           </div>
           <DialogFooter>
-            <Button variant="navy" onClick={() => save.mutate()} disabled={save.isPending}>
-              {t("Save", "Simpan")}
+            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+              {id ? "Simpan" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -385,111 +597,276 @@ const STATUS_STYLE: Record<string, string> = {
   failed: "bg-destructive/15 text-destructive",
   publishing: "bg-secondary text-muted-foreground",
 };
+const STATUS_LABEL = (s: string, id: boolean) =>
+  ({
+    draft: "Draft",
+    scheduled: id ? "Terjadwal" : "Scheduled",
+    published: id ? "Terkirim" : "Published",
+    failed: id ? "Gagal" : "Failed",
+    publishing: id ? "Diproses" : "Publishing",
+  })[s] ?? s;
+
+/** Platforms that reject text-only posts. */
+const NEEDS_MEDIA = ["instagram", "tiktok", "youtube", "pinterest"];
+
+type Draft = {
+  id?: string;
+  title: string;
+  caption: string;
+  media_url: string;
+  media_paths: string[];
+  account_ids: string[];
+  when: string;
+  status: string;
+  last_error?: string | null;
+  source?: string;
+  permalinks?: string[];
+};
+
+const PLATFORM_DOT: Record<string, string> = {
+  instagram: "bg-gold",
+  facebook: "bg-navy",
+  tiktok: "bg-foreground",
+  threads: "bg-muted-foreground",
+  linkedin: "bg-navy",
+  x: "bg-foreground",
+};
+
+function AccountChip({ a, active, onClick }: { a: Account; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors",
+        active
+          ? "border-gold bg-gold/15 font-medium"
+          : "border-border text-muted-foreground hover:bg-secondary",
+      )}
+    >
+      <span
+        className={cn("h-2 w-2 rounded-full", PLATFORM_DOT[a.platform] ?? "bg-muted-foreground")}
+      />
+      {platformLabel(a.platform)} · {a.handle ? `@${a.handle.replace(/^@/, "")}` : a.account_name}
+      {active && <CheckCircle2 className="h-3 w-3 text-gold" />}
+    </button>
+  );
+}
+
+/** Navigates to a sibling CRM submodule in both the ERP and Qalling shells. */
+function useGoSub() {
+  const router = useRouter();
+  return (sub: string) => {
+    const parts = window.location.pathname.replace(/\/$/, "").split("/");
+    parts[parts.length - 1] = sub;
+    router.history.push(parts.join("/"));
+  };
+}
 
 export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const id = lang === "id";
-  const t = (en: string, i: string) => (id ? i : en);
   const qc = useQueryClient();
-  const { data: allAccounts = [] } = useAccounts(workspaceId);
-  const accounts = allAccounts.filter((a) => a.source === "meta");
-  const { data: meta, isLoading: metaLoading } = useMetaSettings(workspaceId);
+  const goSub = useGoSub();
+  const { data: allAccounts = [], isLoading: accLoading } = useAccounts(workspaceId);
+  const accounts = allAccounts.filter((a) => a.source === "meta" || a.source === "tebar");
+  const { data: media = [] } = useCrmMedia(workspaceId);
+  const mediaUrl = useMemo(() => new Map(media.map((m) => [m.file_path, m])), [media]);
   const publishFn = useServerFn(publishPostNow);
-  const [mode, setMode] = useState<"week" | "month">("week");
+  const [mode, setMode] = useState<"list" | "week" | "month">("list");
   const [anchor, setAnchor] = useState(() => new Date());
-  const [editing, setEditing] = useState<(Partial<Post> & { when?: string }) | null>(null);
+  const [editing, setEditing] = useState<Draft | null>(null);
+  const [picker, setPicker] = useState(false);
+  const [statusTab, setStatusTab] = useState("all");
+  const [term, setTerm] = useState("");
 
   const days = useMemo(() => {
     if (mode === "week") {
       const s = startOfWeek(anchor);
-      return Array.from({ length: 7 }, (_, i) => new Date(s.getFullYear(), s.getMonth(), s.getDate() + i));
+      return Array.from(
+        { length: 7 },
+        (_, i) => new Date(s.getFullYear(), s.getMonth(), s.getDate() + i),
+      );
     }
     const s = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
-    return Array.from({ length: 42 }, (_, i) => new Date(s.getFullYear(), s.getMonth(), s.getDate() + i));
+    return Array.from(
+      { length: 42 },
+      (_, i) => new Date(s.getFullYear(), s.getMonth(), s.getDate() + i),
+    );
   }, [mode, anchor]);
-  const rangeStart = days[0];
-  const rangeEnd = new Date(days[days.length - 1].getTime() + 86_400_000);
 
-  const { data: posts = [] } = useQuery({
-    queryKey: ["crm-posts", workspaceId, rangeStart.toISOString(), rangeEnd.toISOString()],
+  const { data: posts = [], isLoading } = useQuery({
+    queryKey: ["crm-posts", workspaceId],
     queryFn: async () => {
-      const data = await listWorkspaceRows({
+      const res = await listWorkspaceRows({
         data: {
           table: "crm_scheduled_posts",
           workspaceId,
-          ranges: { scheduled_at: { gte: sqlDateTime(rangeStart), lt: sqlDateTime(rangeEnd) } },
           orderBy: "scheduled_at",
-          orderDir: "asc",
-          limit: 500,
+          orderDir: "desc",
+          limit: 1000,
         },
       });
-      return (data?.rows ?? []).map((row) => ({
-        ...row,
-        account_ids: parseAccountIds(row.account_ids),
-      })) as unknown as Post[];
+      return rowsOf(res).map(normPost);
     },
   });
-
   const byDay = useMemo(() => {
-    const map = new Map<string, Post[]>();
+    const m = new Map<string, typeof posts>();
     posts.forEach((p) => {
-      const key = dayKey(new Date(p.scheduled_at));
-      map.set(key, [...(map.get(key) ?? []), p]);
+      const k = dayKey(new Date(p.scheduled_at));
+      m.set(k, [...(m.get(k) ?? []), p]);
     });
-    return map;
+    return m;
   }, [posts]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: posts.length };
+    posts.forEach((p) => (c[p.status] = (c[p.status] ?? 0) + 1));
+    return c;
+  }, [posts]);
+  const byStatus = useMemo(
+    () => posts.filter((p) => statusTab === "all" || p.status === statusTab),
+    [posts, statusTab],
+  );
+  const filtered = useSearchFilter(byStatus, term, (p) => [p.title, p.caption]);
+  const pager = usePagination(filtered, 10);
+  const accName = (aid: string) => {
+    const a = allAccounts.find((x) => x.id === aid);
+    return a
+      ? `${platformLabel(a.platform)} · ${a.handle ? `@${a.handle.replace(/^@/, "")}` : a.account_name}`
+      : null;
+  };
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["crm-posts", workspaceId] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["crm-posts", workspaceId] });
+    qc.invalidateQueries({ queryKey: ["crm-posts-all", workspaceId] });
+  };
+
+  const hasTebar = accounts.some((a) => a.source === "tebar");
+  const syncPostsFn = useServerFn(syncTebarPosts);
+  const syncPosts = useMutation({
+    mutationFn: (_v: { silent?: boolean }) => syncPostsFn({ data: { workspaceId } }),
+    onSuccess: (r, v) => {
+      invalidate();
+      if (!v.silent)
+        toast.success(
+          id
+            ? `Sinkron selesai: ${r.imported} baru, ${r.updated} diperbarui`
+            : `Synced: ${r.imported} new, ${r.updated} updated`,
+        );
+    },
+    onError: (e: Error, v) => {
+      if (!v.silent) toast.error(e.message);
+    },
+  });
+  // Pull Tebar-made posts and fresh publish statuses once when the page opens.
+  const [autoSynced, setAutoSynced] = useState(false);
+  useEffect(() => {
+    if (hasTebar && !autoSynced) {
+      setAutoSynced(true);
+      syncPosts.mutate({ silent: true });
+    }
+  }, [hasTebar, autoSynced]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const validate = (d: Draft, status: string) => {
+    if (!d.caption.trim() && !d.media_paths.length && !d.media_url.trim())
+      throw new Error(id ? "Isi caption atau pilih media" : "Add a caption or media");
+    if (status === "draft") return;
+    if (!d.account_ids.length)
+      throw new Error(id ? "Pilih minimal satu akun" : "Select at least one account");
+    if (!d.when) throw new Error(id ? "Jadwal wajib diisi" : "Schedule is required");
+    const hasMedia = d.media_paths.length > 0 || !!d.media_url.trim();
+    const needs = accounts.filter(
+      (a) => d.account_ids.includes(a.id) && NEEDS_MEDIA.includes(a.platform),
+    );
+    if (!hasMedia && needs.length)
+      throw new Error(
+        id
+          ? `${[...new Set(needs.map((a) => platformLabel(a.platform)))].join(", ")} wajib memakai gambar/video`
+          : `${[...new Set(needs.map((a) => platformLabel(a.platform)))].join(", ")} requires an image/video`,
+      );
+  };
+
+  const persist = async (d: Draft, status: string) => {
+    validate(d, status);
+    const payload = {
+      title:
+        d.title.trim() ||
+        d.caption.trim().split("\n")[0].slice(0, 80) ||
+        (id ? "Postingan" : "Post"),
+      caption: d.caption,
+      media_url: d.media_url.trim() || null,
+      media_paths: JSON.stringify(d.media_paths),
+      account_ids: JSON.stringify(d.account_ids),
+      scheduled_at: sqlDateTime(new Date(d.when || Date.now())),
+      status,
+      last_error: null,
+    };
+    const saved = await saveWorkspaceRow({
+      data: { table: "crm_scheduled_posts", workspaceId, id: d.id, data: payload },
+    });
+    return (saved as { id: string }).id;
+  };
 
   const save = useMutation({
-    mutationFn: async () => {
-      if (!editing?.title?.trim()) throw new Error(t("Title is required", "Judul wajib diisi"));
-      if (!editing.when) throw new Error(t("Schedule is required", "Jadwal wajib diisi"));
-      const payload = {
-        title: editing.title.trim(),
-        caption: editing.caption ?? "",
-        media_url: editing.media_url || null,
-        account_ids: JSON.stringify(editing.account_ids ?? []),
-        scheduled_at: sqlDateTimeOrNull(editing.when),
-        status: editing.status ?? "scheduled",
-      };
-      if (editing.id) {
-        await saveWorkspaceRow({ data: { table: "crm_scheduled_posts", workspaceId, id: editing.id, data: payload } });
-      } else {
-        await upsertWorkspaceRows({
-          data: { table: "crm_scheduled_posts", workspaceId, rows: [{ id: crypto.randomUUID(), ...payload }] },
-        });
-      }
-    },
-    onSuccess: () => {
-      void invalidate();
-      toast.success(t("Post saved", "Postingan tersimpan"));
+    mutationFn: ({ status }: { status: string }) => persist(editing!, status),
+    onSuccess: (_, v) => {
+      invalidate();
+      setEditing(null);
+      toast.success(
+        v.status === "draft"
+          ? id
+            ? "Draft disimpan"
+            : "Draft saved"
+          : id
+            ? "Postingan dijadwalkan"
+            : "Post scheduled",
+      );
     },
     onError: (e: Error) => toast.error(e.message),
   });
-
+  const publishNow = useMutation({
+    mutationFn: async () => {
+      const pid = await persist(
+        { ...editing!, when: editing!.when || toLocalInput(new Date()) },
+        "scheduled",
+      );
+      setEditing((e) => (e ? { ...e, id: pid } : e));
+      return publishFn({ data: { postId: pid } });
+    },
+    onSuccess: (r) => {
+      invalidate();
+      // Tebar publishes in the background; refresh statuses and links shortly after.
+      if (hasTebar) setTimeout(() => syncPosts.mutate({ silent: true }), 10_000);
+      if (r.ok) {
+        toast.success(
+          hasTebar
+            ? id
+              ? "Terkirim, sedang diterbitkan"
+              : "Sent, publishing now"
+            : id
+              ? "Berhasil diposting"
+              : "Published",
+        );
+        setEditing(null);
+      } else
+        toast.error(
+          r.results
+            .map((x) => x.error)
+            .filter(Boolean)
+            .join("; "),
+        );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const remove = useMutation({
     mutationFn: async (pid: string) => {
       await deleteWorkspaceRow({ data: { table: "crm_scheduled_posts", workspaceId, id: pid } });
     },
     onSuccess: () => {
-      void invalidate();
+      invalidate();
       setEditing(null);
+      toast.success(id ? "Postingan dihapus" : "Post deleted");
     },
-  });
-
-  const publishNow = useMutation({
-    mutationFn: async () => {
-      await save.mutateAsync();
-      if (!editing?.id) throw new Error(t("Save the post first", "Simpan postingan terlebih dahulu"));
-      return publishFn({ data: { workspaceId, postId: editing.id } });
-    },
-    onSuccess: (r) => {
-      void invalidate();
-      if (r.ok) toast.success(t("Published", "Berhasil diposting"));
-      else toast.error(r.results.map((x) => x.error).filter(Boolean).join("; "));
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   const shift = (dir: number) => {
@@ -498,229 +875,585 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
     else d.setMonth(d.getMonth() + dir);
     setAnchor(d);
   };
-  const openNew = (d: Date) => {
-    const when = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0);
-    setEditing({ title: "", caption: "", account_ids: accounts.map((a) => a.id), status: "scheduled", when: toLocalInput(when) });
+  const openNew = (d?: Date) => {
+    const base = d
+      ? new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0)
+      : new Date(Date.now() + 3600_000);
+    setEditing({
+      title: "",
+      caption: "",
+      media_url: "",
+      media_paths: [],
+      account_ids: accounts.map((a) => a.id),
+      status: "scheduled",
+      when: toLocalInput(base),
+    });
   };
+  const openEdit = (p: Post & { media_paths: string[] }) =>
+    setEditing({
+      id: p.id,
+      title: p.title,
+      caption: p.caption ?? "",
+      media_url: p.media_url ?? "",
+      media_paths: p.media_paths ?? [],
+      account_ids: p.account_ids ?? [],
+      when: toLocalInput(new Date(p.scheduled_at)),
+      status: p.status,
+      last_error: p.last_error,
+      source: p.source,
+      permalinks: p.permalinks ?? [],
+    });
   const weekdays = id
     ? ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]
     : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const title = anchor.toLocaleDateString(id ? "id-ID" : "en-US", { month: "long", year: "numeric" });
+  const title = anchor.toLocaleDateString(id ? "id-ID" : "en-US", {
+    month: "long",
+    year: "numeric",
+  });
   const today = dayKey(new Date());
+  const fmt = (d: string) =>
+    new Date(d).toLocaleString(id ? "id-ID" : "en-US", { dateStyle: "medium", timeStyle: "short" });
+  const firstThumb = (p: { media_paths?: string[]; media_url: string | null }) => {
+    const m = p.media_paths?.length ? mediaUrl.get(p.media_paths[0]) : undefined;
+    return m ?? (p.media_url ? { url: p.media_url, mime_type: null } : null);
+  };
 
-  if (!metaLoading && meta?.status !== "connected") {
+  if (!accLoading && accounts.length === 0) {
     return (
       <div className="mx-auto max-w-lg py-16 text-center">
         <Lock className="mx-auto h-8 w-8 text-gold" />
-        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-primary-foreground">
-          {t("Post Scheduler is locked", "Jadwal Postingan belum aktif")}
+        <h1 className="mt-4 text-xl font-semibold text-navy dark:text-foreground">
+          {id ? "Hubungkan akun sosial dulu" : "Connect a social account first"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {t(
-            "Connect a Facebook Page/Instagram under Social Accounts first.",
-            "Hubungkan Facebook Page/Instagram di menu Akun Media Sosial terlebih dahulu.",
-          )}
+          {id
+            ? "Postingan dikirim ke akun Instagram, Facebook, TikTok, dan lainnya yang sudah terhubung."
+            : "Posts are sent to your connected Instagram, Facebook, TikTok and other accounts."}
         </p>
+        <Button className="mt-5" onClick={() => goSub("social-accounts")}>
+          <Plus className="h-4 w-4" /> {id ? "Hubungkan akun" : "Connect account"}
+        </Button>
       </div>
     );
   }
+
+  const xSelected =
+    !!editing && accounts.some((a) => a.platform === "x" && editing.account_ids.includes(a.id));
+  const previewAcc = editing ? accounts.find((a) => editing.account_ids.includes(a.id)) : undefined;
+  const previewMedia = editing
+    ? firstThumb({ media_paths: editing.media_paths, media_url: editing.media_url || null })
+    : null;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-[0.28em] text-gold">QALLING CRM</p>
-          <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
-            {t("Post Scheduler", "Jadwal Postingan")}
-          </h1>
+          <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+          <h1 className="text-2xl font-semibold text-navy dark:text-foreground">Posts</h1>
           <p className="text-sm text-muted-foreground">
-            {posts.length} {t("posts in this period", "postingan di periode ini")}
+            {accounts.length} {id ? "akun terhubung" : "connected accounts"} ·{" "}
+            {counts.scheduled ?? 0} {id ? "terjadwal" : "scheduled"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-md border border-border p-0.5">
-            {(["week", "month"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                className={cn("rounded px-3 py-1 text-sm", mode === m && "bg-navy text-primary-foreground")}
-              >
-                {m === "week" ? t("Week", "Minggu") : t("Month", "Bulan")}
-              </button>
-            ))}
-          </div>
-          <Button size="icon" variant="outline" onClick={() => shift(-1)} aria-label="Prev">
-            <ChevronLeft className="h-4 w-4" />
+          {hasTebar && (
+            <Button
+              variant="outline"
+              onClick={() => syncPosts.mutate({})}
+              disabled={syncPosts.isPending}
+            >
+              <RefreshCw className={cn("h-4 w-4", syncPosts.isPending && "animate-spin")} />{" "}
+              {id ? "Sinkron dari Tebar" : "Sync from Tebar"}
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => goSub("social-accounts")}>
+            <Plus className="h-4 w-4" /> {id ? "Tambah akun" : "Add account"}
           </Button>
-          <span className="min-w-32 text-center text-sm font-medium">{title}</span>
-          <Button size="icon" variant="outline" onClick={() => shift(1)} aria-label="Next">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="navy" onClick={() => openNew(new Date())}>
-            <Plus /> {t("Post", "Postingan")}
+          <Button onClick={() => openNew()}>
+            <Send className="h-4 w-4" /> {id ? "Buat postingan" : "Create post"}
           </Button>
         </div>
       </div>
 
-      {accounts.length === 0 && (
-        <p className="rounded-lg border border-border bg-secondary/40 p-3 text-sm text-muted-foreground">
-          {t("Add accounts under Social Accounts first.", "Tambahkan akun di menu Akun Media Sosial terlebih dahulu.")}
-        </p>
-      )}
-
-      <div className="overflow-x-auto">
-        <div className="grid min-w-[720px] grid-cols-7 gap-px overflow-hidden rounded-xl border border-border bg-border">
-          {weekdays.map((w) => (
-            <div key={w} className="bg-secondary/60 px-2 py-2 text-center text-xs font-semibold uppercase text-muted-foreground">
-              {w}
-            </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex rounded-md border border-border p-0.5">
+          {(["list", "week", "month"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={cn(
+                "flex items-center gap-1 rounded px-3 py-1 text-sm",
+                mode === m && "bg-navy text-primary-foreground",
+              )}
+            >
+              {m === "list" ? (
+                <List className="h-3.5 w-3.5" />
+              ) : (
+                <CalendarDays className="h-3.5 w-3.5" />
+              )}
+              {m === "list"
+                ? id
+                  ? "Daftar"
+                  : "List"
+                : m === "week"
+                  ? id
+                    ? "Minggu"
+                    : "Week"
+                  : id
+                    ? "Bulan"
+                    : "Month"}
+            </button>
           ))}
-          {days.map((d) => {
-            const list = byDay.get(dayKey(d)) ?? [];
-            const faded = mode === "month" && d.getMonth() !== anchor.getMonth();
-            return (
-              <div
-                key={d.toISOString()}
-                onClick={() => openNew(d)}
-                className={cn(
-                  "cursor-pointer bg-card p-2 hover:bg-secondary/40",
-                  mode === "week" ? "min-h-64" : "min-h-28",
-                  faded && "opacity-50",
-                )}
-              >
-                <span
+        </div>
+        {mode === "list" ? (
+          <SearchInput
+            value={term}
+            onChange={setTerm}
+            placeholder={id ? "Cari caption…" : "Search caption…"}
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="outline" onClick={() => shift(-1)} aria-label="Prev">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-32 text-center text-sm font-medium">{title}</span>
+            <Button size="icon" variant="outline" onClick={() => shift(1)} aria-label="Next">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {mode === "list" ? (
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <div className="flex flex-wrap gap-1.5">
+              {["all", "draft", "scheduled", "published", "failed"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatusTab(s)}
                   className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
-                    dayKey(d) === today && "bg-gold font-semibold text-navy",
+                    "rounded-full border px-3 py-1 text-xs",
+                    statusTab === s
+                      ? "border-gold bg-gold/15 font-medium"
+                      : "border-border text-muted-foreground",
                   )}
                 >
-                  {d.getDate()}
-                </span>
-                <div className="mt-1 space-y-1">
-                  {list.map((p) => (
+                  {s === "all" ? (id ? "Semua" : "All") : STATUS_LABEL(s, id)} ({counts[s] ?? 0})
+                </button>
+              ))}
+            </div>
+            {isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-lg bg-secondary" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                <p>{id ? "Belum ada postingan." : "No posts yet."}</p>
+                <Button className="mt-3" size="sm" onClick={() => openNew()}>
+                  <Plus className="h-4 w-4" /> {id ? "Buat postingan" : "Create post"}
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {pager.items.map((p) => {
+                  const th = firstThumb(p);
+                  const n = (p.media_paths?.length ?? 0) + (p.media_url ? 1 : 0);
+                  return (
                     <button
                       key={p.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditing({ ...p, when: toLocalInput(new Date(p.scheduled_at)) });
-                      }}
-                      className={cn(
-                        "block w-full truncate rounded px-1.5 py-1 text-left text-xs",
-                        STATUS_STYLE[p.status] ?? STATUS_STYLE.scheduled,
-                      )}
+                      onClick={() => openEdit(p)}
+                      className="flex w-full items-center gap-3 py-3 text-left hover:bg-secondary/40"
                     >
-                      {new Date(p.scheduled_at).toLocaleTimeString(id ? "id-ID" : "en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}{" "}
-                      {p.title}
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-secondary">
+                        {th?.url ? (
+                          (th.mime_type ?? "").startsWith("video/") ? (
+                            <video
+                              src={th.url}
+                              muted
+                              preload="metadata"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <img
+                              src={th.url}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          )
+                        ) : (
+                          <ImageIcon className="m-auto mt-4 h-5 w-5 text-muted-foreground" />
+                        )}
+                        {n > 1 && (
+                          <span className="absolute bottom-0.5 right-0.5 rounded bg-navy px-1 text-[10px] text-primary-foreground">
+                            +{n - 1}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                          {p.source === "tebar" && (
+                            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                              Tebar
+                            </Badge>
+                          )}
+                          <span className="truncate">{p.caption || p.title}</span>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {(p.account_ids ?? []).map(accName).filter(Boolean).join(", ") ||
+                            (id ? "Belum pilih akun" : "No accounts")}
+                        </p>
+                        {p.status === "failed" && p.last_error && (
+                          <p className="truncate text-xs text-destructive">{p.last_error}</p>
+                        )}
+                      </div>
+                      <div className="hidden shrink-0 text-right sm:block">
+                        <p className="text-xs text-muted-foreground">{fmt(p.scheduled_at)}</p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded px-2 py-0.5 text-xs",
+                          STATUS_STYLE[p.status] ?? STATUS_STYLE.scheduled,
+                        )}
+                      >
+                        {STATUS_LABEL(p.status, id)}
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            )}
+            {filtered.length > 0 && <PaginationBar p={pager} />}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="overflow-x-auto">
+          <div className="grid min-w-[720px] grid-cols-7 gap-px overflow-hidden rounded-xl border border-border bg-border">
+            {weekdays.map((w) => (
+              <div
+                key={w}
+                className="bg-secondary/60 px-2 py-2 text-center text-xs font-semibold uppercase text-muted-foreground"
+              >
+                {w}
+              </div>
+            ))}
+            {days.map((d) => {
+              const list = byDay.get(dayKey(d)) ?? [];
+              const faded = mode === "month" && d.getMonth() !== anchor.getMonth();
+              return (
+                <div
+                  key={d.toISOString()}
+                  onClick={() => openNew(d)}
+                  className={cn(
+                    "cursor-pointer bg-card p-2 hover:bg-secondary/40",
+                    mode === "week" ? "min-h-64" : "min-h-28",
+                    faded && "opacity-50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                      dayKey(d) === today && "bg-gold font-semibold text-navy",
+                    )}
+                  >
+                    {d.getDate()}
+                  </span>
+                  <div className="mt-1 space-y-1">
+                    {list.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(p);
+                        }}
+                        className={cn(
+                          "block w-full truncate rounded px-1.5 py-1 text-left text-xs",
+                          STATUS_STYLE[p.status] ?? STATUS_STYLE.scheduled,
+                        )}
+                      >
+                        {new Date(p.scheduled_at).toLocaleTimeString(id ? "id-ID" : "en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        {p.caption || p.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{editing?.id ? t("Edit Post", "Ubah Postingan") : t("New Post", "Postingan Baru")}</DialogTitle>
+            <DialogTitle>
+              {editing?.id
+                ? id
+                  ? "Ubah Postingan"
+                  : "Edit Post"
+                : id
+                  ? "Buat Postingan"
+                  : "Create Post"}
+            </DialogTitle>
           </DialogHeader>
           {editing && (
-            <div className="space-y-3">
-              {editing.status === "failed" && editing.last_error && (
-                <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">{editing.last_error}</p>
-              )}
-              <AdminField label={t("Title", "Judul")}>
-                <Input value={editing.title ?? ""} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-              </AdminField>
-              <AdminField label="Caption">
-                <Textarea rows={5} value={editing.caption ?? ""} onChange={(e) => setEditing({ ...editing, caption: e.target.value })} />
-              </AdminField>
-              <AdminField label={t("Media URL", "Link gambar/video")}>
-                <Input
-                  value={editing.media_url ?? ""}
-                  onChange={(e) => setEditing({ ...editing, media_url: e.target.value })}
-                  placeholder="https://"
-                />
-              </AdminField>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AdminField label={t("Schedule", "Jadwal")}>
-                  <Input
-                    type="datetime-local"
-                    value={editing.when ?? ""}
-                    onChange={(e) => setEditing({ ...editing, when: e.target.value })}
-                  />
-                </AdminField>
-                <AdminField label="Status">
-                  <AdminSelect value={editing.status ?? "scheduled"} onChange={(v) => setEditing({ ...editing, status: v })}>
-                    <option value="draft">Draft</option>
-                    <option value="scheduled">{t("Scheduled", "Terjadwal")}</option>
-                    <option value="published">{t("Published", "Sudah diposting")}</option>
-                    <option value="failed">{t("Failed", "Gagal")}</option>
-                  </AdminSelect>
-                </AdminField>
-              </div>
-              <AdminField label={t("Post to accounts", "Posting ke akun")}>
-                <div className="space-y-2">
-                  {accounts.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {t("No Meta account connected yet.", "Belum ada akun Meta yang terhubung.")}
+            <div className="grid gap-5 md:grid-cols-[1fr_280px]">
+              <div className="min-w-0 space-y-4">
+                {editing.source === "tebar" && (
+                  <p className="rounded border border-gold/40 bg-gold/10 p-2 text-xs">
+                    {id
+                      ? "Postingan ini dibuat di Tebar dan hanya ditampilkan di sini. Ubah atau jadwalkan ulang dari Tebar."
+                      : "This post was created in Tebar and is shown here read-only. Edit or reschedule it in Tebar."}
+                  </p>
+                )}
+                {editing.last_error &&
+                  (editing.status === "failed" || editing.status === "published") && (
+                    <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
+                      {editing.last_error}
                     </p>
                   )}
-                  {accounts.map((a) => {
-                    const checked = (editing.account_ids ?? []).includes(a.id);
-                    return (
-                      <label key={a.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(v) =>
+                {!!editing.permalinks?.length && (
+                  <div className="flex flex-wrap gap-2">
+                    {editing.permalinks.map((u) => (
+                      <a
+                        key={u}
+                        href={u}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-secondary"
+                      >
+                        <ExternalLink className="h-3 w-3" /> {id ? "Lihat postingan" : "View post"}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                <AdminField label={id ? "Posting ke akun" : "Post to accounts"}>
+                  <div className="flex flex-wrap gap-2">
+                    {accounts.map((a) => {
+                      const on = editing.account_ids.includes(a.id);
+                      return (
+                        <AccountChip
+                          key={a.id}
+                          a={a}
+                          active={on}
+                          onClick={() =>
                             setEditing({
                               ...editing,
-                              account_ids: v
-                                ? [...(editing.account_ids ?? []), a.id]
-                                : (editing.account_ids ?? []).filter((x) => x !== a.id),
+                              account_ids: on
+                                ? editing.account_ids.filter((x) => x !== a.id)
+                                : [...editing.account_ids, a.id],
                             })
                           }
                         />
-                        {platformLabel(a.platform)} · {a.account_name}
-                      </label>
-                    );
-                  })}
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => goSub("social-accounts")}
+                      className="flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
+                    >
+                      <Plus className="h-3 w-3" /> {id ? "Akun baru" : "New account"}
+                    </button>
+                  </div>
+                </AdminField>
+                <AdminField label="Caption">
+                  <Textarea
+                    rows={7}
+                    value={editing.caption}
+                    onChange={(e) => setEditing({ ...editing, caption: e.target.value })}
+                    placeholder={
+                      id
+                        ? "Tulis caption, hashtag, dan ajakan…"
+                        : "Write your caption, hashtags and call to action…"
+                    }
+                  />
+                  <p
+                    className={cn(
+                      "mt-1 text-right text-[11px] text-muted-foreground",
+                      xSelected && editing.caption.length > 280 && "text-destructive",
+                    )}
+                  >
+                    {editing.caption.length}
+                    {xSelected ? " / 280 (X)" : ""}
+                  </p>
+                </AdminField>
+                <AdminField label={id ? "Media" : "Media"}>
+                  <div className="flex flex-wrap gap-2">
+                    {editing.media_paths.map((path) => {
+                      const m = mediaUrl.get(path);
+                      return (
+                        <div
+                          key={path}
+                          className="relative h-20 w-20 overflow-hidden rounded-lg border border-border bg-secondary"
+                        >
+                          {m && <MediaThumb m={m} className="h-full w-full" />}
+                          <button
+                            type="button"
+                            aria-label="Remove"
+                            onClick={() =>
+                              setEditing({
+                                ...editing,
+                                media_paths: editing.media_paths.filter((x) => x !== path),
+                              })
+                            }
+                            className="absolute right-1 top-1 rounded-full bg-background/90 p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setPicker(true)}
+                      className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-[11px] text-muted-foreground hover:bg-secondary"
+                    >
+                      <ImageIcon className="h-5 w-5" /> {id ? "Tambah" : "Add"}
+                    </button>
+                  </div>
+                  <Input
+                    className="mt-2"
+                    value={editing.media_url}
+                    onChange={(e) => setEditing({ ...editing, media_url: e.target.value })}
+                    placeholder={
+                      id
+                        ? "atau tempel link gambar/video (opsional)"
+                        : "or paste an image/video link (optional)"
+                    }
+                  />
+                </AdminField>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <AdminField label={id ? "Jadwal posting" : "Publish at"}>
+                    <Input
+                      type="datetime-local"
+                      value={editing.when}
+                      onChange={(e) => setEditing({ ...editing, when: e.target.value })}
+                    />
+                  </AdminField>
+                  <AdminField
+                    label={id ? "Judul internal (opsional)" : "Internal title (optional)"}
+                  >
+                    <Input
+                      value={editing.title}
+                      onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                    />
+                  </AdminField>
                 </div>
-              </AdminField>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Preview
+                </p>
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  <div className="flex items-center gap-2 p-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/20 text-xs font-semibold">
+                      {(previewAcc?.account_name ?? "Q").slice(0, 1).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold">
+                        {previewAcc?.account_name ?? (id ? "Pilih akun" : "Pick an account")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {previewAcc ? platformLabel(previewAcc.platform) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {previewMedia?.url ? (
+                    (previewMedia.mime_type ?? "").startsWith("video/") ? (
+                      <video
+                        src={previewMedia.url}
+                        muted
+                        controls
+                        className="aspect-square w-full bg-secondary object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={previewMedia.url}
+                        alt=""
+                        className="aspect-square w-full bg-secondary object-cover"
+                      />
+                    )
+                  ) : (
+                    <div className="flex aspect-square items-center justify-center bg-secondary text-muted-foreground">
+                      <ImageIcon className="h-8 w-8" />
+                    </div>
+                  )}
+                  <p className="line-clamp-6 whitespace-pre-wrap p-3 text-xs">
+                    {editing.caption ||
+                      (id ? "Caption akan tampil di sini" : "Caption appears here")}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           <DialogFooter className="flex-wrap gap-2">
             {editing?.id && (
-              <Button variant="outline" onClick={() => remove.mutate(editing.id!)}>
-                <Trash2 className="h-4 w-4" /> {t("Delete", "Hapus")}
+              <Button
+                variant="ghost"
+                className="mr-auto"
+                onClick={() => remove.mutate(editing.id!)}
+              >
+                <Trash2 className="h-4 w-4" /> {id ? "Hapus" : "Delete"}
               </Button>
             )}
             <Button
               variant="outline"
               onClick={() => {
-                void navigator.clipboard.writeText(editing?.caption ?? "");
-                toast.success(t("Caption copied", "Caption disalin"));
+                navigator.clipboard.writeText(editing?.caption ?? "");
+                toast.success(id ? "Caption disalin" : "Caption copied");
               }}
             >
-              <Copy className="h-4 w-4" /> {t("Copy caption", "Salin caption")}
+              <Copy className="h-4 w-4" /> {id ? "Salin" : "Copy"}
             </Button>
-            {editing?.id && editing.status !== "published" && (
-              <Button variant="outline" onClick={() => publishNow.mutate()} disabled={publishNow.isPending}>
-                <Send className="h-4 w-4" /> {t("Post now", "Posting sekarang")}
-              </Button>
+            {editing?.status !== "published" && editing?.source !== "tebar" && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => save.mutate({ status: "draft" })}
+                  disabled={save.isPending}
+                >
+                  {id ? "Simpan draft" : "Save draft"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => publishNow.mutate()}
+                  disabled={publishNow.isPending}
+                >
+                  {publishNow.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}{" "}
+                  {id ? "Posting sekarang" : "Post now"}
+                </Button>
+                <Button
+                  onClick={() => save.mutate({ status: "scheduled" })}
+                  disabled={save.isPending}
+                >
+                  <CalendarDays className="h-4 w-4" /> {id ? "Jadwalkan" : "Schedule"}
+                </Button>
+              </>
             )}
-            <Button variant="navy" onClick={() => save.mutate()} disabled={save.isPending}>
-              {t("Save", "Simpan")}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {editing && (
+        <MediaPickerDialog
+          workspaceId={workspaceId}
+          open={picker}
+          onOpenChange={setPicker}
+          selected={editing.media_paths}
+          onConfirm={(paths) => setEditing((e) => (e ? { ...e, media_paths: paths } : e))}
+        />
+      )}
     </div>
   );
 }
@@ -728,25 +1461,26 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
 export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const id = lang === "id";
-  const t = (en: string, i: string) => (id ? i : en);
   const { data: accounts = [] } = useAccounts(workspaceId);
-  const { data: meta } = useMetaSettings(workspaceId);
+  const connected = accounts.filter((a) => a.source === "meta" || a.source === "tebar").length;
   const { data: posts = [] } = useQuery({
     queryKey: ["crm-posts-all", workspaceId],
     queryFn: async () => {
-      const data = await listWorkspaceRows({
-        data: { table: "crm_scheduled_posts", workspaceId, orderBy: "scheduled_at", orderDir: "desc", limit: 1000 },
+      const res = await listWorkspaceRows({
+        data: {
+          table: "crm_scheduled_posts",
+          workspaceId,
+          orderBy: "scheduled_at",
+          orderDir: "desc",
+          limit: 1000,
+        },
       });
-      return (data?.rows ?? []).map((row) => ({
-        ...row,
-        account_ids: parseAccountIds(row.account_ids),
-      })) as unknown as Post[];
+      return rowsOf(res).map(normPost) as Post[];
     },
   });
-
   const now = Date.now();
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-  const count = (status: string) => posts.filter((p) => p.status === status).length;
+  const count = (st: string) => posts.filter((p) => p.status === st).length;
   const thisMonth = posts.filter((p) => new Date(p.scheduled_at).getTime() >= monthStart).length;
   const upcoming = posts
     .filter((p) => p.status === "scheduled" && new Date(p.scheduled_at).getTime() >= now)
@@ -755,7 +1489,10 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
   const failed = posts.filter((p) => p.status === "failed").slice(0, 5);
   const done = count("published") + count("failed");
   const rate = done ? Math.round((count("published") / done) * 100) : 0;
-  const perAccount = accounts.map((a) => ({ a, n: posts.filter((p) => p.account_ids.includes(a.id)).length }));
+  const perAccount = accounts.map((a) => ({
+    a,
+    n: posts.filter((p) => p.account_ids.includes(a.id)).length,
+  }));
   const maxN = Math.max(1, ...perAccount.map((x) => x.n));
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const s = startOfWeek(new Date(now - (7 - i) * 7 * 86_400_000));
@@ -763,8 +1500,8 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
     return {
       label: s.toLocaleDateString(id ? "id-ID" : "en-US", { day: "numeric", month: "short" }),
       n: posts.filter((p) => {
-        const ts = new Date(p.scheduled_at).getTime();
-        return ts >= s.getTime() && ts < e;
+        const t = new Date(p.scheduled_at).getTime();
+        return t >= s.getTime() && t < e;
       }).length,
     };
   });
@@ -773,45 +1510,43 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
     new Date(d).toLocaleString(id ? "id-ID" : "en-US", { dateStyle: "medium", timeStyle: "short" });
 
   const stats = [
-    { label: t("Total posts", "Total postingan"), v: posts.length },
-    { label: t("Scheduled", "Terjadwal"), v: count("scheduled") },
-    { label: t("Published", "Sudah diposting"), v: count("published") },
-    { label: t("Failed", "Gagal"), v: count("failed") },
-    { label: t("This month", "Bulan ini"), v: thisMonth },
-    { label: t("Success rate", "Tingkat sukses"), v: `${rate}%` },
+    { label: id ? "Total postingan" : "Total posts", v: posts.length },
+    { label: id ? "Terjadwal" : "Scheduled", v: count("scheduled") },
+    { label: id ? "Sudah diposting" : "Published", v: count("published") },
+    { label: id ? "Gagal" : "Failed", v: count("failed") },
+    { label: id ? "Bulan ini" : "This month", v: thisMonth },
+    { label: id ? "Tingkat sukses" : "Success rate", v: `${rate}%` },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-[0.28em] text-gold">QALLING CRM</p>
-          <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
-            {t("Social Dashboard", "Dasbor Media Sosial")}
+          <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+          <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
+            {id ? "Dasbor Media Sosial" : "Social Dashboard"}
           </h1>
         </div>
-        <Badge variant={meta?.status === "connected" ? "default" : "secondary"} className="gap-1">
-          {meta?.status === "connected" && <CheckCircle2 className="h-3 w-3" />}
-          Meta: {meta?.status === "connected" ? t("Connected", "Terhubung") : t("Not connected", "Belum terhubung")}
+        <Badge variant={connected ? "default" : "secondary"} className="gap-1">
+          {connected > 0 && <CheckCircle2 className="h-3 w-3" />}
+          {connected} {id ? "akun terhubung" : "accounts connected"}
         </Badge>
       </div>
-
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {stats.map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">{s.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-navy dark:text-primary-foreground">{s.v}</p>
+              <p className="mt-1 text-2xl font-semibold">{s.v}</p>
             </CardContent>
           </Card>
         ))}
       </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardContent className="p-5">
-            <p className="mb-4 font-semibold text-navy dark:text-primary-foreground">
-              {t("Posts per week (8 weeks)", "Postingan per minggu (8 minggu)")}
+            <p className="mb-4 font-semibold">
+              {id ? "Postingan per minggu (8 minggu)" : "Posts per week (8 weeks)"}
             </p>
             <div className="flex h-40 items-end gap-2">
               {weeks.map((w) => (
@@ -827,14 +1562,16 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="space-y-3 p-5">
-            <p className="font-semibold text-navy dark:text-primary-foreground">
-              {t("Posts per account", "Postingan per akun")} ({accounts.length})
+            <p className="font-semibold">
+              {id ? "Postingan per akun" : "Posts per account"} ({accounts.length}{" "}
+              {id ? "akun" : "accounts"})
             </p>
             {perAccount.length === 0 && (
-              <p className="text-sm text-muted-foreground">{t("No accounts yet.", "Belum ada akun.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {id ? "Belum ada akun." : "No accounts yet."}
+              </p>
             )}
             {perAccount.map(({ a, n }) => (
               <div key={a.id}>
@@ -845,18 +1582,22 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
                   <span>{n}</span>
                 </div>
                 <div className="mt-1 h-2 rounded bg-secondary">
-                  <div className="h-2 rounded bg-navy dark:bg-gold" style={{ width: `${(n / maxN) * 100}%` }} />
+                  <div
+                    className="h-2 rounded bg-navy dark:bg-gold"
+                    style={{ width: `${(n / maxN) * 100}%` }}
+                  />
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="space-y-2 p-5">
-            <p className="font-semibold text-navy dark:text-primary-foreground">{t("Upcoming", "Jadwal berikutnya")}</p>
+            <p className="font-semibold">{id ? "Jadwal berikutnya" : "Upcoming"}</p>
             {upcoming.length === 0 && (
-              <p className="text-sm text-muted-foreground">{t("Nothing scheduled.", "Tidak ada jadwal.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {id ? "Tidak ada jadwal." : "Nothing scheduled."}
+              </p>
             )}
             {upcoming.map((p) => (
               <div key={p.id} className="flex justify-between gap-3 text-sm">
@@ -866,12 +1607,13 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
             ))}
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="space-y-2 p-5">
-            <p className="font-semibold text-navy dark:text-primary-foreground">{t("Recent failures", "Gagal terbaru")}</p>
+            <p className="font-semibold">{id ? "Gagal terbaru" : "Recent failures"}</p>
             {failed.length === 0 && (
-              <p className="text-sm text-muted-foreground">{t("No failures.", "Tidak ada kegagalan.")}</p>
+              <p className="text-sm text-muted-foreground">
+                {id ? "Tidak ada kegagalan." : "No failures."}
+              </p>
             )}
             {failed.map((p) => (
               <div key={p.id} className="text-sm">

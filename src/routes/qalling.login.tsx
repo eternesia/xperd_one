@@ -1,22 +1,41 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { emitAuthChange, useSession } from "@/hooks/use-session";
-import { loginAppUser } from "@/lib/auth.functions";
-import { useI18n } from "@/lib/i18n";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSession } from "@/hooks/use-session";
+import {
+  provisionGoogleSignup,
+  requestLoginCode,
+  verifyLoginCode,
+} from "@/lib/qalling-auth.functions";
+import {
+  GoogleButton,
+  OtpInput,
+  QallingAuthFrame,
+  SIGNUP_TIER_KEY,
+  onSessionIssued,
+  useAuthSettings,
+} from "@/components/qalling/qalling-auth";
 
 export const Route = createFileRoute("/qalling/login")({
   ssr: false,
   head: () => ({
     meta: [
       { title: "Masuk ke Qalling — CRM Dashboard" },
-      { name: "description", content: "Masuk ke akun Qalling Anda untuk membuka dashboard CRM dan media sosial." },
+      {
+        name: "description",
+        content: "Masuk ke akun Qalling dengan Google atau kode yang dikirim ke email Anda.",
+      },
+      { property: "og:title", content: "Masuk ke Qalling" },
+      { property: "og:description", content: "Masuk ke dashboard Qalling tanpa kata sandi." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -25,90 +44,155 @@ export const Route = createFileRoute("/qalling/login")({
 
 function QallingLogin() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const { session, loading } = useSession();
   const navigate = useNavigate();
-  const { pick } = useI18n();
+  const { data: settings } = useAuthSettings();
+  const request = useServerFn(requestLoginCode);
+  const verify = useServerFn(verifyLoginCode);
+  const provisionGoogle = useServerFn(provisionGoogleSignup);
+  const handled = useRef(false);
 
+  // After Google returns: create the trial for a new user who picked a plan, then open the app.
   useEffect(() => {
-    if (!loading && session) navigate({ to: "/qalling/app", replace: true });
-  }, [loading, session, navigate]);
+    if (loading || !session || handled.current) return;
+    handled.current = true;
+    const tier = sessionStorage.getItem(SIGNUP_TIER_KEY);
+    (async () => {
+      if (tier) {
+        try {
+          await provisionGoogle({ data: { tier } });
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Gagal mengaktifkan akun");
+        }
+        sessionStorage.removeItem(SIGNUP_TIER_KEY);
+      }
+      navigate({ to: "/qalling/app", replace: true });
+    })();
+  }, [loading, session, navigate, provisionGoogle]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function send(e?: React.FormEvent) {
+    e?.preventDefault();
     setBusy(true);
     try {
-      await loginAppUser({ data: { email, password } });
-      // Sesi disimpan sebagai cookie httpOnly; beri tahu tab lain agar memuat ulang.
-      emitAuthChange();
-      navigate({ to: "/qalling/app", replace: true });
+      await request({ data: { email } });
+      setSent(true);
+      toast.success("Jika email terdaftar, kode 6 digit sudah dikirim.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : pick("Authentication failed", "Autentikasi gagal"));
+      toast.error(err instanceof Error ? err.message : "Gagal mengirim kode");
     } finally {
       setBusy(false);
     }
   }
 
+  async function confirm(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await verify({ data: { email, code } });
+      onSessionIssued();
+      navigate({ to: "/qalling/app", replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Kode salah");
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className="grid min-h-screen place-items-center bg-secondary/40 px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center gap-2">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gold text-2xl font-extrabold text-navy">Q</span>
-          <span className="text-2xl font-extrabold tracking-tight text-navy dark:text-foreground">
-            Qalling<span className="text-gold">.</span>
-          </span>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>{pick("Sign in", "Masuk")}</CardTitle>
-            <CardDescription>
-              {pick("Access your Qalling CRM dashboard.", "Akses dashboard Qalling CRM Anda.")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={submit}>
-              <div className="space-y-2">
-                <Label htmlFor="email">{pick("Work email", "Email kerja")}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-                {busy && <Loader2 className="animate-spin" />}
-                {pick("Sign in to Qalling", "Masuk ke Qalling")}
+    <QallingAuthFrame>
+      <Card>
+        <CardHeader>
+          <CardTitle>{sent ? "Masukkan kode" : "Masuk"}</CardTitle>
+          <CardDescription>
+            {sent
+              ? `Kode dikirim ke ${email}. Berlaku 10 menit.`
+              : "Tanpa kata sandi — pakai Google atau kode email."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {sent ? (
+            <form className="space-y-4" onSubmit={confirm}>
+              <OtpInput value={code} onChange={setCode} />
+              <Button
+                type="submit"
+                variant="gold"
+                className="w-full"
+                disabled={busy || code.length !== 6}
+              >
+                {busy && <Loader2 className="animate-spin" />}Masuk
               </Button>
+              <div className="flex justify-between text-xs">
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:underline"
+                  onClick={() => {
+                    setSent(false);
+                    setCode("");
+                  }}
+                >
+                  Ubah email
+                </button>
+                <button
+                  type="button"
+                  className="text-gold hover:underline"
+                  disabled={busy}
+                  onClick={() => send()}
+                >
+                  Kirim ulang kode
+                </button>
+              </div>
             </form>
-          </CardContent>
-        </Card>
-        <p className="text-center text-sm text-muted-foreground">
-          {pick("No account yet? ", "Belum punya akun? ")}
-          <Link to="/register" className="text-gold underline-offset-4 hover:underline">
-            {pick("Register online", "Daftar online")}
-          </Link>
-          {" · "}
-          <Link to="/qalling" className="underline-offset-4 hover:underline">
-            {pick("Back to website", "Kembali ke website")}
-          </Link>
-        </p>
-      </div>
-    </div>
+          ) : (
+            <>
+              {settings?.google_enabled !== false && (
+                <GoogleButton
+                  label="Masuk dengan Google"
+                  onSignedIn={() => {
+                    /* session effect handles redirect */
+                  }}
+                />
+              )}
+              {settings?.google_enabled !== false && settings?.email_otp_enabled !== false && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  atau
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              {settings?.email_otp_enabled !== false && (
+                <form className="space-y-4" onSubmit={send}>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" variant="gold" className="w-full" disabled={busy}>
+                    {busy ? <Loader2 className="animate-spin" /> : <Mail />}Kirim kode masuk
+                  </Button>
+                </form>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        Belum punya akun?{" "}
+        <Link to="/qalling/daftar" className="text-gold underline-offset-4 hover:underline">
+          Coba gratis
+        </Link>
+        {" · "}
+        <Link to="/qalling" className="underline-offset-4 hover:underline">
+          Kembali ke website
+        </Link>
+      </p>
+    </QallingAuthFrame>
   );
 }

@@ -114,7 +114,7 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
   // #57: pencarian + paginasi daftar broadcast.
   const [term, setTerm] = useState("");
   const visibleRows = useSearchFilter(rows, term, (r) => [r.name, r.channel, r.status, r.message]);
-  const pager = usePagination(visibleRows, 10);
+  const pager = usePagination(visibleRows);
 
   const { data: recipients = [] } = useQuery({
     queryKey: ["crm-broadcast-recipients", activeId],
@@ -699,7 +699,7 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
     r.owner_name,
     (r.platforms ?? []).join(" "),
   ]);
-  const pager = usePagination(visibleRows, 10);
+  const pager = usePagination(visibleRows);
 
   const save = useMutation({
     mutationFn: async (v: CampaignForm) => {

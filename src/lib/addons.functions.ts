@@ -115,7 +115,7 @@ export const adminListTenantAddons = createServerFn({ method: "POST" })
 
     const rows = await execute(
       `SELECT ta.id, ta.tenant_id, ta.addon_id, ta.status, ta.starts_at, ta.ends_at,
-              ta.monthly_price, ta.notes,
+              ta.monthly_price, ta.notes, ta.tier_id,
               t.name AS tenant_name, t.subdomain AS tenant_subdomain,
               a.code AS addon_code, a.name AS addon_name, a.monthly_price AS addon_price
          FROM tenant_addons ta
@@ -136,6 +136,7 @@ export const adminListTenantAddons = createServerFn({ method: "POST" })
       ends_at: r.ends_at ?? null,
       monthly_price: Number(r.monthly_price) || 0,
       notes: r.notes ?? null,
+      tier_id: (r.tier_id as string | null) ?? null,
     }));
   });
 
@@ -147,6 +148,8 @@ export interface UpsertTenantAddonInput {
   endsAt?: string;
   monthlyPrice?: number;
   notes?: string;
+  /** Tier Qalling (null/undefined = legacy: semua fitur). */
+  tierId?: string | null;
 }
 
 export const adminUpsertTenantAddon = createServerFn({ method: "POST" })
@@ -168,20 +171,30 @@ export const adminUpsertTenantAddon = createServerFn({ method: "POST" })
     const status = data.status ?? "active";
     const startsAt = data.startsAt ?? new Date().toISOString().slice(0, 10);
 
+    // Padanan trigger New 11: tier harus milik add-on yang sama.
+    let tierId: string | null = null;
+    if (data.tierId) {
+      const t = await executeOne<{ id: string }>(
+        "SELECT id FROM addon_tiers WHERE id = ? AND addon_id = ? AND is_active = 1",
+        [data.tierId, data.addonId],
+      );
+      if (!t) throw new Error("Tier unavailable");
+      tierId = t.id;
+    }
     if (existing) {
       await execute(
         `UPDATE tenant_addons
-            SET status = ?, starts_at = ?, ends_at = ?, monthly_price = ?, notes = ?
+            SET status = ?, starts_at = ?, ends_at = ?, monthly_price = ?, notes = ?, tier_id = ?
           WHERE id = ?`,
-        [status, startsAt, data.endsAt ?? null, price, data.notes ?? null, existing.id],
+        [status, startsAt, data.endsAt ?? null, price, data.notes ?? null, tierId, existing.id],
       );
       return { id: existing.id };
     }
     const id = uuid();
     await execute(
-      `INSERT INTO tenant_addons (id, tenant_id, addon_id, status, starts_at, ends_at, monthly_price, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, data.tenantId, data.addonId, status, startsAt, data.endsAt ?? null, price, data.notes ?? null],
+      `INSERT INTO tenant_addons (id, tenant_id, addon_id, status, starts_at, ends_at, monthly_price, notes, tier_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, data.tenantId, data.addonId, status, startsAt, data.endsAt ?? null, price, data.notes ?? null, tierId],
     );
     return { id };
   });

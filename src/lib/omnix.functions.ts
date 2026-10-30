@@ -14,16 +14,17 @@ import { createServerFn } from "@tanstack/react-start";
 import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 
-import { OMNIX_BUNDLE, OMNIX_CHANNELS, OMNIX_FEE_PER_ORDER, OMNIX_MIN_TOPUP, OMNIX_ORDER_STATUS } from "@/lib/omnix";
+import { OMNIX_BUNDLE, OMNIX_CHANNELS, OMNIX_FEE_PER_ORDER, OMNIX_ORDER_STATUS } from "@/lib/omnix";
 
 /** Koneksi transaksi (khusus dipakai di dalam `transaction()`). */
 type Tx = PoolConnection;
 
 async function workspaceTenant(workspaceId: string): Promise<string> {
   const { executeOne } = await import("@/integrations/mysql/pool");
-  const row = await executeOne<{ tenant_id: string }>("SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1", [
-    workspaceId,
-  ]);
+  const row = await executeOne<{ tenant_id: string }>(
+    "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
+    [workspaceId],
+  );
   if (!row?.tenant_id) throw new Error("Workspace tidak ditemukan");
   return row.tenant_id;
 }
@@ -35,16 +36,32 @@ async function assertWriter(workspaceId: string, userId: string) {
 
 async function assertReader(workspaceId: string, userId: string) {
   const { canWriteWorkspace, isWorkspaceMember } = await import("@/lib/auth-context.server");
-  if (!(await isWorkspaceMember(workspaceId, userId)) && !(await canWriteWorkspace(workspaceId, userId))) {
+  if (
+    !(await isWorkspaceMember(workspaceId, userId)) &&
+    !(await canWriteWorkspace(workspaceId, userId))
+  ) {
     throw new Error("Forbidden");
   }
 }
 
-/** Memastikan baris wallet ada, lalu mengunci barisnya untuk update. */
-async function lockWallet(tx: Tx, tenantId: string) {
-  await tx.execute("INSERT INTO omnix_wallets (tenant_id) VALUES (?) ON DUPLICATE KEY UPDATE tenant_id = tenant_id", [
+/** Kunci saldo bersama lebih dulu (urutan kunci sama dengan `walletPostEntryOn`). */
+async function lockAccount(tx: Tx, tenantId: string): Promise<number> {
+  await tx.execute("INSERT IGNORE INTO wallet_accounts (tenant_id, balance_idr) VALUES (?, 0)", [
     tenantId,
   ]);
+  const [rows] = await tx.execute<RowDataPacket[]>(
+    "SELECT balance_idr FROM wallet_accounts WHERE tenant_id = ? FOR UPDATE",
+    [tenantId],
+  );
+  return Number(rows?.[0]?.balance_idr ?? 0);
+}
+
+/** Memastikan baris wallet ada, lalu mengunci barisnya untuk update. */
+async function lockWallet(tx: Tx, tenantId: string) {
+  await tx.execute(
+    "INSERT INTO omnix_wallets (tenant_id) VALUES (?) ON DUPLICATE KEY UPDATE tenant_id = tenant_id",
+    [tenantId],
+  );
   const [rows] = await tx.execute<WalletRow[]>(
     "SELECT tenant_id, balance, bundle_quota, bundle_used, bundle_ends_at FROM omnix_wallets WHERE tenant_id = ? FOR UPDATE",
     [tenantId],
@@ -52,7 +69,13 @@ async function lockWallet(tx: Tx, tenantId: string) {
   const wallet = rows?.[0];
   if (!wallet) {
     await tx.execute("INSERT INTO omnix_wallets (tenant_id) VALUES (?)", [tenantId]);
-    return { tenant_id: tenantId, balance: 0, bundle_quota: 0, bundle_used: 0, bundle_ends_at: null };
+    return {
+      tenant_id: tenantId,
+      balance: 0,
+      bundle_quota: 0,
+      bundle_used: 0,
+      bundle_ends_at: null,
+    };
   }
   return { ...wallet, balance: Number(wallet.balance) };
 }
@@ -77,17 +100,15 @@ interface ChannelSettingLookupRow extends RowDataPacket {
   secret_hint: string | null;
 }
 
-interface LedgerLockRow extends RowDataPacket {
-  id: string;
-  tenant_id: string;
-  status: string;
-  amount: number;
-}
-
-function bundleActive(wallet: { bundle_quota: number; bundle_used: number; bundle_ends_at: string | null }) {
+function bundleActive(wallet: {
+  bundle_quota: number;
+  bundle_used: number;
+  bundle_ends_at: string | null;
+}) {
   if (!wallet.bundle_ends_at) return false;
   return (
-    new Date(wallet.bundle_ends_at).getTime() > Date.now() && Number(wallet.bundle_used) < Number(wallet.bundle_quota)
+    new Date(wallet.bundle_ends_at).getTime() > Date.now() &&
+    Number(wallet.bundle_used) < Number(wallet.bundle_quota)
   );
 }
 
@@ -111,10 +132,16 @@ export const getOmnixWallet = createServerFn({ method: "POST" })
     const tenantId = await workspaceTenant(data.workspaceId);
     const { executeOne } = await import("@/integrations/mysql/pool");
     const row = await executeOne<OmnixWalletView>(
-      "SELECT tenant_id, balance, bundle_quota, bundle_used, bundle_ends_at FROM omnix_wallets WHERE tenant_id = ? LIMIT 1",
-      [tenantId],
+      `SELECT ? AS tenant_id, COALESCE(a.balance_idr, 0) AS balance, COALESCE(w.bundle_quota, 0) AS bundle_quota,
+              COALESCE(w.bundle_used, 0) AS bundle_used, w.bundle_ends_at
+         FROM (SELECT 1) x
+         LEFT JOIN wallet_accounts a ON a.tenant_id = ?
+         LEFT JOIN omnix_wallets w ON w.tenant_id = ?`,
+      [tenantId, tenantId, tenantId],
     );
-    return row ?? { tenant_id: tenantId, balance: 0, bundle_quota: 0, bundle_used: 0, bundle_ends_at: null };
+    return row
+      ? { ...row, balance: Number(row.balance) }
+      : { tenant_id: tenantId, balance: 0, bundle_quota: 0, bundle_used: 0, bundle_ends_at: null };
   });
 
 export interface OmnixLedgerRow {
@@ -147,31 +174,6 @@ export const listOmnixLedger = createServerFn({ method: "POST" })
     return rows ?? [];
   });
 
-/** Tenant mengajukan top up (status `pending` sampai Super Admin menyetujui). */
-export const omnixRequestTopup = createServerFn({ method: "POST" })
-  .middleware([requireAppAuth])
-  .validator((data: { workspaceId: string; amount: number; note?: string }) => {
-    if (!data?.workspaceId) throw new Error("Workspace is required");
-    return data;
-  })
-  .handler(async ({ data, context }): Promise<{ id: string }> => {
-    await assertWriter(data.workspaceId, context.userId);
-    const amount = Number(data.amount);
-    if (!Number.isFinite(amount) || amount < OMNIX_MIN_TOPUP) {
-      throw new Error(`Minimum top up Rp${OMNIX_MIN_TOPUP.toLocaleString("id-ID")}`);
-    }
-    const tenantId = await workspaceTenant(data.workspaceId);
-    const { transaction, uuid } = await import("@/integrations/mysql/pool");
-    const id = uuid();
-    await transaction(async (conn) => {
-      await conn.execute(
-        "INSERT INTO omnix_wallet_ledger (id, tenant_id, kind, status, amount, note, created_by) VALUES (?, ?, 'topup', 'pending', ?, ?, ?)",
-        [id, tenantId, amount, data.note ?? null, context.userId],
-      );
-    });
-    return { id };
-  });
-
 /** Beli paket bulanan dari saldo (Rp350.000 untuk 20.000 transaksi / 30 hari). */
 export const omnixBuyBundle = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
@@ -182,30 +184,38 @@ export const omnixBuyBundle = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ balance: number }> => {
     await assertWriter(data.workspaceId, context.userId);
     const tenantId = await workspaceTenant(data.workspaceId);
-    const { transaction, uuid } = await import("@/integrations/mysql/pool");
+    const { transaction } = await import("@/integrations/mysql/pool");
+    const { walletPostEntryOn } = await import("@/lib/wallet.server");
 
     return transaction(async (conn) => {
+      await lockAccount(conn, tenantId);
       const wallet = await lockWallet(conn, tenantId);
       if (bundleActive(wallet)) throw new Error("Paket masih aktif");
-      if (Number(wallet.balance) < OMNIX_BUNDLE.price) {
-        throw new Error(`Saldo tidak cukup (butuh Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")})`);
-      }
-      const balance = Number(wallet.balance) - OMNIX_BUNDLE.price;
-      await conn.execute(
-        `UPDATE omnix_wallets SET balance = ?, bundle_quota = ?, bundle_used = 0,
-           bundle_ends_at = DATE_ADD(NOW(), INTERVAL ${OMNIX_BUNDLE.days} DAY) WHERE tenant_id = ?`,
-        [balance, OMNIX_BUNDLE.quota, tenantId],
-      );
-      await conn.execute(
-        "INSERT INTO omnix_wallet_ledger (id, tenant_id, kind, status, amount, balance_after, note, created_by) VALUES (?, ?, 'bundle', 'posted', ?, ?, ?, ?)",
-        [
-          uuid(),
+      let balance: number;
+      try {
+        const entry = await walletPostEntryOn(conn, {
           tenantId,
-          -OMNIX_BUNDLE.price,
-          balance,
-          `Paket bulanan ${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} transaksi`,
-          context.userId,
-        ],
+          type: "addon",
+          amount: -OMNIX_BUNDLE.price,
+          product: "omnix",
+          ref: null,
+          idem: `omnix-bundle:${tenantId}:${wallet.bundle_ends_at ?? "first"}`,
+          description: `Paket Omnix ${OMNIX_BUNDLE.quota.toLocaleString("id-ID")} transaksi`,
+          actor: context.userId,
+        });
+        balance = entry.balance_after;
+      } catch (e) {
+        if ((e as Error).message === "insufficient_balance") {
+          throw new Error(
+            `Saldo tidak cukup (butuh Rp${OMNIX_BUNDLE.price.toLocaleString("id-ID")})`,
+          );
+        }
+        throw e;
+      }
+      await conn.execute(
+        `UPDATE omnix_wallets SET bundle_quota = ?, bundle_used = 0,
+           bundle_ends_at = DATE_ADD(NOW(), INTERVAL ${OMNIX_BUNDLE.days} DAY) WHERE tenant_id = ?`,
+        [OMNIX_BUNDLE.quota, tenantId],
       );
       return { balance };
     });
@@ -230,45 +240,59 @@ export const omnixSetOrderStatus = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }): Promise<{ status: string; fee: number; balance: number }> => {
     await assertWriter(data.workspaceId, context.userId);
-    const { transaction, uuid } = await import("@/integrations/mysql/pool");
+    const { transaction } = await import("@/integrations/mysql/pool");
     const { sqlDateTime } = await import("@/lib/datetime");
 
     return transaction(async (conn) => {
-      const orders = (await conn.execute<OrderLockRow[]>(
-        "SELECT id, order_no, status, fee_charged FROM omnix_orders WHERE id = ? AND workspace_id = ? FOR UPDATE",
-        [data.orderId, data.workspaceId],
-      ))[0];
+      const orders = (
+        await conn.execute<OrderLockRow[]>(
+          "SELECT id, order_no, status, fee_charged FROM omnix_orders WHERE id = ? AND workspace_id = ? FOR UPDATE",
+          [data.orderId, data.workspaceId],
+        )
+      )[0];
       const order = orders?.[0];
       if (!order) throw new Error("Pesanan tidak ditemukan");
 
       // Bukan penyelesaian pesanan (atau sudah ditagih) → cukup ubah status.
       if (data.status !== "completed" || Number(order.fee_charged) === 1) {
-        await conn.execute("UPDATE omnix_orders SET status = ? WHERE id = ?", [data.status, order.id]);
+        await conn.execute("UPDATE omnix_orders SET status = ? WHERE id = ?", [
+          data.status,
+          order.id,
+        ]);
         return { status: data.status, fee: 0, balance: 0 };
       }
 
       const tenantId = await workspaceTenant(data.workspaceId);
+      const { walletPostEntryOn } = await import("@/lib/wallet.server");
+      let balance = await lockAccount(conn, tenantId);
       const wallet = await lockWallet(conn, tenantId);
       let fee = 0;
-      let balance = Number(wallet.balance);
 
       if (bundleActive(wallet)) {
-        await conn.execute("UPDATE omnix_wallets SET bundle_used = bundle_used + 1 WHERE tenant_id = ?", [tenantId]);
+        // Paket aktif: kuota berkurang, biaya 0 (tanpa entri saldo, seperti BS New 11).
         await conn.execute(
-          "INSERT INTO omnix_wallet_ledger (id, tenant_id, kind, status, amount, balance_after, order_id, note, created_by) VALUES (?, ?, 'charge', 'posted', 0, ?, ?, ?, ?)",
-          [uuid(), tenantId, balance, order.id, `Kuota paket: ${order.order_no}`, context.userId],
+          "UPDATE omnix_wallets SET bundle_used = bundle_used + 1 WHERE tenant_id = ?",
+          [tenantId],
         );
       } else {
-        if (balance < OMNIX_FEE_PER_ORDER) {
-          throw new Error("Saldo Omnix tidak cukup. Silakan top up saldo.");
-        }
         fee = OMNIX_FEE_PER_ORDER;
-        balance -= fee;
-        await conn.execute("UPDATE omnix_wallets SET balance = ? WHERE tenant_id = ?", [balance, tenantId]);
-        await conn.execute(
-          "INSERT INTO omnix_wallet_ledger (id, tenant_id, kind, status, amount, balance_after, order_id, note, created_by) VALUES (?, ?, 'charge', 'posted', ?, ?, ?, ?, ?)",
-          [uuid(), tenantId, -fee, balance, order.id, `Transaksi selesai: ${order.order_no}`, context.userId],
-        );
+        try {
+          const entry = await walletPostEntryOn(conn, {
+            tenantId,
+            type: "usage",
+            amount: -fee,
+            product: "omnix",
+            ref: order.id,
+            idem: `omnix-order:${order.id}`,
+            description: `Transaksi selesai: ${order.order_no}`,
+            actor: context.userId,
+          });
+          balance = entry.balance_after;
+        } catch (e) {
+          if ((e as Error).message === "insufficient_balance")
+            throw new Error("Saldo Omnix tidak cukup. Silakan top up saldo.");
+          throw e;
+        }
       }
 
       await conn.execute(
@@ -313,10 +337,18 @@ export const listOmnixChannelSettings = createServerFn({ method: "POST" })
  */
 export const omnixSaveChannelKeys = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((data: { workspaceId: string; channel: string; partnerId: string; publicKey: string; secretKey?: string }) => {
-    if (!data?.workspaceId || !data.channel) throw new Error("Missing channel");
-    return data;
-  })
+  .validator(
+    (data: {
+      workspaceId: string;
+      channel: string;
+      partnerId: string;
+      publicKey: string;
+      secretKey?: string;
+    }) => {
+      if (!data?.workspaceId || !data.channel) throw new Error("Missing channel");
+      return data;
+    },
+  )
   .handler(async ({ data, context }): Promise<{ status: string; hint: string | null }> => {
     const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
@@ -325,7 +357,8 @@ export const omnixSaveChannelKeys = createServerFn({ method: "POST" })
       (await canWriteWorkspace(data.workspaceId, context.userId));
     if (!allowed) throw new Error("Hanya owner/admin yang dapat mengatur kunci API");
 
-    if (!OMNIX_CHANNELS.some((c) => c.id === data.channel)) throw new Error("Channel tidak dikenal");
+    if (!OMNIX_CHANNELS.some((c) => c.id === data.channel))
+      throw new Error("Channel tidak dikenal");
     const partnerId = (data.partnerId ?? "").trim();
     const publicKey = (data.publicKey ?? "").trim();
     const secret = (data.secretKey ?? "").trim();
@@ -340,10 +373,12 @@ export const omnixSaveChannelKeys = createServerFn({ method: "POST" })
         "INSERT INTO omnix_channel_settings (id, workspace_id, channel) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE channel = channel",
         [uuid(), data.workspaceId, data.channel],
       );
-      const rows = (await conn.execute<ChannelSettingLookupRow[]>(
-        "SELECT id, secret_hint FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ? LIMIT 1",
-        [data.workspaceId, data.channel],
-      ))[0];
+      const rows = (
+        await conn.execute<ChannelSettingLookupRow[]>(
+          "SELECT id, secret_hint FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ? LIMIT 1",
+          [data.workspaceId, data.channel],
+        )
+      )[0];
       const setting = rows?.[0];
       if (!setting) throw new Error("Gagal menyimpan pengaturan kanal");
 
@@ -378,80 +413,19 @@ export const omnixClearChannelKeys = createServerFn({ method: "POST" })
     await assertWriter(data.workspaceId, context.userId);
     const { transaction } = await import("@/integrations/mysql/pool");
     await transaction(async (conn) => {
-      const rows = (await conn.execute<ChannelSettingLookupRow[]>(
-        "SELECT id, secret_hint FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ? LIMIT 1",
-        [data.workspaceId, data.channel],
-      ))[0];
+      const rows = (
+        await conn.execute<ChannelSettingLookupRow[]>(
+          "SELECT id, secret_hint FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ? LIMIT 1",
+          [data.workspaceId, data.channel],
+        )
+      )[0];
       const setting = rows?.[0];
-      if (setting) await conn.execute("DELETE FROM omnix_channel_secrets WHERE setting_id = ?", [setting.id]);
-      await conn.execute("DELETE FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ?", [
-        data.workspaceId,
-        data.channel,
-      ]);
+      if (setting)
+        await conn.execute("DELETE FROM omnix_channel_secrets WHERE setting_id = ?", [setting.id]);
+      await conn.execute(
+        "DELETE FROM omnix_channel_settings WHERE workspace_id = ? AND channel = ?",
+        [data.workspaceId, data.channel],
+      );
     });
     return { ok: true };
-  });
-
-/* ------------------------- Super Admin: review top up ------------------------- */
-
-export interface OmnixTopupRow {
-  id: string;
-  tenant_id: string;
-  tenant_name: string | null;
-  amount: number;
-  status: string;
-  note: string | null;
-  created_at: string;
-}
-
-export const listOmnixTopups = createServerFn({ method: "POST" })
-  .middleware([requireAppAuth])
-  .validator((data: { status?: string }) => data ?? {})
-  .handler(async ({ context }): Promise<OmnixTopupRow[]> => {
-    const { hasRole } = await import("@/lib/auth-context.server");
-    if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden: admin role required");
-    const { execute } = await import("@/integrations/mysql/pool");
-    const rows = await execute<OmnixTopupRow>(
-      `SELECT l.id, l.tenant_id, t.name AS tenant_name, l.amount, l.status, l.note, l.created_at
-         FROM omnix_wallet_ledger l LEFT JOIN tenants t ON t.id = l.tenant_id
-        WHERE l.kind = 'topup' AND l.status = 'pending'
-        ORDER BY l.created_at ASC LIMIT 200`,
-    );
-    return rows ?? [];
-  });
-
-/** Super Admin menyetujui/menolak top up; saldo ditambah dalam satu transaksi. */
-export const omnixReviewTopup = createServerFn({ method: "POST" })
-  .middleware([requireAppAuth])
-  .validator((data: { ledgerId: string; approve: boolean }) => {
-    if (!data?.ledgerId) throw new Error("Missing ledger");
-    return data;
-  })
-  .handler(async ({ data, context }): Promise<{ status: string; balance: number | null }> => {
-    const { hasRole } = await import("@/lib/auth-context.server");
-    if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden: admin role required");
-
-    const { transaction } = await import("@/integrations/mysql/pool");
-    return transaction(async (conn) => {
-      const rows = (await conn.execute<LedgerLockRow[]>(
-        "SELECT id, tenant_id, status, amount FROM omnix_wallet_ledger WHERE id = ? FOR UPDATE",
-        [data.ledgerId],
-      ))[0];
-      const ledger = rows?.[0];
-      if (!ledger || ledger.status !== "pending") throw new Error("Top up tidak berstatus pending");
-
-      if (!data.approve) {
-        await conn.execute("UPDATE omnix_wallet_ledger SET status = 'rejected' WHERE id = ?", [ledger.id]);
-        return { status: "rejected", balance: null };
-      }
-
-      const wallet = await lockWallet(conn, ledger.tenant_id);
-      const balance = Number(wallet.balance) + Number(ledger.amount);
-      await conn.execute("UPDATE omnix_wallets SET balance = ? WHERE tenant_id = ?", [balance, ledger.tenant_id]);
-      await conn.execute("UPDATE omnix_wallet_ledger SET status = 'posted', balance_after = ? WHERE id = ?", [
-        balance,
-        ledger.id,
-      ]);
-      return { status: "posted", balance };
-    });
   });

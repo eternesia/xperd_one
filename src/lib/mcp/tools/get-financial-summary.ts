@@ -5,7 +5,8 @@ import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 export default defineTool({
   name: "get_financial_summary",
   title: "Financial summary",
-  description: "Get a high-level financial summary for a workspace: cash balance, AR, AP, and inventory value.",
+  description:
+    "Get a high-level financial summary for a workspace: cash balance, AR, AP, and inventory value.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace UUID."),
   },
@@ -31,7 +32,10 @@ export default defineTool({
         "SELECT total FROM prc_documents WHERE workspace_id = ? AND doc_type = 'ap_invoice' AND status = 'open'",
         [workspace_id],
       ),
-      execute("SELECT item_code,qty,unit_cost FROM inv_movements WHERE workspace_id = ? AND qty > 0", [workspace_id]),
+      execute(
+        "SELECT item_code,qty,unit_cost FROM inv_movements WHERE workspace_id = ? AND qty > 0",
+        [workspace_id],
+      ),
     ]);
 
     const arList = (arDocs ?? []) as { total?: unknown }[];
@@ -39,7 +43,10 @@ export default defineTool({
     const invList = (inventory ?? []) as { qty?: unknown; unit_cost?: unknown }[];
     const arTotal = arList.reduce((sum, d) => sum + Number(d.total ?? 0), 0);
     const apTotal = apList.reduce((sum, d) => sum + Number(d.total ?? 0), 0);
-    const inventoryValue = invList.reduce((sum, s) => sum + Number(s.qty ?? 0) * Number(s.unit_cost ?? 0), 0);
+    const inventoryValue = invList.reduce(
+      (sum, s) => sum + Number(s.qty ?? 0) * Number(s.unit_cost ?? 0),
+      0,
+    );
 
     const summary = {
       cash_accounts: cashAccount ?? [],

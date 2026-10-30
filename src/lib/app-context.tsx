@@ -1,7 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/hooks/use-session";
+import { findModule } from "@/lib/modules";
 import { getAppShellData } from "@/lib/app-shell.functions";
 import { getWorkspaceAccess, type WorkspaceRole } from "@/lib/team.functions";
+import { getWorkspaceEntitlements } from "@/lib/addon-catalog.functions";
+import { hasCatalogFeature, type Entitlements } from "@/lib/entitlements";
 
 export interface Workspace {
   id: string;
@@ -67,6 +70,9 @@ interface AppContextValue {
   /** #58 (BS New 3): peran pada workspace aktif + izin per modul/submodul. */
   workspaceRole: WorkspaceRole | null;
   accessLoading: boolean;
+  /** Entitlement add-on workspace aktif (tier + opsi + override); `{}` bila tidak ada add-on aktif. */
+  entitlements: Entitlements;
+  refreshEntitlements: () => Promise<void>;
   canViewModule: (moduleId: string) => boolean;
   canViewSubmodule: (moduleId: string, submoduleId: string) => boolean;
   canEditSubmodule: (moduleId: string, submoduleId: string) => boolean;
@@ -87,8 +93,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   // #58: peran + izin per kunci akses (`module` atau `module/submodule`).
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
-  const [roleAccess, setRoleAccess] = useState<Map<string, { canView: boolean; canEdit: boolean }>>(new Map());
+  const [roleAccess, setRoleAccess] = useState<Map<string, { canView: boolean; canEdit: boolean }>>(
+    new Map(),
+  );
   const [accessLoading, setAccessLoading] = useState(true);
+  const [entitlements, setEntitlements] = useState<Entitlements>({});
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+
+  const refreshEntitlements = useCallback(async () => {
+    if (!userId || !activeId) {
+      setEntitlements({});
+      return;
+    }
+    try {
+      setEntitlements(await getWorkspaceEntitlements({ data: { workspaceId: activeId } }));
+    } catch {
+      setEntitlements({});
+    }
+  }, [userId, activeId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEntitlementsLoading(true);
+    void refreshEntitlements().finally(() => {
+      if (!cancelled) setEntitlementsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshEntitlements]);
 
   const load = useCallback(async () => {
     if (!userId) {
@@ -140,7 +173,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const result = await getWorkspaceAccess({ data: { workspaceId: activeId } });
         if (cancelled) return;
         setWorkspaceRole(result?.role ?? null);
-        setRoleAccess(new Map((result?.access ?? []).map((row) => [row.module_id, { canView: row.can_view, canEdit: row.can_edit }])));
+        setRoleAccess(
+          new Map(
+            (result?.access ?? []).map((row) => [
+              row.module_id,
+              { canView: row.can_view, canEdit: row.can_edit },
+            ]),
+          ),
+        );
       } catch {
         if (cancelled) return;
         // Gagal memuat izin → biarkan tampil (jangan mengunci seluruh aplikasi).
@@ -161,54 +201,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(ACTIVE_KEY, id);
   }, []);
 
-  const value = useMemo<AppContextValue>(
-    () => {
-      const isOwner = workspaceRole === "owner";
-      const modulePermission = (moduleId: string) => roleAccess.get(moduleId);
-      const submodulePermission = (moduleId: string, submoduleId: string) =>
-        roleAccess.get(`${moduleId}/${submoduleId}`);
-      return {
-        loading: sessionLoading || loading,
-        userId,
-        email: session?.user.email ?? undefined,
-        tenant,
-        pkg,
-        workspaces,
-        activeWorkspace: workspaces.find((w) => w.id === activeId) ?? null,
-        workspaceRole,
-        accessLoading,
-        canViewModule: (moduleId) =>
-          Boolean(workspaceRole) && (isOwner || (modulePermission(moduleId)?.canView ?? true)),
-        canViewSubmodule: (moduleId, submoduleId) =>
-          Boolean(workspaceRole) &&
-          (isOwner ||
-            ((modulePermission(moduleId)?.canView ?? true) &&
-              (submodulePermission(moduleId, submoduleId)?.canView ?? true))),
-        canEditSubmodule: (moduleId, submoduleId) =>
-          Boolean(workspaceRole) &&
-          (isOwner ||
-            ((modulePermission(moduleId)?.canEdit ?? workspaceRole !== "viewer") &&
-              (submodulePermission(moduleId, submoduleId)?.canEdit ?? workspaceRole !== "viewer"))),
-        setActiveWorkspaceId,
-        refresh: load,
-      };
-    },
-    [
-      sessionLoading,
-      loading,
+  const value = useMemo<AppContextValue>(() => {
+    const isOwner = workspaceRole === "owner";
+    const isManager = workspaceRole === "owner" || workspaceRole === "admin";
+    // BS New 11: submodul `managerOnly` (mis. XPro keuangan/beban kerja) tertutup bagi Staff/Viewer.
+    const managerOnly = (moduleId: string, submoduleId: string) =>
+      Boolean(findModule(moduleId)?.submodules.find((s) => s.id === submoduleId)?.managerOnly);
+    const modulePermission = (moduleId: string) => roleAccess.get(moduleId);
+    const submodulePermission = (moduleId: string, submoduleId: string) =>
+      roleAccess.get(`${moduleId}/${submoduleId}`);
+    return {
+      loading: sessionLoading || loading,
       userId,
-      session?.user.email,
+      email: session?.user.email ?? undefined,
       tenant,
       pkg,
       workspaces,
-      activeId,
+      activeWorkspace: workspaces.find((w) => w.id === activeId) ?? null,
       workspaceRole,
-      accessLoading,
-      roleAccess,
+      accessLoading: accessLoading || entitlementsLoading,
+      entitlements,
+      refreshEntitlements,
+      canViewModule: (moduleId) =>
+        Boolean(workspaceRole) && (isOwner || (modulePermission(moduleId)?.canView ?? true)),
+      canViewSubmodule: (moduleId, submoduleId) =>
+        hasCatalogFeature(entitlements, moduleId, submoduleId) &&
+        Boolean(workspaceRole) &&
+        (isManager || !managerOnly(moduleId, submoduleId)) &&
+        (isOwner ||
+          ((modulePermission(moduleId)?.canView ?? true) &&
+            (submodulePermission(moduleId, submoduleId)?.canView ?? true))),
+      canEditSubmodule: (moduleId, submoduleId) =>
+        hasCatalogFeature(entitlements, moduleId, submoduleId) &&
+        Boolean(workspaceRole) &&
+        (isManager || !managerOnly(moduleId, submoduleId)) &&
+        (isOwner ||
+          ((modulePermission(moduleId)?.canEdit ?? workspaceRole !== "viewer") &&
+            (submodulePermission(moduleId, submoduleId)?.canEdit ?? workspaceRole !== "viewer"))),
       setActiveWorkspaceId,
-      load,
-    ],
-  );
+      refresh: load,
+    };
+  }, [
+    sessionLoading,
+    loading,
+    userId,
+    session?.user.email,
+    tenant,
+    pkg,
+    workspaces,
+    activeId,
+    workspaceRole,
+    accessLoading,
+    entitlements,
+    entitlementsLoading,
+    refreshEntitlements,
+    roleAccess,
+    setActiveWorkspaceId,
+    load,
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

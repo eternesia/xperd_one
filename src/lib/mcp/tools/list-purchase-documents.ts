@@ -5,7 +5,8 @@ import { assertWorkspaceMember, getTokenUser, requireAuth } from "../db";
 export default defineTool({
   name: "list_purchase_documents",
   title: "List purchase documents",
-  description: "List purchase requests, orders, goods receipts, AP invoices, payments, or returns in a workspace.",
+  description:
+    "List purchase requests, orders, goods receipts, AP invoices, payments, or returns in a workspace.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace UUID."),
     doc_type: z
@@ -37,7 +38,12 @@ export default defineTool({
       [workspace_id, doc_type, String(limit), String(offset)],
     );
     return {
-      content: [{ type: "text", text: JSON.stringify({ documents: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ documents: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2),
+        },
+      ],
       structuredContent: { documents: rows ?? [], total: Number(countRow?.c ?? 0) },
     };
   },

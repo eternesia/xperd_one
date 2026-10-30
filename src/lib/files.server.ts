@@ -76,6 +76,9 @@ const MIME_BY_EXT: Record<string, string> = {
   jpeg: "image/jpeg",
   webp: "image/webp",
   gif: "image/gif",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xls: "application/vnd.ms-excel",
@@ -91,7 +94,12 @@ export function mimeFromPath(relPath: string): string {
 }
 
 /** Menyaring jenis berkas yang boleh diunggah (dokumen & gambar). */
-export const ALLOWED_UPLOAD_EXT = Object.keys(MIME_BY_EXT);
+export const ALLOWED_UPLOAD_EXT = Object.keys(MIME_BY_EXT).filter((e) => !["mp4", "mov", "webm"].includes(e));
 
 /** Batas ukuran berkas (20 MB — sama dengan BS New 3). */
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+/** Pustaka Media Qalling (gambar/video untuk postingan): 50 MB per berkas, sama dengan BS New 11. */
+export const MEDIA_FOLDER = "crm/media";
+export const MEDIA_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+export const MEDIA_UPLOAD_EXT = ["png", "jpg", "jpeg", "webp", "gif", "mp4", "mov", "webm"];

@@ -47,11 +47,11 @@ const RESTORE_TABLES = [
   "md_items",
 ] as const;
 
-type Snapshot = { workspace_id: string; created_at: string; tables: Record<string, Record<string, unknown>[]> };
+type Snapshot = { workspace_id: string; owner_email?: string; created_at: string; tables: Record<string, Record<string, unknown>[]> };
 
 function MaintenancePage() {
   const { workspaceId } = Route.useParams();
-  const { activeWorkspace } = useApp();
+  const { activeWorkspace, email } = useApp();
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const [busy, setBusy] = useState<"backup" | "restore" | "seed" | null>(null);
@@ -79,7 +79,12 @@ function MaintenancePage() {
         });
         tables[table] = ((data?.rows ?? []) as Record<string, unknown>[]);
       }
-      const snapshot: Snapshot = { workspace_id: workspaceId, created_at: new Date().toISOString(), tables };
+      const snapshot: Snapshot = {
+        workspace_id: workspaceId,
+        owner_email: (email ?? "").toLowerCase(),
+        created_at: new Date().toISOString(),
+        tables,
+      };
       const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -100,6 +105,19 @@ function MaintenancePage() {
     try {
       const snapshot = JSON.parse(await file.text()) as Snapshot;
       if (!snapshot?.tables) throw new Error(t("Invalid backup file.", "Berkas cadangan tidak valid."));
+      // Anti trial-hopping (New 11): cadangan hanya boleh dipulihkan ke workspace yang sama, oleh email akun yang membuatnya.
+      if (
+        snapshot.workspace_id !== workspaceId ||
+        !snapshot.owner_email ||
+        snapshot.owner_email.toLowerCase() !== (email ?? "").toLowerCase()
+      ) {
+        throw new Error(
+          t(
+            "This backup belongs to another workspace or account email and cannot be restored here.",
+            "Cadangan ini milik workspace atau email akun lain, tidak bisa dipulihkan di sini.",
+          ),
+        );
+      }
       let total = 0;
       for (const table of RESTORE_TABLES) {
         const rows = snapshot.tables[table];

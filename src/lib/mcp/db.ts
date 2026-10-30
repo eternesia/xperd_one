@@ -29,3 +29,19 @@ export async function assertWorkspaceMember(workspaceId: string, userId: string)
   );
   if (!row) throw new Error("Access denied: not a member of this workspace.");
 }
+
+/** Hak setara RLS New 11: anggota workspace + fitur Qalling aktif (+ izin tulis bila `write`). */
+export async function assertQallingAccess(
+  workspaceId: string,
+  userId: string,
+  feature: string,
+  write = false,
+): Promise<void> {
+  await assertWorkspaceMember(workspaceId, userId);
+  const { canWriteWorkspace } = await import("@/lib/auth-context.server");
+  if (write && !(await canWriteWorkspace(workspaceId, userId)))
+    throw new Error("Access denied: your role cannot modify this workspace.");
+  const { workspaceHasFeature } = await import("@/lib/entitlements.server");
+  if (!(await workspaceHasFeature(workspaceId, feature)))
+    throw new Error("This workspace plan does not include this Qalling feature.");
+}

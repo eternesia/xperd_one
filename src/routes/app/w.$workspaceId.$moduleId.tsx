@@ -3,7 +3,15 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { ChevronLeft, LayoutDashboard, Loader2, Lock, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { SubmoduleNav } from "@/components/app/SubmoduleNav";
 import { useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
@@ -21,7 +29,10 @@ function ModuleShell() {
   const mod = findModule(moduleId);
   const { hasAddon, loading: addonsLoading } = useTenantAddons();
   // #59 (BS New 3): penegakan izin modul/submodul.
-  const { accessLoading, canViewModule, canViewSubmodule } = useApp();
+  const { accessLoading, canViewModule, canViewSubmodule, workspaceRole } = useApp();
+  // BS New 11: penerima tugas XPro (Staff/Viewer) bekerja dari Kanban; tautan Dasbor akan menduplikasinya.
+  const showDashboardLink =
+    moduleId !== "xpro" || workspaceRole === "owner" || workspaceRole === "admin";
   // #61 (BS New 3): menu modul mobile memakai Sheet hamburger.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -115,35 +126,42 @@ function ModuleShell() {
         </div>
 
         <nav className="mt-4 flex flex-col gap-1">
-          <Link
-            to="/app/w/$workspaceId/$moduleId"
-            params={{ workspaceId, moduleId: mod.id }}
-            activeOptions={{ exact: true }}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-              pathname === `/app/w/${workspaceId}/${mod.id}` &&
-                "bg-navy text-primary-foreground hover:bg-navy hover:text-primary-foreground",
-            )}
-          >
-            <LayoutDashboard className="h-4 w-4" />
-            {lang === "id" ? "Dasbor" : "Dashboard"}
-          </Link>
-          {mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id)).map((sub) => {
-            const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
-            return (
-              <Link
-                key={sub.id}
-                to="/app/w/$workspaceId/$moduleId/$submoduleId"
-                params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-                  pathname === to && "bg-navy text-primary-foreground hover:bg-navy hover:text-primary-foreground",
-                )}
-              >
-                {lang === "id" ? sub.id_ : sub.en}
-              </Link>
-            );
-          })}
+          {showDashboardLink && (
+            <Link
+              to="/app/w/$workspaceId/$moduleId"
+              params={{ workspaceId, moduleId: mod.id }}
+              activeOptions={{ exact: true }}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                pathname === `/app/w/${workspaceId}/${mod.id}` &&
+                  "bg-navy text-primary-foreground hover:bg-navy hover:text-primary-foreground",
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              {lang === "id" ? "Dasbor" : "Dashboard"}
+            </Link>
+          )}
+          <SubmoduleNav
+            lang={lang}
+            subs={mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id))}
+            renderLink={(sub, content) => {
+              const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
+              return (
+                <Link
+                  key={sub.id}
+                  to="/app/w/$workspaceId/$moduleId/$submoduleId"
+                  params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+                    pathname === to &&
+                      "bg-navy text-primary-foreground hover:bg-navy hover:text-primary-foreground",
+                  )}
+                >
+                  {content}
+                </Link>
+              );
+            }}
+          />
         </nav>
       </aside>
 
@@ -180,39 +198,48 @@ function ModuleShell() {
                     params={{ workspaceId }}
                     className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-primary-foreground"
                   >
-                    <ChevronLeft className="h-4 w-4" /> {lang === "id" ? "Semua Modul" : "All Modules"}
+                    <ChevronLeft className="h-4 w-4" />{" "}
+                    {lang === "id" ? "Semua Modul" : "All Modules"}
                   </Link>
                 </SheetClose>
-                <SheetClose asChild>
-                  <Link
-                    to="/app/w/$workspaceId/$moduleId"
-                    params={{ workspaceId, moduleId: mod.id }}
-                    activeOptions={{ exact: true }}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg px-3 py-3 text-sm text-muted-foreground",
-                      pathname === `/app/w/${workspaceId}/${mod.id}` && "bg-navy text-primary-foreground",
-                    )}
-                  >
-                    <LayoutDashboard className="h-4 w-4" /> {lang === "id" ? "Dasbor" : "Dashboard"}
-                  </Link>
-                </SheetClose>
-                {mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id)).map((sub) => {
-                  const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
-                  return (
-                    <SheetClose asChild key={sub.id}>
-                      <Link
-                        to="/app/w/$workspaceId/$moduleId/$submoduleId"
-                        params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
-                        className={cn(
-                          "rounded-lg px-3 py-3 text-sm text-muted-foreground",
-                          pathname === to && "bg-navy text-primary-foreground",
-                        )}
-                      >
-                        {lang === "id" ? sub.id_ : sub.en}
-                      </Link>
-                    </SheetClose>
-                  );
-                })}
+                {showDashboardLink && (
+                  <SheetClose asChild>
+                    <Link
+                      to="/app/w/$workspaceId/$moduleId"
+                      params={{ workspaceId, moduleId: mod.id }}
+                      activeOptions={{ exact: true }}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg px-3 py-3 text-sm text-muted-foreground",
+                        pathname === `/app/w/${workspaceId}/${mod.id}` &&
+                          "bg-navy text-primary-foreground",
+                      )}
+                    >
+                      <LayoutDashboard className="h-4 w-4" />{" "}
+                      {lang === "id" ? "Dasbor" : "Dashboard"}
+                    </Link>
+                  </SheetClose>
+                )}
+                <SubmoduleNav
+                  lang={lang}
+                  subs={mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id))}
+                  renderLink={(sub, content) => {
+                    const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
+                    return (
+                      <SheetClose asChild key={sub.id}>
+                        <Link
+                          to="/app/w/$workspaceId/$moduleId/$submoduleId"
+                          params={{ workspaceId, moduleId: mod.id, submoduleId: sub.id }}
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg px-3 py-3 text-sm text-muted-foreground",
+                            pathname === to && "bg-navy text-primary-foreground",
+                          )}
+                        >
+                          {content}
+                        </Link>
+                      </SheetClose>
+                    );
+                  }}
+                />
               </nav>
             </SheetContent>
           </Sheet>

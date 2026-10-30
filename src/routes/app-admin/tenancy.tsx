@@ -28,6 +28,8 @@ import { adminDelete, adminList, adminListTenantsWithPackages, adminSave } from 
 import { adminResetTenantTransactions } from "@/lib/admin-users.functions";
 import { formatDate } from "@/lib/xperd";
 
+import { TablePager, usePaged } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/tenancy")({
   component: TenancyPage,
 });
@@ -201,6 +203,8 @@ function TenancyPage() {
 
   const counts = STATUSES.map((s) => ({ status: s, count: tenants.filter((t) => t.status === s).length }));
 
+  const pg = usePaged(filtered);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -286,7 +290,7 @@ function TenancyPage() {
                   <TableCell colSpan={8} className="text-sm text-muted-foreground">No tenants found.</TableCell>
                 </TableRow>
               )}
-              {filtered.map((t) => (
+              {pg.rows.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -399,6 +403,7 @@ function TenancyPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

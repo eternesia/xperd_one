@@ -30,7 +30,12 @@ export default defineTool({
       [workspace_id, doc_type, String(limit), String(offset)],
     );
     return {
-      content: [{ type: "text", text: JSON.stringify({ documents: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2) }],
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ documents: rows ?? [], total: Number(countRow?.c ?? 0) }, null, 2),
+        },
+      ],
       structuredContent: { documents: rows ?? [], total: Number(countRow?.c ?? 0) },
     };
   },

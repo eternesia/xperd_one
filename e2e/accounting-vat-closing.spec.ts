@@ -296,7 +296,7 @@ test("Accounting: tutup PPN mengompensasi 2100/1400/1410 dan menutup periode sek
 
   // Buka lagi supaya tidak meninggalkan kunci periode.
   await page.getByTestId(`period-lock-remove-${PERIODS.empty}`).click();
-  await expect(toastWith(page, /Period unlocked|Kunci periode dibuka/)).toBeVisible({ timeout: 30_000 });
+  await expect(toastWith(page, /Period reopened|Periode dibuka kembali/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId(`period-lock-remove-${PERIODS.empty}`)).toHaveCount(0, { timeout: 30_000 });
 
   await cleanup();

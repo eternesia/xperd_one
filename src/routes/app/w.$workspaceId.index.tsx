@@ -4,6 +4,7 @@ import { ArrowUpRight, Lock, Sparkles } from "lucide-react";
 import launcherBg from "@/assets/launcher-vector-bg.jpg";
 import { Badge } from "@/components/ui/badge";
 import { TrialBanner } from "@/components/app/TrialBanner";
+import { GettingStartedChecklist } from "@/components/app/GettingStartedChecklist";
 import { useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
@@ -38,8 +39,9 @@ function Launcher() {
       <div className="pointer-events-none absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-gold/20 blur-3xl" />
 
       <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col justify-center px-5 py-8">
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
           <TrialBanner workspaceId={workspaceId} />
+          {isManager && <GettingStartedChecklist workspaceId={workspaceId} />}
         </div>
         <div className="text-center">
           <p className="text-[11px] font-semibold tracking-[0.32em] text-gold">

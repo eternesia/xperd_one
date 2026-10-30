@@ -1,23 +1,57 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Briefcase, CheckCircle2, FileText, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import {
+  AlertTriangle,
+  Briefcase,
+  CheckCircle2,
+  FileText,
+  Pencil,
+  Plus,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
 import { AdminField, AdminSelect, fmtIDR, todayISO } from "@/components/app/admin-ui";
 import { PartyPicker } from "@/components/app/Pickers";
-import { PageSkeleton, PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
+import {
+  PageSkeleton,
+  PaginationBar,
+  SearchInput,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useApp } from "@/lib/app-context";
-import { countWorkspaceRows, deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
+import {
+  countWorkspaceRows,
+  deleteWorkspaceRow,
+  listWorkspaceRows,
+  saveWorkspaceRow,
+} from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { nextDocNumber } from "@/lib/procurement";
 import { XproProjectDetail } from "@/components/app/XproDetail";
+import { XproKanbanView, XproWorkloadView } from "@/components/app/XproKanban";
 
 /**
  * Ronde 33 — modul add-on **XPro** (Proyek & Kontrak, Milestone & Tugas, RAB,
@@ -61,7 +95,15 @@ function useCanSeeValue() {
   return workspaceRole === "owner" || workspaceRole === "admin";
 }
 
-function Header({ title, desc, action }: { title: string; desc?: string; action?: React.ReactNode }) {
+function Header({
+  title,
+  desc,
+  action,
+}: {
+  title: string;
+  desc?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
@@ -76,11 +118,20 @@ function Header({ title, desc, action }: { title: string; desc?: string; action?
 
 const asRows = (r: unknown) => ((r as { rows?: XproRow[] } | undefined)?.rows ?? []) as XproRow[];
 
-function useRows(table: string, workspaceId: string, order = "created_at", dir: "asc" | "desc" = "desc") {
+function useRows(
+  table: string,
+  workspaceId: string,
+  order = "created_at",
+  dir: "asc" | "desc" = "desc",
+) {
   return useQuery({
     queryKey: ["xpro", table, workspaceId, order, dir],
     queryFn: async () =>
-      asRows(await listWorkspaceRows({ data: { table, workspaceId, orderBy: order, orderDir: dir, limit: 1000 } })),
+      asRows(
+        await listWorkspaceRows({
+          data: { table, workspaceId, orderBy: order, orderDir: dir, limit: 1000 },
+        }),
+      ),
   });
 }
 
@@ -90,7 +141,9 @@ function useSave(table: string, workspaceId: string) {
   return useMutation({
     mutationFn: async (row: XproRow) => {
       const { id, ...rest } = row;
-      await saveWorkspaceRow({ data: { table, workspaceId, id: id as string | undefined, data: rest } });
+      await saveWorkspaceRow({
+        data: { table, workspaceId, id: id as string | undefined, data: rest },
+      });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["xpro"] });
@@ -137,7 +190,12 @@ function ProjectFilter({
 }
 
 function statusBadge(s: string) {
-  const tone = s === "completed" || s === "done" || s === "invoiced" ? "default" : s === "cancelled" ? "destructive" : "secondary";
+  const tone =
+    s === "completed" || s === "done" || s === "invoiced"
+      ? "default"
+      : s === "cancelled"
+        ? "destructive"
+        : "secondary";
   return (
     <Badge variant={tone} className="capitalize">
       {s.replace("_", " ")}
@@ -166,7 +224,11 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
   const canSeeValue = useCanSeeValue();
   const { email } = useApp();
 
-  if (projects.isLoading || milestones.isLoading || budget.isLoading || billings.isLoading) return <PageSkeleton stats={4} />;
+  // BS New 11: penerima tugas (Staff/Viewer) hanya bekerja dari papan Kanban-nya.
+  if (!canSeeValue) return <XproKanbanView workspaceId={workspaceId} />;
+
+  if (projects.isLoading || milestones.isLoading || budget.isLoading || billings.isLoading)
+    return <PageSkeleton stats={4} />;
   const P = projects.data ?? [];
   const M = milestones.data ?? [];
   const B = budget.data ?? [];
@@ -176,13 +238,17 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
   const contract = P.reduce((s, p) => s + num(p.contract_value), 0);
   const rab = B.reduce((s, b) => s + num(b.amount), 0);
   const billed = BL.filter((b) => b.status === "invoiced").reduce((s, b) => s + num(b.amount), 0);
-  const avgProg = active.length ? active.reduce((s, p) => s + projectProgress(String(p.id ?? ""), M), 0) / active.length : 0;
+  const avgProg = active.length
+    ? active.reduce((s, p) => s + projectProgress(String(p.id ?? ""), M), 0) / active.length
+    : 0;
   const late = M.filter((m) => m.status !== "done" && m.due_date && String(m.due_date) < today);
   const chart = P.slice(0, 8).map((p) => ({
     name: p.code,
     [t("Contract", "Kontrak")]: num(p.contract_value),
     RAB: B.filter((b) => b.project_id === p.id).reduce((s, b) => s + num(b.amount), 0),
-    [t("Billed", "Ditagih")]: BL.filter((b) => b.project_id === p.id && b.status === "invoiced").reduce((s, b) => s + num(b.amount), 0),
+    [t("Billed", "Ditagih")]: BL.filter(
+      (b) => b.project_id === p.id && b.status === "invoiced",
+    ).reduce((s, b) => s + num(b.amount), 0),
   }));
 
   const me = (email ?? "").toLowerCase();
@@ -193,7 +259,11 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
   );
   if (me) myNames.add(me);
   const allTasks = tasks.data ?? [];
-  const visibleTasks = (canSeeValue ? allTasks : allTasks.filter((x) => myNames.has(String(x.assignee ?? "").toLowerCase())))
+  const visibleTasks = (
+    canSeeValue
+      ? allTasks
+      : allTasks.filter((x) => myNames.has(String(x.assignee ?? "").toLowerCase()))
+  )
     .slice()
     .sort(
       (a, b) =>
@@ -205,7 +275,8 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          {canSeeValue ? t("Tasks", "Tugas") : t("My tasks", "Tugas saya")} ({openTasks.length} {t("open", "aktif")})
+          {canSeeValue ? t("Tasks", "Tugas") : t("My tasks", "Tugas saya")} ({openTasks.length}{" "}
+          {t("open", "aktif")})
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
@@ -240,14 +311,23 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
                 <TableRow key={x.id}>
                   <TableCell>{i + 1}</TableCell>
                   <TableCell className="font-medium">{String(x.name)}</TableCell>
-                  <TableCell className="text-xs">{String(P.find((p) => p.id === x.project_id)?.code ?? "-")}</TableCell>
-                  {canSeeValue && <TableCell className="text-xs">{String(x.assignee ?? "-")}</TableCell>}
-                  <TableCell className={`whitespace-nowrap text-xs ${isLate ? "text-destructive" : ""}`}>
+                  <TableCell className="text-xs">
+                    {String(P.find((p) => p.id === x.project_id)?.code ?? "-")}
+                  </TableCell>
+                  {canSeeValue && (
+                    <TableCell className="text-xs">{String(x.assignee ?? "-")}</TableCell>
+                  )}
+                  <TableCell
+                    className={`whitespace-nowrap text-xs ${isLate ? "text-destructive" : ""}`}
+                  >
                     {String(x.due_date ?? "-")}
                   </TableCell>
                   <TableCell className="text-right">{num(x.progress_pct)}%</TableCell>
                   <TableCell>
-                    <Badge variant={x.status === "done" ? "default" : "secondary"} className="capitalize">
+                    <Badge
+                      variant={x.status === "done" ? "default" : "secondary"}
+                      className="capitalize"
+                    >
                       {String(x.status).replace("_", " ")}
                     </Badge>
                   </TableCell>
@@ -289,7 +369,11 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
   }
 
   const kpis = [
-    { label: t("Active projects", "Proyek aktif"), value: `${active.length} / ${P.length}`, icon: Briefcase },
+    {
+      label: t("Active projects", "Proyek aktif"),
+      value: `${active.length} / ${P.length}`,
+      icon: Briefcase,
+    },
     { label: t("Contract value", "Nilai kontrak"), value: fmtIDR(contract), icon: FileText },
     { label: t("Total budget (RAB)", "Total RAB"), value: fmtIDR(rab), icon: Wallet },
     { label: t("Billed (invoiced)", "Sudah ditagih"), value: fmtIDR(billed), icon: CheckCircle2 },
@@ -320,7 +404,9 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">{t("Contract vs budget vs billed", "Kontrak vs RAB vs Tagihan")}</CardTitle>
+            <CardTitle className="text-base">
+              {t("Contract vs budget vs billed", "Kontrak vs RAB vs Tagihan")}
+            </CardTitle>
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -350,7 +436,9 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
               <b>{fmtIDR(contract - billed)}</b>
             </div>
             <div className="flex justify-between">
-              <span>{t("Est. gross margin (contract − RAB)", "Estimasi margin (kontrak − RAB)")}</span>
+              <span>
+                {t("Est. gross margin (contract − RAB)", "Estimasi margin (kontrak − RAB)")}
+              </span>
               <b>{fmtIDR(contract - rab)}</b>
             </div>
             <div className="border-t pt-3">
@@ -360,7 +448,8 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
               </p>
               {late.slice(0, 5).map((m) => (
                 <p key={m.id} className="truncate text-muted-foreground">
-                  {String(P.find((p) => p.id === m.project_id)?.code ?? "")} · {String(m.name)} · {String(m.due_date)}
+                  {String(P.find((p) => p.id === m.project_id)?.code ?? "")} · {String(m.name)} ·{" "}
+                  {String(m.due_date)}
                 </p>
               ))}
             </div>
@@ -373,7 +462,11 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
           <CardTitle className="text-base">{t("Project progress", "Progres proyek")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {P.length === 0 && <p className="text-sm text-muted-foreground">{t("No projects yet.", "Belum ada proyek.")}</p>}
+          {P.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("No projects yet.", "Belum ada proyek.")}
+            </p>
+          )}
           {P.slice(0, 10).map((p) => {
             const prog = projectProgress(String(p.id ?? ""), M);
             return (
@@ -385,7 +478,10 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
                   <span>{prog.toFixed(0)}%</span>
                 </div>
                 <div className="mt-1 h-2 rounded-full bg-muted">
-                  <div className="h-2 rounded-full bg-gold" style={{ width: `${Math.min(100, prog)}%` }} />
+                  <div
+                    className="h-2 rounded-full bg-gold"
+                    style={{ width: `${Math.min(100, prog)}%` }}
+                  />
                 </div>
               </div>
             );
@@ -409,7 +505,12 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
   const [edit, setEdit] = useState<XproRow | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const canSeeValue = useCanSeeValue();
-  const rows = useSearchFilter(data, term, (r) => [String(r.code ?? ""), String(r.name ?? ""), String(r.customer_name ?? ""), String(r.contract_no ?? "")]);
+  const rows = useSearchFilter(data, term, (r) => [
+    String(r.code ?? ""),
+    String(r.name ?? ""),
+    String(r.customer_name ?? ""),
+    String(r.contract_no ?? ""),
+  ]);
   const p = usePagination(rows);
 
   const openNew = () =>
@@ -424,7 +525,15 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
 
   if (isLoading) return <PageSkeleton />;
   const opened = data.find((x) => x.id === openId);
-  if (opened) return <XproProjectDetail workspaceId={workspaceId} project={opened as XproRow & { id: string }} onBack={() => setOpenId(null)} wsName={activeWorkspace?.name} />;
+  if (opened)
+    return (
+      <XproProjectDetail
+        workspaceId={workspaceId}
+        project={opened as XproRow & { id: string }}
+        onBack={() => setOpenId(null)}
+        wsName={activeWorkspace?.name}
+      />
+    );
   return (
     <div className="space-y-4">
       <Header
@@ -449,7 +558,9 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                 <TableHead>{t("Name", "Nama")}</TableHead>
                 <TableHead>{t("Client", "Klien")}</TableHead>
                 <TableHead>{t("Period", "Periode")}</TableHead>
-                {canSeeValue && <TableHead className="text-right">{t("Contract", "Kontrak")}</TableHead>}
+                {canSeeValue && (
+                  <TableHead className="text-right">{t("Contract", "Kontrak")}</TableHead>
+                )}
                 <TableHead>{t("Progress", "Progres")}</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead />
@@ -481,8 +592,12 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                   <TableCell className="whitespace-nowrap text-xs">
                     {String(r.start_date ?? "")} → {String(r.end_date ?? "-")}
                   </TableCell>
-                  {canSeeValue && <TableCell className="text-right">{fmtIDR(num(r.contract_value))}</TableCell>}
-                  <TableCell>{projectProgress(String(r.id ?? ""), milestones.data ?? []).toFixed(0)}%</TableCell>
+                  {canSeeValue && (
+                    <TableCell className="text-right">{fmtIDR(num(r.contract_value))}</TableCell>
+                  )}
+                  <TableCell>
+                    {projectProgress(String(r.id ?? ""), milestones.data ?? []).toFixed(0)}%
+                  </TableCell>
                   <TableCell>{statusBadge(String(r.status))}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Button size="icon" variant="ghost" onClick={() => setEdit(r)}>
@@ -492,7 +607,12 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                       size="icon"
                       variant="ghost"
                       onClick={() =>
-                        confirm(t("Delete project and all its data?", "Hapus proyek beserta seluruh datanya?")) && remove.mutate(String(r.id))
+                        confirm(
+                          t(
+                            "Delete project and all its data?",
+                            "Hapus proyek beserta seluruh datanya?",
+                          ),
+                        ) && remove.mutate(String(r.id))
                       }
                     >
                       <Trash2 />
@@ -509,19 +629,30 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
       <Dialog open={!!edit} onOpenChange={(o) => !o && setEdit(null)}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{edit?.id ? t("Edit project", "Ubah proyek") : t("New project", "Proyek baru")}</DialogTitle>
+            <DialogTitle>
+              {edit?.id ? t("Edit project", "Ubah proyek") : t("New project", "Proyek baru")}
+            </DialogTitle>
           </DialogHeader>
           {edit && (
             <div className="grid gap-3 sm:grid-cols-2">
               <AdminField label={t("Code", "Kode")}>
-                <Input value={String(edit.code ?? "")} onChange={(e) => setEdit({ ...edit, code: e.target.value })} />
+                <Input
+                  value={String(edit.code ?? "")}
+                  onChange={(e) => setEdit({ ...edit, code: e.target.value })}
+                />
               </AdminField>
               <AdminField label={t("Contract / SPK no.", "No. Kontrak / SPK")}>
-                <Input value={String(edit.contract_no ?? "")} onChange={(e) => setEdit({ ...edit, contract_no: e.target.value })} />
+                <Input
+                  value={String(edit.contract_no ?? "")}
+                  onChange={(e) => setEdit({ ...edit, contract_no: e.target.value })}
+                />
               </AdminField>
               <div className="sm:col-span-2">
                 <AdminField label={t("Project name", "Nama proyek")}>
-                  <Input value={String(edit.name ?? "")} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+                  <Input
+                    value={String(edit.name ?? "")}
+                    onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+                  />
                 </AdminField>
               </div>
               <AdminField label={t("Client", "Klien")}>
@@ -533,7 +664,10 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                 />
               </AdminField>
               <AdminField label={t("Project manager", "Project Manager")}>
-                <Input value={String(edit.manager ?? "")} onChange={(e) => setEdit({ ...edit, manager: e.target.value })} />
+                <Input
+                  value={String(edit.manager ?? "")}
+                  onChange={(e) => setEdit({ ...edit, manager: e.target.value })}
+                />
               </AdminField>
               <AdminField label={t("Start", "Mulai")}>
                 <Input
@@ -566,7 +700,10 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                 />
               </AdminField>
               <AdminField label="Status">
-                <AdminSelect value={String(edit.status ?? "planning")} onChange={(v) => setEdit({ ...edit, status: v })}>
+                <AdminSelect
+                  value={String(edit.status ?? "planning")}
+                  onChange={(v) => setEdit({ ...edit, status: v })}
+                >
                   {PROJECT_STATUS.map((s) => (
                     <option key={s} value={s}>
                       {s.replace("_", " ")}
@@ -575,7 +712,10 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                 </AdminSelect>
               </AdminField>
               <AdminField label={t("Notes", "Catatan")}>
-                <Input value={String(edit.notes ?? "")} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} />
+                <Input
+                  value={String(edit.notes ?? "")}
+                  onChange={(e) => setEdit({ ...edit, notes: e.target.value })}
+                />
               </AdminField>
             </div>
           )}
@@ -605,7 +745,10 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
   const [project, setProject] = useState("");
   const [edit, setEdit] = useState<XproRow | null>(null);
   const P = projects.data ?? [];
-  const rows = useMemo(() => (project ? data.filter((m) => m.project_id === project) : data), [data, project]);
+  const rows = useMemo(
+    () => (project ? data.filter((m) => m.project_id === project) : data),
+    [data, project],
+  );
   const p = usePagination(rows);
   const weight = rows.reduce((s, m) => s + num(m.weight_pct), 0);
 
@@ -641,8 +784,11 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
         }
       />
       {project && (
-        <p className={`text-sm ${Math.abs(weight - 100) > 0.01 ? "text-destructive" : "text-muted-foreground"}`}>
-          {t("Total weight", "Total bobot")}: {weight}% · {t("Weighted progress", "Progres tertimbang")}:{" "}
+        <p
+          className={`text-sm ${Math.abs(weight - 100) > 0.01 ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {t("Total weight", "Total bobot")}: {weight}% ·{" "}
+          {t("Weighted progress", "Progres tertimbang")}:{" "}
           {projectProgress(project, data).toFixed(1)}%
         </p>
       )}
@@ -673,18 +819,27 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
               {p.items.map((r, i) => (
                 <TableRow key={r.id}>
                   <TableCell>{p.start + i + 1}</TableCell>
-                  <TableCell className="whitespace-nowrap">{String(P.find((x) => x.id === r.project_id)?.code ?? "")}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {String(P.find((x) => x.id === r.project_id)?.code ?? "")}
+                  </TableCell>
                   <TableCell>{String(r.name)}</TableCell>
                   <TableCell>{String(r.pic ?? "")}</TableCell>
                   <TableCell
-                    className={r.status !== "done" && r.due_date && String(r.due_date) < todayISO() ? "text-destructive" : ""}
+                    className={
+                      r.status !== "done" && r.due_date && String(r.due_date) < todayISO()
+                        ? "text-destructive"
+                        : ""
+                    }
                   >
                     {String(r.due_date ?? "")}
                   </TableCell>
                   <TableCell className="text-right">{num(r.weight_pct)}%</TableCell>
                   <TableCell className="min-w-28">
                     <div className="h-2 rounded-full bg-muted">
-                      <div className="h-2 rounded-full bg-gold" style={{ width: `${Math.min(100, num(r.progress_pct))}%` }} />
+                      <div
+                        className="h-2 rounded-full bg-gold"
+                        style={{ width: `${Math.min(100, num(r.progress_pct))}%` }}
+                      />
                     </div>
                     <span className="text-xs">{num(r.progress_pct)}%</span>
                   </TableCell>
@@ -727,7 +882,10 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
               </div>
               <div className="sm:col-span-2">
                 <AdminField label={t("Name", "Nama")}>
-                  <Input value={String(edit.name ?? "")} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+                  <Input
+                    value={String(edit.name ?? "")}
+                    onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+                  />
                 </AdminField>
               </div>
               <AdminField label={t("Weight %", "Bobot %")}>
@@ -745,7 +903,11 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
                   value={String(edit.progress_pct ?? 0)}
                   onChange={(e) => {
                     const v = Math.min(100, num(e.target.value));
-                    setEdit({ ...edit, progress_pct: v, status: v >= 100 ? "done" : v > 0 ? "in_progress" : edit.status });
+                    setEdit({
+                      ...edit,
+                      progress_pct: v,
+                      status: v >= 100 ? "done" : v > 0 ? "in_progress" : edit.status,
+                    });
                   }}
                 />
               </AdminField>
@@ -764,10 +926,16 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
                 />
               </AdminField>
               <AdminField label="PIC">
-                <Input value={String(edit.pic ?? "")} onChange={(e) => setEdit({ ...edit, pic: e.target.value })} />
+                <Input
+                  value={String(edit.pic ?? "")}
+                  onChange={(e) => setEdit({ ...edit, pic: e.target.value })}
+                />
               </AdminField>
               <AdminField label="Status">
-                <AdminSelect value={String(edit.status ?? "not_started")} onChange={(v) => setEdit({ ...edit, status: v })}>
+                <AdminSelect
+                  value={String(edit.status ?? "not_started")}
+                  onChange={(v) => setEdit({ ...edit, status: v })}
+                >
                   {MS_STATUS.map((s) => (
                     <option key={s} value={s}>
                       {s.replace("_", " ")}
@@ -804,7 +972,10 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
   const [project, setProject] = useState("");
   const [edit, setEdit] = useState<XproRow | null>(null);
   const P = projects.data ?? [];
-  const rows = useMemo(() => (project ? data.filter((b) => b.project_id === project) : data), [data, project]);
+  const rows = useMemo(
+    () => (project ? data.filter((b) => b.project_id === project) : data),
+    [data, project],
+  );
   const p = usePagination(rows);
   const total = rows.reduce((s, b) => s + num(b.amount), 0);
   const contract = project
@@ -827,7 +998,13 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
               variant="navy"
               disabled={!P.length}
               onClick={() =>
-                setEdit({ project_id: project || P[0]?.id, category: "material", description: "", qty: 1, unit_cost: 0 })
+                setEdit({
+                  project_id: project || P[0]?.id,
+                  category: "material",
+                  description: "",
+                  qty: 1,
+                  unit_cost: 0,
+                })
               }
             >
               <Plus />
@@ -842,7 +1019,9 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">{lang === "id" ? c.id_ : c.en}</p>
               <p className="font-semibold">
-                {fmtIDR(rows.filter((b) => b.category === c.id).reduce((s, b) => s + num(b.amount), 0))}
+                {fmtIDR(
+                  rows.filter((b) => b.category === c.id).reduce((s, b) => s + num(b.amount), 0),
+                )}
               </p>
             </CardContent>
           </Card>
@@ -856,7 +1035,9 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">{t("Contract − RAB", "Kontrak − RAB")}</p>
-            <p className={`font-semibold ${contract - total < 0 ? "text-destructive" : ""}`}>{fmtIDR(contract - total)}</p>
+            <p className={`font-semibold ${contract - total < 0 ? "text-destructive" : ""}`}>
+              {fmtIDR(contract - total)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -886,7 +1067,9 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
               {p.items.map((r, i) => (
                 <TableRow key={r.id}>
                   <TableCell>{p.start + i + 1}</TableCell>
-                  <TableCell className="whitespace-nowrap">{String(P.find((x) => x.id === r.project_id)?.code ?? "")}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {String(P.find((x) => x.id === r.project_id)?.code ?? "")}
+                  </TableCell>
                   <TableCell>{catName(String(r.category))}</TableCell>
                   <TableCell>{String(r.description)}</TableCell>
                   <TableCell className="text-right">
@@ -931,7 +1114,10 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
                 </AdminField>
               </div>
               <AdminField label={t("Category", "Kategori")}>
-                <AdminSelect value={String(edit.category ?? "material")} onChange={(v) => setEdit({ ...edit, category: v })}>
+                <AdminSelect
+                  value={String(edit.category ?? "material")}
+                  onChange={(v) => setEdit({ ...edit, category: v })}
+                >
                   {BUDGET_CATS.map((c) => (
                     <option key={c.id} value={c.id}>
                       {lang === "id" ? c.id_ : c.en}
@@ -940,7 +1126,10 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
                 </AdminSelect>
               </AdminField>
               <AdminField label={t("Unit", "Satuan")}>
-                <Input value={String(edit.uom ?? "")} onChange={(e) => setEdit({ ...edit, uom: e.target.value })} />
+                <Input
+                  value={String(edit.uom ?? "")}
+                  onChange={(e) => setEdit({ ...edit, uom: e.target.value })}
+                />
               </AdminField>
               <div className="sm:col-span-2">
                 <AdminField label={t("Description", "Uraian")}>
@@ -975,7 +1164,10 @@ function BudgetView({ workspaceId }: { workspaceId: string }) {
               disabled={!edit?.description || !edit?.project_id || save.isPending}
               onClick={() =>
                 edit &&
-                save.mutate({ ...edit, amount: num(edit.qty) * num(edit.unit_cost) }, { onSuccess: () => setEdit(null) })
+                save.mutate(
+                  { ...edit, amount: num(edit.qty) * num(edit.unit_cost) },
+                  { onSuccess: () => setEdit(null) },
+                )
               }
             >
               {t("Save", "Simpan")}
@@ -1002,13 +1194,20 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
   const [edit, setEdit] = useState<XproRow | null>(null);
   const P = projects.data ?? [];
   const M = milestones.data ?? [];
-  const rows = useMemo(() => (project ? data.filter((b) => b.project_id === project) : data), [data, project]);
+  const rows = useMemo(
+    () => (project ? data.filter((b) => b.project_id === project) : data),
+    [data, project],
+  );
   const p = usePagination(rows);
 
   const recalc = (row: XproRow) => {
     const pr = P.find((x) => x.id === row.project_id);
     const amount = Math.round((num(pr?.contract_value) * num(row.progress_pct)) / 100);
-    return { ...row, amount, retention_amount: Math.round((amount * num(pr?.retention_pct)) / 100) };
+    return {
+      ...row,
+      amount,
+      retention_amount: Math.round((amount * num(pr?.retention_pct)) / 100),
+    };
   };
 
   /**
@@ -1019,7 +1218,8 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
   const issueAr = useMutation({
     mutationFn: async (b: XproRow) => {
       const pr = P.find((x) => x.id === b.project_id);
-      if (!pr?.customer_code) throw new Error(t("Set the project client first.", "Isi klien proyek terlebih dulu."));
+      if (!pr?.customer_code)
+        throw new Error(t("Set the project client first.", "Isi klien proyek terlebih dulu."));
       const count = await countWorkspaceRows({
         data: { table: "sls_documents", workspaceId, filters: { doc_type: "ar_invoice" } },
       });
@@ -1146,12 +1346,16 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                     {String(r.bast_no)}
                     <p className="text-xs text-muted-foreground">{String(r.bast_date)}</p>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{String(P.find((x) => x.id === r.project_id)?.code ?? "")}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {String(P.find((x) => x.id === r.project_id)?.code ?? "")}
+                  </TableCell>
                   <TableCell className="text-right">{num(r.progress_pct)}%</TableCell>
                   <TableCell className="text-right">{fmtIDR(num(r.amount))}</TableCell>
                   <TableCell className="text-right">{fmtIDR(num(r.retention_amount))}</TableCell>
                   <TableCell>{statusBadge(String(r.status))}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs">{String(r.ar_doc_number ?? "-")}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">
+                    {String(r.ar_doc_number ?? "-")}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {r.status === "draft" && (
                       <Button
@@ -1159,7 +1363,11 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                         variant="outline"
                         onClick={() =>
                           r.progress_report_id
-                            ? save.mutate({ id: r.id, project_id: r.project_id, status: "approved" })
+                            ? save.mutate({
+                                id: r.id,
+                                project_id: r.project_id,
+                                status: "approved",
+                              })
                             : toast.error(
                                 t(
                                   "Attach an approved progress report first.",
@@ -1172,7 +1380,12 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                       </Button>
                     )}
                     {r.status === "approved" && (
-                      <Button size="sm" variant="navy" disabled={issueAr.isPending} onClick={() => issueAr.mutate(r)}>
+                      <Button
+                        size="sm"
+                        variant="navy"
+                        disabled={issueAr.isPending}
+                        onClick={() => issueAr.mutate(r)}
+                      >
                         {t("Issue AR", "Terbitkan AR")}
                       </Button>
                     )}
@@ -1184,7 +1397,9 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => confirm(t("Delete?", "Hapus?")) && remove.mutate(String(r.id))}
+                          onClick={() =>
+                            confirm(t("Delete?", "Hapus?")) && remove.mutate(String(r.id))
+                          }
                         >
                           <Trash2 />
                         </Button>
@@ -1211,12 +1426,17 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                     all={false}
                     projects={P}
                     value={String(edit.project_id ?? "")}
-                    onChange={(v) => setEdit(recalc({ ...edit, project_id: v, milestone_id: null }))}
+                    onChange={(v) =>
+                      setEdit(recalc({ ...edit, project_id: v, milestone_id: null }))
+                    }
                   />
                 </AdminField>
               </div>
               <AdminField label={t("BAST no.", "No. BAST")}>
-                <Input value={String(edit.bast_no ?? "")} onChange={(e) => setEdit({ ...edit, bast_no: e.target.value })} />
+                <Input
+                  value={String(edit.bast_no ?? "")}
+                  onChange={(e) => setEdit({ ...edit, bast_no: e.target.value })}
+                />
               </AdminField>
               <AdminField label={t("Date", "Tanggal")}>
                 <Input
@@ -1231,7 +1451,13 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                     value={String(edit.milestone_id ?? "")}
                     onChange={(v) => {
                       const m = M.find((x) => x.id === v);
-                      setEdit(recalc({ ...edit, milestone_id: v || null, progress_pct: m ? num(m.weight_pct) : edit.progress_pct }));
+                      setEdit(
+                        recalc({
+                          ...edit,
+                          milestone_id: v || null,
+                          progress_pct: m ? num(m.weight_pct) : edit.progress_pct,
+                        }),
+                      );
                     }}
                   >
                     <option value="">-</option>
@@ -1244,7 +1470,12 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                 </AdminField>
               </div>
               <div className="sm:col-span-2">
-                <AdminField label={t("Approved progress report (required)", "Laporan progres disetujui (wajib)")}>
+                <AdminField
+                  label={t(
+                    "Approved progress report (required)",
+                    "Laporan progres disetujui (wajib)",
+                  )}
+                >
                   <AdminSelect
                     value={String(edit.progress_report_id ?? "")}
                     onChange={(v) => setEdit({ ...edit, progress_report_id: v || null })}
@@ -1288,7 +1519,8 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
                 />
               </AdminField>
               <p className="text-sm sm:col-span-2">
-                {t("Net to invoice", "Neto ditagihkan")}: <b>{fmtIDR(num(edit.amount) - num(edit.retention_amount))}</b>
+                {t("Net to invoice", "Neto ditagihkan")}:{" "}
+                <b>{fmtIDR(num(edit.amount) - num(edit.retention_amount))}</b>
               </p>
             </div>
           )}
@@ -1307,7 +1539,15 @@ function BillingView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-export function XproView({ submoduleId, workspaceId }: { submoduleId: string; workspaceId: string }) {
+export function XproView({
+  submoduleId,
+  workspaceId,
+}: {
+  submoduleId: string;
+  workspaceId: string;
+}) {
+  if (submoduleId === "kanban") return <XproKanbanView workspaceId={workspaceId} />;
+  if (submoduleId === "workload") return <XproWorkloadView workspaceId={workspaceId} />;
   if (submoduleId === "projects") return <ProjectsView workspaceId={workspaceId} />;
   if (submoduleId === "milestones") return <MilestonesView workspaceId={workspaceId} />;
   if (submoduleId === "budget") return <BudgetView workspaceId={workspaceId} />;

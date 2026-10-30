@@ -17,6 +17,8 @@ import { sqlDateTime } from "@/lib/datetime";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 
+import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/announcements")({
   component: AnnouncementsPage,
 });
@@ -96,6 +98,8 @@ function AnnouncementsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const pg = usePaged(rows, rowText);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -114,6 +118,7 @@ function AnnouncementsPage() {
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
+          <div className="border-b border-border p-4"><TableSearch value={pg.query} onChange={pg.setQuery} /></div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -132,7 +137,7 @@ function AnnouncementsPage() {
               {!isLoading && rows.length === 0 && (
                 <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">No announcements yet.</TableCell></TableRow>
               )}
-              {rows.map((a) => (
+              {pg.rows.map((a) => (
                 <TableRow key={a.id}>
                   <TableCell>
                     <p className="font-medium text-navy">{a.title_en}</p>
@@ -182,6 +187,7 @@ function AnnouncementsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

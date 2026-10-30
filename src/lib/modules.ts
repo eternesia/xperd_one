@@ -17,6 +17,25 @@ import {
   Store,
   Truck,
   Users,
+  UserPlus,
+  KanbanSquare,
+  Contact,
+  CalendarCheck,
+  Target,
+  Megaphone,
+  MessageCircle,
+  FileText,
+  CalendarDays,
+  Lightbulb,
+  Image,
+  MessagesSquare,
+  Inbox,
+  Zap,
+  Rocket,
+  LineChart,
+  ClipboardCheck,
+  FolderOpen,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +43,11 @@ export interface SubModule {
   id: string;
   en: string;
   id_: string;
+  /** Only workspace Owner/Admin may open it (e.g. project finance, team workload). */
+  managerOnly?: boolean;
+  icon?: LucideIcon;
+  /** Sidebar section label [en, id]. */
+  group?: [string, string];
 }
 
 export interface AppModule {
@@ -42,6 +66,37 @@ export interface AppModule {
 }
 
 const s = (id: string, en: string, id_: string): SubModule => ({ id, en, id_ });
+const m = (id: string, en: string, id_: string): SubModule => ({ id, en, id_, managerOnly: true });
+
+const g = (
+  group: [string, string],
+  icon: LucideIcon,
+  id: string,
+  en: string,
+  id_: string,
+): SubModule => ({ id, en, id_, icon, group });
+
+/** Split submodules into consecutive sidebar sections by their `group`. */
+export function groupSubmodules(
+  subs: SubModule[],
+): { group?: [string, string]; items: SubModule[] }[] {
+  const out: { group?: [string, string]; items: SubModule[] }[] = [];
+  for (const sub of subs) {
+    const last = out[out.length - 1];
+    if (last && last.group?.[0] === sub.group?.[0]) last.items.push(sub);
+    else out.push({ group: sub.group, items: [sub] });
+  }
+  return out;
+}
+
+// Seksi sidebar CRM (Qalling) — urutan & label sama dengan xperd-one.lovable.app (BS New 11).
+const SALES: [string, string] = ["Sales", "Penjualan"];
+const MSG: [string, string] = ["Messaging", "Pesan"];
+const PUB: [string, string] = ["Publishing", "Publikasi"];
+const INTER: [string, string] = ["Interaction", "Interaksi"];
+const ANALYTICS: [string, string] = ["Analytics", "Analitik"];
+const TENDER: [string, string] = ["Tender", "Tender"];
+const SETUP: [string, string] = ["Settings", "Pengaturan"];
 
 const MODULE_DEFS: AppModule[] = [
   {
@@ -237,10 +292,10 @@ const MODULE_DEFS: AppModule[] = [
   },
   {
     id: "crm",
-    en: "CRM",
-    id_: "CRM",
+    en: "Qalling CRM",
+    id_: "Qalling CRM",
     descEn: "Leads, pipeline, follow-up and campaign add-on.",
-    descId: "Prospek, pipeline, follow up, dan kampanye.",
+    descId: "Prospek, pipeline, follow up, dan kampanye (add-on).",
     icon: HandCoins,
     tone: "gold",
     phase: 4,
@@ -249,43 +304,26 @@ const MODULE_DEFS: AppModule[] = [
       // Catatan (Ronde 35): submodul `dashboard` SENGAJA tidak didaftarkan di sini.
       // Halaman indeks modul sudah merender dasbor CRM yang sama, sehingga
       // mendaftarkannya akan memunculkan dua menu "Dashboard" di sidebar.
-      // Rujukan BS New 10 juga tidak punya submodul `dashboard` untuk CRM.
-      s("leads", "Leads", "Prospek"),
-      s("pipeline", "Pipeline", "Pipeline"),
-      s("contacts", "Contacts", "Kontak"),
-      s("follow-ups", "Follow Ups", "Follow Up"),
-      s("broadcast", "Broadcast", "Broadcast Pesan"),
-      s("wa-gateway", "WhatsApp Gateway", "WhatsApp Gateway"),
-      s("campaigns", "Social Campaigns", "Kampanye Sosial"),
-      s("targets", "Sales Targets", "Target Sales"),
-      s("templates", "Message Templates", "Template Pesan"),
-      // Batch 3 #50 (BS New 3): checklist dokumen tender.
-      s("tenders", "Tender Checklist", "Checklist Tender"),
-      // Batch 3 #54–56 (BS New 3): akun sosial & penjadwal postingan.
-      s("social-dashboard", "Social Dashboard", "Dasbor Media Sosial"),
-      s("social-accounts", "Social Accounts", "Akun Media Sosial"),
-      s("post-scheduler", "Post Scheduler", "Jadwal Postingan"),
-      // Batch 3 #51 (BS New 3): pustaka dokumen tender.
-      s("doc-library", "Document Library", "Pustaka Dokumen"),
-    ],
-  },
-  {
-    id: "omnix",
-    en: "Omnix",
-    id_: "Omnix",
-    descEn: "Omni-channel marketplace & food delivery in one dashboard (add-on).",
-    descId: "Marketplace & food delivery omni-channel dalam satu dasbor (add-on).",
-    icon: Store,
-    tone: "sky",
-    phase: 4,
-    addon: "omnix",
-    submodules: [
-      s("stores", "Store Connections", "Koneksi Toko"),
-      s("orders", "Transactions", "Transaksi"),
-      s("shipping", "Shipping & Pickup", "Pengiriman & Pickup"),
-      s("reports", "Reports", "Laporan"),
-      s("wallet", "Balance & Billing", "Saldo & Tagihan"),
-      s("settings", "API Settings", "Pengaturan API"),
+      // Ronde 37 (BS New 11): sidebar bergrup + ikon, sama dengan live.
+      g(SALES, UserPlus, "leads", "Leads", "Prospek"),
+      g(SALES, KanbanSquare, "pipeline", "Pipeline", "Pipeline"),
+      g(SALES, Contact, "contacts", "Contacts", "Kontak"),
+      g(SALES, CalendarCheck, "follow-ups", "Follow Ups", "Follow Up"),
+      g(SALES, Target, "targets", "Sales Targets", "Target Sales"),
+      g(MSG, Megaphone, "broadcast", "Broadcast", "Broadcast Pesan"),
+      g(MSG, MessageCircle, "wa-gateway", "WhatsApp Gateway", "WhatsApp Gateway"),
+      g(MSG, FileText, "templates", "Message Templates", "Template Pesan"),
+      g(PUB, CalendarDays, "post-scheduler", "Posts", "Posts"),
+      g(PUB, Lightbulb, "ideas", "Ideas", "Ide Konten"),
+      g(PUB, Image, "media", "Media", "Media"),
+      g(PUB, Rocket, "campaigns", "Social Campaigns", "Kampanye Sosial"),
+      g(INTER, MessagesSquare, "comments", "Comments", "Komentar"),
+      g(INTER, Inbox, "inbox", "Inbox", "Inbox"),
+      g(INTER, Zap, "automations", "Automations", "Otomasi"),
+      g(ANALYTICS, LineChart, "social-dashboard", "Insights", "Insight Sosial"),
+      g(TENDER, ClipboardCheck, "tenders", "Tender Checklist", "Checklist Tender"),
+      g(TENDER, FolderOpen, "doc-library", "Document Library", "Pustaka Dokumen"),
+      g(SETUP, Share2, "social-accounts", "Social Accounts", "Akun Media Sosial"),
     ],
   },
   {
@@ -308,6 +346,25 @@ const MODULE_DEFS: AppModule[] = [
       s("tax-bpjs", "BPJS & PPh 21", "BPJS & PPh 21"),
     ],
   },
+  {
+    id: "omnix",
+    en: "Omnix",
+    id_: "Omnix",
+    descEn: "Omni-channel marketplace & food delivery in one dashboard (add-on).",
+    descId: "Marketplace & food delivery omni-channel dalam satu dasbor (add-on).",
+    icon: Store,
+    tone: "sky",
+    phase: 4,
+    addon: "omnix",
+    submodules: [
+      s("stores", "Store Connections", "Koneksi Toko"),
+      s("orders", "Transactions", "Transaksi"),
+      s("shipping", "Shipping & Pickup", "Pengiriman & Pickup"),
+      s("reports", "Reports", "Laporan"),
+      s("wallet", "Balance & Billing", "Saldo & Tagihan"),
+      s("settings", "API Settings", "Pengaturan API"),
+    ],
+  },
   // Ronde 33 (BS New 10): add-on XPro — Proyek & Kontrak, Milestone, RAB,
   // tagihan termin/BAST. Diporting apa adanya (termasuk BAST → draft AR Invoice).
   {
@@ -321,10 +378,13 @@ const MODULE_DEFS: AppModule[] = [
     phase: 4,
     addon: "xpro",
     submodules: [
-      s("projects", "Projects & Contracts", "Proyek & Kontrak"),
-      s("milestones", "Milestones & Tasks", "Tahapan & Tugas"),
-      s("budget", "Project Budget (RAB)", "Rencana Anggaran Biaya"),
-      s("billing", "Progress Billing & BAST", "Tagihan Termin & BAST"),
+      // Ronde 36 (BS New 11): Kanban untuk semua penerima tugas; sisanya khusus owner/admin.
+      s("kanban", "Kanban Tasks", "Kanban Tugas"),
+      m("workload", "Team Workload", "Beban Kerja Tim"),
+      m("projects", "Projects & Contracts", "Proyek & Kontrak"),
+      m("milestones", "Milestones & Tasks", "Tahapan & Tugas"),
+      m("budget", "Project Budget (RAB)", "Rencana Anggaran Biaya"),
+      m("billing", "Progress Billing & BAST", "Tagihan Termin & BAST"),
     ],
   },
 ];

@@ -34,6 +34,8 @@ import {
 import { adminList, adminSave } from "@/lib/platform.functions";
 import { provisionRegistration } from "@/lib/provisioning.functions";
 
+import { TablePager, usePaged } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/registrations")({
   component: RegistrationsPage,
 });
@@ -103,6 +105,8 @@ function RegistrationsPage() {
       .includes(search.toLowerCase());
     return hit && (statusFilter === "all" || r.status === statusFilter);
   });
+
+  const pg = usePaged(filtered);
 
   return (
     <div className="space-y-6">
@@ -177,7 +181,7 @@ function RegistrationsPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((r) => (
+              {pg.rows.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>
                     <p className="font-medium text-navy">{r.company_name}</p>
@@ -231,6 +235,7 @@ function RegistrationsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

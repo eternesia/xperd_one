@@ -233,7 +233,7 @@ export const listTenantInvoices = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
-    return execute("SELECT * FROM invoices WHERE tenant_id = ? ORDER BY issue_date DESC", [data.tenantId]);
+    return execute("SELECT * FROM invoices WHERE tenant_id = ? AND product <> 'wallet' ORDER BY issue_date DESC", [data.tenantId]);
   });
 
 export const listTenantUpgradeRequests = createServerFn({ method: "POST" })

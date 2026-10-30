@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { adminList, adminSave } from "@/lib/platform.functions";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 
+import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/packages")({
   component: PackagesPage,
 });
@@ -98,6 +100,8 @@ function PackagesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const pg = usePaged(rows, rowText);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -116,6 +120,7 @@ function PackagesPage() {
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
+          <div className="border-b border-border p-4"><TableSearch value={pg.query} onChange={pg.setQuery} /></div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -131,7 +136,7 @@ function PackagesPage() {
               {isLoading && (
                 <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               )}
-              {rows.map((p) => (
+              {pg.rows.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell>
                     <p className="font-medium text-navy">{p.name}</p>
@@ -180,6 +185,7 @@ function PackagesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

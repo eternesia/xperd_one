@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useIsFetching, useIsMutating } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -14,6 +15,10 @@ import {
   LifeBuoy,
   ClipboardCheck,
   Users,
+  Share2,
+  Wallet,
+  Mail,
+  KeyRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsAdmin, useSession, emitAuthChange } from "@/hooks/use-session";
-import { loginAppUser, logoutAppUser, registerAppUser } from "@/lib/auth.functions";
+import { loginAppUser, logoutAppUser } from "@/lib/auth.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app-admin")({
@@ -78,14 +83,16 @@ function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-secondary/40">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-white/10 bg-navy p-5 text-primary-foreground lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-navy p-5 text-primary-foreground lg:flex">
         <div className="flex items-center gap-2 text-sm font-semibold tracking-[0.22em] text-gold">
           <ShieldCheck className="h-4 w-4" /> SUPER ADMIN
         </div>
-        <nav className="mt-8 flex flex-col gap-1">
+        <nav className="mt-6 flex flex-col gap-1">
           <NavItem to="/app-admin" icon={<LayoutDashboard className="h-4 w-4" />} exact>
             Dashboard
           </NavItem>
+          <NavItem to="/app-admin/visitors" icon={<Users className="h-4 w-4" />}>Pengunjung Website</NavItem>
+          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Tenant</p>
           <NavItem to="/app-admin/tenancy" icon={<Building2 className="h-4 w-4" />}>
             Tenancy
           </NavItem>
@@ -95,29 +102,45 @@ function AdminLayout() {
           <NavItem to="/app-admin/users" icon={<Users className="h-4 w-4" />}>
             Users
           </NavItem>
+          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Billing</p>
           <NavItem to="/app-admin/invoices" icon={<ReceiptText className="h-4 w-4" />}>
             Invoices
           </NavItem>
           <NavItem to="/app-admin/payments" icon={<CreditCard className="h-4 w-4" />}>
             Payment Gateway
           </NavItem>
+          <NavItem to="/app-admin/wallet" icon={<Wallet className="h-4 w-4" />}>
+            Deposit & Top-up
+          </NavItem>
+          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Katalog</p>
           <NavItem to="/app-admin/packages" icon={<LayoutList className="h-4 w-4" />}>
             Plan & Packages
           </NavItem>
           <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
             Add-on Modules
           </NavItem>
+          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Operasional</p>
           <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
             Announcements
           </NavItem>
           <NavItem to="/app-admin/tickets" icon={<LifeBuoy className="h-4 w-4" />}>
             Help Desk
           </NavItem>
+          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Integrasi & Konten</p>
+          <NavItem to="/app-admin/auth-settings" icon={<KeyRound className="h-4 w-4" />}>
+            Login & Pendaftaran
+          </NavItem>
+          <NavItem to="/app-admin/email" icon={<Mail className="h-4 w-4" />}>
+            Email Gateway
+          </NavItem>
+          <NavItem to="/app-admin/tebar" icon={<Share2 className="h-4 w-4" />}>
+            Tebar Connector
+          </NavItem>
           <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>
             Website Content
           </NavItem>
         </nav>
-        <div className="mt-auto space-y-3 pt-8">
+        <div className="mt-auto space-y-3 pt-6">
           <p className="truncate text-xs text-primary-foreground/50">{session.user.email}</p>
           <Button
             variant="onDark"
@@ -135,21 +158,25 @@ function AdminLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-6 lg:hidden">
+        <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-4 border-b border-border bg-background px-6 lg:hidden">
           <span className="text-sm font-semibold tracking-[0.2em] text-navy">SUPER ADMIN</span>
           <div className="flex flex-wrap gap-2 text-xs">
             <Link to="/app-admin" className="text-muted-foreground">Dashboard</Link>
+            <Link to="/app-admin/visitors" className="text-muted-foreground">Visitors</Link>
             <Link to="/app-admin/tenancy" className="text-muted-foreground">Tenancy</Link>
             <Link to="/app-admin/users" className="text-muted-foreground">Users</Link>
             <Link to="/app-admin/invoices" className="text-muted-foreground">Invoices</Link>
             <Link to="/app-admin/payments" className="text-muted-foreground">Payments</Link>
+            <Link to="/app-admin/wallet" className="text-muted-foreground">Top-up</Link>
             <Link to="/app-admin/packages" className="text-muted-foreground">Plans</Link>
             <Link to="/app-admin/addons" className="text-muted-foreground">Add-ons</Link>
             <Link to="/app-admin/announcements" className="text-muted-foreground">News</Link>
             <Link to="/app-admin/tickets" className="text-muted-foreground">Help Desk</Link>
+            <Link to="/app-admin/tebar" className="text-muted-foreground">Tebar</Link>
             <Link to="/app-admin/content" className="text-muted-foreground">Content</Link>
           </div>
         </header>
+        <AdminLoadingBar />
         <main className="min-w-0 flex-1 p-6 lg:p-10">
           <Outlet />
         </main>
@@ -188,19 +215,13 @@ function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
-        await registerAppUser({ data: { email, password } });
-        toast.success("Account created. Sign in to continue.");
-      } else {
-        await loginAppUser({ data: { email, password } });
-        emitAuthChange();
-      }
+      await loginAppUser({ data: { email, password } });
+      emitAuthChange();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
     } finally {
@@ -228,18 +249,23 @@ function AdminLogin() {
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
             </div>
             <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-              {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+              {busy ? "Please wait…" : "Sign in"}
             </Button>
-            <button
-              type="button"
-              className="w-full text-center text-xs text-muted-foreground underline"
-              onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
-            >
-              {mode === "signup" ? "Already have an account? Sign in" : "First-time setup? Create the super admin account"}
-            </button>
           </form>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function AdminLoadingBar() {
+  const routing = useRouterState({ select: (s) => s.isLoading || s.status === "pending" });
+  const fetching = useIsFetching();
+  const mutating = useIsMutating();
+  const busy = routing || fetching + mutating > 0;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden" aria-hidden={!busy}>
+      {busy && <div className="h-full w-1/3 animate-[admin-load_1.1s_ease-in-out_infinite] bg-gold" />}
     </div>
   );
 }

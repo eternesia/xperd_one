@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmailGatewayPanel } from "@/components/app/EmailGatewayPanel";
 // Ronde 31 (BS New 8/10): tab Audit Trail di halaman Settings.
 import { AuditTrailView } from "@/components/app/AuditTrailView";
 import { updateWorkspaceSettings } from "@/lib/platform.functions";
@@ -244,6 +245,9 @@ function SettingsPage() {
           <TabsTrigger value="general" data-testid="settings-tab-general">
             {lang === "id" ? "Umum" : "General"}
           </TabsTrigger>
+          <TabsTrigger value="email" data-testid="settings-tab-email">
+            {lang === "id" ? "Notifikasi Email" : "Email Notifications"}
+          </TabsTrigger>
           <TabsTrigger value="audit" data-testid="settings-tab-audit">
             Audit Trail
           </TabsTrigger>
@@ -389,12 +393,13 @@ function SettingsPage() {
                 </Label>
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 w-40 items-center justify-center rounded-md border border-dashed border-border bg-muted/30">
-                    {/* #4: bila workspace belum punya logo sendiri, tampilkan logo default Xperd One. */}
-                    <img
-                      src={form.logo_url || DEFAULT_WORKSPACE_LOGO}
-                      alt="Logo"
-                      className="max-h-14 max-w-36 object-contain"
-                    />
+                    {form.logo_url ? (
+                      <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-36 object-contain" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {lang === "id" ? "Belum ada logo" : "No logo"}
+                      </span>
+                    )}
                   </div>
                   <Input
                     type="file"
@@ -411,11 +416,7 @@ function SettingsPage() {
                     >
                       {lang === "id" ? "Hapus" : "Remove"}
                     </Button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {lang === "id" ? "Logo default (Xperd One)" : "Default logo (Xperd One)"}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -510,39 +511,63 @@ function SettingsPage() {
               />
             ) : (
               <>
+                <div className="absolute right-[7%] top-[5%] flex h-14 w-[43%] overflow-hidden" aria-hidden="true">
+                  <div className="h-full w-[34%] bg-info/60" />
+                  <div className="h-full w-[25%] bg-info/40" />
+                  <div className="h-full w-[23%] bg-muted-foreground/55" />
+                  <div className="h-full w-[18%] bg-gold-soft" />
+                </div>
                 <div className="absolute left-[7%] top-[3%] flex h-20 w-[28%] items-center">
-                  {form.logo_url ? (
-                    <img
-                      src={form.logo_url}
-                      alt=""
-                      aria-hidden="true"
-                      className="max-h-14 max-w-32 object-contain"
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 text-navy dark:text-primary-foreground">
-                      <FileText className="h-8 w-8" />
-                      <span className="text-xs font-bold">{form.legal_name || form.name || "PERUSAHAAN"}</span>
-                    </div>
-                  )}
+                  <div className="flex h-14 w-32 items-center justify-start">
+                    {form.logo_url ? (
+                      <img src={form.logo_url} alt="Logo" className="max-h-14 max-w-32 object-contain" />
+                    ) : (
+                      <div className="flex items-center gap-2 text-navy">
+                        <FileText className="h-8 w-8" />
+                        <span className="text-xs font-bold">{form.legal_name || form.name || "PERUSAHAAN"}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {letterhead.show_divider && (
                   <div className="absolute left-[7%] right-[7%] top-[15%] border-b border-gold/80" />
                 )}
-                <div className="absolute bottom-[3%] right-[7%] w-[36%] text-right text-[9px] leading-4 text-muted-foreground">
-                  {letterhead.show_phone && form.phone && <p>T {form.phone}</p>}
-                  {letterhead.show_email && form.email && <p>E {form.email}</p>}
+                <div className="absolute bottom-[3%] left-[7%] flex h-8 w-[43%] overflow-hidden" aria-hidden="true">
+                  <div className="h-full w-[31%] bg-muted-foreground/55" />
+                  <div className="h-full w-[22%] bg-info/40" />
+                  <div className="h-full w-[28%] bg-info/60" />
+                  <div className="h-full w-[19%] bg-gold-soft" />
+                </div>
+                <div className="absolute bottom-[3%] right-[7%] w-[36%] text-right text-[7px] leading-3 text-muted-foreground/70">
+                  {letterhead.show_phone && form.phone && (
+                    <p>
+                      <span className="font-semibold text-navy">T</span> {form.phone}
+                    </p>
+                  )}
+                  {letterhead.show_email && form.email && (
+                    <p>
+                      <span className="font-semibold text-navy">E</span> {form.email}
+                    </p>
+                  )}
                   {letterhead.show_tax_id && form.tax_id && <p>NPWP {form.tax_id}</p>}
                   {letterhead.show_address && form.address && <p>{form.address}</p>}
                   {!form.phone && !form.email && !form.tax_id && !form.address && (
-                    <p>
-                      {lang === "id"
-                        ? "Lengkapi profil perusahaan di atas"
-                        : "Complete the company profile above"}
-                    </p>
+                    <p>{lang === "id" ? "Lengkapi profil perusahaan di atas" : "Complete the company profile above"}</p>
                   )}
                 </div>
               </>
             )}
+            <div className="absolute left-[12%] right-[12%] top-[22%] space-y-3 opacity-70">
+              <div className="flex justify-between text-[9px] font-medium text-navy">
+                <span>{lang === "id" ? "Kepada Yth." : "To"}</span>
+                <span>{lang === "id" ? "Tanggal" : "Date"}</span>
+              </div>
+              <div className="h-2 w-2/5 rounded-sm bg-muted" />
+              <div className="h-1.5 w-full rounded-sm bg-muted/70" />
+              <div className="h-1.5 w-5/6 rounded-sm bg-muted/70" />
+              <div className="h-1.5 w-full rounded-sm bg-muted/70" />
+              <div className="h-1.5 w-11/12 rounded-sm bg-muted/70" />
+            </div>
             <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded bg-background/85 px-2 py-1 text-[9px] font-medium text-muted-foreground">
               <FileImage className="h-3 w-3" /> {lang === "id" ? "Pratinjau A4" : "A4 preview"}
             </div>
@@ -597,6 +622,9 @@ function SettingsPage() {
           ))}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="email" className="mt-6">
+          <EmailGatewayPanel workspaceId={workspaceId} />
         </TabsContent>
         <TabsContent value="audit" className="mt-6">
           <AuditTrailView workspaceId={workspaceId} />

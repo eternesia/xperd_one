@@ -18,7 +18,16 @@ export const CRM_STAGES: CrmStage[] = [
   { id: "lost", en: "Lost", id_: "Kalah", probability: 0 },
 ];
 
-export const CRM_SOURCES = ["website", "referral", "instagram", "tiktok", "facebook", "linkedin", "whatsapp", "offline"];
+export const CRM_SOURCES = [
+  "website",
+  "referral",
+  "instagram",
+  "tiktok",
+  "facebook",
+  "linkedin",
+  "whatsapp",
+  "offline",
+];
 
 export const CRM_ACTIVITY_TYPES = [
   { id: "call", en: "Call", id_: "Telepon" },
@@ -34,8 +43,19 @@ export function stageLabel(id: string, lang: string) {
   return lang === "id" ? s.id_ : s.en;
 }
 
-export function nextLeadCode(count: number) {
-  return `LEAD-${String(count + 1).padStart(4, "0")}`;
+/** Highest numeric suffix among existing LEAD-xxxx codes (0 when none). */
+export function maxLeadNumber(codes: (string | null | undefined)[]) {
+  let max = 0;
+  for (const c of codes) {
+    const m = /^LEAD-(\d+)$/i.exec((c ?? "").trim());
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max;
+}
+
+/** Next lead code after the highest existing one; `offset` reserves extra numbers (e.g. bulk import). */
+export function nextLeadCode(codes: (string | null | undefined)[], offset = 0) {
+  return `LEAD-${String(maxLeadNumber(codes) + offset + 1).padStart(4, "0")}`;
 }
 
 export const CRM_BROADCAST_CHANNELS = [

@@ -219,6 +219,8 @@ export const adminAssignWorkspace = createServerFn({ method: "POST" })
     const { execute, uuid } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
 
+    const { assertUserQuota } = await import("@/lib/qalling-quota.server");
+    await assertUserQuota(data.workspaceId, data.targetUserId);
     await execute(
       `INSERT INTO workspace_members (id, workspace_id, user_id, role) VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE role = VALUES(role)`,

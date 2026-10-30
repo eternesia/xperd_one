@@ -18,6 +18,8 @@ import { confirmInvoicePayment } from "@/lib/billing.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { adminList, adminSave } from "@/lib/platform.functions";
 
+import { TablePager, TableSearch, usePaged } from "@/components/app/admin-table";
+
 export const Route = createFileRoute("/app-admin/invoices")({
   component: InvoicesPage,
 });
@@ -195,6 +197,8 @@ function InvoicesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const pg = usePaged(shown, (inv) => `${inv.invoice_number} ${tenantName(inv.tenant_id)} ${inv.status} ${inv.total}`);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -240,6 +244,7 @@ function InvoicesPage() {
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
+          <div className="border-b border-border p-4"><TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari invoice, tenant, status…" /></div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -262,7 +267,7 @@ function InvoicesPage() {
                   <TableCell colSpan={6} className="text-sm text-muted-foreground">No invoices yet.</TableCell>
                 </TableRow>
               )}
-              {shown.map((inv) => (
+              {pg.rows.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell className="font-medium text-navy">
                     {inv.invoice_number}{" "}
@@ -300,6 +305,7 @@ function InvoicesPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePager {...pg} />
         </CardContent>
       </Card>
 

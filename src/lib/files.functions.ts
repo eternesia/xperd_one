@@ -35,14 +35,24 @@ export const uploadWorkspaceFile = createServerFn({ method: "POST" })
     const { canWriteWorkspace } = await import("@/lib/auth-context.server");
     if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
 
-    const { buildFilePath, saveWorkspaceFile, ALLOWED_UPLOAD_EXT, MAX_UPLOAD_BYTES } = await import("@/lib/files.server");
+    const {
+      buildFilePath,
+      saveWorkspaceFile,
+      ALLOWED_UPLOAD_EXT,
+      MAX_UPLOAD_BYTES,
+      MEDIA_FOLDER,
+      MEDIA_MAX_UPLOAD_BYTES,
+      MEDIA_UPLOAD_EXT,
+    } = await import("@/lib/files.server");
+    const isMedia = data.folder === MEDIA_FOLDER;
 
     const ext = data.fileName.split(".").pop()?.toLowerCase() ?? "";
-    if (!ALLOWED_UPLOAD_EXT.includes(ext)) throw new Error(`Jenis berkas .${ext} tidak diizinkan`);
+    if (!(isMedia ? MEDIA_UPLOAD_EXT : ALLOWED_UPLOAD_EXT).includes(ext)) throw new Error(`Jenis berkas .${ext} tidak diizinkan`);
 
     const bytes = parseDataUrl(data.dataUrl);
-    if (bytes.length > MAX_UPLOAD_BYTES) {
-      throw new Error(`Ukuran berkas melebihi ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB`);
+    const maxBytes = isMedia ? MEDIA_MAX_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
+    if (bytes.length > maxBytes) {
+      throw new Error(`Ukuran berkas melebihi ${Math.round(maxBytes / 1024 / 1024)} MB`);
     }
 
     const { uuid } = await import("@/integrations/mysql/pool");

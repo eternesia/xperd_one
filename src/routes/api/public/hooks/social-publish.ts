@@ -28,8 +28,9 @@ async function run(request: Request) {
   }
 
   const { publishDuePosts } = await import("@/lib/meta-publish.server");
+  const { publicOrigin } = await import("@/lib/crm-media.server");
   try {
-    const result = await publishDuePosts(20);
+    const result = await publishDuePosts(publicOrigin(request.url), 25);
     return Response.json({ success: true, ...result });
   } catch (err) {
     return Response.json(

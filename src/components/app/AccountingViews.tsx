@@ -1452,7 +1452,7 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
   const removeLock = useMutation({
     mutationFn: async (id: string) => unlockPeriod(workspaceId, id),
     onSuccess: () => {
-      toast.success(t("Period unlocked.", "Kunci periode dibuka."));
+      toast.success(t("Period reopened", "Periode dibuka kembali"));
       qc.invalidateQueries({ queryKey: ["acc-period-locks", workspaceId] });
     },
     onError: (e: Error) => toast.error(e.message),

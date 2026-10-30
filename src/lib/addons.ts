@@ -5,14 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useApp } from "@/lib/app-context";
 import { listAddonCatalog, listTenantAddons } from "@/lib/addons.functions";
 import type { AddonRow, TenantAddonRow } from "@/lib/addons.functions";
+import { isLiveAddon } from "@/lib/entitlements";
 
 export type AddonRecord = AddonRow;
 export type TenantAddonRecord = TenantAddonRow;
 
+/** Sama dengan New 11: berlaku bila active/trial, sudah mulai, dan belum lewat `ends_at` (grace tidak membuka modul). */
 function isLive(row: TenantAddonRow) {
-  if (row.status !== "active" && row.status !== "trial") return false;
-  if (!row.ends_at) return true;
-  return row.ends_at >= new Date().toISOString().slice(0, 10);
+  return isLiveAddon(row, new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10));
 }
 
 /** Add-on codes currently unlocked for the signed-in user's tenant. */
@@ -31,7 +31,10 @@ export function useTenantAddons() {
   });
 
   const rows = query.data ?? [];
-  const activeCodes = rows.filter(isLive).map((r) => r.addons?.code).filter(Boolean) as string[];
+  const activeCodes = rows
+    .filter(isLive)
+    .map((r) => r.addons?.code)
+    .filter(Boolean) as string[];
 
   return {
     rows,
