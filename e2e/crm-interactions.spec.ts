@@ -313,10 +313,10 @@ test("CRM Meta native: webhook aman, ingest idempoten, Inbox, Comments, Automati
   await page.getByRole("button", { name: "Aturan", exact: true }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Nama aturan").fill("Balas harga");
-  await dialog.getByLabel("Kata kunci (opsional)").fill("harga");
-  await dialog.getByLabel("Balasan").fill("Terima kasih, paket mulai Rp 99.000");
-  await dialog.getByRole("switch").click();
-  await dialog.getByRole("button", { name: "Simpan aturan" }).click();
+  await dialog.getByLabel("Pemicu").selectOption("dm");
+  await dialog.getByLabel("Kata kunci (pisahkan koma, kosong = semua)").fill("harga");
+  await dialog.getByLabel("Isi DM").fill("Terima kasih, paket mulai Rp 99.000");
+  await dialog.getByRole("button", { name: "Simpan dan aktifkan" }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   const [rule] = await q(
     "SELECT * FROM crm_automation_rules WHERE workspace_id = ? AND name = 'Balas harga'",

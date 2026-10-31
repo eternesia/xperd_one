@@ -48,7 +48,8 @@ interface I18nValue {
 const I18nContext = createContext<I18nValue | null>(null);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
+  // Default Indonesia (BS New 12); pilihan pengguna tersimpan di localStorage.
+  const [lang, setLangState] = useState<Lang>("id");
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);

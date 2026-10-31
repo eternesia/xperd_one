@@ -8,10 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { savePlatformAuthSettings } from "@/lib/qalling-auth.functions";
 import { useAuthSettings, type AuthSettings } from "@/components/qalling/qalling-auth";
 
 export const Route = createFileRoute("/app-admin/auth-settings")({
+  head: () => ({
+    meta: [
+      { title: "Login & Pendaftaran — XPERD Super Admin" },
+      { name: "description", content: "Pengaturan metode masuk dan lama trial Qalling." },
+      { property: "og:title", content: "Login & Pendaftaran — XPERD" },
+      { property: "og:description", content: "Pengaturan akses Qalling." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: AuthSettingsPage,
 });
 
@@ -58,7 +69,7 @@ function AuthSettingsPage() {
         >
           <Row
             title="Masuk & daftar dengan Google"
-            desc="Akun baru langsung aktif setelah memilih paket — tanpa kode email. Butuh penyedia OAuth Google (VITE_GOOGLE_OAUTH_URL)."
+            desc="Akun baru langsung aktif dengan trial — tanpa pilihan paket wajib atau kode email. Butuh penyedia OAuth Google (VITE_GOOGLE_OAUTH_URL)."
           >
             <Switch
               checked={form.google_enabled}
@@ -89,6 +100,41 @@ function AuthSettingsPage() {
             <p className="text-xs text-muted-foreground">
               Berlaku untuk pendaftaran baru; trial yang sudah berjalan tidak berubah.
             </p>
+          </div>
+          <div className="space-y-4 border-t pt-4">
+            <div>
+              <p className="font-medium">Persetujuan saat mendaftar</p>
+              <p className="text-sm text-muted-foreground">
+                Pelanggan wajib mencentang kalimat ini sebelum bisa mendaftar. Isi dokumen yang
+                kosong tidak ditampilkan sebagai tautan.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="terms_label">Kalimat kotak centang</Label>
+              <Input
+                id="terms_label"
+                value={form.terms_label}
+                maxLength={300}
+                onChange={(e) => setForm({ ...form, terms_label: e.target.value })}
+              />
+            </div>
+            {(
+              [
+                ["terms_of_service", "Syarat Layanan (Terms of Service)"],
+                ["privacy_policy", "Kebijakan Privasi (Privacy Policy)"],
+                ["acceptable_use_policy", "Kebijakan Penggunaan (Acceptable Use Policy)"],
+              ] as const
+            ).map(([k, label]) => (
+              <div key={k} className="grid gap-2">
+                <Label htmlFor={k}>{label}</Label>
+                <Textarea
+                  id={k}
+                  rows={6}
+                  value={form[k]}
+                  onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                />
+              </div>
+            ))}
           </div>
           <Button type="submit" variant="gold" disabled={save.isPending}>
             {save.isPending && <Loader2 className="animate-spin" />}Simpan

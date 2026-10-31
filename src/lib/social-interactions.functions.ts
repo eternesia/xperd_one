@@ -18,7 +18,10 @@ const bool = (v: unknown) => v === 1 || v === true || v === "1";
 async function assertMember(workspaceId: string, userId: string, feature = "inbox_dm") {
   const { isWorkspaceMember } = await import("@/lib/auth-context.server");
   const { workspaceHasQalling } = await import("@/lib/social-interactions.server");
-  if (!(await isWorkspaceMember(workspaceId, userId)) || !(await workspaceHasQalling(workspaceId, feature)))
+  if (
+    !(await isWorkspaceMember(workspaceId, userId)) ||
+    !(await workspaceHasQalling(workspaceId, feature))
+  )
     throw new Error("Forbidden");
 }
 async function assertWriter(
@@ -29,7 +32,10 @@ async function assertWriter(
 ) {
   const { canWriteWorkspace } = await import("@/lib/auth-context.server");
   const { workspaceHasQalling } = await import("@/lib/social-interactions.server");
-  if (!(await canWriteWorkspace(workspaceId, userId)) || !(await workspaceHasQalling(workspaceId, feature)))
+  if (
+    !(await canWriteWorkspace(workspaceId, userId)) ||
+    !(await workspaceHasQalling(workspaceId, feature))
+  )
     throw new Error(message);
 }
 
@@ -45,8 +51,8 @@ export const listCrmComments = createServerFn({ method: "POST" })
     await assertMember(data.workspaceId, context.userId, "comments");
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute<Record<string, unknown>>(
-      `SELECT c.id, c.account_id, c.post_id, c.author_name, c.body, c.reply, c.status, c.created_at,
-              a.account_name, a.platform
+      `SELECT c.id, c.account_id, c.post_id, c.author_name, c.body, c.reply, c.status, c.created_at, c.liked_at,
+              a.account_name, a.platform, a.source
          FROM crm_social_comments c LEFT JOIN crm_social_accounts a ON a.id = c.account_id
         WHERE c.workspace_id = ? ORDER BY c.created_at DESC LIMIT 1000`,
       [data.workspaceId],
@@ -60,11 +66,48 @@ export const listCrmComments = createServerFn({ method: "POST" })
       reply: (r.reply as string | null) ?? null,
       status: String(r.status),
       created_at: iso(r.created_at) ?? "",
+      liked_at: iso(r.liked_at),
       crm_social_accounts: {
         account_name: String(r.account_name ?? ""),
         platform: String(r.platform ?? ""),
+        source: String(r.source ?? ""),
       },
     }));
+  });
+
+/** Like komentar (Tebar: Facebook/TikTok; Meta native: Halaman Facebook) — platform lain dilewati. */
+export const likeSocialComments = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((d: { workspaceId: string; commentIds: string[] }) => {
+    if (
+      !isId(d?.workspaceId) ||
+      !Array.isArray(d.commentIds) ||
+      d.commentIds.length < 1 ||
+      d.commentIds.length > 50 ||
+      !d.commentIds.every(isId)
+    )
+      throw new Error("Input tidak valid");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    await assertWriter(data.workspaceId, context.userId, undefined, "comments");
+    const { likeCommentsCore } = await import("@/lib/social-interactions.server");
+    return likeCommentsCore(data.workspaceId, data.commentIds);
+  });
+
+/** Tarik komentar & DM dari Tebar saat halaman dibuka (tanpa webhook push). */
+export const syncTebarSocial = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((d: { workspaceId: string }) => {
+    if (!isId(d?.workspaceId)) throw new Error("Workspace is required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { isWorkspaceMember } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceMember(data.workspaceId, context.userId)))
+      throw new Error("Tidak memiliki akses.");
+    const { syncTebarInteractions } = await import("@/lib/tebar-interactions.server");
+    return syncTebarInteractions(data.workspaceId);
   });
 
 export const replySocialComment = createServerFn({ method: "POST" })
@@ -94,13 +137,28 @@ export const replySocialComment = createServerFn({ method: "POST" })
       [data.body, c.id],
     );
     if (!claimed.affectedRows) throw new Error("Balasan sedang diproses.");
-    const status = await sendMetaInteraction(
-      data.workspaceId,
-      c.account_id,
-      "comment",
-      c.provider_comment_id,
-      data.body,
+    const acct = await executeOne<{ source: string }>(
+      "SELECT source FROM crm_social_accounts WHERE id = ?",
+      [c.account_id],
     );
+    let status: string;
+    if (acct?.source === "tebar") {
+      const { replyTebarComment } = await import("@/lib/tebar-interactions.server");
+      status = await replyTebarComment(data.workspaceId, c.provider_comment_id, data.body);
+      if (status === "failed") {
+        await execute("UPDATE crm_social_comments SET status = 'open' WHERE id = ?", [c.id]);
+        return { status };
+      }
+      if (status === "sent") status = "replied";
+    } else {
+      status = await sendMetaInteraction(
+        data.workspaceId,
+        c.account_id,
+        "comment",
+        c.provider_comment_id,
+        data.body,
+      );
+    }
     await execute("UPDATE crm_social_comments SET status = ? WHERE id = ?", [status, c.id]);
     return { status };
   });
@@ -122,7 +180,7 @@ export const getAutomationBoard = createServerFn({ method: "POST" })
         [data.workspaceId],
       ),
       execute<Record<string, unknown>>(
-        "SELECT id, account_name, platform FROM crm_social_accounts WHERE workspace_id = ? AND source = 'meta' AND status = 'connected'",
+        "SELECT id, account_name, platform, source FROM crm_social_accounts WHERE workspace_id = ? AND source IN ('meta','tebar') AND status = 'connected'",
         [data.workspaceId],
       ),
       execute<Record<string, unknown>>(
@@ -141,11 +199,23 @@ export const getAutomationBoard = createServerFn({ method: "POST" })
         keyword: String(r.keyword ?? ""),
         reply_body: String(r.reply_body ?? ""),
         enabled: bool(r.enabled),
+        action_kind: String(r.action_kind ?? "reply"),
+        public_reply: (r.public_reply as string | null) ?? null,
+        link_label: (r.link_label as string | null) ?? null,
+        link_url: (r.link_url as string | null) ?? null,
+        track_clicks: bool(r.track_clicks),
+        follow_gate: bool(r.follow_gate),
+        follow_ask: (r.follow_ask as string | null) ?? null,
+        follow_button: (r.follow_button as string | null) ?? null,
+        follow_retry: (r.follow_retry as string | null) ?? null,
+        auto_like: bool(r.auto_like),
+        click_count: Number(r.click_count) || 0,
       })),
       accounts: accounts.map((a) => ({
         id: String(a.id),
         account_name: String(a.account_name),
         platform: String(a.platform),
+        source: String(a.source),
       })),
       runs: runs.map((r) => ({
         id: String(r.id),
@@ -163,8 +233,18 @@ interface ManageInput {
   accountId: string;
   name: string;
   trigger: "dm" | "comment";
+  action?: "reply" | "comment_to_dm";
   keyword: string;
   reply: string;
+  publicReply?: string | null;
+  linkLabel?: string | null;
+  linkUrl?: string | null;
+  trackClicks?: boolean;
+  followGate?: boolean;
+  followAsk?: string | null;
+  followButton?: string | null;
+  followRetry?: string | null;
+  autoLike?: boolean;
   enabled: boolean;
 }
 
@@ -185,24 +265,123 @@ export const manageAutomation = createServerFn({ method: "POST" })
     )
       throw new Error("Input tidak valid");
     if (d.trigger !== "dm" && d.trigger !== "comment") throw new Error("Input tidak valid");
-    return { ...d, name, reply, keyword, enabled: Boolean(d.enabled) };
+    const t = (v: unknown, max: number) => {
+      const x = String(v ?? "").trim();
+      if (x.length > max) throw new Error("Input tidak valid");
+      return x || null;
+    };
+    return {
+      ...d,
+      name,
+      reply,
+      keyword,
+      action: d.action === "comment_to_dm" ? ("comment_to_dm" as const) : ("reply" as const),
+      publicReply: t(d.publicReply, 2200),
+      linkLabel: t(d.linkLabel, 20),
+      linkUrl: t(d.linkUrl, 2000),
+      followAsk: t(d.followAsk, 1000),
+      followButton: t(d.followButton, 20),
+      followRetry: t(d.followRetry, 1000),
+      trackClicks: d.trackClicks !== false,
+      followGate: Boolean(d.followGate),
+      autoLike: Boolean(d.autoLike),
+      enabled: Boolean(d.enabled),
+    };
   })
   .handler(async ({ data, context }) => {
     await assertWriter(data.workspaceId, context.userId, undefined, "automations");
+    const { validateAutomation } = await import("@/lib/automation-payload");
+    if (!data.remove) {
+      const err = validateAutomation({
+        name: data.name,
+        trigger: data.trigger,
+        action: data.trigger === "dm" ? "reply" : data.action,
+        keyword: data.keyword,
+        reply: data.reply,
+        publicReply: data.publicReply,
+        linkLabel: data.linkLabel,
+        linkUrl: data.linkUrl,
+        trackClicks: data.trackClicks,
+        followGate: data.followGate,
+        followAsk: data.followAsk,
+        followButton: data.followButton,
+        followRetry: data.followRetry,
+        enabled: data.enabled,
+      });
+      if (err) throw new Error(err);
+    }
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
-    const account = await executeOne<{ source: string; status: string }>(
-      "SELECT source, status FROM crm_social_accounts WHERE workspace_id = ? AND id = ?",
+    const account = await executeOne<{
+      source: string;
+      status: string;
+      external_id: string | null;
+    }>(
+      "SELECT source, status, external_id FROM crm_social_accounts WHERE workspace_id = ? AND id = ?",
       [data.workspaceId, data.accountId],
     );
-    if (!account || account.source !== "meta" || account.status !== "connected") {
-      throw new Error("Otomatisasi memerlukan akun Meta native yang terhubung.");
+    if (!account || account.status !== "connected" || !["meta", "tebar"].includes(account.source))
+      throw new Error("Otomatisasi memerlukan akun Meta atau Tebar yang terhubung.");
+
+    const action = data.trigger === "dm" ? "reply" : data.action;
+    let externalId: string | null = null;
+    if (account.source === "tebar") {
+      const prior = data.id
+        ? await executeOne<{ external_id: string | null }>(
+            "SELECT external_id FROM crm_automation_rules WHERE workspace_id = ? AND id = ?",
+            [data.workspaceId, data.id],
+          )
+        : null;
+      const { upsertTebarAutomation } = await import("@/lib/tebar-interactions.server");
+      try {
+        externalId = await upsertTebarAutomation(data.workspaceId, {
+          name: data.name,
+          trigger: data.trigger,
+          action,
+          keyword: data.keyword,
+          reply: data.reply,
+          publicReply: data.publicReply,
+          linkLabel: data.linkLabel,
+          linkUrl: data.linkUrl,
+          trackClicks: data.trackClicks,
+          followGate: data.followGate,
+          followAsk: data.followAsk,
+          followButton: data.followButton,
+          followRetry: data.followRetry,
+          enabled: data.enabled,
+          externalId: prior?.external_id ?? null,
+          accountExternalId: account.external_id ?? "",
+          remove: data.remove,
+        });
+      } catch (e) {
+        throw new Error(`Tebar menolak otomasi: ${(e as Error).message}`);
+      }
+    } else {
+      const setting = await executeOne<{ native_social_enabled: number }>(
+        "SELECT native_social_enabled FROM crm_meta_settings WHERE workspace_id = ?",
+        [data.workspaceId],
+      );
+      if (data.enabled && !setting?.native_social_enabled)
+        throw new Error("Meta native belum diaktifkan.");
     }
-    const setting = await executeOne<{ native_social_enabled: number }>(
-      "SELECT native_social_enabled FROM crm_meta_settings WHERE workspace_id = ?",
-      [data.workspaceId],
-    );
-    if (data.enabled && !setting?.native_social_enabled)
-      throw new Error("Meta native belum diaktifkan.");
+    const cols = [
+      data.accountId,
+      data.name,
+      data.trigger,
+      action,
+      data.keyword,
+      data.reply,
+      data.publicReply,
+      data.linkLabel,
+      data.linkUrl,
+      data.trackClicks ? 1 : 0,
+      data.followGate ? 1 : 0,
+      data.followAsk,
+      data.followButton,
+      data.followRetry,
+      data.autoLike ? 1 : 0,
+      externalId,
+      data.enabled ? 1 : 0,
+    ];
     try {
       if (data.remove && data.id) {
         await execute("DELETE FROM crm_automation_rules WHERE workspace_id = ? AND id = ?", [
@@ -211,31 +390,17 @@ export const manageAutomation = createServerFn({ method: "POST" })
         ]);
       } else if (data.id) {
         await execute(
-          "UPDATE crm_automation_rules SET account_id = ?, name = ?, trigger_type = ?, keyword = ?, reply_body = ?, enabled = ? WHERE workspace_id = ? AND id = ?",
-          [
-            data.accountId,
-            data.name,
-            data.trigger,
-            data.keyword,
-            data.reply,
-            data.enabled ? 1 : 0,
-            data.workspaceId,
-            data.id,
-          ],
+          `UPDATE crm_automation_rules SET account_id = ?, name = ?, trigger_type = ?, action_kind = ?, keyword = ?, reply_body = ?,
+                  public_reply = ?, link_label = ?, link_url = ?, track_clicks = ?, follow_gate = ?, follow_ask = ?, follow_button = ?,
+                  follow_retry = ?, auto_like = ?, external_id = ?, enabled = ? WHERE workspace_id = ? AND id = ?`,
+          [...cols, data.workspaceId, data.id],
         );
       } else {
         await execute(
-          "INSERT INTO crm_automation_rules (id, workspace_id, account_id, name, trigger_type, keyword, reply_body, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [
-            uuid(),
-            data.workspaceId,
-            data.accountId,
-            data.name,
-            data.trigger,
-            data.keyword,
-            data.reply,
-            data.enabled ? 1 : 0,
-          ],
+          `INSERT INTO crm_automation_rules (account_id, name, trigger_type, action_kind, keyword, reply_body, public_reply, link_label,
+                  link_url, track_clicks, follow_gate, follow_ask, follow_button, follow_retry, auto_like, external_id, enabled, id, workspace_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [...cols, uuid(), data.workspaceId],
         );
       }
     } catch {
@@ -271,6 +436,7 @@ export const listConversations = createServerFn({ method: "POST" })
       last_message_at: iso(r.last_message_at),
       reply_window_expires_at: iso(r.reply_window_expires_at),
       unread_count: Number(r.unread_count) || 0,
+      lead_id: (r.lead_id as string | null) ?? null,
       crm_social_accounts: {
         account_name: String(r.account_name ?? ""),
         platform: String(r.platform ?? ""),
@@ -407,6 +573,36 @@ export const sendInboxMessage = createServerFn({ method: "POST" })
       if (prior.conversation_id !== c.id || prior.body !== data.body)
         throw new Error("Konfirmasi pesan tidak cocok.");
       return { status: prior.status };
+    }
+    const src = await executeOne<{ source: string }>(
+      "SELECT source FROM crm_social_accounts WHERE id = ? AND workspace_id = ?",
+      [c.account_id, data.workspaceId],
+    );
+    if (!data.note && src?.source === "tebar") {
+      if (!replyWindowOpen(iso(c.reply_window_expires_at)))
+        throw new Error("Jendela balasan 24 jam sudah ditutup.");
+      try {
+        await execute(
+          "INSERT INTO crm_messages (id, workspace_id, conversation_id, body, direction, status, created_by) VALUES (?, ?, ?, ?, 'outbound', 'sending', ?)",
+          [data.messageId, data.workspaceId, c.id, data.body, context.userId],
+        );
+      } catch (e) {
+        if ((e as { code?: string }).code === "ER_DUP_ENTRY") return { status: "sending" };
+        throw new Error("Pesan tidak dapat disimpan.");
+      }
+      const { sendTebarDm } = await import("@/lib/tebar-interactions.server");
+      const r = await sendTebarDm(data.workspaceId, c.participant_id, data.messageId, data.body);
+      await execute("UPDATE crm_messages SET status = ?, provider_message_id = ? WHERE id = ?", [
+        r.status,
+        r.providerId,
+        data.messageId,
+      ]);
+      if (r.status === "sent")
+        await execute(
+          "UPDATE crm_conversations SET last_message = ?, last_message_at = NOW(6) WHERE id = ?",
+          [data.body, c.id],
+        );
+      return { status: r.status };
     }
     let token: string | null = null;
     let externalId: string | null = null;

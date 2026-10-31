@@ -30,6 +30,11 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { QALLING_EN } from "@/lib/qalling-copy";
+import { useI18n } from "@/lib/i18n";
+import { useQallingCatalog } from "@/lib/qalling-catalog";
+import { TierFeatures } from "./TierFeatures";
+import { QallingPreferences } from "./QallingPreferences";
 import { QallingLogo } from "./QallingLogo";
 
 // Placeholder contact details — replace with the real ones.
@@ -61,6 +66,20 @@ const NAV = [
 
 export function QallingShell({ children }: { children: ReactNode }) {
   const QALLING_CONTACT = useQallingContact();
+  const { pick } = useI18n();
+  const navLabel = (label: string) =>
+    pick(
+      (
+        {
+          Solusi: "Solutions",
+          Fitur: "Features",
+          Kelebihan: "Benefits",
+          Harga: "Pricing",
+          Kontak: "Contact",
+        } as Record<string, string>
+      )[label],
+      label,
+    );
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div className="min-h-screen bg-background">
@@ -81,29 +100,33 @@ export function QallingShell({ children }: { children: ReactNode }) {
                 className="hover:text-foreground"
                 activeProps={{ className: "text-foreground" }}
               >
-                {n.label}
+                {navLabel(n.label)}
               </Link>
             ))}
           </nav>
           <div className="hidden items-center gap-2 md:flex">
+            <QallingPreferences />
             <Button asChild variant="outline" size="sm">
-              <Link to="/qalling/login">Masuk</Link>
+              <Link to="/qalling/login">{pick("Sign in", "Masuk")}</Link>
             </Button>
             <Button asChild variant="gold" size="sm">
-              <Link to="/qalling/daftar">Coba Gratis</Link>
+              <Link to="/qalling/daftar">{pick("Try free", "Coba Gratis")}</Link>
             </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0 md:hidden"
-            aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
-            aria-expanded={menuOpen}
-            aria-controls="qalling-mobile-menu"
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            {menuOpen ? <X /> : <Menu />}
-          </Button>
+          <div className="flex items-center md:hidden">
+            <QallingPreferences />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 md:hidden"
+              aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
+              aria-expanded={menuOpen}
+              aria-controls="qalling-mobile-menu"
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              {menuOpen ? <X /> : <Menu />}
+            </Button>
+          </div>
         </div>
         {menuOpen && (
           <nav
@@ -118,18 +141,18 @@ export function QallingShell({ children }: { children: ReactNode }) {
                 className="rounded-md px-3 py-3 hover:bg-muted"
                 activeProps={{ className: "bg-muted text-foreground font-medium" }}
               >
-                {n.label}
+                {navLabel(n.label)}
               </Link>
             ))}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <Button asChild variant="outline">
                 <Link to="/qalling/login" onClick={() => setMenuOpen(false)}>
-                  Masuk
+                  {pick("Sign in", "Masuk")}
                 </Link>
               </Button>
               <Button asChild variant="gold">
                 <Link to="/qalling/daftar" onClick={() => setMenuOpen(false)}>
-                  Coba Gratis
+                  {pick("Try free", "Coba Gratis")}
                 </Link>
               </Button>
             </div>
@@ -143,13 +166,16 @@ export function QallingShell({ children }: { children: ReactNode }) {
           <div>
             <QallingLogo className="w-40" />
             <p className="mt-2">
-              Kelola media sosial, percakapan, dan prospek dalam satu dashboard.
+              {pick(
+                "Manage social media, conversations and leads in one dashboard.",
+                "Kelola media sosial, percakapan, dan prospek dalam satu dashboard.",
+              )}
             </p>
           </div>
           <div className="flex flex-col gap-1">
             {NAV.map((n) => (
               <Link key={n.to} to={n.to} className="hover:text-foreground">
-                {n.label}
+                {navLabel(n.label)}
               </Link>
             ))}
           </div>
@@ -174,32 +200,42 @@ export function PageHero({
   title: ReactNode;
   desc: string;
 }) {
+  const { lang } = useI18n();
+  const text = (v: string) => (lang === "en" ? (QALLING_EN[v] ?? v) : v);
   return (
     <section className="container-x py-14 text-center lg:py-20">
       <span className="inline-flex rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-xs font-semibold text-gold">
-        {eyebrow}
+        {text(eyebrow)}
       </span>
       <h1 className="mx-auto mt-5 max-w-3xl text-4xl font-extrabold leading-tight tracking-tight text-navy dark:text-foreground sm:text-5xl">
-        {title}
+        {typeof title === "string" ? text(title) : title}
       </h1>
-      <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">{desc}</p>
+      <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+        {text(desc)}
+      </p>
     </section>
   );
 }
 
 function CtaBand() {
+  const { pick } = useI18n();
   return (
     <section className="bg-secondary py-12">
       <div className="container-x flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
         <div>
-          <h2 className="text-2xl font-medium text-foreground">Mulai gratis 14 hari</h2>
+          <h2 className="text-2xl font-medium text-foreground">
+            {pick("Start your free trial", "Mulai uji coba gratis")}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tanpa kartu kredit. Upgrade kapan saja dari saldo.
+            {pick(
+              "No credit card. Upgrade whenever you need.",
+              "Tanpa kartu kredit. Upgrade kapan saja.",
+            )}
           </p>
         </div>
         <Button asChild variant="gold" size="lg">
           <Link to="/qalling/daftar">
-            Daftar Sekarang <ArrowRight />
+            {pick("Sign up now", "Daftar Sekarang")} <ArrowRight />
           </Link>
         </Button>
       </div>
@@ -209,6 +245,8 @@ function CtaBand() {
 
 type Item = { icon: typeof Users; title: string; desc: string };
 export function ItemGrid({ items, cols = 3 }: { items: Item[]; cols?: 2 | 3 }) {
+  const { lang } = useI18n();
+  const text = (v: string) => (lang === "en" ? (QALLING_EN[v] ?? v) : v);
   return (
     <div className={`grid gap-4 sm:grid-cols-2 ${cols === 3 ? "lg:grid-cols-3" : ""}`}>
       {items.map((f) => (
@@ -216,8 +254,8 @@ export function ItemGrid({ items, cols = 3 }: { items: Item[]; cols?: 2 | 3 }) {
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-gold/10">
             <f.icon className="h-5 w-5 text-gold" />
           </span>
-          <h3 className="mt-4 font-semibold text-navy dark:text-foreground">{f.title}</h3>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+          <h3 className="mt-4 font-semibold text-navy dark:text-foreground">{text(f.title)}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{text(f.desc)}</p>
         </div>
       ))}
     </div>
@@ -349,7 +387,7 @@ export const ADVANTAGES: Item[] = [
   },
 ];
 
-export const PLANS = [
+const LEGACY_UNUSED_PLANS = [
   {
     tier: "lite",
     name: "Lite",
@@ -381,44 +419,53 @@ export const PLANS = [
 ];
 
 export function PricingGrid() {
+  const { data: plans = [], isLoading, error } = useQallingCatalog();
+  const { pick, lang } = useI18n();
+  if (isLoading)
+    return <p className="py-6 text-muted-foreground">{pick("Loading plans…", "Memuat paket…")}</p>;
+  if (error)
+    return (
+      <p className="py-6 text-destructive">
+        {pick("Plans are temporarily unavailable.", "Paket belum dapat dimuat.")}
+      </p>
+    );
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {PLANS.map((p) => (
-        <div
-          key={p.name}
-          className={`flex flex-col rounded-2xl border bg-card p-6 shadow-sm ${p.highlight ? "border-gold ring-2 ring-gold/30" : "border-border"}`}
-        >
-          {p.highlight && (
-            <span className="mb-2 self-start rounded-full bg-gold px-2 py-0.5 text-xs font-semibold text-navy">
-              Terpopuler
-            </span>
-          )}
-          <h3 className="text-lg font-bold text-navy dark:text-foreground">{p.name}</h3>
-          <div className="mt-2">
-            <span className="text-3xl font-extrabold">{p.price}</span>
-            <span className="text-sm text-muted-foreground"> {p.note}</span>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {p.accounts} · {p.users}
-          </p>
-          <ul className="mt-4 flex-1 space-y-2 text-sm">
-            {p.features.map((f) => (
-              <li key={f} className="flex gap-2">
-                <Check className="h-4 w-4 shrink-0 text-gold" />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <Button asChild className="mt-6" variant={p.highlight ? "gold" : "outline"}>
-            <Link to="/qalling/daftar" search={{ paket: p.tier }}>
-              Coba gratis 14 hari
-            </Link>
-          </Button>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Tanpa kartu kredit · pilih paket {p.name}
-          </p>
-        </div>
-      ))}
+      {plans.map((p) => {
+        const limits = p.limits as Record<string, number | null>;
+        return (
+          <article
+            key={p.id}
+            className="flex flex-col rounded-lg border border-border bg-card p-6 shadow-sm"
+          >
+            <h3 className="text-lg font-medium">{p.name}</h3>
+            <p className="mt-3 text-3xl font-medium">
+              {new Intl.NumberFormat(lang === "id" ? "id-ID" : "en-US", {
+                style: "currency",
+                currency: "IDR",
+                maximumFractionDigits: 0,
+              }).format(Number(p.monthly_price))}
+              <span className="text-sm text-muted-foreground"> {pick("/month", "/bulan")}</span>
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {limits.max_accounts ?? "∞"} {pick("social accounts", "akun sosial")} ·{" "}
+              {limits.max_users ?? "∞"} {pick("users", "pengguna")}
+            </p>
+            <p className="mb-5 mt-1 text-sm text-muted-foreground">
+              {limits.storage_gb ?? "∞"} GB · {limits.monthly_post_limit ?? "∞"}{" "}
+              {pick("posts/month", "postingan/bulan")}
+            </p>
+            <div className="flex-1">
+              <TierFeatures features={p.features as Record<string, boolean>} compare />
+            </div>
+            <Button asChild className="mt-6" variant="outline">
+              <Link to="/qalling/daftar" search={{ paket: p.code.replace("qalling_", "") }}>
+                {pick("Try free", "Coba gratis")}
+              </Link>
+            </Button>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -449,11 +496,15 @@ export function ContactCards() {
   );
 }
 
-export function seo(title: string, description: string) {
+export const QALLING_KEYWORDS =
+  "Qalling, CRM media sosial, AI social media CRM, jadwal posting lewat ChatGPT, posting lewat Claude, auto balas komentar Instagram, auto DM Instagram TikTok, inbox terpadu, lead management, sales pipeline, follow up pelanggan, manajemen kontak, integrasi WhatsApp sales, laporan media sosial PDF Excel, software tender, ERP XPERD, CRM UMKM Indonesia, tools agensi digital";
+
+export function seo(title: string, description: string, keywords = QALLING_KEYWORDS) {
   return {
     meta: [
       { title },
       { name: "description", content: description },
+      { name: "keywords", content: keywords },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },

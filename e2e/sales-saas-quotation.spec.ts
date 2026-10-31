@@ -140,9 +140,9 @@ test("SALES: Generate SaaS Monthly + penawaran terbit dapat diedit/dihapus/didup
     "INSERT INTO md_items (id, workspace_id, code, name, item_type, sell_price) VALUES (?, ?, ?, 'One-off goods', 'goods', 5000)",
     [crypto.randomUUID(), ws, `${TAG}-GOODS`],
   );
-  const lastMonth = new Date();
-  lastMonth.setMonth(lastMonth.getMonth() - 1);
-  const lm = lastMonth.toISOString().slice(0, 10);
+  // tanggal 15 bulan lalu (setMonth(-1) pada tanggal 31 meluap ke bulan yang sama)
+  const nowD = new Date();
+  const lm = new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - 1, 15)).toISOString().slice(0, 10);
   const custA = `${TAG}-A`,
     custB = `${TAG}-B`;
   // A: faktur bulan lalu dengan 1 baris SaaS + 1 baris barang; B: sudah ditagih bulan ini (dilewati)

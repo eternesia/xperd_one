@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
+  FileBarChart,
+  Gift,
+  Users,
   CreditCard,
   LayoutDashboard,
-  Sparkles,
   LogOut,
   Menu,
   Plus,
@@ -13,11 +15,11 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getWallet } from "@/lib/wallet.functions";
-import { logoutAppUser } from "@/lib/auth.functions";
-import { emitAuthChange } from "@/hooks/use-session";
+import { provisionGoogleSignup } from "@/lib/qalling-auth.functions";
+import { SIGNUP_TIER_KEY } from "@/components/qalling/qalling-auth";
 
 import { AppProvider, useApp } from "@/lib/app-context";
-import { ThemeProvider } from "@/lib/theme";
+import { QallingPreferences } from "@/components/qalling/QallingPreferences";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -27,6 +29,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { logoutAppUser } from "@/lib/auth.functions";
+import { emitAuthChange } from "@/hooks/use-session";
+import { claimReferral } from "@/lib/referral.functions";
 import { useI18n } from "@/lib/i18n";
 import { findModule } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -46,25 +51,27 @@ export const Route = createFileRoute("/qalling/app")({
     ],
   }),
   component: () => (
-    <ThemeProvider>
-      <AppProvider>
-        <QallingShell />
-      </AppProvider>
-    </ThemeProvider>
+    <AppProvider>
+      <QallingShell />
+    </AppProvider>
   ),
 });
 
 const CRM = findModule("crm");
 
 function QallingShell() {
-  const { loading, userId, workspaces, activeWorkspace, canViewSubmodule, accessLoading, tenant } =
-    useApp();
-  const fetchWallet = useServerFn(getWallet);
-  const wallet = useQuery({
-    queryKey: ["wallet", tenant?.id, 0],
-    enabled: Boolean(tenant?.id),
-    queryFn: () => fetchWallet({ data: { tenantId: tenant!.id, page: 0 } }),
-  });
+  const {
+    loading,
+    userId,
+    workspaces,
+    activeWorkspace,
+    canViewSubmodule,
+    accessLoading,
+    tenant,
+    refresh,
+  } = useApp();
+  const provision = useServerFn(provisionGoogleSignup);
+  const [autoState, setAutoState] = useState<"idle" | "working" | "failed">("idle");
   const navigate = useNavigate();
   const { lang } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -76,7 +83,32 @@ function QallingShell() {
     if (!userId) navigate({ to: "/qalling/login", replace: true });
   }, [loading, userId, navigate]);
 
-  if (loading || accessLoading) {
+  // Attach a referral code captured on the public site once the account has a workspace.
+  useEffect(() => {
+    if (!userId || workspaces.length === 0) return;
+    const ref = localStorage.getItem("qalling_ref");
+    if (!ref) return;
+    void claimReferral({ data: { code: ref } })
+      .catch(() => undefined)
+      .then(() => localStorage.removeItem("qalling_ref"));
+  }, [userId, workspaces.length]);
+
+  // The plan is chosen once at signup; if the account still has no workspace, activate it automatically.
+  useEffect(() => {
+    if (loading || accessLoading || !userId || workspaces.length > 0 || autoState !== "idle")
+      return;
+    setAutoState("working");
+    const tier = sessionStorage.getItem(SIGNUP_TIER_KEY) || "qalling_lite";
+    provision({ data: { tier, acceptTerms: true } })
+      .then(async () => {
+        sessionStorage.removeItem(SIGNUP_TIER_KEY);
+        await refresh();
+        setAutoState("idle");
+      })
+      .catch(() => setAutoState("failed"));
+  }, [loading, accessLoading, userId, workspaces.length, autoState, provision, refresh]);
+
+  if (loading || accessLoading || (userId && workspaces.length === 0 && autoState !== "failed")) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
         {lang === "id" ? "Memuat Qalling…" : "Loading Qalling…"}
@@ -178,6 +210,14 @@ function QallingShell() {
         <CalendarRange className="h-4 w-4" />
         {id ? "Kalender Konten" : "Content Calendar"}
       </Link>
+      <Link to="/qalling/app/clients" className={item(pathname === "/qalling/app/clients")}>
+        <Users className="h-4 w-4" />
+        {id ? "Klien & Brand" : "Clients & Brands"}
+      </Link>
+      <Link to="/qalling/app/reports" className={item(pathname === "/qalling/app/reports")}>
+        <FileBarChart className="h-4 w-4" />
+        {id ? "Laporan" : "Reports"}
+      </Link>
       {subLink("social-dashboard")}
       {section(id ? "Studio Konten" : "Content Studio", [
         "ideas",
@@ -203,13 +243,13 @@ function QallingShell() {
       {section("Tender", ["tenders", "doc-library"])}
       <div className="mt-3 border-t border-border pt-3">
         {subLink("social-accounts")}
-        <Link to="/qalling/app/ai" className={item(pathname === "/qalling/app/ai")}>
-          <Sparkles className="h-4 w-4" />
-          {id ? "Integrasi AI" : "AI Integration"}
-        </Link>
         <Link to="/qalling/app/billing" className={item(pathname === "/qalling/app/billing")}>
           <CreditCard className="h-4 w-4" />
           {id ? "Tagihan & Saldo" : "Billing & Balance"}
+        </Link>
+        <Link to="/qalling/app/referral" className={item(pathname === "/qalling/app/referral")}>
+          <Gift className="h-4 w-4" />
+          {id ? "Referral" : "Referral"}
         </Link>
       </div>
     </nav>
@@ -242,26 +282,7 @@ function QallingShell() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link
-              to="/qalling/app/billing"
-              search={{ tab: "saldo" }}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium tabular-nums hover:border-gold"
-            >
-              <Wallet className="h-4 w-4 text-gold" />
-              {wallet.data
-                ? new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(wallet.data.balance)
-                : "—"}
-            </Link>
-            <Button asChild size="sm" variant="gold" className="hidden sm:inline-flex">
-              <Link to="/qalling/app/billing" search={{ tab: "saldo" }}>
-                <Plus />
-                Top up
-              </Link>
-            </Button>
+            <QallingPreferences />
             <span className="hidden max-w-[200px] truncate text-sm text-muted-foreground sm:block">
               {activeWorkspace?.name}
             </span>

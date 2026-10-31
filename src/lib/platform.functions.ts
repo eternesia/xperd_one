@@ -98,8 +98,13 @@ export const adminList = createServerFn({ method: "POST" })
     const offset = Math.max(Number(data.offset) || 0, 0);
 
     const row = await executeOne<{ c: number }>(`SELECT COUNT(*) AS c FROM \`${table}\`${wsql}`, params);
+    // Kunci rahasia gateway tidak boleh keluar: kolom dipilih eksplisit, klien hanya tahu ada/tidaknya.
+    const sel =
+      table === "payment_gateways"
+        ? `${PCOLS[table].map((c) => `\`${c}\``).join(", ")}, (server_key IS NOT NULL AND server_key <> '') AS has_server_key`
+        : "*";
     const rows = await execute(
-      `SELECT * FROM \`${table}\`${wsql} ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`,
+      `SELECT ${sel} FROM \`${table}\`${wsql} ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`,
       [...params, String(limit), String(offset)],
     );
     return { rows: rows as Record<string, any>[], count: Number(row?.c ?? 0) };
@@ -121,6 +126,15 @@ export const adminSave = createServerFn({ method: "POST" })
     const table = assertAdminTable(data.table);
     const omit = new Set(["id", "created_at", "updated_at"]);
 
+    // Server key gateway: tulis-saja; kosong = pertahankan nilai tersimpan.
+    const gwKey =
+      table === "payment_gateways" && typeof data.data?.server_key === "string"
+        ? data.data.server_key.trim()
+        : "";
+    const saveGwKey = async (id: string) => {
+      if (gwKey) await execute("UPDATE `payment_gateways` SET `server_key` = ? WHERE `id` = ?", [gwKey, id]);
+    };
+
     if (data.id) {
       const cols = clean(table, Object.keys(data.data ?? {}), omit);
       if (!cols.length) throw new Error("No valid columns to update");
@@ -128,6 +142,7 @@ export const adminSave = createServerFn({ method: "POST" })
         `UPDATE \`${table}\` SET ${cols.map((c) => `\`${c}\` = ?`).join(", ")} WHERE \`id\` = ?`,
         [...cols.map((c) => data.data[c]), data.id],
       );
+      await saveGwKey(data.id);
       return { id: data.id };
     }
 
@@ -138,6 +153,7 @@ export const adminSave = createServerFn({ method: "POST" })
       `INSERT INTO \`${table}\` (\`${cols.join("`,`")}\`) VALUES (${cols.map(() => "?").join(", ")})`,
       cols.map((c) => payload[c]),
     );
+    await saveGwKey(payload.id as string);
     return { id: payload.id as string };
   });
 

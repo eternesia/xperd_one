@@ -1,0 +1,82 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getMyReferralCode, getReferralOverview } from "@/lib/referral.functions";
+import { useApp } from "@/lib/app-context";
+import { useI18n } from "@/lib/i18n";
+import { fmtIDR } from "@/components/app/admin-ui";
+
+export const Route = createFileRoute("/qalling/app/referral")({
+  head: () => ({
+    meta: [
+      { title: "Referral — Qalling" },
+      { name: "description", content: "Ajak teman ke Qalling dan dapatkan komisi saldo." },
+      { property: "og:title", content: "Referral — Qalling" },
+      { property: "og:description", content: "Ajak teman ke Qalling dan dapatkan komisi saldo." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: ReferralPage,
+});
+
+function ReferralPage() {
+  const { tenant } = useApp();
+  const { pick } = useI18n();
+  const code = useQuery({ queryKey: ["referral-code"], queryFn: () => getMyReferralCode() });
+  const overview = useQuery({
+    queryKey: ["referrals", tenant?.id],
+    enabled: Boolean(tenant?.id),
+    queryFn: () => getReferralOverview({ data: { tenantId: tenant!.id } }),
+  });
+  const settings = { data: overview.data?.settings ?? null };
+  const list = { data: overview.data?.rows ?? [] };
+  const link = code.data && typeof window !== "undefined" ? `${window.location.origin}/qalling/daftar?ref=${code.data}` : "";
+  const rows = list.data ?? [];
+  const earned = rows.reduce((s, r) => s + Number(r.commission_idr), 0);
+  const s = settings.data;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold">Referral</h1>
+        <p className="text-sm text-muted-foreground">
+          {s
+            ? pick(
+                `Earn ${s.percent}% (max ${fmtIDR(Number(s.max_idr))}) of a friend's first top-up of at least ${fmtIDR(Number(s.min_topup_idr))}, credited to your balance.`,
+                `Dapatkan ${s.percent}% (maks ${fmtIDR(Number(s.max_idr))}) dari top-up pertama teman minimal ${fmtIDR(Number(s.min_topup_idr))}, langsung masuk saldo.`,
+              )
+            : "…"}
+        </p>
+      </div>
+      <Card>
+        <CardHeader><CardTitle className="text-base">{pick("Your link", "Link Anda")}</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <code className="flex-1 break-all rounded-md bg-muted px-3 py-2 text-sm">{link || "…"}</code>
+          <Button variant="outline" size="sm" disabled={!link} onClick={() => { void navigator.clipboard.writeText(link); toast.success(pick("Copied", "Tersalin")); }}><Copy />{pick("Copy", "Salin")}</Button>
+        </CardContent>
+      </Card>
+      <div className="grid grid-cols-3 gap-3">
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">{pick("Sign-ups", "Pendaftar")}</p><p className="text-2xl font-semibold">{rows.length}</p></CardContent></Card>
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">{pick("Rewarded", "Berhasil")}</p><p className="text-2xl font-semibold">{rows.filter((r) => r.status === "rewarded").length}</p></CardContent></Card>
+        <Card><CardContent className="pt-5"><p className="text-xs text-muted-foreground">{pick("Commission", "Komisi")}</p><p className="text-2xl font-semibold">{fmtIDR(earned)}</p></CardContent></Card>
+      </div>
+      <Card>
+        <CardHeader><CardTitle className="text-base">{pick("History", "Riwayat")}</CardTitle></CardHeader>
+        <CardContent className="divide-y divide-border">
+          {rows.length === 0 && <p className="py-2 text-sm text-muted-foreground">{pick("No referrals yet.", "Belum ada referral.")}</p>}
+          {rows.map((r) => (
+            <div key={r.referred_tenant_id} className="flex justify-between py-2 text-sm">
+              <span>{new Date(r.created_at).toLocaleDateString("id-ID")}</span>
+              <span>{r.status === "rewarded" ? fmtIDR(Number(r.commission_idr)) : pick("Waiting for top-up", "Menunggu top-up")}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

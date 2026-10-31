@@ -7,6 +7,7 @@
 import { execute, executeOne, result, transaction, uuid } from "@/integrations/mysql/pool";
 import { sqlDateTime } from "./datetime";
 import { automationMatches } from "./social-interaction-rules";
+import { canLikeOn, dmTextWithLink } from "./automation-payload";
 
 /** Basis Graph API; bisa ditimpa (`META_GRAPH_BASE`) untuk server tiruan saat uji. */
 export const GRAPH_BASE = (
@@ -96,25 +97,163 @@ export interface AutomationEvent {
   conversationId?: string;
 }
 
+interface RuleRow {
+  id: string;
+  keyword: string;
+  reply_body: string;
+  action_kind: string;
+  public_reply: string | null;
+  link_label: string | null;
+  link_url: string | null;
+  track_clicks: number;
+  follow_gate: number;
+  follow_ask: string | null;
+  follow_retry: string | null;
+  auto_like: number;
+}
+
+async function metaCreds(workspaceId: string, accountId: string) {
+  const [a, t] = await Promise.all([
+    executeOne<{ platform: string; external_id: string | null }>(
+      "SELECT platform, external_id FROM crm_social_accounts WHERE workspace_id = ? AND id = ?",
+      [workspaceId, accountId],
+    ),
+    executeOne<{ access_token: string; page_id: string | null }>(
+      "SELECT access_token, page_id FROM crm_social_tokens WHERE workspace_id = ? AND account_id = ?",
+      [workspaceId, accountId],
+    ),
+  ]);
+  return a && t?.access_token ? { a, t } : null;
+}
+
+/** Balasan privat atas komentar (satu DM per komentar — aturan Meta). */
+export async function sendMetaPrivateReply(
+  workspaceId: string,
+  accountId: string,
+  commentId: string,
+  text: string,
+): Promise<SendStatus> {
+  const c = await metaCreds(workspaceId, accountId);
+  if (!c) return "failed";
+  const sender = c.a.platform === "instagram" ? c.a.external_id : (c.t.page_id ?? c.a.external_id);
+  try {
+    const res = await fetch(`${GRAPH_BASE}/${sender}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.t.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text } }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return res.status >= 500 ? "unknown" : "failed";
+    return "sent";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Instagram: `is_user_follow_business` untuk pengguna yang pernah mengirim pesan; tidak diketahui = belum follow. */
+export async function metaUserFollows(workspaceId: string, accountId: string, userId: string) {
+  const c = await metaCreds(workspaceId, accountId);
+  if (!c) return false;
+  try {
+    const res = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(userId)}?fields=is_user_follow_business`,
+      {
+        headers: { Authorization: `Bearer ${c.t.access_token}` },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!res.ok) return false;
+    return (
+      ((await res.json()) as { is_user_follow_business?: boolean }).is_user_follow_business === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Like komentar sebagai akun. Tebar: Facebook/TikTok; Meta native: Halaman Facebook. */
+export async function likeCommentsCore(workspaceId: string, commentIds: string[]) {
+  const out = { liked: 0, skipped: 0, failed: 0 };
+  if (!commentIds.length) return out;
+  const rows = await execute<{
+    id: string;
+    provider_comment_id: string;
+    account_id: string;
+    liked_at: string | null;
+    platform: string | null;
+    source: string | null;
+  }>(
+    `SELECT c.id, c.provider_comment_id, c.account_id, c.liked_at, a.platform, a.source
+       FROM crm_social_comments c LEFT JOIN crm_social_accounts a ON a.id = c.account_id
+      WHERE c.workspace_id = ? AND c.id IN (${commentIds.map(() => "?").join(",")})`,
+    [workspaceId, ...commentIds],
+  );
+  for (const c of rows) {
+    if (c.liked_at) {
+      out.skipped++;
+      continue;
+    }
+    if (!canLikeOn(c.platform) || (c.source === "meta" && c.platform !== "facebook")) {
+      out.skipped++;
+      continue;
+    }
+    let ok = false;
+    if (c.source === "tebar") {
+      const { likeTebarComment } = await import("./tebar-interactions.server");
+      ok = await likeTebarComment(workspaceId, c.provider_comment_id);
+    } else if (c.source === "meta") {
+      const t = await executeOne<{ access_token: string }>(
+        "SELECT access_token FROM crm_social_tokens WHERE workspace_id = ? AND account_id = ?",
+        [workspaceId, c.account_id],
+      );
+      if (t?.access_token) {
+        try {
+          const r = await fetch(`${GRAPH_BASE}/${c.provider_comment_id}/likes`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${t.access_token}` },
+            signal: AbortSignal.timeout(10000),
+          });
+          ok = r.ok;
+        } catch {
+          ok = false;
+        }
+      }
+    }
+    if (ok) {
+      out.liked++;
+      await execute("UPDATE crm_social_comments SET liked_at = NOW(6) WHERE id = ?", [c.id]);
+    } else out.failed++;
+  }
+  return out;
+}
+
 export async function dispatchSocialAutomation(event: AutomationEvent) {
   // Pesan lama tidak boleh membuka ulang kebijakan 24 jam atau memicu balasan otomatis historis.
   if (event.kind === "dm" && (!event.at || Date.parse(event.at) < Date.now() - 24 * 3600000))
     return;
   if (!(await workspaceHasQalling(event.workspaceId, "automations"))) return;
-  const rules = await execute<{ id: string; keyword: string; reply_body: string }>(
-    `SELECT id, keyword, reply_body FROM crm_automation_rules
+  const rules = await execute<RuleRow>(
+    `SELECT * FROM crm_automation_rules
       WHERE workspace_id = ? AND account_id = ? AND trigger_type = ? AND enabled = 1
       ORDER BY created_at LIMIT 100`,
     [event.workspaceId, event.accountId, event.kind],
   );
   const rule = rules.find((r) => automationMatches(r.keyword, event.body));
   if (!rule) return;
+  let claimedId: string | null = null;
   if (event.kind === "comment") {
     const claimed = await result(
       "UPDATE crm_social_comments SET status = 'sending', reply = ? WHERE account_id = ? AND provider_comment_id = ? AND status = 'open'",
       [rule.reply_body, event.accountId, event.eventId],
     );
     if (!claimed.affectedRows) return;
+    claimedId =
+      (
+        await executeOne<{ id: string }>(
+          "SELECT id FROM crm_social_comments WHERE account_id = ? AND provider_comment_id = ?",
+          [event.accountId, event.eventId],
+        )
+      )?.id ?? null;
   }
   // Klaim durable: kunci unik (rule_id, event_id) mencegah balasan ganda setelah hasil ambigu.
   const runId = uuid();
@@ -126,13 +265,54 @@ export async function dispatchSocialAutomation(event: AutomationEvent) {
   } catch {
     return;
   }
-  const status = await sendMetaInteraction(
-    event.workspaceId,
-    event.accountId,
-    event.kind,
-    event.target,
-    rule.reply_body,
+  if (event.kind === "comment" && rule.auto_like && claimedId)
+    await likeCommentsCore(event.workspaceId, [claimedId]).catch(() => null);
+  const origin = process.env.PUBLIC_APP_ORIGIN || "https://qalling.id";
+  const dmText = dmTextWithLink(
+    {
+      reply: rule.reply_body,
+      linkLabel: rule.link_label,
+      linkUrl: rule.link_url,
+      trackClicks: Boolean(rule.track_clicks),
+    },
+    rule.id,
+    origin,
   );
+  let status: SendStatus;
+  if (event.kind === "comment" && rule.action_kind === "comment_to_dm") {
+    // Instagram: satu balasan privat per komentar; dengan follow gate yang dikirim lebih dulu adalah ajakan follow.
+    status = await sendMetaPrivateReply(
+      event.workspaceId,
+      event.accountId,
+      event.target,
+      rule.follow_gate ? rule.follow_ask || dmText : dmText,
+    );
+    if (rule.public_reply)
+      await sendMetaInteraction(
+        event.workspaceId,
+        event.accountId,
+        "comment",
+        event.target,
+        rule.public_reply,
+      );
+  } else if (event.kind === "dm" && rule.follow_gate) {
+    const follows = await metaUserFollows(event.workspaceId, event.accountId, event.target);
+    status = await sendMetaInteraction(
+      event.workspaceId,
+      event.accountId,
+      "dm",
+      event.target,
+      follows ? dmText : rule.follow_retry || rule.follow_ask || dmText,
+    );
+  } else {
+    status = await sendMetaInteraction(
+      event.workspaceId,
+      event.accountId,
+      event.kind,
+      event.target,
+      event.kind === "dm" ? dmText : rule.reply_body,
+    );
+  }
   await execute("UPDATE crm_automation_runs SET status = ?, error = ? WHERE id = ?", [
     status,
     status === "sent"
@@ -185,7 +365,10 @@ export async function ingestMetaMessage(input: IngestInput): Promise<string | nu
       "SELECT 1 AS ok FROM crm_meta_settings WHERE workspace_id = ? AND native_social_enabled = 1",
       [account.workspace_id],
     );
-    if (!(settings as unknown[]).length || !(await workspaceHasQalling(account.workspace_id, "inbox_dm")))
+    if (
+      !(settings as unknown[]).length ||
+      !(await workspaceHasQalling(account.workspace_id, "inbox_dm"))
+    )
       return null;
 
     await conn.execute(

@@ -1,9 +1,10 @@
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AddonTierChoices } from "@/components/app/AddonTierChoices";
 import { WalletPanel } from "@/components/app/WalletPanel";
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, CreditCard, Loader2, Rocket } from "lucide-react";
+import { ChevronLeft, CreditCard, Download, Loader2, Rocket } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -306,7 +307,19 @@ function BillingPage() {
                             {inv.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="space-x-2 whitespace-nowrap text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label={t("Download PDF", "Unduh PDF")}
+                            onClick={() =>
+                              downloadInvoicePdf(inv as never, { name: tenant?.name || "-" }, "XPERD").catch(() =>
+                                toast.error(t("Failed to create PDF", "Gagal membuat PDF")),
+                              )
+                            }
+                          >
+                            <Download className="h-3.5 w-3.5" /> PDF
+                          </Button>
                           {inv.status !== "paid" && inv.status !== "void" && (
                             <Button
                               size="sm"

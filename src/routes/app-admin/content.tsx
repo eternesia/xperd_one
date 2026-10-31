@@ -23,6 +23,7 @@ import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
 
 export const Route = createFileRoute("/app-admin/content")({
+  head: () => ({meta:[{title:"Konten Website — XPERD Super Admin"},{name:"description",content:"Kelola banner, fitur dan konten XPERD serta Qalling."},{property:"og:title",content:"Konten Website — XPERD"},{property:"og:description",content:"Pengelolaan konten website XPERD dan Qalling."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary"}]}),
   component: ContentPage,
 });
 
@@ -118,7 +119,7 @@ function ContentPage() {
         <Button
           variant="gold"
           onClick={() => {
-            setForm({ ...EMPTY, section: site === "qalling" ? "qalling.home" : "home" });
+            setForm({ ...EMPTY, section: site === "qalling" ? "qalling.hero" : "home", key: site === "qalling" ? "main" : "" });
             setOpen(true);
           }}
         >
@@ -238,7 +239,7 @@ function ContentPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Section">
-                <Input value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} required />
+                {site==="qalling"?<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.section} onChange={e=>setForm({...form,section:e.target.value})}><option value="qalling.hero">Banner Beranda</option><option value="qalling.features">Fitur Aplikasi</option><option value="qalling.kontak">Kontak</option>{!["qalling.hero","qalling.features","qalling.kontak"].includes(form.section)&&<option value={form.section}>{form.section}</option>}</select>:<Input value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} required />}
               </Field>
               <Field label="Key">
                 <Input value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} required />
@@ -261,6 +262,21 @@ function ContentPage() {
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Image URL">
                 <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
+                <Input aria-label="Unggah gambar banner atau fitur" type="file" accept="image/png,image/jpeg,image/webp" onChange={async e=>{
+                  const file=e.target.files?.[0];if(!file)return;
+                  if(file.size>5_000_000){toast.error("Gambar maksimal 5 MB");return;}
+                  try {
+                    const bitmap=await createImageBitmap(file);
+                    const scale=Math.min(1,1600/bitmap.width);
+                    const canvas=document.createElement("canvas");canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+                    const context=canvas.getContext("2d");if(!context)throw new Error("Gambar tidak dapat diproses");
+                    context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
+                    const value=canvas.toDataURL("image/webp",0.8);
+                    if(value.length>1_000_000)throw new Error("Gambar terlalu besar setelah kompresi");
+                    setForm(v=>({...v,image_url:value}));
+                  }catch(err){toast.error(err instanceof Error?err.message:"Gambar tidak valid");}
+                }} />
+                {form.image_url&&<img src={form.image_url} alt="Pratinjau gambar" className="max-h-40 w-full rounded-md object-contain" />}
               </Field>
               <Field label="Link URL">
                 <Input value={form.link_url} onChange={(e) => setForm({ ...form, link_url: e.target.value })} />

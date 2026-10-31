@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCheck, Clock, Inbox, RefreshCw, Send, StickyNote } from "lucide-react";
+import { CheckCheck, Clock, Inbox, Lock, RefreshCw, Send, StickyNote, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useApp } from "@/lib/app-context";
+import { convertConversationToLead } from "@/lib/inbox-lead.functions";
 import { useI18n } from "@/lib/i18n";
 import { replyWindowOpen } from "@/lib/meta-inbox-rules";
 import {
   listConversations,
   listThread,
   sendInboxMessage,
+  syncTebarSocial,
   updateConversation,
 } from "@/lib/social-interactions.functions";
 import { cn } from "@/lib/utils";
@@ -32,9 +35,15 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
   const [body, setBody] = useState("");
   const [note, setNote] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const { entitlements } = useApp();
+  const crmAccess = {
+    data: Boolean(entitlements.qalling && (entitlements.qalling.features.legacy || entitlements.qalling.features.crm)),
+  };
+  const leadFn = useServerFn(convertConversationToLead);
   const sendFn = useServerFn(sendInboxMessage);
   const updateFn = useServerFn(updateConversation);
   const listFn = useServerFn(listConversations);
+  const syncFn = useServerFn(syncTebarSocial);
   const threadFn = useServerFn(listThread);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["crm-inbox", workspaceId] });
@@ -54,6 +63,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-inbox", workspaceId],
     queryFn: async () => {
       try {
+        await syncFn({ data: { workspaceId } }).catch(() => null); // tarik DM/komentar Tebar saat dibuka
         return await listFn({ data: { workspaceId } });
       } catch {
         throw new Error(id ? "Inbox tidak dapat dimuat." : "Unable to load Inbox.");
@@ -100,6 +110,18 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const toLead = useMutation({
+    mutationFn: (conversationId: string) => leadFn({ data: { workspaceId, conversationId } }),
+    onSuccess: (r) => {
+      toast.success(
+        r.existing
+          ? id ? "Sudah tersimpan di Leads." : "Already in Leads."
+          : id ? "Prospek baru masuk ke Leads." : "Lead created.",
+      );
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const rows = (list.data ?? []).filter(
     (c) =>
       (platform === "all" || c.crm_social_accounts?.platform === platform) &&
@@ -129,7 +151,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           value={platform}
           onChange={(e) => setPlatform(e.target.value)}
         >
-          <option value="all">{id ? "Semua akun Meta" : "All Meta accounts"}</option>
+          <option value="all">{id ? "Semua akun" : "All accounts"}</option>
           <option value="facebook">Facebook</option>
           <option value="instagram">Instagram</option>
         </select>
@@ -217,26 +239,51 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
                     {active.crm_social_accounts?.account_name}
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={update.isPending}
-                  onClick={() =>
-                    update.mutate({
-                      conversationId: active.id,
-                      status: active.status === "open" ? "resolved" : "open",
-                    })
-                  }
-                >
-                  <CheckCheck className="size-4" />
-                  {active.status === "open"
-                    ? id
-                      ? "Selesaikan"
-                      : "Resolve"
-                    : id
-                      ? "Buka kembali"
-                      : "Reopen"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {active.lead_id ? (
+                    <Badge variant="secondary">
+                      <UserPlus className="mr-1 size-3" />
+                      {id ? "Tersimpan di Leads" : "In Leads"}
+                    </Badge>
+                  ) : crmAccess.data ? (
+                    <Button variant="outline" size="sm" disabled={toLead.isPending} onClick={() => toLead.mutate(active.id)}>
+                      <UserPlus className="size-4" />
+                      {id ? "Simpan ke Leads" : "Save to Leads"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      title={id ? "Tersedia mulai paket Pro" : "Available from Pro"}
+                      onClick={() =>
+                        toast.info(
+                          id
+                            ? "Simpan DM ke Leads tersedia mulai paket Pro. Upgrade di menu Tagihan & Saldo."
+                            : "Save to Leads is available from the Pro plan.",
+                        )
+                      }
+                    >
+                      <Lock className="size-4" />
+                      {id ? "Simpan ke Leads · Pro" : "Save to Leads · Pro"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={update.isPending}
+                    onClick={() =>
+                      update.mutate({
+                        conversationId: active.id,
+                        status: active.status === "open" ? "resolved" : "open",
+                      })
+                    }
+                  >
+                    <CheckCheck className="size-4" />
+                    {active.status === "open"
+                      ? id ? "Selesaikan" : "Resolve"
+                      : id ? "Buka kembali" : "Reopen"}
+                  </Button>
+                </div>
               </div>
               <div
                 className="flex max-h-[520px] min-h-64 flex-col gap-3 overflow-y-auto py-5"

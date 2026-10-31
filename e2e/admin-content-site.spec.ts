@@ -69,7 +69,7 @@ test("ADMIN content: pemisah Website XPERD / Qalling + pencarian", async ({ page
     await expect(page.getByText(`home-${tag}`)).toHaveCount(0);
     // entri baru pada tab Qalling diisi awalan `qalling.`
     await page.getByRole("button", { name: "New entry" }).click();
-    await expect(page.getByRole("dialog").locator("input").first()).toHaveValue("qalling.home");
+    await expect(page.getByRole("dialog").locator("select").first()).toHaveValue("qalling.hero");
   } finally {
     await conn.execute("DELETE FROM site_content WHERE id IN (?, ?)", ids);
     await conn.end();

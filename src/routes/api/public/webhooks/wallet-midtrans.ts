@@ -30,11 +30,13 @@ export const Route = createFileRoute("/api/public/webhooks/wallet-midtrans")({
         );
         if (!row?.gateway_id || row.gateway !== "midtrans")
           return new Response("Not found", { status: 404 });
-        const gateway = await executeOne<{ server_key_secret_name: string | null }>(
-          "SELECT server_key_secret_name FROM payment_gateways WHERE id = ? AND provider = 'midtrans'",
+        const gateway = await executeOne<{ server_key_secret_name: string | null; server_key: string | null }>(
+          "SELECT server_key_secret_name, server_key FROM payment_gateways WHERE id = ? AND provider = 'midtrans'",
           [row.gateway_id],
         );
-        const key = process.env[gateway?.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
+        const key =
+          gateway?.server_key ||
+          process.env[gateway?.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
         if (!key) return new Response("Unavailable", { status: 503 });
         const { verifyMidtransNotice, isSettledPayment } =
           await import("@/lib/wallet/gateway.server");
@@ -55,9 +57,10 @@ export const Route = createFileRoute("/api/public/webhooks/wallet-midtrans")({
               note: "Webhook gateway terverifikasi",
               gatewayVerified: true,
             });
-            // Saldo masuk → coba perpanjangan otomatis yang tertunda (best-effort).
+            // Saldo masuk → perpanjangan otomatis yang tertunda. Gagal setelah settle → balas 500 supaya Midtrans
+            // mencoba lagi (settle idempoten; perpanjangan diulang) — New 12.
             const { renewTenant } = await import("@/lib/billing-wallet.server");
-            await renewTenant(row.tenant_id).catch(() => undefined);
+            await renewTenant(row.tenant_id);
           } else if (["expire", "cancel", "deny"].includes(notice.transaction_status)) {
             await execute("UPDATE topups SET status = ? WHERE id = ? AND status <> 'paid'", [
               notice.transaction_status === "expire" ? "expired" : "failed",

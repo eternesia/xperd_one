@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { executeOne } from "@/integrations/mysql/pool";
 
-export const TEBAR_API = "https://api.tebar.app/v1";
+/** Basis API Tebar; dapat ditimpa (`TEBAR_API_BASE`) untuk server tiruan saat uji. */
+export const TEBAR_API = (process.env.TEBAR_API_BASE ?? "https://api.tebar.app/v1").replace(/\/$/, "");
 
 export type TebarAccount = {
   id: string;

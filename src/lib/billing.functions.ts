@@ -45,9 +45,10 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
       mode: string;
       instructions: string | null;
       server_key_secret_name: string | null;
+      server_key: string | null;
       is_active: number;
     }>(
-      "SELECT id, provider, display_name, mode, instructions, server_key_secret_name, is_active FROM payment_gateways WHERE id = ? LIMIT 1",
+      "SELECT id, provider, display_name, mode, instructions, server_key_secret_name, server_key, is_active FROM payment_gateways WHERE id = ? LIMIT 1",
       [data.gatewayId],
     );
     if (!gateway || !gateway.is_active) throw new Error("Payment method is not available");
@@ -67,9 +68,9 @@ export const startInvoiceCheckout = createServerFn({ method: "POST" })
     }
 
     const secretName = gateway.server_key_secret_name || "MIDTRANS_SERVER_KEY";
-    const serverKey = process.env[secretName];
+    const serverKey = gateway.server_key || process.env[secretName];
     if (!serverKey) {
-      throw new Error(`Server key "${secretName}" is not configured yet. Ask the administrator to add it.`);
+      throw new Error("Server key is not configured yet. Ask the administrator to add it.");
     }
 
     const { createMidtransSnap } = await import("@/lib/billing.server");

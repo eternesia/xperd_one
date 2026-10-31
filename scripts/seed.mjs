@@ -10,12 +10,18 @@
 import { connect, ensureLogTable, applied, record, listSqlFiles, readSqlFile } from "./lib/db.mjs";
 
 const force = process.argv.includes("--force");
+// Produksi: hanya seed inti (data katalog). Seed lain adalah fixture dev/e2e (tenant demo, dokumen, karyawan, dll.)
+// dan tidak boleh masuk produksi. Paksa dengan `--include-dev` hanya bila memang disengaja.
+const PROD_SEEDS = new Set(["001_core_seed.sql"]);
+const isProd = process.env.NODE_ENV === "production" && !process.argv.includes("--include-dev");
 
 const conn = await connect();
 try {
   await ensureLogTable(conn);
   const done = await applied(conn, "seed");
-  const files = await listSqlFiles("db/seeds");
+  const all = await listSqlFiles("db/seeds");
+  const files = isProd ? all.filter((f) => PROD_SEEDS.has(f)) : all;
+  if (isProd) console.log(`[seed] NODE_ENV=production → hanya seed inti (${[...PROD_SEEDS].join(", ")}); ${all.length - files.length} seed dev dilewati.`);
   const todo = force ? files : files.filter((f) => !done.has(f));
 
   if (!todo.length) {

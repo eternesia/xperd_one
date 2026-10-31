@@ -30,23 +30,26 @@ import {
   listCrmComments,
   manageAutomation,
   replySocialComment,
+  syncTebarSocial,
+  likeSocialComments,
 } from "@/lib/social-interactions.functions";
+import { canLikeOn, validateAutomation } from "@/lib/automation-payload";
+import { Heart } from "lucide-react";
 
-/**
- * Qalling **Comments** & **Automations** — diporting dari BS New 11 `CrmInteractions.tsx`
- * (teks Indonesia hardcode seperti sumbernya). Data lewat server fn MySQL Old
- * (`social-interactions.functions.ts`), bukan Supabase.
- */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const send = useServerFn(replySocialComment);
+  const syncFn = useServerFn(syncTebarSocial);
+  const likeFn = useServerFn(likeSocialComments);
   const listFn = useServerFn(listCrmComments);
   const query = useQuery({
     queryKey: ["crm-comments", workspaceId],
-    queryFn: () => listFn({ data: { workspaceId } }),
+    queryFn: async () => {
+      await syncFn({ data: { workspaceId } }).catch(() => null);
+      return listFn({ data: { workspaceId } });
+    },
   });
   const pages = usePaged(
     query.data ?? [],
@@ -63,6 +66,14 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
       qc.invalidateQueries({ queryKey: ["crm-comments", workspaceId] });
       if (r.status !== "sent")
         toast.warning(`Status balasan: ${r.status}. Periksa izin akun sebelum mencoba lagi.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const like = useMutation({
+    mutationFn: (ids: string[]) => likeFn({ data: { workspaceId, commentIds: ids } }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["crm-comments", workspaceId] });
+      toast.success(`${r.liked} komentar disukai` + (r.skipped ? `, ${r.skipped} dilewati` : ""));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -95,7 +106,7 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
       ) : pages.total === 0 ? (
         <div className="border-y py-14 text-center text-muted-foreground">
           <MessageSquare className="mx-auto mb-3 size-7" />
-          Belum ada komentar masuk dari akun Meta native.
+          Belum ada komentar masuk dari akun Meta atau Tebar.
         </div>
       ) : (
         [...groups].map(([key, comments]) => (
@@ -121,18 +132,30 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
                 {c.reply && (
                   <p className="mt-3 border-l-2 pl-3 text-sm text-muted-foreground">{c.reply}</p>
                 )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3"
-                  disabled={c.status !== "open"}
-                  onClick={() => {
-                    setSelected(c.id);
-                    setBody("");
-                  }}
-                >
-                  Balas
-                </Button>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={c.status !== "open"}
+                    onClick={() => {
+                      setSelected(c.id);
+                      setBody("");
+                    }}
+                  >
+                    Balas
+                  </Button>
+                  {canLikeOn(c.crm_social_accounts?.platform) && (
+                    <Button
+                      size="sm"
+                      variant={c.liked_at ? "secondary" : "outline"}
+                      disabled={!!c.liked_at || like.isPending}
+                      onClick={() => like.mutate([c.id])}
+                    >
+                      <Heart className="size-4" />
+                      {c.liked_at ? "Disukai" : "Like"}
+                    </Button>
+                  )}
+                </div>
               </article>
             ))}
           </section>
@@ -170,9 +193,36 @@ type Form = {
   accountId: string;
   name: string;
   trigger: "dm" | "comment";
+  action: "reply" | "comment_to_dm";
   keyword: string;
   reply: string;
+  publicReply: string;
+  linkLabel: string;
+  linkUrl: string;
+  trackClicks: boolean;
+  followGate: boolean;
+  followAsk: string;
+  followButton: string;
+  followRetry: string;
+  autoLike: boolean;
   enabled: boolean;
+};
+const EMPTY: Omit<Form, "accountId"> = {
+  name: "",
+  trigger: "comment",
+  action: "comment_to_dm",
+  keyword: "link",
+  reply: "Makasih sudah follow! Ini linknya, tekan tombol di bawah ya 👇",
+  publicReply: "Cek DM ya kak 🙌",
+  linkLabel: "Buka link",
+  linkUrl: "",
+  trackClicks: true,
+  followGate: false,
+  followAsk: "Follow akun kami dulu ya, lalu tekan tombol di bawah untuk dapat linknya.",
+  followButton: "Saya sudah follow",
+  followRetry: "Sepertinya kamu belum follow. Follow dulu, lalu tekan tombolnya lagi ya.",
+  autoLike: false,
+  enabled: true,
 };
 export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
@@ -201,8 +251,18 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
     accountId: r.account_id,
     name: r.name,
     trigger: r.trigger_type as "dm" | "comment",
+    action: (r.action_kind as Form["action"]) ?? "reply",
     keyword: r.keyword,
     reply: r.reply_body,
+    publicReply: r.public_reply ?? "",
+    linkLabel: r.link_label ?? "",
+    linkUrl: r.link_url ?? "",
+    trackClicks: r.track_clicks,
+    followGate: r.follow_gate,
+    followAsk: r.follow_ask ?? EMPTY.followAsk,
+    followButton: r.follow_button ?? EMPTY.followButton,
+    followRetry: r.follow_retry ?? EMPTY.followRetry,
+    autoLike: r.auto_like,
     enabled: r.enabled,
   });
   return (
@@ -211,16 +271,7 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
         <h1 className="text-2xl font-medium">Automation</h1>
         <Button
           disabled={!query.data?.accounts.length}
-          onClick={() =>
-            setForm({
-              name: "",
-              accountId: query.data?.accounts[0]?.id ?? "",
-              trigger: "dm",
-              keyword: "",
-              reply: "",
-              enabled: false,
-            })
-          }
+          onClick={() => setForm({ ...EMPTY, accountId: query.data?.accounts[0]?.id ?? "" })}
         >
           <Plus className="size-4" />
           Aturan
@@ -247,10 +298,19 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
                   <div className="min-w-0">
                     <h2 className="break-words font-medium">{r.name}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {r.trigger_type === "dm" ? "DM masuk" : "Komentar baru"} ·{" "}
-                      {query.data?.accounts.find((a) => a.id === r.account_id)?.account_name} ·{" "}
+                      {r.trigger_type === "dm"
+                        ? "DM masuk"
+                        : r.action_kind === "comment_to_dm"
+                          ? "Komentar → DM"
+                          : "Komentar baru"}{" "}
+                      · {query.data?.accounts.find((a) => a.id === r.account_id)?.account_name} ·{" "}
                       {r.keyword || "Semua pesan"}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {r.link_url && <Badge variant="secondary">Link · {r.click_count} klik</Badge>}
+                      {r.follow_gate && <Badge variant="secondary">Wajib follow</Badge>}
+                      {r.auto_like && <Badge variant="secondary">Auto-like</Badge>}
+                    </div>
                   </div>
                   <Switch
                     aria-label={`Aktifkan ${r.name}`}
@@ -316,90 +376,292 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
           <TablePager {...history} />
         </TabsContent>
       </Tabs>
-      <Dialog
-        open={!!form}
-        onOpenChange={(v) => {
-          if (!v) setForm(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{form?.id ? "Ubah aturan" : "Aturan baru"}</DialogTitle>
-          </DialogHeader>
-          {form && (
-            <div className="space-y-3">
+      <AutomationDialog
+        form={form}
+        setForm={setForm}
+        accounts={query.data?.accounts ?? []}
+        pending={save.isPending}
+        onSave={(f) => save.mutate(f)}
+      />
+    </div>
+  );
+}
+function AutomationDialog({
+  form,
+  setForm,
+  accounts,
+  pending,
+  onSave,
+}: {
+  form: Form | null;
+  setForm: (f: Form | null) => void;
+  accounts: { id: string; account_name: string; platform: string }[];
+  pending: boolean;
+  onSave: (f: Form) => void;
+}) {
+  const f = form;
+  const set = (p: Partial<Form>) => f && setForm({ ...f, ...p });
+  const sendsDm = !!f && (f.trigger === "dm" || f.action === "comment_to_dm");
+  const platform = accounts.find((a) => a.id === f?.accountId)?.platform;
+  const err = f ? validateAutomation(f) : null;
+  return (
+    <Dialog
+      open={!!f}
+      onOpenChange={(v) => {
+        if (!v) setForm(null);
+      }}
+    >
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{f?.id ? "Ubah aturan" : "Aturan baru"}</DialogTitle>
+        </DialogHeader>
+        {f && (
+          <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="min-w-0 space-y-3">
               <label className="block text-sm">
                 Nama aturan
                 <Input
-                  value={form.name}
+                  value={f.name}
                   maxLength={100}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => set({ name: e.target.value })}
                 />
               </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  Akun
+                  <select
+                    className="mt-1 w-full rounded border bg-background p-2"
+                    value={f.accountId}
+                    onChange={(e) => set({ accountId: e.target.value })}
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.account_name} · {a.platform}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  Pemicu
+                  <select
+                    className="mt-1 w-full rounded border bg-background p-2"
+                    value={f.trigger === "dm" ? "dm" : f.action}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      set(
+                        v === "dm"
+                          ? { trigger: "dm", action: "reply" }
+                          : {
+                              trigger: "comment",
+                              action: v as Form["action"],
+                              followGate: v === "reply" ? false : f.followGate,
+                            },
+                      );
+                    }}
+                  >
+                    <option value="comment_to_dm">Komentar → kirim DM</option>
+                    <option value="reply">Komentar → balas komentar</option>
+                    <option value="dm">DM masuk → balas DM</option>
+                  </select>
+                </label>
+              </div>
               <label className="block text-sm">
-                Akun
-                <select
-                  className="mt-1 w-full rounded border bg-background p-2"
-                  value={form.accountId}
-                  onChange={(e) => setForm({ ...form, accountId: e.target.value })}
-                >
-                  {query.data?.accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.account_name} · {a.platform}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                Pemicu
-                <select
-                  className="mt-1 w-full rounded border bg-background p-2"
-                  value={form.trigger}
-                  onChange={(e) =>
-                    setForm({ ...form, trigger: e.target.value as "dm" | "comment" })
-                  }
-                >
-                  <option value="dm">DM masuk → balas DM</option>
-                  <option value="comment">Komentar baru → balas komentar</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                Kata kunci (opsional)
+                Kata kunci (pisahkan koma, kosong = semua)
                 <Input
-                  value={form.keyword}
+                  value={f.keyword}
                   maxLength={100}
-                  onChange={(e) => setForm({ ...form, keyword: e.target.value })}
+                  onChange={(e) => set({ keyword: e.target.value })}
                 />
               </label>
+              {f.action === "comment_to_dm" && f.trigger === "comment" && (
+                <label className="block text-sm">
+                  Balasan publik di komentar
+                  <Input
+                    value={f.publicReply}
+                    maxLength={2200}
+                    onChange={(e) => set({ publicReply: e.target.value })}
+                  />
+                </label>
+              )}
               <label className="block text-sm">
-                Balasan
+                {sendsDm ? "Isi DM" : "Balasan komentar"}
                 <Textarea
-                  value={form.reply}
-                  maxLength={2000}
-                  onChange={(e) => setForm({ ...form, reply: e.target.value })}
+                  value={f.reply}
+                  maxLength={f.linkUrl ? 640 : 2000}
+                  onChange={(e) => set({ reply: e.target.value })}
                 />
               </label>
+              {sendsDm && (
+                <section className="space-y-3 rounded-md border p-4">
+                  <p className="text-sm font-medium">Tombol link</p>
+                  <div className="grid gap-2 sm:grid-cols-[140px_minmax(0,1fr)]">
+                    <Input
+                      aria-label="Judul tombol"
+                      placeholder="Buka link"
+                      maxLength={20}
+                      value={f.linkLabel}
+                      onChange={(e) => set({ linkLabel: e.target.value })}
+                    />
+                    <Input
+                      aria-label="Link tujuan"
+                      placeholder="https://websiteanda.com"
+                      value={f.linkUrl}
+                      onChange={(e) => set({ linkUrl: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1 text-sm">
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1.5 ${f.trackClicks ? "bg-background shadow-sm" : ""}`}
+                      onClick={() => set({ trackClicks: true })}
+                    >
+                      Lewat link pelacak
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded px-2 py-1.5 ${!f.trackClicks ? "bg-background shadow-sm" : ""}`}
+                      onClick={() => set({ trackClicks: false })}
+                    >
+                      Link sendiri
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {f.trackClicks
+                      ? "Tombol lewat link pelacak lalu diteruskan ke website Anda, sehingga jumlah klik terhitung."
+                      : "Tombol langsung membuka website Anda; klik tidak dihitung (pakai UTM bila perlu)."}
+                  </p>
+                </section>
+              )}
+              {sendsDm && (
+                <section className="space-y-3 rounded-md border p-4">
+                  <label className="flex items-start justify-between gap-3 text-sm">
+                    <span>
+                      <span className="font-medium">Wajib follow dulu</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Orang diminta follow dulu; status follow dicek ke Instagram sebelum DM
+                        dikirim.
+                      </span>
+                    </span>
+                    <Switch
+                      checked={f.followGate}
+                      onCheckedChange={(v) => set({ followGate: v })}
+                    />
+                  </label>
+                  {f.followGate && (
+                    <>
+                      <label className="block text-sm">
+                        Ajakan follow
+                        <Textarea
+                          value={f.followAsk}
+                          maxLength={640}
+                          onChange={(e) => set({ followAsk: e.target.value })}
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        Judul tombol
+                        <Input
+                          value={f.followButton}
+                          maxLength={20}
+                          onChange={(e) => set({ followButton: e.target.value })}
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        Bila belum follow
+                        <Textarea
+                          value={f.followRetry}
+                          maxLength={640}
+                          onChange={(e) => set({ followRetry: e.target.value })}
+                        />
+                      </label>
+                    </>
+                  )}
+                </section>
+              )}
+              {f.trigger === "comment" && (
+                <label className="flex items-start justify-between gap-3 rounded-md border p-4 text-sm">
+                  <span>
+                    <span className="font-medium">Like komentar otomatis</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Beri like ke komentar yang masuk. Hanya Facebook Page dan TikTok
+                      {platform && !canLikeOn(platform) ? " — akun ini tidak mendukung" : ""}.
+                    </span>
+                  </span>
+                  <Switch checked={f.autoLike} onCheckedChange={(v) => set({ autoLike: v })} />
+                </label>
+              )}
               <label className="flex items-center justify-between text-sm">
                 Aktif
-                <Switch
-                  checked={form.enabled}
-                  onCheckedChange={(enabled) => setForm({ ...form, enabled })}
-                />
+                <Switch checked={f.enabled} onCheckedChange={(v) => set({ enabled: v })} />
               </label>
+              {err && <p className="text-sm text-destructive">{err}</p>}
             </div>
-          )}
-          <DialogFooter>
-            <Button
-              disabled={
-                save.isPending || !form?.name.trim() || !form.reply.trim() || !form.accountId
-              }
-              onClick={() => form && save.mutate(form)}
-            >
-              Simpan aturan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <AutomationPreview f={f} />
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setForm(null)}>
+            Batal
+          </Button>
+          <Button
+            disabled={pending || !f?.name.trim() || !f.reply.trim() || !f.accountId || !!err}
+            onClick={() => f && onSave(f)}
+          >
+            Simpan dan aktifkan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function Bubble({ me, children }: { me?: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={`max-w-[90%] rounded-2xl px-3 py-2 text-xs ${me ? "ml-auto bg-primary text-primary-foreground" : "bg-muted"}`}
+    >
+      {children}
     </div>
+  );
+}
+function AutomationPreview({ f }: { f: Form }) {
+  const dm = f.trigger === "dm" || f.action === "comment_to_dm";
+  return (
+    <aside className="space-y-3 rounded-md border bg-muted/30 p-3 text-xs">
+      <p className="text-muted-foreground">Pratinjau</p>
+      {f.trigger === "comment" && (
+        <div className="rounded-md border bg-background p-3">
+          <p>
+            <b>pelanggan</b> {f.keyword.split(",")[0] || "halo"}
+          </p>
+          {(f.action === "reply" ? f.reply : f.publicReply) && (
+            <p className="mt-2 border-l-2 pl-2 text-muted-foreground">
+              {f.action === "reply" ? f.reply : f.publicReply}
+            </p>
+          )}
+        </div>
+      )}
+      {dm && (
+        <div className="space-y-2 rounded-md border bg-background p-3">
+          {f.trigger === "dm" && <Bubble me>{f.keyword.split(",")[0] || "Halo kak"}</Bubble>}
+          {f.followGate && (
+            <>
+              <Bubble>
+                {f.followAsk}
+                <span className="mt-2 block text-center font-medium">{f.followButton}</span>
+              </Bubble>
+              <Bubble me>{f.followButton}</Bubble>
+              <p className="text-center text-muted-foreground">Bila sudah follow:</p>
+            </>
+          )}
+          <Bubble>
+            {f.reply || "…"}
+            {f.linkUrl && (
+              <span className="mt-2 block text-center font-medium">
+                {f.linkLabel || "Buka link"}
+              </span>
+            )}
+          </Bubble>
+        </div>
+      )}
+    </aside>
   );
 }

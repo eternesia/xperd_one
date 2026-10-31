@@ -24,8 +24,8 @@ async function renewAfterTopup(tenantId: string) {
     /* dicoba lagi oleh cron */
   }
 }
-const keyOf = (g: { server_key_secret_name: string | null }) =>
-  process.env[g.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
+const keyOf = (g: { server_key?: string | null; server_key_secret_name: string | null }) =>
+  g.server_key || process.env[g.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
 
 async function assertMember(tenantId: string, userId: string) {
   const { isTenantMember } = await import("@/lib/wallet.server");
@@ -137,8 +137,9 @@ export const createWalletTopup = createServerFn({ method: "POST" })
       mode: string;
       instructions: string | null;
       server_key_secret_name: string | null;
+      server_key: string | null;
     }>(
-      "SELECT id, provider, mode, instructions, server_key_secret_name FROM payment_gateways WHERE id = ? AND is_active = 1",
+      "SELECT id, provider, mode, instructions, server_key_secret_name, server_key FROM payment_gateways WHERE id = ? AND is_active = 1",
       [data.gatewayId],
     );
     if (!gateway || !["manual_transfer", "midtrans"].includes(gateway.provider))
@@ -376,8 +377,12 @@ export const reconcileWalletTopup = createServerFn({ method: "POST" })
     if (row.gateway !== "midtrans" || !row.gateway_ref || !row.gateway_id)
       throw new Error("Pembayaran otomatis tidak tersedia.");
     if (row.status === "paid") return { status: "paid" };
-    const gateway = await executeOne<{ mode: string; server_key_secret_name: string | null }>(
-      "SELECT mode, server_key_secret_name FROM payment_gateways WHERE id = ?",
+    const gateway = await executeOne<{
+      mode: string;
+      server_key_secret_name: string | null;
+      server_key: string | null;
+    }>(
+      "SELECT mode, server_key_secret_name, server_key FROM payment_gateways WHERE id = ?",
       [row.gateway_id],
     );
     if (!gateway) throw new Error("Gateway tidak tersedia.");

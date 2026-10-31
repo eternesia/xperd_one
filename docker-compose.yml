@@ -78,6 +78,10 @@ services:
       MYSQL_PORT: "3306"
       # Uji e2e: pengiriman email lewat penyedia API diarahkan ke server tiruan milik spec (host:4599).
       EMAIL_API_BASE_BREVO: "http://host.docker.internal:4599"
+      # Uji e2e: Graph API Meta & API Tebar diarahkan ke server tiruan milik spec (host:4598 / host:4597).
+      META_GRAPH_BASE: "http://host.docker.internal:4598"
+      TEBAR_API_BASE: "http://host.docker.internal:4597"
+      PUBLIC_APP_ORIGIN: "http://127.0.0.1:3999"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:

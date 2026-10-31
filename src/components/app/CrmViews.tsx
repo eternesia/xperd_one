@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Check, Construction, FileOutput, Loader2, Pencil, Plus, Search, Trash2, Upload, UserRound } from "lucide-react";
+import { CalendarClock, MessageCircle, Check, Construction, FileOutput, Loader2, Pencil, Plus, Search, Trash2, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ import { CrmCommentsView, CrmAutomationsView } from "@/components/app/CrmInterac
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
-import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel } from "@/lib/crm";
+import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel, waLink } from "@/lib/crm";
 import { convertLeadToQuotation, listWorkspaceOwners, type WorkspaceOwner } from "@/lib/crm.functions";
 
 interface LeadRow {
@@ -380,6 +380,17 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                   <TableCell>{r.owner_name ?? "—"}</TableCell>
                   <TableCell>{r.next_follow_up_at ?? "—"}</TableCell>
                   <TableCell className="text-right">
+                    {r.phone && (
+                      <Button asChild size="icon" variant="ghost" title="WhatsApp">
+                        <a
+                          href={waLink(r.phone, lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
                     {r.status === "open" && !r.quotation_id && (
                       <Button
                         size="icon"

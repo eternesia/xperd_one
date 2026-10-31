@@ -27,11 +27,17 @@ export const Route = createFileRoute("/api/public/webhooks/midtrans")({
 
         const { execute, executeOne } = await import("@/integrations/mysql/pool");
 
-        const gateway = await executeOne<{ server_key_secret_name: string | null; display_name: string | null }>(
-          "SELECT server_key_secret_name, display_name FROM payment_gateways WHERE provider = 'midtrans' AND is_active = 1 LIMIT 1",
+        const gateway = await executeOne<{
+          server_key_secret_name: string | null;
+          server_key: string | null;
+          display_name: string | null;
+        }>(
+          "SELECT server_key_secret_name, server_key, display_name FROM payment_gateways WHERE provider = 'midtrans' AND is_active = 1 LIMIT 1",
         );
 
-        const serverKey = process.env[gateway?.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
+        const serverKey =
+          gateway?.server_key ||
+          process.env[gateway?.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
         if (!serverKey) return new Response("Gateway not configured", { status: 503 });
 
         const expected = createHash("sha512")

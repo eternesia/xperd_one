@@ -7,6 +7,7 @@ import {
   OTP_TTL_MIN,
   isSignupTier,
   normalizeEmail,
+  resolveSignupTier,
   subdomainFromEmail,
   validEmail,
 } from "@/lib/qalling-signup-rules";
@@ -73,48 +74,80 @@ async function startSession(email: string) {
   ]);
 }
 
-/** Pengaturan login/pendaftaran yang boleh dibaca publik (halaman daftar/masuk). */
+/** Pengaturan login/pendaftaran yang boleh dibaca publik (halaman daftar/masuk), termasuk teks persetujuan. */
 export const getPublicAuthSettings = createServerFn({ method: "GET" }).handler(async () => {
   const { executeOne } = await import("@/integrations/mysql/pool");
-  const r = await executeOne<{
-    google_enabled: number;
-    email_otp_enabled: number;
-    trial_days: number;
-  }>(
-    "SELECT google_enabled, email_otp_enabled, trial_days FROM platform_auth_settings WHERE singleton = 1",
+  const r = await executeOne<Record<string, unknown>>(
+    `SELECT google_enabled, email_otp_enabled, trial_days, terms_label, terms_of_service, privacy_policy, acceptable_use_policy
+       FROM platform_auth_settings WHERE singleton = 1`,
   );
   return {
     google_enabled: r ? Boolean(r.google_enabled) : true,
     email_otp_enabled: r ? Boolean(r.email_otp_enabled) : true,
-    trial_days: r?.trial_days ?? 14,
+    trial_days: Number(r?.trial_days ?? 14),
+    terms_label: String(
+      r?.terms_label ??
+        "Saya menyetujui Syarat Layanan, Kebijakan Privasi, dan Kebijakan Penggunaan yang Wajar.",
+    ),
+    terms_of_service: String(r?.terms_of_service ?? ""),
+    privacy_policy: String(r?.privacy_policy ?? ""),
+    acceptable_use_policy: String(r?.acceptable_use_policy ?? ""),
   };
 });
 
 export const savePlatformAuthSettings = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((d: { google_enabled: boolean; email_otp_enabled: boolean; trial_days: number }) => {
-    if (!Number.isInteger(d?.trial_days) || d.trial_days < 1 || d.trial_days > 90)
-      throw new Error("Lama trial harus 1–90 hari");
-    return d;
-  })
+  .validator(
+    (d: {
+      google_enabled: boolean;
+      email_otp_enabled: boolean;
+      trial_days: number;
+      terms_label?: string;
+      terms_of_service?: string;
+      privacy_policy?: string;
+      acceptable_use_policy?: string;
+    }) => {
+      if (!Number.isInteger(d?.trial_days) || d.trial_days < 1 || d.trial_days > 90)
+        throw new Error("Lama trial harus 1–90 hari");
+      if ((d.terms_label ?? "x").trim().length < 1 || (d.terms_label ?? "").length > 300)
+        throw new Error("Kalimat persetujuan wajib diisi (maks. 300 karakter)");
+      return d;
+    },
+  )
   .handler(async ({ data, context }) => {
     const { hasRole } = await import("@/lib/auth-context.server");
     if (!(await hasRole(context.userId, "admin")))
       throw new Error("Hanya Super Admin yang dapat mengubah pengaturan ini");
     const { execute } = await import("@/integrations/mysql/pool");
     await execute(
-      "UPDATE platform_auth_settings SET google_enabled = ?, email_otp_enabled = ?, trial_days = ? WHERE singleton = 1",
-      [data.google_enabled ? 1 : 0, data.email_otp_enabled ? 1 : 0, data.trial_days],
+      `UPDATE platform_auth_settings SET google_enabled = ?, email_otp_enabled = ?, trial_days = ?,
+              terms_label = COALESCE(?, terms_label), terms_of_service = COALESCE(?, terms_of_service),
+              privacy_policy = COALESCE(?, privacy_policy), acceptable_use_policy = COALESCE(?, acceptable_use_policy)
+        WHERE singleton = 1`,
+      [
+        data.google_enabled ? 1 : 0,
+        data.email_otp_enabled ? 1 : 0,
+        data.trial_days,
+        data.terms_label ?? null,
+        data.terms_of_service ?? null,
+        data.privacy_policy ?? null,
+        data.acceptable_use_policy ?? null,
+      ],
     );
     return { ok: true };
   });
 
 export const startQallingSignup = createServerFn({ method: "POST" })
-  .validator((d: { name: string; email: string; tier: string }) => {
-    if (!isSignupTier(d?.tier)) throw new Error("Pilih paket terlebih dahulu");
+  .validator((d: { name: string; email: string; tier?: string; acceptTerms?: boolean }) => {
+    if (d?.acceptTerms !== true)
+      throw new Error("Anda harus menyetujui syarat & kebijakan untuk mendaftar");
     if ((d.name ?? "").trim().length < 2) throw new Error("Nama minimal 2 huruf");
     if (!validEmail(d.email)) throw new Error("Email tidak valid");
-    return { name: d.name.trim().slice(0, 120), email: normalizeEmail(d.email), tier: d.tier };
+    return {
+      name: d.name.trim().slice(0, 120),
+      email: normalizeEmail(d.email),
+      tier: resolveSignupTier(d.tier),
+    };
   })
   .handler(async ({ data }) => {
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
@@ -129,15 +162,15 @@ export const startQallingSignup = createServerFn({ method: "POST" })
     let regId: string;
     if (pending) {
       await execute(
-        `UPDATE registrations SET company_name = ?, contact_name = ?, email = ?, phone = '-', package_code = ?, notes = 'qalling-signup' WHERE id = ?`,
+        `UPDATE registrations SET company_name = ?, contact_name = ?, email = ?, phone = '-', package_code = ?, notes = 'qalling-signup', terms_accepted_at = NOW(6) WHERE id = ?`,
         [data.name, data.name, data.email, data.tier, pending.id],
       );
       regId = pending.id;
     } else {
       regId = uuid();
       await execute(
-        `INSERT INTO registrations (id, company_name, contact_name, email, phone, subdomain, package_code, notes)
-         VALUES (?, ?, ?, ?, '-', ?, ?, 'qalling-signup')`,
+        `INSERT INTO registrations (id, company_name, contact_name, email, phone, subdomain, package_code, notes, terms_accepted_at)
+         VALUES (?, ?, ?, ?, '-', ?, ?, 'qalling-signup', NOW(6))`,
         [
           regId,
           data.name,
@@ -291,9 +324,10 @@ export const verifyLoginCode = createServerFn({ method: "POST" })
 /** Pengguna yang sudah masuk (mis. Google) tetapi belum punya tenant: buat trial dengan paket pilihannya. */
 export const provisionGoogleSignup = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((d: { tier: string }) => {
-    if (!isSignupTier(d?.tier)) throw new Error("Pilih paket terlebih dahulu");
-    return d;
+  .validator((d: { tier?: string; acceptTerms?: boolean }) => {
+    if (d?.acceptTerms !== true)
+      throw new Error("Anda harus menyetujui syarat & kebijakan untuk mendaftar");
+    return { tier: resolveSignupTier(d?.tier) };
   })
   .handler(async ({ data, context }) => {
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
@@ -319,8 +353,8 @@ export const provisionGoogleSignup = createServerFn({ method: "POST" })
     );
     const regId = uuid();
     await execute(
-      `INSERT INTO registrations (id, company_name, contact_name, email, phone, subdomain, package_code, notes)
-       VALUES (?, ?, ?, ?, '-', ?, ?, 'qalling-google')`,
+      `INSERT INTO registrations (id, company_name, contact_name, email, phone, subdomain, package_code, notes, terms_accepted_at)
+       VALUES (?, ?, ?, ?, '-', ?, ?, 'qalling-google', NOW(6))`,
       [regId, name, name, email, subdomainFromEmail(email, uuid().slice(0, 6)), data.tier],
     );
     const { provisionRegistrationCore } = await import("@/lib/provisioning-core.server");

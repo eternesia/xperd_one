@@ -7,6 +7,9 @@ import type { Connection, RowDataPacket } from "mysql2/promise";
 
 import { ADMIN, login } from "./helpers";
 
+// New 12: bahasa bawaan aplikasi Indonesia — spec ini memeriksa UI berbahasa Indonesia.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * Email Gateway, "Login & Pendaftaran", pendaftaran + login Qalling tanpa kata sandi, dan pendaftaran mandiri ERP (OTP)
  * — BS New 11, Ronde 45. Pengiriman email diarahkan (env dev `EMAIL_API_BASE_BREVO`) ke server tiruan milik spec di
@@ -230,17 +233,31 @@ test("QALLING tanpa kata sandi: daftar (OTP) → tenant trial + sesi, keluar, ma
   const { ctx, page } = await asAnon(browser);
   const mail = email("a");
 
-  // paket wajib dipilih dulu
-  await page.goto("/qalling/daftar");
-  await expect(page.getByRole("heading", { name: "Pilih paket dulu" })).toBeVisible({
-    timeout: 60_000,
-  });
-  await page.getByRole("link", { name: /Pro/ }).first().click();
-  await expect(page.getByText(/Coba gratis 21 hari/)).toBeVisible({ timeout: 30_000 });
+  // New 12: tanpa halaman pilih paket; `?paket=` dihormati, tombol kirim terkunci sampai syarat disetujui
+  await page.goto("/qalling/daftar?paket=pro");
+  await expect(page.getByText(/Coba gratis 21 hari/).first()).toBeVisible({ timeout: 60_000 });
+  const submitBtn = page.getByRole("button", { name: "Kirim kode ke email" });
+  await expect(submitBtn).toBeDisabled();
+  // server juga menolak tanpa persetujuan syarat
+  const noTerms = await page.evaluate(async (em) => {
+    const m = await import("/src/lib/qalling-auth.functions.ts");
+    try {
+      await m.startQallingSignup({
+        data: { name: "Tanpa Syarat", email: em, tier: "qalling_pro", acceptTerms: false },
+      });
+      return "";
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }, email("noterms"));
+  expect(noTerms).not.toBe("");
+  expect(await q("SELECT 1 FROM registrations WHERE email = ?", [email("noterms")])).toHaveLength(0);
+  await page.locator("#agree").click();
+  await expect(submitBtn).toBeEnabled();
 
   await page.locator("#name").fill("E2E Qalling");
   await page.locator("#email").fill(mail);
-  await page.getByRole("button", { name: "Kirim kode ke email" }).click();
+  await submitBtn.click();
   await expect(page.getByText(/Kode 6 digit telah dikirim/).first()).toBeVisible({
     timeout: 30_000,
   });
@@ -280,6 +297,7 @@ test("QALLING tanpa kata sandi: daftar (OTP) → tenant trial + sesi, keluar, ma
   expect((await q("SELECT status FROM registrations WHERE id = ?", [reg.id]))[0].status).toBe(
     "provisioned",
   );
+  expect((await q("SELECT terms_accepted_at FROM registrations WHERE id = ?", [reg.id]))[0].terms_accepted_at).not.toBeNull();
   expect(await q("SELECT 1 FROM invoices WHERE tenant_id = ?", [t.id])).toHaveLength(0); // Qalling-only: tanpa invoice ERP
   const [member] = await q(
     "SELECT m.role FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE w.tenant_id = ?",
@@ -298,6 +316,7 @@ test("QALLING tanpa kata sandi: daftar (OTP) → tenant trial + sesi, keluar, ma
   await dup.goto("/qalling/daftar?paket=lite");
   await dup.locator("#name").fill("Dup");
   await dup.locator("#email").fill(mail);
+  await dup.locator("#agree").click();
   await dup.getByRole("button", { name: "Kirim kode ke email" }).click();
   await expect(dup.getByText("Email ini sudah terdaftar. Silakan masuk.").first()).toBeVisible({
     timeout: 20_000,
@@ -345,13 +364,11 @@ test("QALLING tanpa kata sandi: daftar (OTP) → tenant trial + sesi, keluar, ma
     )[0].consumed_at,
   ).not.toBeNull();
 
-  // halaman aplikasi Qalling: kalender, AI, tagihan & saldo (tab saldo/paket/tagihan)
+  // halaman aplikasi Qalling: kalender, tagihan & saldo (tab saldo/paket/tagihan)
   await login.goto("/qalling/app/calendar");
   await expect(login.getByRole("heading", { name: "Kalender Konten" })).toBeVisible({
     timeout: 60_000,
   });
-  await login.goto("/qalling/app/ai");
-  await expect(login.getByRole("heading").first()).toBeVisible({ timeout: 60_000 });
   await login.goto("/qalling/app/billing");
   await expect(login.getByRole("heading", { name: "Tagihan & Saldo" })).toBeVisible({
     timeout: 60_000,

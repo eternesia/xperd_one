@@ -4,19 +4,7 @@ import { QallingHome } from "@/components/qalling/QallingHome";
 import { useApp } from "@/lib/app-context";
 
 export const Route = createFileRoute("/qalling/app/")({
-  head: () => ({
-    meta: [
-      { title: "Dasbor — Qalling" },
-      { name: "description", content: "Ringkasan konten, akun sosial, paket, dan saldo Qalling." },
-      { property: "og:title", content: "Dasbor — Qalling" },
-      {
-        property: "og:description",
-        content: "Ringkasan konten, akun sosial, paket, dan saldo Qalling.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Dasbor — Qalling" }, { name: "description", content: "Analitik publikasi, akun sosial, dan aktivitas pelanggan Qalling." }, { property: "og:title", content: "Dasbor — Qalling" }, { property: "og:description", content: "Analitik publikasi, akun sosial, dan aktivitas pelanggan Qalling." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: QallingDashboard,
 });
 

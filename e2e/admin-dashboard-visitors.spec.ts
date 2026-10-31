@@ -265,7 +265,7 @@ test("Dashboard eksekutif & Pengunjung Website: angka = SQL", async ({ page }) =
   await mk("xperd", "/e2e-b", "mobile", "google.com", s2);
   await mk("qalling", "/qalling/e2e-c", "mobile", "", s2);
 
-  await page.getByRole("link", { name: "Pengunjung Website" }).first().click();
+  await page.getByRole("link", { name: "Pengunjung", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Pengunjung Website" })).toBeVisible({
     timeout: 60_000,
   });

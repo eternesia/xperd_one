@@ -324,3 +324,35 @@ re-crawl Old vs live: sisa beda hanya data (isi top-up, tanggal, email) dan tomb
 **Belum dibandingkan / batas:** akun live adalah Starter pelanggan — halaman Super Admin live tidak bisa dicek (tak ada kredensial admin); alur tulis (buat dokumen, payroll,
 dll.) tidak dicoba di live (read-only), hanya dibandingkan lewat kode New 11 pada ronde sebelumnya. Ada berkas New 11 `[.]lovable.oauth.consent.tsx` (halaman persetujuan OAuth
 untuk server MCP Lovable) yang tidak diporting karena Old tidak punya server OAuth.
+
+## 13. Ronde 47–48 — port BS New 12 (sumber: `docs/MAPPING-NEW12-VS-OLD.md`)
+
+Dikerjakan: Qalling signup tanpa pilih paket + syarat (migrasi 028), klien/referral/laporan (029), automation kaya (komentar→DM, balas publik, follow-gate, tombol link + pelacak `/l/$ruleId`, auto-like),
+Tebar hybrid, media folder, DM→Leads (030), pengaturan storage platform (031), PDF invoice, bahasa bawaan Indonesia, layout Super Admin New 12.
+Spec diperbarui ke perilaku New 12: `crm-interactions`, `admin-content-site`, `qalling-auth`, `qalling-standalone` (bahasa Indonesia lewat `storageState` kosong).
+
+Regresi penuh (dev): 74 lulus, 5 gagal → 3 diperbaiki (spec usang/rapuh, bukan bug aplikasi), 2 diblokir data dev:
+- `admin-dashboard-visitors`: menu admin New 12 berlabel "Pengunjung" (spec mencari "Pengunjung Website") → spec diperbarui.
+- `workspace-logo`: spec masih menguji "Default logo (Xperd One)"; sejak New 11 tampil "No logo" tanpa gambar; setelah unggah ada 2 gambar "Logo" (kartu + pratinjau kop) → spec diperbarui.
+- `sales-saas-quotation`: `setMonth(-1)` pada tanggal 31 meluap ke bulan yang sama (faktur "bulan lalu" jatuh di bulan ini) → tanggal diganti tanggal 15 bulan lalu.
+- `cash-bank-trx-number` & `cash-out-proof`: DB dev punya kunci periode **hard** 2026-10 (catatan "test", dibuat 2026-10-12, bukan dari spec) sehingga transaksi bertanggal hari ini ditolak. Terbukti: dengan kunci dilepas sementara kedua spec lulus (kunci dikembalikan persis). Perlu keputusan: hapus kunci dev itu.
+
+E2E baru (semua lulus, angka dari SQL): `qalling-referral`, `qalling-clients-reports` (menemukan bug: `crm_social_comments` belum terdaftar di `data.functions.ts`),
+`crm-automation-rich` (Meta Graph tiruan :4598), `crm-tebar-hybrid` (Tebar tiruan :4597), `crm-inbox-to-leads`, `crm-media-folders`, `admin-storage`, `admin-signup-terms`, `billing-invoice-pdf`.
+Re-crawl live (xperd-new) vs Old: Klien, Laporan, Referral, Kalender, Media, Inbox, Komentar, Automation, Leads, Billing sama; beda hanya data.
+**Belum:** tes webhook Midtrans → 500 bila perpanjangan gagal (sulit dipaksa gagal tanpa mock); crawl halaman Super Admin live (akun live bukan admin).
+
+### Ronde 49 — kunci gateway dari aplikasi, MCP dihapus, regresi penuh
+
+- **Regresi penuh:** 79/79 lulus (8,4 menit) setelah kunci periode dev `2026-10` ("test") dihapus.
+- **Midtrans tanpa env:** migrasi `032_gateway_server_key.sql` menambah `payment_gateways.server_key`. Super Admin mengisinya di
+  Admin → Payments ("Server key (rahasia)"): tulis-saja, kosong = pertahankan, tidak pernah dikembalikan ke klien
+  (`adminList` memilih kolom eksplisit dan hanya mengirim `has_server_key`). Dibaca dua webhook, checkout tagihan, dan
+  top-up/cek status wallet; env `server_key_secret_name` tetap jadi cadangan. **Prod: jalankan `npm run migrate` manual.**
+- **Spec baru** `e2e/wallet-midtrans-webhook.spec.ts`: isi kunci lewat UI, kunci tidak muncul di respons server function,
+  tanda tangan salah 401, nominal beda 400, perpanjangan gagal → 500 (saldo sudah masuk), diulang → 200 + invoice
+  `renew:base:…` + saldo = top-up − harga paket, ulangan berikutnya idempoten.
+- **Meta/Tebar:** sudah diatur dari aplikasi (`crm_meta_settings`, `tebar_settings`, `crm_social_tokens`); tak ada perubahan.
+- **MCP dihapus** (fitur platform Lovable, butuh OAuth Lovable): `src/lib/mcp/`, route `/mcp`, `/.mcp/*`,
+  `/.well-known/oauth-protected-resource`, halaman & menu "Integrasi AI", dependensi `@lovable.dev/mcp-js`. Flag fitur `mcp_api`
+  pada tier Agency (data & label katalog) sengaja tidak diubah.

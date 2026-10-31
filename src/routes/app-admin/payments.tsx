@@ -29,6 +29,8 @@ interface GatewayForm {
   merchant_id: string;
   client_key: string;
   server_key_secret_name: string;
+  server_key: string;
+  has_server_key?: boolean;
   callback_url: string;
   instructions: string;
   sort_order: number;
@@ -42,6 +44,7 @@ const EMPTY: GatewayForm = {
   merchant_id: "",
   client_key: "",
   server_key_secret_name: "",
+  server_key: "",
   callback_url: "",
   instructions: "",
   sort_order: 0,
@@ -72,6 +75,7 @@ function PaymentsPage() {
         merchant_id: v.merchant_id || null,
         client_key: v.client_key || null,
         server_key_secret_name: v.server_key_secret_name || null,
+        server_key: v.server_key,
         callback_url: v.callback_url || null,
         instructions: v.instructions || null,
         sort_order: Number(v.sort_order) || 0,
@@ -115,8 +119,10 @@ function PaymentsPage() {
 
       <Card className="border-gold/40 bg-gold/5">
         <CardContent className="p-4 text-sm text-muted-foreground">
-          Secret API keys are never stored here. Save the secret in project secrets and reference its name in the
-          <span className="font-medium text-navy"> Server key secret name </span> field.
+          Paste the gateway <span className="font-medium text-navy">Server key</span> below. It is stored write-only
+          and never shown again (leave it empty to keep the saved key). The
+          <span className="font-medium text-navy"> Server key secret name </span> field is an optional fallback to an
+          environment variable.
         </CardContent>
       </Card>
 
@@ -168,6 +174,8 @@ function PaymentsPage() {
                           merchant_id: g.merchant_id ?? "",
                           client_key: g.client_key ?? "",
                           server_key_secret_name: g.server_key_secret_name ?? "",
+                          server_key: "",
+                          has_server_key: Boolean(Number(g.has_server_key)),
                           callback_url: g.callback_url ?? "",
                           instructions: g.instructions ?? "",
                           sort_order: g.sort_order,
@@ -228,6 +236,16 @@ function PaymentsPage() {
                   value={form.server_key_secret_name}
                   onChange={(e) => setForm({ ...form, server_key_secret_name: e.target.value })}
                   placeholder="MIDTRANS_SERVER_KEY"
+                />
+              </AdminField>
+              <AdminField label="Server key (rahasia)">
+                <Input
+                  id="gw-server-key"
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.server_key}
+                  onChange={(e) => setForm({ ...form, server_key: e.target.value })}
+                  placeholder={form.has_server_key ? "Tersimpan — kosongkan untuk mempertahankan" : "Tempel server key dari dashboard gateway"}
                 />
               </AdminField>
               <AdminField label="Callback / webhook URL">

@@ -250,8 +250,8 @@
 
 /* Qalling has its own identity; legacy gold utilities inherit its blue roles. */
 .qalling-theme {
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
   --radius: 0.5rem;
   --qalling-blue: oklch(0.43 0.22 262);
   --qalling-cyan: oklch(0.66 0.17 243);
@@ -285,11 +285,11 @@
   --chart-5: oklch(0.65 0.17 15);
   --gradient-gold: linear-gradient(110deg, var(--qalling-blue), oklch(0.52 0.2 253));
   --shadow-gold: 0 6px 18px -10px oklch(0.43 0.22 262 / 0.4);
-  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
 }
 .qalling-theme h1, .qalling-theme h2, .qalling-theme h3, .qalling-theme h4 {
-  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
 }
 .qalling-theme .font-extrabold, .qalling-theme .font-bold { font-weight: 500; }
@@ -343,3 +343,13 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
 }
+
+:root { --social-instagram: oklch(0.57 0.23 350); --social-facebook: oklch(0.55 0.23 260); --social-youtube: oklch(0.58 0.23 27); --social-linkedin: oklch(0.5 0.15 243); --social-telegram: oklch(0.63 0.13 235); --social-discord: oklch(0.55 0.2 278); }
+.social-instagram { color: var(--social-instagram); }
+.social-facebook { color: var(--social-facebook); }
+.social-youtube { color: var(--social-youtube); }
+.social-linkedin { color: var(--social-linkedin); }
+.social-telegram { color: var(--social-telegram); }
+.social-discord { color: var(--social-discord); }
+.social-tiktok, .social-x, .social-twitter, .social-threads { color: var(--foreground); }
+.qalling-theme .recharts-default-tooltip { background: var(--card) !important; border-color: var(--border) !important; color: var(--foreground) !important; border-radius: var(--radius); }

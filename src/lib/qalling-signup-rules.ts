@@ -1,6 +1,12 @@
-/** Paid Qalling tiers a visitor may start a trial on; registration requires choosing one first. */
+/** Signup defaults to Lite; explicit selections are preserved. */
 export const QALLING_SIGNUP_TIERS = ["qalling_lite", "qalling_pro", "qalling_agency"] as const;
 export type QallingSignupTier = (typeof QALLING_SIGNUP_TIERS)[number];
+
+export function resolveSignupTier(v?: string): QallingSignupTier {
+  if (!v) return "qalling_lite";
+  if (!isSignupTier(v)) throw new Error("Paket tidak valid");
+  return v;
+}
 
 export function isSignupTier(v: unknown): v is QallingSignupTier {
   return typeof v === "string" && (QALLING_SIGNUP_TIERS as readonly string[]).includes(v);

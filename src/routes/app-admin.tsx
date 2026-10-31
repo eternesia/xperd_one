@@ -17,8 +17,7 @@ import {
   Users,
   Share2,
   Wallet,
-  Mail,
-  KeyRound,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,15 +44,24 @@ function AdminLayout() {
   const { session, loading } = useSession();
   const isAdmin = useIsAdmin(session?.user.id);
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (st) => st.location.pathname });
 
   if (loading) {
-    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
 
   if (!session) return <AdminLogin />;
 
   if (isAdmin === null) {
-    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Verifying access…</div>;
+    return (
+      <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
+        Verifying access…
+      </div>
+    );
   }
 
   if (!isAdmin) {
@@ -81,6 +89,7 @@ function AdminLayout() {
     );
   }
 
+  const inSettings = SETTINGS.some(([to]) => pathname.startsWith(to));
   return (
     <div className="flex min-h-screen bg-secondary/40">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-navy p-5 text-primary-foreground lg:flex">
@@ -91,54 +100,52 @@ function AdminLayout() {
           <NavItem to="/app-admin" icon={<LayoutDashboard className="h-4 w-4" />} exact>
             Dashboard
           </NavItem>
-          <NavItem to="/app-admin/visitors" icon={<Users className="h-4 w-4" />}>Pengunjung Website</NavItem>
-          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Tenant</p>
+          <NavItem to="/app-admin/visitors" icon={<Users className="h-4 w-4" />}>
+            Pengunjung
+          </NavItem>
+          <Group>Pelanggan</Group>
           <NavItem to="/app-admin/tenancy" icon={<Building2 className="h-4 w-4" />}>
             Tenancy
           </NavItem>
           <NavItem to="/app-admin/registrations" icon={<ClipboardCheck className="h-4 w-4" />}>
-            Registrations
+            Pendaftaran
           </NavItem>
           <NavItem to="/app-admin/users" icon={<Users className="h-4 w-4" />}>
             Users
           </NavItem>
-          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Billing</p>
+          <Group>Keuangan & Katalog</Group>
           <NavItem to="/app-admin/invoices" icon={<ReceiptText className="h-4 w-4" />}>
             Invoices
-          </NavItem>
-          <NavItem to="/app-admin/payments" icon={<CreditCard className="h-4 w-4" />}>
-            Payment Gateway
           </NavItem>
           <NavItem to="/app-admin/wallet" icon={<Wallet className="h-4 w-4" />}>
             Deposit & Top-up
           </NavItem>
-          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Katalog</p>
           <NavItem to="/app-admin/packages" icon={<LayoutList className="h-4 w-4" />}>
-            Plan & Packages
+            Paket
           </NavItem>
           <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
-            Add-on Modules
+            Add-on
           </NavItem>
-          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Operasional</p>
+          <Group>Layanan</Group>
+          <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>
+            Konten Website
+          </NavItem>
           <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
-            Announcements
+            Pengumuman
           </NavItem>
           <NavItem to="/app-admin/tickets" icon={<LifeBuoy className="h-4 w-4" />}>
             Help Desk
           </NavItem>
-          <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">Integrasi & Konten</p>
-          <NavItem to="/app-admin/auth-settings" icon={<KeyRound className="h-4 w-4" />}>
-            Login & Pendaftaran
-          </NavItem>
-          <NavItem to="/app-admin/email" icon={<Mail className="h-4 w-4" />}>
-            Email Gateway
-          </NavItem>
-          <NavItem to="/app-admin/tebar" icon={<Share2 className="h-4 w-4" />}>
-            Tebar Connector
-          </NavItem>
-          <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>
-            Website Content
-          </NavItem>
+          <Group>Sistem</Group>
+          <Link
+            to="/app-admin/auth-settings"
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-primary-foreground/65 transition-colors hover:bg-white/10 hover:text-primary-foreground",
+              inSettings && "bg-white/10 text-gold",
+            )}
+          >
+            <Settings className="h-4 w-4" /> Pengaturan
+          </Link>
         </nav>
         <div className="mt-auto space-y-3 pt-6">
           <p className="truncate text-xs text-primary-foreground/50">{session.user.email}</p>
@@ -161,27 +168,70 @@ function AdminLayout() {
         <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-4 border-b border-border bg-background px-6 lg:hidden">
           <span className="text-sm font-semibold tracking-[0.2em] text-navy">SUPER ADMIN</span>
           <div className="flex flex-wrap gap-2 text-xs">
-            <Link to="/app-admin" className="text-muted-foreground">Dashboard</Link>
-            <Link to="/app-admin/visitors" className="text-muted-foreground">Visitors</Link>
-            <Link to="/app-admin/tenancy" className="text-muted-foreground">Tenancy</Link>
-            <Link to="/app-admin/users" className="text-muted-foreground">Users</Link>
-            <Link to="/app-admin/invoices" className="text-muted-foreground">Invoices</Link>
-            <Link to="/app-admin/payments" className="text-muted-foreground">Payments</Link>
-            <Link to="/app-admin/wallet" className="text-muted-foreground">Top-up</Link>
-            <Link to="/app-admin/packages" className="text-muted-foreground">Plans</Link>
-            <Link to="/app-admin/addons" className="text-muted-foreground">Add-ons</Link>
-            <Link to="/app-admin/announcements" className="text-muted-foreground">News</Link>
-            <Link to="/app-admin/tickets" className="text-muted-foreground">Help Desk</Link>
-            <Link to="/app-admin/tebar" className="text-muted-foreground">Tebar</Link>
-            <Link to="/app-admin/content" className="text-muted-foreground">Content</Link>
+            {[
+              ["/app-admin", "Dashboard"],
+              ["/app-admin/tenancy", "Tenancy"],
+              ["/app-admin/users", "Users"],
+              ["/app-admin/invoices", "Invoices"],
+              ["/app-admin/wallet", "Top-up"],
+              ["/app-admin/packages", "Paket"],
+              ["/app-admin/addons", "Add-on"],
+              ["/app-admin/content", "Konten"],
+              ["/app-admin/tickets", "Help Desk"],
+              ["/app-admin/auth-settings", "Pengaturan"],
+            ].map(([to, l]) => (
+              <Link key={to} to={to} className="text-muted-foreground">
+                {l}
+              </Link>
+            ))}
           </div>
         </header>
         <AdminLoadingBar />
         <main className="min-w-0 flex-1 p-6 lg:p-10">
+          {inSettings && (
+            <div className="mb-6 space-y-3">
+              <div>
+                <h1 className="text-2xl font-semibold">Pengaturan</h1>
+                <p className="text-sm text-muted-foreground">
+                  Semua konfigurasi sistem dalam satu tempat.
+                </p>
+              </div>
+              <nav className="flex gap-1 overflow-x-auto border-b">
+                {SETTINGS.map(([to, label]) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    className={cn(
+                      "whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground",
+                      pathname.startsWith(to) && "border-primary text-foreground font-medium",
+                    )}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>
     </div>
+  );
+}
+
+const SETTINGS = [
+  ["/app-admin/auth-settings", "Login & Pendaftaran"],
+  ["/app-admin/email", "Email / SMTP"],
+  ["/app-admin/payments", "Payment Gateway"],
+  ["/app-admin/tebar", "API Tebar & Sosial"],
+  ["/app-admin/storage", "Object Storage"],
+] as const;
+
+function Group({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-4 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">
+      {children}
+    </p>
   );
 }
 
@@ -242,11 +292,25 @@ function AdminLogin() {
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
             </div>
             <Button type="submit" variant="gold" className="w-full" disabled={busy}>
               {busy ? "Please wait…" : "Sign in"}
@@ -264,8 +328,13 @@ function AdminLoadingBar() {
   const mutating = useIsMutating();
   const busy = routing || fetching + mutating > 0;
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden" aria-hidden={!busy}>
-      {busy && <div className="h-full w-1/3 animate-[admin-load_1.1s_ease-in-out_infinite] bg-gold" />}
+    <div
+      className="pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden"
+      aria-hidden={!busy}
+    >
+      {busy && (
+        <div className="h-full w-1/3 animate-[admin-load_1.1s_ease-in-out_infinite] bg-gold" />
+      )}
     </div>
   );
 }

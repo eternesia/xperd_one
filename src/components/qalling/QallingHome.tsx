@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -32,8 +32,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getWorkspaceEntitlements } from "@/lib/addon-catalog.functions";
 import { listWorkspaceRows } from "@/lib/data.functions";
+import { getQallingHomeCounts } from "@/lib/qalling-home.functions";
 import { useApp } from "@/lib/app-context";
-import { getWallet } from "@/lib/wallet.functions";
+import { useI18n } from "@/lib/i18n";
+import { SocialIcon } from "./SocialIcon";
 import type { Entitlements } from "@/lib/entitlements";
 
 const money = (v: number) =>
@@ -64,20 +66,16 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   return useQuery({
     queryKey: ["workspace-entitlements", workspaceId],
     enabled: Boolean(workspaceId),
-    queryFn: () =>
-      getWorkspaceEntitlements({ data: { workspaceId: workspaceId! } }) as Promise<Entitlements>,
+    queryFn: () => getWorkspaceEntitlements({ data: { workspaceId: workspaceId ?? "" } }) as Promise<Entitlements>,
   });
 }
 
 export function QallingHome() {
   const { activeWorkspace, tenant, canViewSubmodule } = useApp();
   const workspaceId = activeWorkspace?.id;
-  const fetchWallet = useServerFn(getWallet);
-  const wallet = useQuery({
-    queryKey: ["wallet", tenant?.id, 0],
-    enabled: Boolean(tenant?.id),
-    queryFn: () => fetchWallet({ data: { tenantId: tenant!.id, page: 0 } }),
-  });
+  const { pick, lang } = useI18n();
+  const [period, setPeriod] = useState(30);
+  const [account, setAccount] = useState("all");
   const ent = useWorkspaceEntitlements(workspaceId);
   const q = ent.data?.qalling as (Entitlements[string] & { status?: string }) | undefined;
 
@@ -85,51 +83,48 @@ export function QallingHome() {
     queryKey: ["qalling-home-accounts", workspaceId],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
-      const res = await listWorkspaceRows({
-        data: { table: "crm_social_accounts", workspaceId: workspaceId!, limit: 500 },
-      });
-      return (res?.rows ?? []) as {
-        id: string;
-        platform: string;
-        account_name: string;
-        source: string;
-      }[];
+      const res = await listWorkspaceRows({ data: { table: "crm_social_accounts", workspaceId: workspaceId ?? "", limit: 500 } });
+      return (res?.rows ?? []) as { id: string; platform: string; account_name: string; source: string }[];
     },
   });
-  const { data: posts = [] } = useQuery({
+  const { data: allPosts = [] } = useQuery({
     queryKey: ["qalling-home-posts", workspaceId],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
       const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
       const res = await listWorkspaceRows({
-        data: {
-          table: "crm_scheduled_posts",
-          workspaceId: workspaceId!,
-          orderBy: "scheduled_at",
-          orderDir: "asc",
-          limit: 1000,
-        },
+        data: { table: "crm_scheduled_posts", workspaceId: workspaceId ?? "", orderBy: "scheduled_at", orderDir: "asc", limit: 2000 },
       });
       return ((res?.rows ?? []) as Post[])
-        .map((p) => ({
-          ...p,
-          scheduled_at: new Date(
-            `${String(p.scheduled_at).replace(" ", "T")}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(p.scheduled_at)) ? "" : "Z"}`,
-          ).toISOString(),
-        }))
+        .map((p) => ({ ...p, scheduled_at: new Date(`${String(p.scheduled_at).replace(" ", "T")}Z`).toISOString() }))
         .filter((p) => p.scheduled_at >= since);
     },
+  });
+
+  const posts = allPosts.filter(
+    (p) =>
+      (account === "all" || p.account_ids?.includes(account)) &&
+      new Date(p.scheduled_at).getTime() >= Date.now() - period * 86_400_000,
+  );
+  const hasCrm = canViewSubmodule("crm", "leads");
+  const { data: crm } = useQuery({
+    queryKey: ["qalling-home-crm", workspaceId],
+    enabled: Boolean(workspaceId && hasCrm),
+    queryFn: () => getQallingHomeCounts({ data: { workspaceId: workspaceId ?? "" } }),
   });
 
   const stats = useMemo(() => {
     const now = Date.now();
     const week = now + 7 * 86_400_000;
     const days: { day: string; label: string; terbit: number; terjadwal: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
+    for (let i = period - 1; i >= 0; i--) {
       const d = new Date(now - i * 86_400_000);
       days.push({
         day: dayKey(d),
-        label: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        label: d.toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
+          day: "numeric",
+          month: "short",
+        }),
         terbit: 0,
         terjadwal: 0,
       });
@@ -159,7 +154,7 @@ export function QallingHome() {
       published: posts.filter((p) => p.status === "published").length,
       drafts: posts.filter((p) => p.status === "draft").length,
     };
-  }, [posts, accounts]);
+  }, [posts, accounts, period, lang]);
 
   const maxAccounts = q?.limits?.max_accounts ?? null;
   const tierName = q?.tier
@@ -170,8 +165,6 @@ export function QallingHome() {
     ? Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / 86_400_000))
     : null;
   const isTop = q?.tier === "qalling_agency";
-  const balance = wallet.data?.balance ?? 0;
-  const hasCrm = canViewSubmodule("crm", "leads");
 
   return (
     <div className="space-y-6">
@@ -179,10 +172,13 @@ export function QallingHome() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">Qalling</p>
           <h1 className="text-2xl font-bold text-navy dark:text-foreground">
-            Halo, {activeWorkspace?.name}
+            {pick("Hello", "Halo")}, {activeWorkspace?.name}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Ringkasan konten, akun sosial, dan saldo Anda.
+            {pick(
+              "Your content and social performance at a glance.",
+              "Ringkasan konten dan performa akun sosial Anda.",
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -190,7 +186,7 @@ export function QallingHome() {
             <Button asChild variant="gold">
               <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "post-scheduler" }}>
                 <PenSquare />
-                Buat postingan
+                {pick("Create post", "Buat postingan")}
               </Link>
             </Button>
           )}
@@ -198,68 +194,27 @@ export function QallingHome() {
             <Button asChild variant="outline">
               <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "media" }}>
                 <ImageIcon />
-                Unggah media
+                {pick("Upload media", "Unggah media")}
               </Link>
             </Button>
           )}
           {hasCrm && (
             <Button asChild variant="outline">
               <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "dashboard" }}>
-                Dasbor penjualan
+                {pick("Sales dashboard", "Dasbor penjualan")}
               </Link>
             </Button>
           )}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-1">
-          <div className="flex items-center justify-between">
-            <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <Wallet className="h-4 w-4 text-gold" />
-              Saldo deposit
-            </p>
-            <Button asChild size="sm" variant="gold">
-              <Link to="/qalling/app/billing" search={{ tab: "saldo" }}>
-                <Plus />
-                Top up
-              </Link>
-            </Button>
-          </div>
-          <p className="mt-3 text-3xl font-bold tabular-nums">
-            {wallet.isLoading ? "…" : money(balance)}
-          </p>
-          <div className="mt-4 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Mutasi terakhir</p>
-            {(wallet.data?.ledger ?? []).slice(0, 3).map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate">{r.description}</span>
-                <span
-                  className={
-                    Number(r.amount_idr) < 0 ? "shrink-0 text-destructive" : "shrink-0 text-success"
-                  }
-                >
-                  {money(Number(r.amount_idr))}
-                </span>
-              </div>
-            ))}
-            {!wallet.data?.ledger?.length && (
-              <p className="text-sm text-muted-foreground">Belum ada mutasi.</p>
-            )}
-            <Link
-              to="/qalling/app/billing"
-              search={{ tab: "saldo" }}
-              className="inline-flex items-center gap-1 text-xs text-gold hover:underline"
-            >
-              Lihat semua mutasi <ArrowUpRight className="h-3 w-3" />
-            </Link>
-          </div>
-        </section>
-
+      <div className="space-y-4">
         <section className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Paket aktif</p>
+              <p className="text-sm font-medium text-muted-foreground">
+                {pick("Current plan", "Paket aktif")}
+              </p>
               <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
                 {tierName}
                 {isTrial && (
@@ -272,44 +227,85 @@ export function QallingHome() {
             <Button asChild variant={isTop ? "outline" : "gold"}>
               <Link to="/qalling/app/billing" search={{ tab: "paket" }}>
                 <Sparkles />
-                {isTop ? "Kelola paket" : "Upgrade paket"}
+                {isTop
+                  ? pick("Manage plan", "Kelola paket")
+                  : pick("Upgrade plan", "Upgrade paket")}
               </Link>
             </Button>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-4">
             <Kpi
               icon={Share2}
-              label="Akun terhubung"
+              label={pick("Connected accounts", "Akun terhubung")}
               value={`${accounts.length}${maxAccounts != null ? ` / ${maxAccounts}` : ""}`}
               progress={maxAccounts ? accounts.length / maxAccounts : undefined}
             />
             <Kpi
               icon={CalendarClock}
-              label="Terjadwal 7 hari"
+              label={pick("Scheduled this week", "Terjadwal 7 hari")}
               value={String(stats.weekScheduled)}
             />
-            <Kpi icon={CheckCircle2} label="Terbit 30 hari" value={String(stats.published)} />
-            <Kpi icon={PenSquare} label="Draft" value={String(stats.drafts)} />
+            <Kpi
+              icon={CheckCircle2}
+              label={pick("Published", "Terbit")}
+              value={String(stats.published)}
+            />
+            <Kpi icon={PenSquare} label={pick("Drafts", "Draft")} value={String(stats.drafts)} />
           </div>
-          {!hasCrm && (
-            <p className="mt-4 rounded-lg border border-dashed border-gold/50 bg-gold/5 p-3 text-sm">
-              Butuh Inbox DM terpadu, CRM prospek, dan automasi?{" "}
-              <Link
-                to="/qalling/app/billing"
-                search={{ tab: "paket" }}
-                className="font-semibold text-gold hover:underline"
-              >
-                Upgrade ke Pro
-              </Link>{" "}
-              — dipotong dari saldo, langsung aktif.
-            </p>
-          )}
         </section>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <select
+          aria-label={pick("Filter social account", "Filter akun sosial")}
+          className="h-10 max-w-full rounded-md border bg-background px-3 text-sm"
+          value={account}
+          onChange={(e) => setAccount(e.target.value)}
+        >
+          <option value="all">{pick("All accounts", "Semua akun")}</option>
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.account_name} · {a.platform}
+            </option>
+          ))}
+        </select>
+        <div className="flex gap-1">
+          {[7, 14, 30].map((n) => (
+            <Button
+              key={n}
+              size="sm"
+              variant={period === n ? "gold" : "outline"}
+              onClick={() => setPeriod(n)}
+            >
+              {n} {pick("days", "hari")}
+            </Button>
+          ))}
+        </div>
+      </div>
+      {hasCrm && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            ["leads", pick("Leads", "Prospek"), crm?.leads],
+            ["inbox", pick("Unread conversations", "Percakapan belum dibaca"), crm?.inbox],
+            ["automations", pick("Active automations", "Automasi aktif"), crm?.automation],
+          ].map(([key, label, count]) => (
+            <Link
+              key={String(key)}
+              to="/qalling/app/$submoduleId"
+              params={{ submoduleId: String(key) }}
+              className="rounded-lg border bg-card p-4"
+            >
+              <p className="text-sm text-muted-foreground">{label}</p>
+              <p className="mt-2 text-2xl font-medium">{count ?? "—"}</p>
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
-          <h2 className="font-semibold">Aktivitas publikasi · 14 hari</h2>
+          <h2 className="font-semibold">
+            {pick("Publishing activity", "Aktivitas publikasi")} · {period} {pick("days", "hari")}
+          </h2>
           <div className="mt-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={stats.days} margin={{ left: -20, right: 8 }}>
@@ -326,7 +322,7 @@ export function QallingHome() {
                 <Area
                   type="monotone"
                   dataKey="terbit"
-                  name="Terbit"
+                  name={pick("Published", "Terbit")}
                   stroke="var(--chart-1)"
                   fill="url(#qTerbit)"
                   strokeWidth={2}
@@ -334,7 +330,7 @@ export function QallingHome() {
                 <Area
                   type="monotone"
                   dataKey="terjadwal"
-                  name="Terjadwal"
+                  name={pick("Scheduled", "Terjadwal")}
                   stroke="var(--chart-2)"
                   fill="transparent"
                   strokeDasharray="4 4"
@@ -345,7 +341,7 @@ export function QallingHome() {
           </div>
         </section>
         <section className="rounded-xl border bg-card p-5 shadow-sm">
-          <h2 className="font-semibold">Akun per platform</h2>
+          <h2 className="font-semibold">{pick("Accounts by platform", "Akun per platform")}</h2>
           {stats.platform.length ? (
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -354,7 +350,12 @@ export function QallingHome() {
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis allowDecimals={false} />
                     <Tooltip />
-                    <Bar dataKey="value" name="Akun" fill="var(--chart-1)" radius={4} />
+                    <Bar
+                      dataKey="value"
+                      name={pick("Accounts", "Akun")}
+                      fill="var(--chart-1)"
+                      radius={4}
+                    />
                   </BarChart>
                 ) : (
                   <PieChart>
@@ -378,11 +379,11 @@ export function QallingHome() {
             </div>
           ) : (
             <div className="mt-6 space-y-3 text-center text-sm text-muted-foreground">
-              <p>Belum ada akun sosial terhubung.</p>
+              <p>{pick("No social accounts connected yet.", "Belum ada akun sosial terhubung.")}</p>
               <Button asChild size="sm" variant="outline">
                 <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "social-accounts" }}>
                   <Plus />
-                  Tambah akun
+                  {pick("Add account", "Tambah akun")}
                 </Link>
               </Button>
             </div>
@@ -392,21 +393,33 @@ export function QallingHome() {
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Jadwal tayang terdekat</h2>
+          <h2 className="font-semibold">{pick("Upcoming posts", "Jadwal tayang terdekat")}</h2>
           {canViewSubmodule("crm", "post-scheduler") && (
             <Link
               to="/qalling/app/$submoduleId"
               params={{ submoduleId: "post-scheduler" }}
               className="text-xs text-gold hover:underline"
             >
-              Buka kalender
+              {pick("Open calendar", "Buka kalender")}
             </Link>
           )}
         </div>
         <div className="mt-3 divide-y divide-border">
           {stats.upcoming.map((p) => (
-            <div key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-              <span className="truncate">{p.title || p.caption || "Tanpa judul"}</span>
+            <div
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm"
+            >
+              <span className="min-w-0">
+                <span className="block truncate">{p.title || p.caption || "Tanpa judul"}</span>
+                <span className="mt-1 flex gap-2">
+                  {accounts
+                    .filter((a) => p.account_ids?.includes(a.id))
+                    .map((a) => (
+                      <SocialIcon key={a.id} platform={a.platform} />
+                    ))}
+                </span>
+              </span>
               <span className="shrink-0 text-muted-foreground">
                 {new Date(p.scheduled_at).toLocaleString("id-ID", {
                   dateStyle: "medium",
@@ -418,7 +431,7 @@ export function QallingHome() {
           ))}
           {!stats.upcoming.length && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              Belum ada postingan terjadwal.
+              {pick("No scheduled posts yet.", "Belum ada postingan terjadwal.")}
             </p>
           )}
         </div>

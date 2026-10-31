@@ -1,6 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
 
+// New 12: bahasa bawaan aplikasi Indonesia — spec ini memeriksa UI berbahasa Indonesia.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * Permukaan Qalling standalone (BS New 11):
  *  - `/qalling`        : situs publik dengan header & logo Qalling sendiri.

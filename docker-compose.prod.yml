@@ -9,7 +9,7 @@
 #   docker push  ${APP_IMAGE:-ghcr.io/eternesia/xperd_one:latest}
 #
 #   # 2) on the server, with a production .env in place
-#   docker compose -f docker-compose.prod.yml up -d     # web runs migrate+seed on start
+#   docker compose -f docker-compose.prod.yml up -d     # web hanya boot; migrate/seed dijalankan manual (lihat di bawah)
 #
 #   # 3) one-shot DB jobs (run on demand, idempotent):
 #   docker compose -f docker-compose.prod.yml run --rm migrate   # apply schema only
@@ -58,8 +58,10 @@ services:
     container_name: xperd-web-prod
     restart: unless-stopped
     working_dir: /app
-    # Apply pending migrations + seeds (idempotent) on every start, then boot.
-    command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs && node --env-file-if-exists=.env .output/server/index.mjs"]
+    # Produksi: TIDAK menjalankan migrate/seed otomatis. Terapkan manual & terkontrol sebelum deploy:
+    #   docker compose -f docker-compose.prod.yml run --rm migrate
+    #   docker compose -f docker-compose.prod.yml run --rm seed     # hanya seed inti (lihat scripts/seed.mjs)
+    command: ["node", "--env-file-if-exists=.env", ".output/server/index.mjs"]
     environment:
       NODE_ENV: production
       PORT: "3000" # keep deterministic; must match the `ports` mapping

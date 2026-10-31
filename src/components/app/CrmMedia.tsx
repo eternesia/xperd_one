@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Film, ImageIcon, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { Check, Film, Folder, FolderPlus, ImageIcon, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,7 @@ export type MediaItem = {
   mime_type: string | null;
   size_bytes: number;
   created_at: string;
+  folder: string | null;
   url: string | null;
 };
 
@@ -80,6 +81,7 @@ export function useCrmMedia(workspaceId: string) {
         mime_type: (r.mime_type as string | null) ?? null,
         size_bytes: Number(r.size_bytes) || 0,
         created_at: String(r.created_at),
+        folder: (r.folder as string | null) ?? null,
         url: mediaUrl(String(r.file_path)),
       })) as MediaItem[];
     },
@@ -93,7 +95,9 @@ function useUpload(workspaceId: string) {
   const id = lang === "id";
   const { userId } = useApp();
   return useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async (input: File[] | { files: File[]; folder: string | null }) => {
+      const files = Array.isArray(input) ? input : input.files;
+      const folder = Array.isArray(input) ? null : input.folder;
       const out: string[] = [];
       for (const f of files) {
         if (!/^(image|video)\//.test(f.type))
@@ -120,6 +124,7 @@ function useUpload(workspaceId: string) {
                 file_path: path,
                 mime_type: f.type,
                 size_bytes: f.size,
+                folder,
                 created_by: userId ?? null,
               },
             },
@@ -213,10 +218,50 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
   const [kind, setKind] = useState<"all" | "image" | "video">("all");
   const [preview, setPreview] = useState<MediaItem | null>(null);
 
-  const byKind = useMemo(
-    () => items.filter((m) => kind === "all" || (kind === "video" ? isVideo(m) : !isVideo(m))),
-    [items, kind],
+  const [folder, setFolder] = useState<string>("__all");
+  const [extraFolders, setExtraFolders] = useState<string[]>([]);
+  const [sort, setSort] = useState<"new" | "old" | "name" | "size">("new");
+  const folders = useMemo(
+    () =>
+      Array.from(
+        new Set([...items.map((m) => m.folder).filter((f): f is string => !!f), ...extraFolders]),
+      ).sort((a, b) => a.localeCompare(b)),
+    [items, extraFolders],
   );
+  const targetFolder = folder === "__all" || folder === "__none" ? null : folder;
+
+  const byKind = useMemo(() => {
+    const rows = items.filter(
+      (m) =>
+        (kind === "all" || (kind === "video" ? isVideo(m) : !isVideo(m))) &&
+        (folder === "__all" || (folder === "__none" ? !m.folder : m.folder === folder)),
+    );
+    const cmp: Record<typeof sort, (a: MediaItem, b: MediaItem) => number> = {
+      new: (a, b) => b.created_at.localeCompare(a.created_at),
+      old: (a, b) => a.created_at.localeCompare(b.created_at),
+      name: (a, b) => a.name.localeCompare(b.name),
+      size: (a, b) => Number(b.size_bytes) - Number(a.size_bytes),
+    };
+    return [...rows].sort(cmp[sort]);
+  }, [items, kind, folder, sort]);
+  const move = useMutation({
+    mutationFn: async ({ m, to }: { m: MediaItem; to: string | null }) => {
+      await saveWorkspaceRow({ data: { table: "crm_media", workspaceId, id: m.id, data: { folder: to } } });
+      return to;
+    },
+    onSuccess: (to) => {
+      setPreview((p) => (p ? { ...p, folder: to } : p));
+      qc.invalidateQueries({ queryKey: ["crm-media", workspaceId] });
+      toast.success(id ? "Folder diperbarui" : "Folder updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const newFolder = () => {
+    const name = window.prompt(id ? "Nama folder baru" : "New folder name")?.trim().slice(0, 60);
+    if (!name) return;
+    setExtraFolders((f) => (f.includes(name) ? f : [...f, name]));
+    setFolder(name);
+  };
   const filtered = useSearchFilter(byKind, term, (m) => [m.name]);
   const p = usePagination(filtered, 25);
   const total = items.reduce((s, m) => s + Number(m.size_bytes || 0), 0);
@@ -294,10 +339,45 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             );
             return;
           }
-          upload.mutate(f);
+          upload.mutate({ files: f, folder: targetFolder });
         }}
         busy={upload.isPending}
       />
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          ["__all", id ? "Semua folder" : "All folders"],
+          ["__none", id ? "Tanpa folder" : "Unfiled"],
+          ...folders.map((f) => [f, f]),
+        ].map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setFolder(k)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm",
+              folder === k ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-secondary",
+            )}
+          >
+            <Folder className="h-3.5 w-3.5" />
+            {label}
+            <span className="text-xs opacity-70">
+              {k === "__all"
+                ? items.length
+                : items.filter((m) => (k === "__none" ? !m.folder : m.folder === k)).length}
+            </span>
+          </button>
+        ))}
+        <Button size="sm" variant="ghost" onClick={newFolder}>
+          <FolderPlus className="h-4 w-4" />
+          {id ? "Folder baru" : "New folder"}
+        </Button>
+      </div>
+      {targetFolder && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          {id
+            ? `File yang diunggah sekarang masuk ke folder “${targetFolder}”.`
+            : `New uploads go to “${targetFolder}”.`}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex rounded-md border border-border p-0.5">
@@ -322,11 +402,24 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             </button>
           ))}
         </div>
-        <SearchInput
-          value={term}
-          onChange={setTerm}
-          placeholder={id ? "Cari nama file…" : "Search file name…"}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label={id ? "Urutkan" : "Sort"}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+          >
+            <option value="new">{id ? "Terbaru" : "Newest"}</option>
+            <option value="old">{id ? "Terlama" : "Oldest"}</option>
+            <option value="name">{id ? "Nama A–Z" : "Name A–Z"}</option>
+            <option value="size">{id ? "Ukuran terbesar" : "Largest"}</option>
+          </select>
+          <SearchInput
+            value={term}
+            onChange={setTerm}
+            placeholder={id ? "Cari nama file…" : "Search file name…"}
+          />
+        </div>
       </div>
 
       {isLoading ? (
@@ -401,7 +494,23 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             {preview &&
               `${fmtSize(preview.size_bytes)} · ${new Date(preview.created_at).toLocaleString(id ? "id-ID" : "en-US")}`}
           </p>
-          <DialogFooter>
+          <DialogFooter className="items-center gap-2 sm:justify-between">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Folder className="h-4 w-4" />
+              <select
+                value={preview?.folder ?? ""}
+                disabled={move.isPending}
+                onChange={(e) => preview && move.mutate({ m: preview, to: e.target.value || null })}
+                className="h-9 rounded-md border border-border bg-background px-2 text-foreground"
+              >
+                <option value="">{id ? "Tanpa folder" : "Unfiled"}</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Button
               variant="outline"
               onClick={() => preview && remove.mutate(preview)}

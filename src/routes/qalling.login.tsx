@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ export const Route = createFileRoute("/qalling/login")({
 });
 
 function QallingLogin() {
+  const { pick } = useI18n();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -63,7 +65,7 @@ function QallingLogin() {
     (async () => {
       if (tier) {
         try {
-          await provisionGoogle({ data: { tier } });
+          await provisionGoogle({ data: { tier, acceptTerms: true } });
         } catch (e) {
           toast.error(e instanceof Error ? e.message : "Gagal mengaktifkan akun");
         }
@@ -104,11 +106,16 @@ function QallingLogin() {
     <QallingAuthFrame>
       <Card>
         <CardHeader>
-          <CardTitle>{sent ? "Masukkan kode" : "Masuk"}</CardTitle>
+          <CardTitle>
+            {sent ? pick("Enter code", "Masukkan kode") : pick("Sign in", "Masuk")}
+          </CardTitle>
           <CardDescription>
             {sent
               ? `Kode dikirim ke ${email}. Berlaku 10 menit.`
-              : "Tanpa kata sandi — pakai Google atau kode email."}
+              : pick(
+                  "No password — use Google or an email code.",
+                  "Tanpa kata sandi — pakai Google atau kode email.",
+                )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -132,7 +139,7 @@ function QallingLogin() {
                     setCode("");
                   }}
                 >
-                  Ubah email
+                  {pick("Change email", "Ubah email")}
                 </button>
                 <button
                   type="button"
@@ -140,7 +147,7 @@ function QallingLogin() {
                   disabled={busy}
                   onClick={() => send()}
                 >
-                  Kirim ulang kode
+                  {pick("Resend code", "Kirim ulang kode")}
                 </button>
               </div>
             </form>
@@ -148,7 +155,7 @@ function QallingLogin() {
             <>
               {settings?.google_enabled !== false && (
                 <GoogleButton
-                  label="Masuk dengan Google"
+                  label={pick("Sign in with Google", "Masuk dengan Google")}
                   onSignedIn={() => {
                     /* session effect handles redirect */
                   }}
@@ -157,7 +164,7 @@ function QallingLogin() {
               {settings?.google_enabled !== false && settings?.email_otp_enabled !== false && (
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="h-px flex-1 bg-border" />
-                  atau
+                  {pick("or", "atau")}
                   <span className="h-px flex-1 bg-border" />
                 </div>
               )}
@@ -175,7 +182,8 @@ function QallingLogin() {
                     />
                   </div>
                   <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-                    {busy ? <Loader2 className="animate-spin" /> : <Mail />}Kirim kode masuk
+                    {busy ? <Loader2 className="animate-spin" /> : <Mail />}
+                    {pick("Send login code", "Kirim kode masuk")}
                   </Button>
                 </form>
               )}
@@ -184,13 +192,13 @@ function QallingLogin() {
         </CardContent>
       </Card>
       <p className="text-center text-sm text-muted-foreground">
-        Belum punya akun?{" "}
+        {pick("New to Qalling?", "Belum punya akun?")}{" "}
         <Link to="/qalling/daftar" className="text-gold underline-offset-4 hover:underline">
-          Coba gratis
+          {pick("Try free", "Coba gratis")}
         </Link>
         {" · "}
         <Link to="/qalling" className="underline-offset-4 hover:underline">
-          Kembali ke website
+          {pick("Back to website", "Kembali ke website")}
         </Link>
       </p>
     </QallingAuthFrame>

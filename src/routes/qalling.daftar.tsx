@@ -23,7 +23,9 @@ import {
   onSessionIssued,
   useAuthSettings,
 } from "@/components/qalling/qalling-auth";
-import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Search = { paket?: string };
 
@@ -38,13 +40,10 @@ export const Route = createFileRoute("/qalling/daftar")({
       {
         name: "description",
         content:
-          "Pilih paket Qalling, daftar dengan Google atau email, dan langsung coba gratis tanpa kartu kredit.",
+          "Daftar langsung dengan Google atau email, dan langsung coba gratis tanpa kartu kredit.",
       },
       { property: "og:title", content: "Daftar Qalling — Coba Gratis 14 Hari" },
-      {
-        property: "og:description",
-        content: "Pilih paket Qalling dan mulai trial gratis dalam satu menit.",
-      },
+      { property: "og:description", content: "Mulai trial gratis dengan nama dan email Anda." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -55,7 +54,8 @@ export const Route = createFileRoute("/qalling/daftar")({
 function QallingSignup() {
   const { paket } = Route.useSearch();
   const navigate = useNavigate();
-  const plan = SIGNUP_PLANS.find((p) => p.slug === paket);
+  const plan = SIGNUP_PLANS.find((p) => p.slug === paket) ?? SIGNUP_PLANS[0];
+  const { pick } = useI18n();
   const { session } = useSession();
   const { data: settings } = useAuthSettings();
   const trialDays = settings?.trial_days ?? 14;
@@ -69,11 +69,13 @@ function QallingSignup() {
   const [regId, setRegId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [policy, setPolicy] = useState<null | { title: string; body: string }>(null);
 
   async function finishWithSession(tier: string) {
     setBusy(true);
     try {
-      await provisionGoogle({ data: { tier } });
+      await provisionGoogle({ data: { tier, acceptTerms: true } });
       sessionStorage.removeItem(SIGNUP_TIER_KEY);
       toast.success(`Trial ${trialDays} hari aktif. Selamat datang!`);
       navigate({ to: "/qalling/app", replace: true });
@@ -85,59 +87,20 @@ function QallingSignup() {
   }
 
   useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) localStorage.setItem("qalling_ref", ref.slice(0, 20));
+  }, []);
+
+  useEffect(() => {
     setRegId(null);
     setCode("");
   }, [paket]);
 
-  if (!plan) {
-    return (
-      <QallingAuthFrame>
-        <div className="text-center">
-          <h1 className="text-xl font-bold text-navy dark:text-foreground">Pilih paket dulu</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Semua paket bisa dicoba gratis {trialDays} hari. Upgrade kapan saja dari saldo.
-          </p>
-        </div>
-        <div className="space-y-3">
-          {SIGNUP_PLANS.map((p) => (
-            <Link
-              key={p.slug}
-              to="/qalling/daftar"
-              search={{ paket: p.slug }}
-              className={cn(
-                "block rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-gold",
-                "highlight" in p && p.highlight ? "border-gold" : "border-border",
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="font-semibold">{p.name}</span>
-                <span className="text-sm font-semibold">
-                  {p.price}
-                  <span className="font-normal text-muted-foreground">/bln</span>
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {p.accounts} · {p.users} · {p.features.join(" · ")}
-              </p>
-            </Link>
-          ))}
-        </div>
-        <p className="text-center text-sm text-muted-foreground">
-          Sudah punya akun?{" "}
-          <Link to="/qalling/login" className="text-gold hover:underline">
-            Masuk
-          </Link>
-        </p>
-      </QallingAuthFrame>
-    );
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!plan) return;
     setBusy(true);
     try {
-      const r = await start({ data: { name, email, tier: plan.code } });
+      const r = await start({ data: { name, email, tier: plan.code, acceptTerms: agreed } });
       setRegId(r.registrationId);
       toast.success(
         r.throttled
@@ -171,26 +134,15 @@ function QallingSignup() {
     <QallingAuthFrame>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm">
-            <span>
-              <Check className="mr-1 inline h-4 w-4 text-gold" />
-              Paket <b>{plan.name}</b> · {plan.price}/bln
-            </span>
-            <Link
-              to="/qalling/daftar"
-              search={{}}
-              className="text-xs underline-offset-4 hover:underline"
-            >
-              Ganti
-            </Link>
-          </div>
           <CardTitle className="pt-3">
-            {regId ? "Masukkan kode" : `Coba gratis ${trialDays} hari`}
+            {regId
+              ? pick("Enter verification code", "Masukkan kode")
+              : pick(`Try free for ${trialDays} days`, `Coba gratis ${trialDays} hari`)}
           </CardTitle>
           <CardDescription>
             {regId
               ? `Kami mengirim kode 6 digit ke ${email}.`
-              : "Tanpa kata sandi, tanpa kartu kredit."}
+              : pick("No password, no credit card.", "Tanpa kata sandi, tanpa kartu kredit.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -202,7 +154,7 @@ function QallingSignup() {
               <Button
                 variant="gold"
                 className="w-full"
-                disabled={busy}
+                disabled={busy || !agreed}
                 onClick={() => finishWithSession(plan.code)}
               >
                 {busy && <Loader2 className="animate-spin" />}Aktifkan trial {plan.name}
@@ -217,7 +169,8 @@ function QallingSignup() {
                 className="w-full"
                 disabled={busy || code.length !== 6}
               >
-                {busy && <Loader2 className="animate-spin" />}Verifikasi & aktifkan
+                {busy && <Loader2 className="animate-spin" />}
+                {pick("Verify & activate", "Verifikasi & aktifkan")}
               </Button>
               <div className="flex justify-between text-xs">
                 <button
@@ -228,7 +181,7 @@ function QallingSignup() {
                     setCode("");
                   }}
                 >
-                  Ubah email
+                  {pick("Change email", "Ubah email")}
                 </button>
                 <button
                   type="button"
@@ -236,23 +189,40 @@ function QallingSignup() {
                   disabled={busy}
                   onClick={(e) => submit(e as unknown as React.FormEvent)}
                 >
-                  Kirim ulang kode
+                  {pick("Resend code", "Kirim ulang kode")}
                 </button>
               </div>
             </form>
           ) : (
             <>
+              <div className="flex items-start gap-3 rounded-lg border bg-secondary/40 p-3">
+                <Checkbox id="agree" checked={agreed} onCheckedChange={(v) => setAgreed(v === true)} className="mt-0.5" />
+                <div className="space-y-1 text-sm">
+                  <Label htmlFor="agree" className="font-normal leading-snug">{settings?.terms_label}</Label>
+                  <div className="flex flex-wrap gap-x-3 text-xs">
+                    {[
+                      [pick("Terms of Service", "Syarat Layanan"), settings?.terms_of_service],
+                      [pick("Privacy Policy", "Kebijakan Privasi"), settings?.privacy_policy],
+                      [pick("Acceptable Use Policy", "Kebijakan Penggunaan"), settings?.acceptable_use_policy],
+                    ].filter(([, b]) => b).map(([t, b]) => (
+                      <button key={t} type="button" className="text-gold hover:underline" onClick={() => setPolicy({ title: t as string, body: b as string })}>{t}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               {settings?.google_enabled !== false && (
                 <>
+                  <div className={agreed ? "" : "pointer-events-none opacity-50"} aria-disabled={!agreed}>
                   <GoogleButton
-                    label="Daftar dengan Google"
+                    label={pick("Sign up with Google", "Daftar dengan Google")}
                     beforeRedirect={() => sessionStorage.setItem(SIGNUP_TIER_KEY, plan.code)}
                     onSignedIn={() => finishWithSession(plan.code)}
                   />
+                  </div>
                   {settings?.email_otp_enabled !== false && (
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span className="h-px flex-1 bg-border" />
-                      atau
+                      {pick("or", "atau")}
                       <span className="h-px flex-1 bg-border" />
                     </div>
                   )}
@@ -261,7 +231,7 @@ function QallingSignup() {
               {settings?.email_otp_enabled !== false && (
                 <form className="space-y-4" onSubmit={submit}>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nama lengkap</Label>
+                    <Label htmlFor="name">{pick("Full name", "Nama lengkap")}</Label>
                     <Input
                       id="name"
                       autoComplete="name"
@@ -282,8 +252,9 @@ function QallingSignup() {
                       required
                     />
                   </div>
-                  <Button type="submit" variant="gold" className="w-full" disabled={busy}>
-                    {busy ? <Loader2 className="animate-spin" /> : <Mail />}Kirim kode ke email
+                  <Button type="submit" variant="gold" className="w-full" disabled={busy || !agreed}>
+                    {busy ? <Loader2 className="animate-spin" /> : <Mail />}
+                    {pick("Email verification code", "Kirim kode ke email")}
                   </Button>
                 </form>
               )}
@@ -291,10 +262,16 @@ function QallingSignup() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={!!policy} onOpenChange={(o) => !o && setPolicy(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>{policy?.title}</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">{policy?.body}</div>
+        </DialogContent>
+      </Dialog>
       <p className="text-center text-sm text-muted-foreground">
-        Sudah punya akun?{" "}
+        {pick("Already have an account?", "Sudah punya akun?")}{" "}
         <Link to="/qalling/login" className="text-gold hover:underline">
-          Masuk
+          {pick("Sign in", "Masuk")}
         </Link>
       </p>
     </QallingAuthFrame>

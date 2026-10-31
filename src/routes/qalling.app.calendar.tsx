@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
+import { useI18n } from "@/lib/i18n";
+import { SocialIcon } from "@/components/qalling/SocialIcon";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qalling/app/calendar")({
@@ -37,6 +39,25 @@ const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function CalendarPage() {
   const { activeWorkspace } = useApp();
+  const { pick, lang } = useI18n();
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["qalling-calendar-accounts", activeWorkspace?.id],
+    enabled: Boolean(activeWorkspace),
+    queryFn: async () => {
+      if (!activeWorkspace) return [];
+      const res = await listWorkspaceRows({ data: { table: "crm_social_accounts", workspaceId: activeWorkspace.id, limit: 500 } });
+      return (res?.rows ?? []) as { id: string; platform: string; client_group_id: string | null }[];
+    },
+  });
+  const { data: groups = [] } = useQuery({
+    queryKey: ["client-groups", activeWorkspace?.id],
+    enabled: Boolean(activeWorkspace),
+    queryFn: async () => {
+      const res = await listWorkspaceRows({ data: { table: "crm_client_groups", workspaceId: activeWorkspace!.id, orderBy: "name", orderDir: "asc", limit: 500 } });
+      return (res?.rows ?? []) as { id: string; name: string }[];
+    },
+  });
+  const [client, setClient] = useState("all");
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -47,25 +68,16 @@ function CalendarPage() {
     queryKey: ["qalling-calendar", activeWorkspace?.id, start.toISOString()],
     enabled: Boolean(activeWorkspace?.id),
     queryFn: async () => {
+      if (!activeWorkspace) return [];
       const res = await listWorkspaceRows({
-        data: {
-          table: "crm_scheduled_posts",
-          workspaceId: activeWorkspace!.id,
-          orderBy: "scheduled_at",
-          orderDir: "asc",
-          limit: 2000,
-        },
+        data: { table: "crm_scheduled_posts", workspaceId: activeWorkspace.id, orderBy: "scheduled_at", orderDir: "asc", limit: 2000 },
       });
-      return (
-        (res?.rows ?? []) as {
-          id: string;
-          title: string | undefined;
-          status: string;
-          scheduled_at: string;
-        }[]
-      )
+      const arr = (v: unknown): string[] => (typeof v === "string" ? JSON.parse(v) : Array.isArray(v) ? (v as string[]) : []);
+      return ((res?.rows ?? []) as { id: string; title: string | null; status: string; scheduled_at: string; account_ids: unknown }[])
         .map((p) => ({
           ...p,
+          title: p.title ?? undefined,
+          account_ids: arr(p.account_ids),
           scheduled_at: new Date(`${String(p.scheduled_at).replace(" ", "T")}Z`).toISOString(),
         }))
         .filter((p) => p.scheduled_at >= start.toISOString() && p.scheduled_at < end.toISOString());
@@ -73,12 +85,14 @@ function CalendarPage() {
   });
   const byDay = useMemo(() => {
     const m = new Map<string, typeof posts>();
+    const ids = new Set(accounts.filter((a) => a.client_group_id === client).map((a) => a.id));
     for (const p of posts) {
+      if (client !== "all" && !p.account_ids.some((x: string) => ids.has(x))) continue;
       const k = key(new Date(p.scheduled_at));
       m.set(k, [...(m.get(k) ?? []), p]);
     }
     return m;
-  }, [posts]);
+  }, [posts, accounts, client]);
   const lead = (start.getDay() + 6) % 7;
   const total = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
   const cells = Array.from({ length: Math.ceil((lead + total) / 7) * 7 }, (_, i) => {
@@ -91,10 +105,16 @@ function CalendarPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Kalender Konten</h1>
+          <h1 className="text-2xl font-semibold">{pick("Content calendar", "Kalender Konten")}</h1>
           <p className="text-sm text-muted-foreground">{posts.length} postingan bulan ini</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {groups.length > 0 && (
+            <select value={client} onChange={(e) => setClient(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm" aria-label={pick("Client", "Klien")}>
+              <option value="all">{pick("All clients", "Semua klien")}</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -104,7 +124,10 @@ function CalendarPage() {
             <ChevronLeft />
           </Button>
           <span className="min-w-36 text-center text-sm font-medium">
-            {cursor.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+            {cursor.toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
+              month: "long",
+              year: "numeric",
+            })}
           </span>
           <Button
             variant="outline"
@@ -124,7 +147,7 @@ function CalendarPage() {
       </div>
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <div className="grid min-w-[640px] grid-cols-7">
-          {DAYS.map((d) => (
+          {(lang === "id" ? DAYS : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (
             <div
               key={d}
               className="border-b border-border px-2 py-2 text-xs font-medium text-muted-foreground"
@@ -157,6 +180,14 @@ function CalendarPage() {
                         )}
                         title={p.title}
                       >
+                        <span className="inline-flex gap-1">
+                          {accounts
+                            .filter((a) => p.account_ids.includes(a.id))
+                            .slice(0, 2)
+                            .map((a) => (
+                              <SocialIcon key={a.id} platform={a.platform} className="h-3 w-3" />
+                            ))}
+                        </span>{" "}
                         {new Date(p.scheduled_at).toLocaleTimeString("id-ID", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -166,7 +197,7 @@ function CalendarPage() {
                     ))}
                     {(byDay.get(key(d))?.length ?? 0) > 3 && (
                       <Badge variant="secondary" className="text-[10px]">
-                        +{byDay.get(key(d))!.length - 3}
+                        +{(byDay.get(key(d))?.length ?? 0) - 3}
                       </Badge>
                     )}
                   </div>
