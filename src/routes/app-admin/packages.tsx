@@ -151,7 +151,7 @@ function PackagesPage() {
                   </TableCell>
                   <TableCell className="space-x-1">
                     <Badge variant={p.is_active ? "default" : "secondary"}>{p.is_active ? "Visible" : "Hidden"}</Badge>
-                    {p.is_public_signup && <Badge variant="secondary">Self-signup</Badge>}
+                    {Boolean(Number(p.is_public_signup)) && <Badge variant="secondary">Self-signup</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

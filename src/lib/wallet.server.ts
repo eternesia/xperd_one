@@ -200,13 +200,13 @@ export async function walletCreateTopup(p: {
     "SELECT id, provider FROM payment_gateways WHERE id = ? AND is_active = 1",
     [p.gatewayId],
   );
-  if (!g || !["manual_transfer", "midtrans"].includes(g.provider))
+  if (!g || !["manual_transfer", "midtrans", "doku"].includes(g.provider))
     throw new Error("gateway_unavailable");
   const id = uuid();
   try {
     await execute(
       `INSERT INTO topups (id, tenant_id, amount_idr, gateway_id, gateway, idempotency_key, created_by, note, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${g.provider === "midtrans" ? "DATE_ADD(NOW(6), INTERVAL 24 HOUR)" : "NULL"})`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${g.provider === "midtrans" || g.provider === "doku" ? "DATE_ADD(NOW(6), INTERVAL 24 HOUR)" : "NULL"})`,
       [id, p.tenantId, p.amount, g.id, g.provider, p.idem, p.actor, p.note.slice(0, 1000)],
     );
   } catch (e) {

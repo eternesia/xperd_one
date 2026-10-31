@@ -81,6 +81,7 @@ services:
       # Uji e2e: Graph API Meta & API Tebar diarahkan ke server tiruan milik spec (host:4598 / host:4597).
       META_GRAPH_BASE: "http://host.docker.internal:4598"
       TEBAR_API_BASE: "http://host.docker.internal:4597"
+      DOKU_API_BASE: "http://host.docker.internal:4596"
       PUBLIC_APP_ORIGIN: "http://127.0.0.1:3999"
     extra_hosts:
       - "host.docker.internal:host-gateway"

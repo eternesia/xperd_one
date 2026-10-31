@@ -143,7 +143,10 @@ test("AUTOMATION kaya: komentar→DM + balasan publik + like + pelacak, wajib fo
   /* ---------- aturan komentar lewat UI: validasi link, lalu simpan ---------- */
   await page.goto(`/app/w/${ws}/crm/automations`);
   await expect(page.getByRole("heading", { name: "Automation" })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Aturan", exact: true }).first().click();
+  await page.getByRole("button", { name: "Buat automation", exact: true }).click();
+  // New 13: pilih template dulu; "Buat dari awal" membuka formulir kosong
+  await page.getByRole("button", { name: "Buat dari awal" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Nama aturan")).toBeVisible();
   const dlg = page.getByRole("dialog");
   await dlg.getByLabel("Nama aturan").fill(`Promo ${TAG}`);
   await dlg.locator("label", { hasText: /^Akun/ }).locator("select").selectOption(fbId);

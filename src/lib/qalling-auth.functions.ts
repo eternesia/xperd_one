@@ -150,6 +150,8 @@ export const startQallingSignup = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
+    const { assertRegistrationEmail } = await import("@/lib/disposable-email.server");
+    assertRegistrationEmail(data.email);
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     const s = await authSettings();
     if (!s.email_otp_enabled) throw new Error("Pendaftaran lewat email sedang dinonaktifkan");
@@ -227,6 +229,8 @@ export const verifyQallingSignup = createServerFn({ method: "POST" })
     ]);
     if (!reg || reg.status !== "pending" || !isSignupTier(reg.package_code))
       throw new Error("Pendaftaran tidak ditemukan");
+    const { assertRegistrationEmail } = await import("@/lib/disposable-email.server");
+    assertRegistrationEmail(reg.email);
     const otp = await executeOne<{
       id: string;
       expires_at: string;
@@ -345,6 +349,8 @@ export const provisionGoogleSignup = createServerFn({ method: "POST" })
     const u = await findAppUserById(context.userId);
     const email = normalizeEmail(u?.email ?? "");
     if (!email) throw new Error("Akun tidak memiliki email");
+    const { assertRegistrationEmail } = await import("@/lib/disposable-email.server");
+    assertRegistrationEmail(email);
     const name = (u?.full_name || email.split("@")[0]).slice(0, 120);
     await execute(
       `INSERT INTO profiles (id, email, full_name) VALUES (?, ?, ?)

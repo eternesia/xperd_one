@@ -136,6 +136,12 @@ function ContentPage() {
               </Button>
             ))}
           </div>
+          {site === "qalling" && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => { setForm({ ...EMPTY, section: "qalling.hero", key: "main" }); setOpen(true); }}>+ Banner utama</Button>
+              <Button size="sm" variant="outline" onClick={() => { setForm({ ...EMPTY, section: "qalling.features", key: `fitur-${Date.now().toString(36)}` }); setOpen(true); }}>+ Fitur</Button>
+            </div>
+          )}
           <TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari konten…" />
         </div>
         <p className="px-4 pt-3 text-xs text-muted-foreground">

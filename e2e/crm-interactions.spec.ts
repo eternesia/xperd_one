@@ -310,7 +310,10 @@ test("CRM Meta native: webhook aman, ingest idempoten, Inbox, Comments, Automati
   /* ---------- 4. Automations: aturan, klaim durable ---------- */
   await page.goto(`/app/w/${ws}/crm/automations`);
   await expect(page.getByRole("heading", { name: "Automation" })).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Aturan", exact: true }).first().click();
+  await page.getByRole("button", { name: "Buat automation", exact: true }).click();
+  // New 13: pilih template dulu; "Buat dari awal" membuka formulir kosong
+  await page.getByRole("button", { name: "Buat dari awal" }).click();
+  await expect(page.getByRole("dialog").getByLabel("Nama aturan")).toBeVisible();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Nama aturan").fill("Balas harga");
   await dialog.getByLabel("Pemicu").selectOption("dm");

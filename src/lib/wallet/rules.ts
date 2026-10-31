@@ -7,6 +7,7 @@ export const requestTopupSchema = z.object({
   gatewayId: z.string().uuid(),
   idempotencyKey: z.string().uuid(),
   note: z.string().trim().max(1000).default(""),
+  returnPath: z.string().min(1).max(200).optional(),
 });
 export const reviewTopupSchema = z
   .object({

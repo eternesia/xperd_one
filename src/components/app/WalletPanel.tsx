@@ -34,8 +34,17 @@ import {
   uploadTopupProof,
 } from "@/lib/wallet.functions";
 import { walletCsv } from "@/lib/wallet/rules";
+import { walletReturnPath } from "@/lib/wallet/return-url";
 import { useI18n } from "@/lib/i18n";
 
+// Tujuan kembali pembayaran (DOKU) hanya halaman billing; halaman lain → tanpa tujuan, top-up tetap jalan.
+function safeReturnPath() {
+  try {
+    return walletReturnPath(window.location.pathname);
+  } catch {
+    return undefined;
+  }
+}
 const money = (v: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -95,6 +104,7 @@ export function WalletPanel({ tenantId }: { tenantId: string }) {
           gatewayId: gateway,
           idempotencyKey: key.current,
           note,
+          returnPath: safeReturnPath(),
         },
       });
     },
@@ -301,7 +311,7 @@ export function WalletPanel({ tenantId }: { tenantId: string }) {
                               {t("Bukti", "Proof")}
                             </Button>
                           )}
-                        {r.gateway === "midtrans" && r.status !== "paid" && (
+                        {["midtrans", "doku"].includes(r.gateway) && r.status !== "paid" && (
                           <>
                             <Button
                               variant="outline"

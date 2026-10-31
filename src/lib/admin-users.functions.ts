@@ -201,6 +201,26 @@ export const adminSetPlatformAdmin = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const adminDeleteUser = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { targetUserId: string }) => {
+    if (!data?.targetUserId) throw new Error("Missing user");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    const { transaction } = await import("@/integrations/mysql/pool");
+    await requireAdmin(context.userId);
+    if (data.targetUserId === context.userId) throw new Error("Anda tidak bisa menghapus akun sendiri");
+    await transaction(async (conn) => {
+      await conn.execute("DELETE FROM workspace_members WHERE user_id = ?", [data.targetUserId]);
+      await conn.execute("DELETE FROM user_roles WHERE user_id = ?", [data.targetUserId]);
+      await conn.execute("DELETE FROM profiles WHERE id = ?", [data.targetUserId]);
+      await conn.execute("DELETE FROM app_users WHERE id = ?", [data.targetUserId]);
+    });
+    return { ok: true };
+  });
+
 export interface AdminAssignWorkspaceInput {
   targetUserId: string;
   workspaceId: string;

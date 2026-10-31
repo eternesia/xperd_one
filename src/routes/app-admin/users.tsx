@@ -15,6 +15,7 @@ import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 import {
   adminAssignWorkspace,
   adminCreateUser,
+  adminDeleteUser,
   adminListUsers,
   adminListWorkspaces,
   adminRemoveWorkspaceAccess,
@@ -113,7 +114,33 @@ function AdminUsersPage() {
     );
   }, [usersQ.data, search]);
 
-  const pg = usePaged(rows);
+  const groups = useMemo(() => {
+    type Group = { key: string; title: string; users: { u: AdminUserRow; role: string | null }[] };
+    const map = new Map<string, Group>();
+    for (const u of rows) {
+      if (!u.memberships.length) {
+        const g: Group = map.get("__none") ?? { key: "__none", title: "Tanpa workspace", users: [] };
+        g.users.push({ u, role: null });
+        map.set("__none", g);
+      }
+      for (const m of u.memberships) {
+        const g: Group = map.get(m.workspaceId) ?? { key: m.workspaceId, title: `${m.tenantName} / ${m.workspaceName}`, users: [] };
+        g.users.push({ u, role: m.role });
+        map.set(m.workspaceId, g);
+      }
+    }
+    return [...map.values()].sort((a, b) => (a.key === "__none" ? 1 : b.key === "__none" ? -1 : a.title.localeCompare(b.title)));
+  }, [rows]);
+  const pg = usePaged(groups, (g) => g.title, 5);
+
+  const deleteM = useMutation({
+    mutationFn: (targetUserId: string) => adminDeleteUser({ data: { targetUserId } }),
+    onSuccess: () => {
+      toast.success("User dihapus");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-6">
@@ -122,110 +149,85 @@ function AdminUsersPage() {
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-navy dark:text-primary-foreground">
             <Users className="h-5 w-5 text-gold" /> Users
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Manage every account on the platform, their admin rights, and which workspace they can open.
-          </p>
+          <p className="text-sm text-muted-foreground">Akun dikelompokkan per workspace.</p>
         </div>
         <div className="flex gap-2">
-          <Input
-            placeholder="Search name, email, workspace…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-56"
-          />
+          <Input placeholder="Cari nama, email, workspace…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56" />
           <Button variant="gold" onClick={() => setCreateOpen(true)}>
             <Plus /> New user
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Platform role</TableHead>
-                <TableHead>Workspace access</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {usersQ.isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                    Loading…
-                  </TableCell>
-                </TableRow>
-              ) : rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                    No users found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pg.rows.map((u) => {
-                  const isAdmin = u.platformRoles.includes("admin");
-                  return (
-                    <TableRow key={u.userId}>
-                      <TableCell>
-                        <div className="font-medium">{u.fullName ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground">{u.email ?? "—"}</div>
-                        {u.companyName ? <div className="text-xs text-muted-foreground">{u.companyName}</div> : null}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={isAdmin}
-                            onCheckedChange={(v) => roleM.mutate({ targetUserId: u.userId, makeAdmin: v })}
-                          />
-                          <span className="text-xs text-muted-foreground">{isAdmin ? "Super admin" : "Customer"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {u.memberships.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">No workspace</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5">
-                            {u.memberships.map((m) => (
-                              <Badge key={m.workspaceId} variant="secondary" className="gap-1 border-0">
-                                {m.tenantName} / {m.workspaceName} · {m.role}
-                                <button
-                                  type="button"
-                                  aria-label="Remove access"
-                                  className="ml-1 text-muted-foreground hover:text-destructive"
-                                  onClick={() => revokeM.mutate({ targetUserId: u.userId, workspaceId: m.workspaceId })}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            ))}
+      {usersQ.isLoading ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>
+      ) : groups.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">No users found.</p>
+      ) : (
+        pg.rows.map((g) => (
+          <Card key={g.key}>
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="font-medium">{g.title}</h2>
+              <Badge variant="secondary">{g.users.length} user</Badge>
+            </div>
+            <CardContent className="overflow-x-auto p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Platform role</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {g.users.map(({ u, role }) => {
+                    const isAdmin = u.platformRoles.includes("admin");
+                    return (
+                      <TableRow key={u.userId}>
+                        <TableCell>
+                          <div className="font-medium">{u.fullName ?? "—"}</div>
+                          <div className="text-xs text-muted-foreground">{u.email ?? "—"}</div>
+                        </TableCell>
+                        <TableCell>
+                          {role ? (
+                            <Badge variant="outline" className="gap-1">
+                              {role}
+                              <button type="button" aria-label="Cabut akses" className="ml-1 text-muted-foreground hover:text-destructive" onClick={() => revokeM.mutate({ targetUserId: u.userId, workspaceId: g.key })}>
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch checked={isAdmin} onCheckedChange={(v) => roleM.mutate({ targetUserId: u.userId, makeAdmin: v })} />
+                            <span className="text-xs text-muted-foreground">{isAdmin ? "Super admin" : "Customer"}</span>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAccess({ user: u, workspaceId: wsQ.data?.[0]?.id ?? "", role: "staff" })}
-                          >
-                            <UserPlus /> Access
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setPwUser({ user: u, password: "" })}>
-                            <KeyRound /> Password
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-          <TablePager {...pg} />
-        </CardContent>
-      </Card>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="outline" onClick={() => setAccess({ user: u, workspaceId: wsQ.data?.[0]?.id ?? "", role: "staff" })}>
+                              <UserPlus /> Access
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setPwUser({ user: u, password: "" })}>
+                              <KeyRound /> Password
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-destructive" disabled={deleteM.isPending} onClick={() => { if (window.confirm(`Hapus akun ${u.email ?? ""} secara permanen?`)) deleteM.mutate(u.userId); }}>
+                              <Trash2 /> Hapus
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        ))
+      )}
+      <TablePager {...pg} />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>

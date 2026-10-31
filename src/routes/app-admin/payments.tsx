@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
@@ -14,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
+import { testDokuCheckout } from "@/lib/payment-gateway.functions";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 
 export const Route = createFileRoute("/app-admin/payments")({
@@ -54,6 +56,12 @@ const PROVIDERS = ["midtrans", "xendit", "doku", "stripe", "manual_transfer"];
 
 function PaymentsPage() {
   const qc = useQueryClient();
+  const testCheckout = useServerFn(testDokuCheckout);
+  const test = useMutation({
+    mutationFn: (gatewayId: string) => testCheckout({ data: { gatewayId } }),
+    onSuccess: (r) => window.location.assign(r.url),
+    onError: (e: Error) => toast.error(e.message),
+  });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<GatewayForm>(EMPTY);
 
@@ -80,6 +88,11 @@ function PaymentsPage() {
         instructions: v.instructions || null,
         sort_order: Number(v.sort_order) || 0,
       };
+      if (
+        v.provider === "doku" &&
+        (!v.merchant_id.trim() || (v.is_active && !v.server_key.trim() && !v.has_server_key && !v.server_key_secret_name))
+      )
+        throw new Error("Isi Client ID dan Secret Key DOKU sebelum mengaktifkan gateway.");
       await adminSave({ data: { table: "payment_gateways", id: v.id ?? undefined, data: payload } });
     },
     onSuccess: () => {
@@ -160,6 +173,11 @@ function PaymentsPage() {
                     <Badge variant={g.is_active ? "default" : "secondary"}>{g.is_active ? "Active" : "Inactive"}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
+                    {g.provider === "doku" && g.mode === "sandbox" && (
+                      <Button variant="outline" size="sm" disabled={test.isPending} onClick={() => test.mutate(g.id)}>
+                        Uji checkout
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -209,7 +227,23 @@ function PaymentsPage() {
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(form); }}>
             <div className="grid gap-4 sm:grid-cols-2">
               <AdminField label="Provider">
-                <AdminSelect value={form.provider} onChange={(v: string) => setForm({ ...form, provider: v })}>
+                <AdminSelect
+                  value={form.provider}
+                  onChange={(v: string) =>
+                    setForm({
+                      ...form,
+                      provider: v,
+                      ...(v === "doku"
+                        ? {
+                            display_name: "DOKU Checkout",
+                            client_key: "",
+                            server_key_secret_name: "",
+                            callback_url: `${window.location.origin}/api/public/webhooks/wallet-doku`,
+                          }
+                        : {}),
+                    })
+                  }
+                >
                   {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </AdminSelect>
               </AdminField>
@@ -218,27 +252,31 @@ function PaymentsPage() {
               </AdminField>
               <AdminField label="Mode">
                 <AdminSelect value={form.mode} onChange={(v: string) => setForm({ ...form, mode: v })}>
-                  <option value="sandbox">sandbox</option>
+                  <option value="sandbox">Test (sandbox)</option>
                   <option value="live">live</option>
                 </AdminSelect>
               </AdminField>
               <AdminField label="Sort order">
                 <Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} />
               </AdminField>
-              <AdminField label="Merchant ID">
+              <AdminField label={form.provider === "doku" ? "DOKU Client ID" : "Merchant ID"}>
                 <Input value={form.merchant_id} onChange={(e) => setForm({ ...form, merchant_id: e.target.value })} />
               </AdminField>
-              <AdminField label="Client key (publishable)">
-                <Input value={form.client_key} onChange={(e) => setForm({ ...form, client_key: e.target.value })} />
-              </AdminField>
-              <AdminField label="Server key secret name">
-                <Input
-                  value={form.server_key_secret_name}
-                  onChange={(e) => setForm({ ...form, server_key_secret_name: e.target.value })}
-                  placeholder="MIDTRANS_SERVER_KEY"
-                />
-              </AdminField>
-              <AdminField label="Server key (rahasia)">
+              {form.provider !== "doku" && (
+                <AdminField label="Client key (publishable)">
+                  <Input value={form.client_key} onChange={(e) => setForm({ ...form, client_key: e.target.value })} />
+                </AdminField>
+              )}
+              {form.provider !== "doku" && (
+                <AdminField label="Server key secret name">
+                  <Input
+                    value={form.server_key_secret_name}
+                    onChange={(e) => setForm({ ...form, server_key_secret_name: e.target.value })}
+                    placeholder="MIDTRANS_SERVER_KEY"
+                  />
+                </AdminField>
+              )}
+              <AdminField label={form.provider === "doku" ? "DOKU Secret Key" : "Server key (rahasia)"}>
                 <Input
                   id="gw-server-key"
                   type="password"
@@ -247,9 +285,25 @@ function PaymentsPage() {
                   onChange={(e) => setForm({ ...form, server_key: e.target.value })}
                   placeholder={form.has_server_key ? "Tersimpan — kosongkan untuk mempertahankan" : "Tempel server key dari dashboard gateway"}
                 />
+                {form.provider === "doku" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    DOKU Checkout NON-SNAP memakai Client ID dan Secret Key. API Key, Public Key, dan Merchant Public Key tidak
+                    diperlukan. Kunci tidak ditampilkan kembali.
+                  </p>
+                )}
               </AdminField>
               <AdminField label="Callback / webhook URL">
-                <Input value={form.callback_url} onChange={(e) => setForm({ ...form, callback_url: e.target.value })} />
+                <Input
+                  readOnly={form.provider === "doku"}
+                  value={form.callback_url}
+                  onChange={(e) => setForm({ ...form, callback_url: e.target.value })}
+                />
+                {form.provider === "doku" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Daftarkan URL ini sebagai Notification URL DOKU setelah versi ini terpasang di domain tersebut. Callback browser
+                    tidak mengkredit saldo; hanya notifikasi terverifikasi.
+                  </p>
+                )}
               </AdminField>
             </div>
             <AdminField label="Payment instructions (shown to tenant)">

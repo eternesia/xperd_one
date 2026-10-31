@@ -26,6 +26,8 @@ async function renewAfterTopup(tenantId: string) {
 }
 const keyOf = (g: { server_key?: string | null; server_key_secret_name: string | null }) =>
   g.server_key || process.env[g.server_key_secret_name || "MIDTRANS_SERVER_KEY"];
+const dokuKeyOf = (g: { server_key?: string | null; server_key_secret_name: string | null }) =>
+  g.server_key || process.env[g.server_key_secret_name || "DOKU_SECRET_KEY"];
 
 async function assertMember(tenantId: string, userId: string) {
   const { isTenantMember } = await import("@/lib/wallet.server");
@@ -87,9 +89,11 @@ export const getWallet = createServerFn({ method: "POST" })
         display_name: string;
         instructions: string | null;
         mode: string;
+        merchant_id: string | null;
         server_key_secret_name: string | null;
+        server_key: string | null;
       }>(
-        "SELECT id, provider, display_name, instructions, mode, server_key_secret_name FROM payment_gateways WHERE is_active = 1 AND provider IN ('manual_transfer','midtrans') ORDER BY sort_order",
+        "SELECT id, provider, display_name, instructions, mode, merchant_id, server_key_secret_name, server_key FROM payment_gateways WHERE is_active = 1 AND provider IN ('manual_transfer','midtrans','doku') ORDER BY sort_order",
       ),
       canManageTenantWallet(data.tenantId, context.userId),
     ]);
@@ -117,7 +121,9 @@ export const getWallet = createServerFn({ method: "POST" })
         provider: g.provider,
         display_name: g.display_name,
         instructions: g.instructions,
-        available: g.provider === "manual_transfer" || !!keyOf(g),
+        available:
+          g.provider === "manual_transfer" ||
+          (g.provider === "doku" ? !!g.merchant_id && !!dokuKeyOf(g) : !!keyOf(g)),
       })),
     };
   });
@@ -136,14 +142,25 @@ export const createWalletTopup = createServerFn({ method: "POST" })
       provider: string;
       mode: string;
       instructions: string | null;
+      merchant_id: string | null;
       server_key_secret_name: string | null;
       server_key: string | null;
     }>(
-      "SELECT id, provider, mode, instructions, server_key_secret_name, server_key FROM payment_gateways WHERE id = ? AND is_active = 1",
+      "SELECT id, provider, mode, instructions, merchant_id, server_key_secret_name, server_key FROM payment_gateways WHERE id = ? AND is_active = 1",
       [data.gatewayId],
     );
-    if (!gateway || !["manual_transfer", "midtrans"].includes(gateway.provider))
+    if (!gateway || !["manual_transfer", "midtrans", "doku"].includes(gateway.provider))
       throw new Error("Metode pembayaran tidak tersedia.");
+    // DOKU: tujuan kembali browser hanya halaman billing; tidak pernah menyelesaikan saldo.
+    let returnUrl: string | undefined;
+    if (gateway.provider === "doku" && data.returnPath) {
+      const { getRequest } = await import("@tanstack/react-start/server");
+      const { publicOrigin } = await import("@/lib/crm-media.server");
+      const { walletReturnUrl } = await import("@/lib/wallet/return-url");
+      returnUrl = walletReturnUrl(publicOrigin(getRequest().url), data.returnPath);
+    }
+    const dokuModule = gateway.provider === "doku" ? await import("@/lib/wallet/doku.server") : null;
+    const dokuCredentials = dokuModule ? dokuModule.getDokuCredentials(gateway) : null;
     const key = gateway.provider === "midtrans" ? keyOf(gateway) : undefined;
     if (gateway.provider === "midtrans" && !key)
       throw new Error("Pembayaran otomatis belum dikonfigurasi admin.");
@@ -165,6 +182,36 @@ export const createWalletTopup = createServerFn({ method: "POST" })
           ? "Pengajuan ini sudah dipakai untuk transaksi lain."
           : "Pengajuan top-up gagal. Coba lagi.",
       );
+    }
+    if (dokuModule && dokuCredentials && !topup.payment_url && topup.status === "pending") {
+      const reference = `WAL-${topup.id}`;
+      // Klaim sekali: kegagalan ambigu tidak diulang buta (pakai "Cek"), supaya tidak ada pembayaran ganda.
+      const { result } = await import("@/integrations/mysql/pool");
+      const claimed = await result(
+        "UPDATE topups SET gateway_ref = ?, checkout_started_at = NOW(6) WHERE id = ? AND status = 'pending' AND checkout_started_at IS NULL",
+        [reference, topup.id],
+      );
+      if (!claimed.affectedRows)
+        throw new Error(
+          "Checkout sudah diproses. Muat ulang riwayat, lalu cek pembayaran; jangan membuat pengajuan ulang.",
+        );
+      let url: string;
+      try {
+        url = await dokuModule.createDokuCheckout(
+          dokuCredentials,
+          reference,
+          Number(topup.amount_idr),
+          returnUrl,
+        );
+      } catch {
+        throw new Error(
+          "Checkout DOKU belum terkonfirmasi. Pengajuan tersimpan; cek status atau hubungi admin. Jangan membuat pembayaran ganda.",
+        );
+      }
+      await execute("UPDATE topups SET payment_url = ? WHERE id = ?", [url, topup.id]).catch(() => {
+        throw new Error("Tautan belum tersimpan. Cek status pembayaran sebelum mengulang.");
+      });
+      return { id: topup.id, url, instructions: gateway.instructions ?? "", status: topup.status };
     }
     if (
       gateway.provider === "midtrans" &&
@@ -374,18 +421,45 @@ export const reconcileWalletTopup = createServerFn({ method: "POST" })
     );
     if (!row) throw new Error("Pembayaran otomatis tidak tersedia.");
     await assertMember(row.tenant_id, context.userId);
-    if (row.gateway !== "midtrans" || !row.gateway_ref || !row.gateway_id)
+    if (!["midtrans", "doku"].includes(row.gateway) || !row.gateway_ref || !row.gateway_id)
       throw new Error("Pembayaran otomatis tidak tersedia.");
     if (row.status === "paid") return { status: "paid" };
     const gateway = await executeOne<{
+      provider: string;
       mode: string;
+      merchant_id: string | null;
       server_key_secret_name: string | null;
       server_key: string | null;
     }>(
-      "SELECT mode, server_key_secret_name, server_key FROM payment_gateways WHERE id = ?",
+      "SELECT provider, mode, merchant_id, server_key_secret_name, server_key FROM payment_gateways WHERE id = ?",
       [row.gateway_id],
     );
     if (!gateway) throw new Error("Gateway tidak tersedia.");
+    if (row.gateway === "doku") {
+      if (gateway.provider !== "doku") throw new Error("Gateway tidak cocok.");
+      const { getDokuCredentials, readDokuStatus, validateDokuPayment } =
+        await import("@/lib/wallet/doku.server");
+      const { walletSettleTopup } = await import("@/lib/wallet.server");
+      const notice = await readDokuStatus(getDokuCredentials(gateway), row.gateway_ref);
+      if (validateDokuPayment(notice, row.gateway_ref, Number(row.amount_idr))) {
+        try {
+          await walletSettleTopup({
+            id: row.id,
+            approve: true,
+            note: "Konfirmasi status DOKU",
+            gatewayVerified: true,
+          });
+        } catch {
+          throw new Error("Saldo belum dapat diperbarui.");
+        }
+        await renewAfterTopup(row.tenant_id);
+        return { status: "paid" };
+      }
+      return {
+        status:
+          notice.transaction.status === "PENDING" ? "pending" : notice.transaction.status.toLowerCase(),
+      };
+    }
     const key = keyOf(gateway);
     if (!key) throw new Error("Gateway belum dikonfigurasi.");
     const { readMidtransStatus, isSettledPayment } = await import("@/lib/wallet/gateway.server");

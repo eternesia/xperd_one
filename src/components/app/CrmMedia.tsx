@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Film, Folder, FolderPlus, ImageIcon, Loader2, Trash2, UploadCloud } from "lucide-react";
+import {
+  Check,
+  Film,
+  Folder,
+  FolderPlus,
+  ImageIcon,
+  Loader2,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -217,6 +226,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
   const [term, setTerm] = useState("");
   const [kind, setKind] = useState<"all" | "image" | "video">("all");
   const [preview, setPreview] = useState<MediaItem | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
 
   const [folder, setFolder] = useState<string>("__all");
   const [extraFolders, setExtraFolders] = useState<string[]>([]);
@@ -246,7 +256,9 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
   }, [items, kind, folder, sort]);
   const move = useMutation({
     mutationFn: async ({ m, to }: { m: MediaItem; to: string | null }) => {
-      await saveWorkspaceRow({ data: { table: "crm_media", workspaceId, id: m.id, data: { folder: to } } });
+      await saveWorkspaceRow({
+        data: { table: "crm_media", workspaceId, id: m.id, data: { folder: to } },
+      });
       return to;
     },
     onSuccess: (to) => {
@@ -257,7 +269,10 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
   const newFolder = () => {
-    const name = window.prompt(id ? "Nama folder baru" : "New folder name")?.trim().slice(0, 60);
+    const name = window
+      .prompt(id ? "Nama folder baru" : "New folder name")
+      ?.trim()
+      .slice(0, 60);
     if (!name) return;
     setExtraFolders((f) => (f.includes(name) ? f : [...f, name]));
     setFolder(name);
@@ -282,6 +297,29 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const bulkRemove = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const rows = items.filter((m) => ids.includes(m.id));
+      for (const m of rows) {
+        await deleteWorkspaceRow({ data: { table: "crm_media", workspaceId, id: m.id } });
+        await deleteWorkspaceFile({ data: { workspaceId, path: m.file_path } }).catch(
+          () => undefined,
+        );
+      }
+      return rows.length;
+    },
+    onSuccess: (n) => {
+      setPicked([]);
+      qc.invalidateQueries({ queryKey: ["crm-media", workspaceId] });
+      toast.success(id ? `${n} file dihapus` : `${n} files deleted`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const togglePick = (mid: string) =>
+    setPicked((s) => (s.includes(mid) ? s.filter((x) => x !== mid) : [...s, mid]));
+  const pageIds = p.items.map((m) => m.id);
+  const allPicked = pageIds.length > 0 && pageIds.every((x) => picked.includes(x));
 
   return (
     <div className="space-y-6">
@@ -354,7 +392,9 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             onClick={() => setFolder(k)}
             className={cn(
               "flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm",
-              folder === k ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-secondary",
+              folder === k
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-card hover:bg-secondary",
             )}
           >
             <Folder className="h-3.5 w-3.5" />
@@ -442,29 +482,87 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
         </Card>
       ) : (
         <>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4 accent-primary"
+                checked={allPicked}
+                onChange={() =>
+                  setPicked((s) =>
+                    allPicked
+                      ? s.filter((x) => !pageIds.includes(x))
+                      : Array.from(new Set([...s, ...pageIds])),
+                  )
+                }
+              />
+              {id ? "Pilih semua" : "Select all"}
+            </label>
+            {picked.length > 0 && (
+              <>
+                <span className="text-muted-foreground">
+                  {picked.length} {id ? "file dipilih" : "selected"}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setPicked([])}>
+                  {id ? "Batal" : "Clear"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={bulkRemove.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        id
+                          ? `Hapus ${picked.length} file? Tindakan ini tidak bisa dibatalkan.`
+                          : `Delete ${picked.length} files?`,
+                      )
+                    )
+                      bulkRemove.mutate(picked);
+                  }}
+                >
+                  {id ? "Hapus terpilih" : "Delete selected"}
+                </Button>
+              </>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {p.items.map((m) => (
-              <button
+              <div
                 key={m.id}
-                onClick={() => setPreview(m)}
-                className="group overflow-hidden rounded-xl border border-border bg-card text-left"
+                className={cn(
+                  "relative",
+                  picked.includes(m.id) && "rounded-xl ring-2 ring-primary",
+                )}
               >
-                <div className="relative">
-                  <Thumb
-                    m={m}
-                    className="aspect-square w-full transition-transform group-hover:scale-105"
-                  />
-                  {isVideo(m) && (
-                    <Badge className="absolute left-2 top-2 gap-1">
-                      <Film className="h-3 w-3" /> Video
-                    </Badge>
-                  )}
-                </div>
-                <div className="p-2">
-                  <p className="truncate text-xs font-medium">{m.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{fmtSize(m.size_bytes)}</p>
-                </div>
-              </button>
+                <input
+                  type="checkbox"
+                  aria-label={m.name}
+                  checked={picked.includes(m.id)}
+                  onChange={() => togglePick(m.id)}
+                  className="absolute right-2 top-2 z-10 size-5 accent-primary"
+                />
+                <button
+                  onClick={() => (picked.length ? togglePick(m.id) : setPreview(m))}
+                  className="group w-full overflow-hidden rounded-xl border border-border bg-card text-left"
+                >
+                  <div className="relative">
+                    <Thumb
+                      m={m}
+                      className="aspect-square w-full transition-transform group-hover:scale-105"
+                    />
+                    {isVideo(m) && (
+                      <Badge className="absolute left-2 top-2 gap-1">
+                        <Film className="h-3 w-3" /> Video
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <p className="truncate text-xs font-medium">{m.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{fmtSize(m.size_bytes)}</p>
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
           <PaginationBar p={p} />

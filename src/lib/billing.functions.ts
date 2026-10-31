@@ -7,7 +7,7 @@ export const listPaymentMethods = createServerFn({ method: "GET" })
   .handler(async () => {
     const { execute } = await import("@/integrations/mysql/pool");
     return execute(
-      "SELECT id, provider, display_name, mode, instructions, sort_order FROM payment_gateways WHERE is_active = 1 ORDER BY sort_order ASC",
+      "SELECT id, provider, display_name, mode, instructions, sort_order FROM payment_gateways WHERE is_active = 1 AND provider IN ('manual_transfer', 'midtrans') ORDER BY sort_order ASC",
     );
   });
 

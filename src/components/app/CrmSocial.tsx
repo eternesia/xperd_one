@@ -269,8 +269,8 @@ function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: 
                   ? "Menyinkronkan..."
                   : "Syncing..."
                 : id
-                  ? "Sinkronkan ulang"
-                  : "Resync"}
+                  ? "Sinkronkan"
+                  : "Sync"}
             </Button>
           </>
         )}
@@ -963,7 +963,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
               disabled={syncPosts.isPending}
             >
               <RefreshCw className={cn("h-4 w-4", syncPosts.isPending && "animate-spin")} />{" "}
-              {id ? "Sinkron dari Tebar" : "Sync from Tebar"}
+              {syncPosts.isPending ? (id ? "Menyinkronkan..." : "Syncing...") : id ? "Sinkronkan" : "Sync"}
             </Button>
           )}
           <Button variant="outline" onClick={() => goSub("social-accounts")}>
@@ -1095,11 +1095,6 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-sm font-medium">
-                          {p.source === "tebar" && (
-                            <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
-                              Tebar
-                            </Badge>
-                          )}
                           <span className="truncate">{p.caption || p.title}</span>
                         </div>
                         <p className="truncate text-xs text-muted-foreground">
@@ -1208,8 +1203,8 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                 {editing.source === "tebar" && (
                   <p className="rounded border border-gold/40 bg-gold/10 p-2 text-xs">
                     {id
-                      ? "Postingan ini dibuat di Tebar dan hanya ditampilkan di sini. Ubah atau jadwalkan ulang dari Tebar."
-                      : "This post was created in Tebar and is shown here read-only. Edit or reschedule it in Tebar."}
+                      ? "Postingan tersinkron ini hanya dapat dilihat. Perubahan dan penjadwalan ulang belum tersedia di sini."
+                      : "This synced post is read-only. Editing and rescheduling are not available here yet."}
                   </p>
                 )}
                 {editing.last_error &&

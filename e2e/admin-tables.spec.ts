@@ -46,7 +46,7 @@ test.afterAll(async () => {
 const PAGES: { path: string; search: string | RegExp; table: string | null }[] = [
   { path: "tenancy", search: "Search tenant, subdomain, or PIC email", table: null },
   { path: "registrations", search: "Search company, subdomain, or email", table: null },
-  { path: "users", search: "Search name, email, workspace…", table: null },
+  { path: "users", search: "Cari nama, email, workspace…", table: null },
   { path: "invoices", search: "Cari invoice, tenant, status…", table: "invoices" },
   { path: "packages", search: "Cari…", table: "packages" },
   { path: "addons", search: "Cari tenant atau add-on…", table: "tenant_addons" },

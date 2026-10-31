@@ -69,6 +69,7 @@ import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/a
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
+import { Route as ApiPublicWebhooksWalletDokuRouteImport } from './routes/api/public/webhooks/wallet-doku'
 import { Route as ApiPublicWebhooksWalletMidtransRouteImport } from './routes/api/public/webhooks/wallet-midtrans'
 import { Route as AppWWorkspaceIdIndexRouteImport } from './routes/app/w.$workspaceId.index'
 import { Route as AppWWorkspaceIdModuleIdRouteImport } from './routes/app/w.$workspaceId.$moduleId'
@@ -383,6 +384,12 @@ const ApiPublicWebhooksMidtransRoute =
     path: '/api/public/webhooks/midtrans',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicWebhooksWalletDokuRoute =
+  ApiPublicWebhooksWalletDokuRouteImport.update({
+    id: '/api/public/webhooks/wallet-doku',
+    path: '/api/public/webhooks/wallet-doku',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWebhooksWalletMidtransRoute =
   ApiPublicWebhooksWalletMidtransRouteImport.update({
     id: '/api/public/webhooks/wallet-midtrans',
@@ -504,6 +511,7 @@ export interface FileRoutesByFullPath {
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
+  '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
@@ -572,6 +580,7 @@ export interface FileRoutesByTo {
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
+  '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
   '/app/w/$workspaceId/guide': typeof AppWWorkspaceIdGuideRoute
@@ -645,6 +654,7 @@ export interface FileRoutesById {
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
+  '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdRouteWithChildren
   '/app/w/$workspaceId/billing': typeof AppWWorkspaceIdBillingRoute
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
     | '/api/public/webhooks/midtrans'
+    | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
@@ -787,6 +798,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
     | '/api/public/webhooks/midtrans'
+    | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
     | '/app/w/$workspaceId/billing'
     | '/app/w/$workspaceId/guide'
@@ -859,6 +871,7 @@ export interface FileRouteTypes {
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
     | '/api/public/webhooks/midtrans'
+    | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/billing'
@@ -895,6 +908,7 @@ export interface RootRouteChildren {
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
+  ApiPublicWebhooksWalletDokuRoute: typeof ApiPublicWebhooksWalletDokuRoute
   ApiPublicWebhooksWalletMidtransRoute: typeof ApiPublicWebhooksWalletMidtransRoute
 }
 
@@ -1320,6 +1334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWebhooksMidtransRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/webhooks/wallet-doku': {
+      id: '/api/public/webhooks/wallet-doku'
+      path: '/api/public/webhooks/wallet-doku'
+      fullPath: '/api/public/webhooks/wallet-doku'
+      preLoaderRoute: typeof ApiPublicWebhooksWalletDokuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/wallet-midtrans': {
       id: '/api/public/webhooks/wallet-midtrans'
       path: '/api/public/webhooks/wallet-midtrans'
@@ -1579,6 +1600,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
+  ApiPublicWebhooksWalletDokuRoute: ApiPublicWebhooksWalletDokuRoute,
   ApiPublicWebhooksWalletMidtransRoute: ApiPublicWebhooksWalletMidtransRoute,
 }
 export const routeTree = rootRouteImport

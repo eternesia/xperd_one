@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
+  ChevronDown,
   FileBarChart,
   Gift,
   Users,
@@ -11,7 +12,18 @@ import {
   Menu,
   Plus,
   Wallet,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Share2,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getWallet } from "@/lib/wallet.functions";
@@ -68,6 +80,7 @@ function QallingShell() {
     canViewSubmodule,
     accessLoading,
     tenant,
+    email: userEmail,
     refresh,
   } = useApp();
   const provision = useServerFn(provisionGoogleSignup);
@@ -76,6 +89,10 @@ function QallingShell() {
   const { lang } = useI18n();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => { setCollapsed(localStorage.getItem("qalling-sidebar-collapsed") === "1"); }, []);
+  const toggleCollapsed = () => setCollapsed((c) => { localStorage.setItem("qalling-sidebar-collapsed", c ? "0" : "1"); return !c; });
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -179,79 +196,60 @@ function QallingShell() {
         className={item(pathname === `/qalling/app/${id}`)}
       >
         {sub.icon && <sub.icon className="h-4 w-4 shrink-0" />}
-        <span className="truncate">{lang === "id" ? sub.id_ : sub.en}</span>
+        <span className="truncate qs-label">{lang === "id" ? sub.id_ : sub.en}</span>
       </Link>
-    );
-  };
-  const section = (label: string, ids: string[]) => {
-    const links = ids.map(subLink).filter(Boolean);
-    if (!links.length) return null;
-    return (
-      <div key={label}>
-        <div className="mt-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-          {label}
-        </div>
-        {links}
-      </div>
     );
   };
   const id = lang === "id";
+  const link = (to: string, Icon: typeof Users, label: string) => (
+    <Link key={to} to={to as "/qalling/app"} className={item(pathname === to)} title={label}>
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="truncate qs-label">{label}</span>
+    </Link>
+  );
+  const section = (key: string, label: string, entries: (React.ReactNode | string)[]) => {
+    const links = entries.map((e) => (typeof e === "string" ? subLink(e) : e)).filter(Boolean);
+    if (!links.length) return null;
+    const isOpen = openGroups[key] ?? true;
+    return (
+      <div key={key} className="mt-2">
+        <button
+          type="button"
+          onClick={() => setOpenGroups((g) => ({ ...g, [key]: !isOpen }))}
+          className="qs-label flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80 hover:text-foreground"
+        >
+          {label}
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "-rotate-90")} />
+        </button>
+        {isOpen && <div className="flex flex-col gap-0.5">{links}</div>}
+      </div>
+    );
+  };
+  const settingsItems = [
+    ...(subs.has("social-accounts") ? [{ to: "/qalling/app/social-accounts", icon: Share2, label: id ? "Akun Sosial" : "Social Accounts" }] : []),
+    { to: "/qalling/app/billing", icon: CreditCard, label: id ? "Tagihan & Saldo" : "Billing & Balance" },
+    { to: "/qalling/app/referral", icon: Gift, label: "Referral" },
+  ];
+  const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
   const nav = (
-    <nav className="flex flex-col gap-1">
-      <Link
-        to="/qalling/app"
-        activeOptions={{ exact: true }}
-        className={item(pathname === "/qalling/app")}
-      >
-        <LayoutDashboard className="h-4 w-4" />
-        {id ? "Beranda" : "Home"}
-      </Link>
-      <Link to="/qalling/app/calendar" className={item(pathname === "/qalling/app/calendar")}>
-        <CalendarRange className="h-4 w-4" />
-        {id ? "Kalender Konten" : "Content Calendar"}
-      </Link>
-      <Link to="/qalling/app/clients" className={item(pathname === "/qalling/app/clients")}>
-        <Users className="h-4 w-4" />
-        {id ? "Klien & Brand" : "Clients & Brands"}
-      </Link>
-      <Link to="/qalling/app/reports" className={item(pathname === "/qalling/app/reports")}>
-        <FileBarChart className="h-4 w-4" />
-        {id ? "Laporan" : "Reports"}
+    <nav className="flex flex-col gap-0.5">
+      <Link to="/qalling/app" activeOptions={{ exact: true }} className={item(pathname === "/qalling/app")}>
+        <LayoutDashboard className="h-4 w-4 shrink-0" />
+        <span className="qs-label">{id ? "Beranda" : "Home"}</span>
       </Link>
       {subLink("social-dashboard")}
-      {section(id ? "Studio Konten" : "Content Studio", [
-        "ideas",
-        "post-scheduler",
-        "media",
-        "campaigns",
+      {subLink("leads")}
+      {section("sales", id ? "Penjualan" : "Sales", ["pipeline", "contacts", "follow-ups", "targets"])}
+      {section("content", id ? "Konten" : "Content", [
+        link("/qalling/app/calendar", CalendarRange, id ? "Kalender" : "Calendar"),
+        "post-scheduler", "ideas", "media", "campaigns",
       ])}
-      {section(id ? "Percakapan" : "Conversations", [
-        "inbox",
-        "comments",
-        "automations",
-        "broadcast",
-        "wa-gateway",
-        "templates",
+      {section("chat", id ? "Percakapan" : "Conversations", ["inbox", "comments", "automations", "broadcast", "wa-gateway", "templates"])}
+      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", [
+        link("/qalling/app/clients", Users, id ? "Klien & Brand" : "Clients & Brands"),
+        link("/qalling/app/reports", FileBarChart, id ? "Laporan" : "Reports"),
       ])}
-      {section(id ? "Penjualan" : "Sales", [
-        "leads",
-        "pipeline",
-        "contacts",
-        "follow-ups",
-        "targets",
-      ])}
-      {section("Tender", ["tenders", "doc-library"])}
-      <div className="mt-3 border-t border-border pt-3">
-        {subLink("social-accounts")}
-        <Link to="/qalling/app/billing" className={item(pathname === "/qalling/app/billing")}>
-          <CreditCard className="h-4 w-4" />
-          {id ? "Tagihan & Saldo" : "Billing & Balance"}
-        </Link>
-        <Link to="/qalling/app/referral" className={item(pathname === "/qalling/app/referral")}>
-          <Gift className="h-4 w-4" />
-          {id ? "Referral" : "Referral"}
-        </Link>
-      </div>
+      {section("tender", "Tender", ["tenders", "doc-library"])}
     </nav>
   );
 
@@ -274,6 +272,7 @@ function QallingShell() {
                 </SheetHeader>
                 <div className="mt-6" onClick={() => setMobileMenuOpen(false)}>
                   {nav}
+                  <div className="mt-4 border-t border-border pt-3">{settingsLinks}</div>
                 </div>
               </SheetContent>
             </Sheet>
@@ -299,8 +298,43 @@ function QallingShell() {
       </header>
 
       <div className="flex">
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto border-r border-border bg-card p-4 md:block">
-          {nav}
+        <aside className={cn("sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-border bg-card transition-[width] md:flex", collapsed ? "w-16 [&_.qs-label]:hidden [&_a]:justify-center" : "w-64")}>
+          <div className="flex-1 overflow-y-auto p-3">{nav}</div>
+          <div className="flex items-center gap-1 border-t border-border p-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-left hover:bg-secondary">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}</span>
+                  <span className="qs-label min-w-0">
+                    <span className="block truncate text-sm font-medium">{activeWorkspace?.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{tenant?.name ?? ""}</span>
+                  </span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-60">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                  <p className="truncate font-medium">{activeWorkspace?.name}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {settingsItems.map((s) => (
+                  <DropdownMenuItem key={s.to} onSelect={() => navigate({ to: s.to as "/qalling/app" })}>
+                    <s.icon className="h-4 w-4" />{s.label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={signOut}><LogOut className="h-4 w-4" />{id ? "Keluar" : "Sign out"}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="ghost" size="icon" onClick={toggleCollapsed} aria-label={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"} title={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"} className={cn(collapsed && "hidden")}>
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
+          </div>
+          {collapsed && (
+            <Button variant="ghost" size="icon" onClick={toggleCollapsed} aria-label="Perbesar sidebar" title="Perbesar sidebar" className="mx-auto mb-2">
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          )}
         </aside>
         <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
           <Outlet />

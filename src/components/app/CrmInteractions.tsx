@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, RefreshCw, Pencil, Trash2, MessageSquare, Zap } from "lucide-react";
+import { Plus, RefreshCw, Pencil, Trash2, MessageSquare, Zap, ChevronRight } from "lucide-react";
+import { SocialIcon } from "@/components/qalling/SocialIcon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,6 +228,7 @@ const EMPTY: Omit<Form, "accountId"> = {
 export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Form | null>(null);
+  const [picker, setPicker] = useState(false);
   const manage = useServerFn(manageAutomation);
   const boardFn = useServerFn(getAutomationBoard);
   const query = useQuery({
@@ -269,12 +271,9 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
     <div className="min-w-0 space-y-5">
       <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <h1 className="text-2xl font-medium">Automation</h1>
-        <Button
-          disabled={!query.data?.accounts.length}
-          onClick={() => setForm({ ...EMPTY, accountId: query.data?.accounts[0]?.id ?? "" })}
-        >
+        <Button disabled={!query.data?.accounts.length} onClick={() => setPicker(true)}>
           <Plus className="size-4" />
-          Aturan
+          Buat automation
         </Button>
       </header>
       {query.error && <p className="text-destructive">{query.error.message}</p>}
@@ -376,6 +375,15 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
           <TablePager {...history} />
         </TabsContent>
       </Tabs>
+      <TemplatePicker
+        open={picker}
+        onOpenChange={setPicker}
+        accounts={query.data?.accounts ?? []}
+        onPick={(f) => {
+          setPicker(false);
+          setForm(f);
+        }}
+      />
       <AutomationDialog
         form={form}
         setForm={setForm}
@@ -663,5 +671,222 @@ function AutomationPreview({ f }: { f: Form }) {
         </div>
       )}
     </aside>
+  );
+}
+
+type Tpl = { title: string; hint: string; sample: string; patch: Partial<Form> };
+const IG_COMMENT: Tpl[] = [
+  {
+    title: "Kirim link ke yang komentar",
+    hint: 'Komentar "link"',
+    sample: "Halo kak! Ini link yang kamu minta, tinggal tekan tombol di bawah ya 👇",
+    patch: {
+      name: "Kirim link",
+      trigger: "comment",
+      action: "comment_to_dm",
+      keyword: "link",
+      reply: "Halo kak! Ini link yang kamu minta, tinggal tekan tombol di bawah ya 👇",
+      followGate: false,
+    },
+  },
+  {
+    title: "Jawab pertanyaan harga",
+    hint: 'Komentar "harga", "berapa"',
+    sample: "Halo kak, terima kasih sudah tanya! Harganya…",
+    patch: {
+      name: "Jawab harga",
+      trigger: "comment",
+      action: "comment_to_dm",
+      keyword: "harga,berapa,price",
+      reply: "Halo kak, terima kasih sudah tanya! Harganya ",
+      followGate: false,
+    },
+  },
+  {
+    title: "Kirim link hanya ke follower",
+    hint: 'Komentar "link", setelah follow',
+    sample: "Makasih sudah follow! Ini linknya, tekan tombol di bawah ya 👇",
+    patch: {
+      name: "Link khusus follower",
+      trigger: "comment",
+      action: "comment_to_dm",
+      keyword: "link",
+      reply: "Makasih sudah follow! Ini linknya, tekan tombol di bawah ya 👇",
+      followGate: true,
+    },
+  },
+  {
+    title: "Balas semua komentar",
+    hint: "Komentar apa saja",
+    sample: "Makasih sudah komentar! 🙏",
+    patch: {
+      name: "Balas semua komentar",
+      trigger: "comment",
+      action: "reply",
+      keyword: "",
+      reply: "Makasih sudah komentar! 🙏",
+      followGate: false,
+    },
+  },
+];
+const IG_DM: Tpl[] = [
+  {
+    title: "Balas otomatis DM dengan kata kunci",
+    hint: 'DM "harga", "price"',
+    sample: "Halo kak, terima kasih sudah tanya! Harganya…",
+    patch: {
+      name: "DM kata kunci harga",
+      trigger: "dm",
+      action: "reply",
+      keyword: "harga,price",
+      reply: "Halo kak, terima kasih sudah tanya! Harganya ",
+      followGate: false,
+    },
+  },
+  {
+    title: "Sambut DM pertama",
+    hint: "DM apa saja",
+    sample: "Halo kak, terima kasih sudah menghubungi kami! Kami akan membalas secepatnya ya.",
+    patch: {
+      name: "Sambutan DM",
+      trigger: "dm",
+      action: "reply",
+      keyword: "",
+      reply: "Halo kak, terima kasih sudah menghubungi kami! Kami akan membalas secepatnya ya.",
+      followGate: false,
+    },
+  },
+  {
+    title: "Kirim katalog via DM",
+    hint: 'DM "katalog", "menu"',
+    sample: "Ini katalog lengkap kami kak, tekan tombol di bawah 👇",
+    patch: {
+      name: "Katalog via DM",
+      trigger: "dm",
+      action: "reply",
+      keyword: "katalog,menu,list",
+      reply: "Ini katalog lengkap kami kak, tekan tombol di bawah 👇",
+      followGate: false,
+    },
+  },
+];
+const TH_COMMENT: Tpl[] = [
+  {
+    title: "Balas semua balasan",
+    hint: "Balasan apa saja di thread",
+    sample: "Makasih sudah mampir di thread ini! 🙌",
+    patch: {
+      name: "Balas balasan Threads",
+      trigger: "comment",
+      action: "reply",
+      keyword: "",
+      reply: "Makasih sudah mampir di thread ini! 🙌",
+    },
+  },
+  {
+    title: "Jawab pertanyaan harga",
+    hint: 'Balasan "harga", "berapa"',
+    sample: "Halo kak, info harga lengkap sudah ada di link bio ya 🙏",
+    patch: {
+      name: "Harga di Threads",
+      trigger: "comment",
+      action: "reply",
+      keyword: "harga,berapa",
+      reply: "Halo kak, info harga lengkap sudah ada di link bio ya 🙏",
+    },
+  },
+  {
+    title: "Arahkan ke link",
+    hint: 'Balasan "link", "info"',
+    sample: "Linknya ada di bio kami ya kak 👆",
+    patch: {
+      name: "Link di Threads",
+      trigger: "comment",
+      action: "reply",
+      keyword: "link,info",
+      reply: "Linknya ada di bio kami ya kak 👆",
+    },
+  },
+];
+function TemplatePicker({
+  open,
+  onOpenChange,
+  accounts,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  accounts: { id: string; account_name: string; platform: string }[];
+  onPick: (f: Form) => void;
+}) {
+  const [tab, setTab] = useState<"instagram" | "threads">("instagram");
+  const acc = accounts.find((a) => a.platform === tab);
+  const pick = (t?: Tpl) =>
+    onPick({ ...EMPTY, accountId: acc?.id ?? accounts[0]?.id ?? "", ...(t?.patch ?? {}) });
+  const card = (t: Tpl) => (
+    <button
+      key={t.title}
+      disabled={!acc}
+      onClick={() => pick(t)}
+      className="group w-full rounded-xl border bg-card p-4 text-left transition hover:border-primary/50 hover:shadow-md disabled:opacity-50"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium">{t.title}</p>
+        <ChevronRight className="size-4 text-muted-foreground group-hover:text-primary" />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">{t.hint}</p>
+      <p className="mt-3 w-fit max-w-full rounded-2xl bg-secondary px-3 py-2 text-sm">{t.sample}</p>
+    </button>
+  );
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Automation baru</DialogTitle>
+        </DialogHeader>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "instagram" | "threads")}>
+          <TabsList>
+            <TabsTrigger value="instagram" className="gap-2">
+              <SocialIcon platform="instagram" className="size-4" />
+              Instagram
+            </TabsTrigger>
+            <TabsTrigger value="threads" className="gap-2">
+              <SocialIcon platform="threads" className="size-4" />
+              Threads
+            </TabsTrigger>
+          </TabsList>
+          {!acc && (
+            <p className="mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+              Belum ada akun {tab === "instagram" ? "Instagram" : "Threads"} terhubung.
+            </p>
+          )}
+          <TabsContent value="instagram">
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Komentar di post</p>
+                {IG_COMMENT.map(card)}
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">DM</p>
+                {IG_DM.map(card)}
+              </div>
+            </div>
+          </TabsContent>
+          <TabsContent value="threads">
+            <div className="grid gap-3 md:grid-cols-2">{TH_COMMENT.map(card)}</div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Threads mendukung balasan otomatis untuk komentar/balasan; DM belum tersedia dari
+              platform.
+            </p>
+          </TabsContent>
+        </Tabs>
+        <DialogFooter className="items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">Pilih template, lalu sesuaikan isinya.</p>
+          <Button variant="outline" disabled={!accounts.length} onClick={() => pick()}>
+            Buat dari awal
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

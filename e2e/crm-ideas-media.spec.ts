@@ -139,6 +139,7 @@ test("CRM Ideas: papan Kanban ide (kolom, kartu, pindah, cari)", async ({ page }
 
   /* pindah lewat drag & drop */
   const card = page.getByRole("article").filter({ hasText: "Ide Video Produk" });
+  await expect(card).toBeVisible();
   const a = (await card.boundingBox())!;
   const b = (await section("Done").boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
