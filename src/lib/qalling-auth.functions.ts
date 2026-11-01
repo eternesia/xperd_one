@@ -106,6 +106,8 @@ export const savePlatformAuthSettings = createServerFn({ method: "POST" })
       terms_of_service?: string;
       privacy_policy?: string;
       acceptable_use_policy?: string;
+      google_client_id?: string;
+      google_client_secret?: string;
     }) => {
       if (!Number.isInteger(d?.trial_days) || d.trial_days < 1 || d.trial_days > 90)
         throw new Error("Lama trial harus 1–90 hari");
@@ -134,7 +136,34 @@ export const savePlatformAuthSettings = createServerFn({ method: "POST" })
         data.acceptable_use_policy ?? null,
       ],
     );
+    // Google OAuth Client: ID boleh diubah/dikosongkan; Secret tulis-saja (kosong = pertahankan).
+    if (typeof data.google_client_id === "string")
+      await execute("UPDATE platform_auth_settings SET google_client_id = ? WHERE singleton = 1", [
+        data.google_client_id.trim().slice(0, 255),
+      ]);
+    if (data.google_client_secret?.trim())
+      await execute("UPDATE platform_auth_settings SET google_client_secret = ? WHERE singleton = 1", [
+        data.google_client_secret.trim().slice(0, 255),
+      ]);
     return { ok: true };
+  });
+
+/** Konfigurasi Google untuk Super Admin: Client ID, ada/tidaknya Secret (tidak pernah dikirim), dan Redirect URI. */
+export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }) => {
+    const { hasRole } = await import("@/lib/auth-context.server");
+    if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden");
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const { publicOrigin } = await import("@/lib/crm-media.server");
+    const { loadGoogleConfig, googleRedirectUri } = await import("@/lib/google-oauth.server");
+    const cfg = await loadGoogleConfig();
+    return {
+      client_id: cfg.clientId,
+      has_secret: Boolean(cfg.secret),
+      secret_from_env: cfg.secretFromEnv,
+      redirect_uri: googleRedirectUri(publicOrigin(getRequest().url)),
+    };
   });
 
 export const startQallingSignup = createServerFn({ method: "POST" })

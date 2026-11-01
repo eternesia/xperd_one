@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { savePlatformAuthSettings } from "@/lib/qalling-auth.functions";
+import { getGoogleOAuthConfig, savePlatformAuthSettings } from "@/lib/qalling-auth.functions";
 import { useAuthSettings, type AuthSettings } from "@/components/qalling/qalling-auth";
 
 export const Route = createFileRoute("/app-admin/auth-settings")({
@@ -34,14 +34,27 @@ function AuthSettingsPage() {
     if (data && !form) setForm(data);
   }, [data, form]);
 
+  const gcfg = useQuery({
+    queryKey: ["google-oauth-config"],
+    queryFn: () => getGoogleOAuthConfig(),
+  });
+  const [gid, setGid] = useState<string | null>(null);
+  const [gsecret, setGsecret] = useState("");
+  const clientId = gid ?? gcfg.data?.client_id ?? "";
+
   const save = useMutation({
     mutationFn: async (v: AuthSettings) => {
       if (!Number.isInteger(v.trial_days) || v.trial_days < 1 || v.trial_days > 90)
         throw new Error("Lama trial harus 1–90 hari");
-      await savePlatformAuthSettings({ data: v });
+      await savePlatformAuthSettings({
+        data: { ...v, google_client_id: clientId, google_client_secret: gsecret },
+      });
     },
     onSuccess: () => {
       toast.success("Pengaturan disimpan");
+      setGsecret("");
+      setGid(null);
+      qc.invalidateQueries({ queryKey: ["google-oauth-config"] });
       qc.invalidateQueries({ queryKey: ["platform-auth-settings"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -69,7 +82,7 @@ function AuthSettingsPage() {
         >
           <Row
             title="Masuk & daftar dengan Google"
-            desc="Akun baru langsung aktif dengan trial — tanpa pilihan paket wajib atau kode email. Butuh penyedia OAuth Google (VITE_GOOGLE_OAUTH_URL)."
+            desc="Akun baru langsung aktif dengan trial — tanpa pilihan paket wajib atau kode email."
           >
             <Switch
               checked={form.google_enabled}
@@ -143,11 +156,11 @@ function AuthSettingsPage() {
       )}
 
       <section className="space-y-3 rounded-xl border bg-card p-6 text-sm shadow-sm">
-        <h2 className="text-base font-semibold">Kunci Google sendiri (opsional)</h2>
+        <h2 className="text-base font-semibold">Kunci Google (OAuth Client)</h2>
         <p className="text-muted-foreground">
-          Login Google memakai penyedia OAuth pihak ketiga. Isi VITE_GOOGLE_OAUTH_URL dengan
-          endpoint pengalihan OAuth Anda; buat OAuth Client di Google Cloud Console agar layar
-          persetujuan menampilkan nama dan logo Qalling.
+          Login Google memakai OAuth Client milik Anda, sehingga layar persetujuan menampilkan nama
+          dan logo Qalling. Isi Client ID dan Client Secret dari Google Cloud Console; Secret
+          disimpan tulis-saja dan tidak ditampilkan kembali.
         </p>
         <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
           <li>
@@ -155,12 +168,47 @@ function AuthSettingsPage() {
             domain (mis. qalling.id).
           </li>
           <li>Credentials → Create credentials → OAuth Client ID → Web application.</li>
-          <li>Masukkan alamat callback penyedia OAuth Anda ke “Authorized redirect URIs”.</li>
-          <li>Simpan Client ID & Secret pada penyedia OAuth Anda.</li>
+          <li>
+            Tempel alamat di bawah ke “Authorized redirect URIs”, lalu simpan Client ID dan Client
+            Secret di sini.
+          </li>
         </ol>
-        <p className="text-muted-foreground">
-          Halaman tujuan setelah login:{" "}
-          <code className="rounded bg-secondary px-1.5 py-0.5">{callback}</code>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="google_client_id">Google Client ID</Label>
+            <Input
+              id="google_client_id"
+              value={clientId}
+              onChange={(e) => setGid(e.target.value)}
+              placeholder="123456-abc.apps.googleusercontent.com"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="google_client_secret">Google Client Secret</Label>
+            <Input
+              id="google_client_secret"
+              type="password"
+              autoComplete="new-password"
+              value={gsecret}
+              onChange={(e) => setGsecret(e.target.value)}
+              placeholder={
+                gcfg.data?.secret_from_env
+                  ? "Dari env GOOGLE_CLIENT_SECRET — isi untuk menimpa"
+                  : gcfg.data?.has_secret
+                    ? "Tersimpan — kosongkan untuk mempertahankan"
+                    : "Client Secret dari Google"
+              }
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="google_redirect_uri">Authorized redirect URI</Label>
+          <Input id="google_redirect_uri" readOnly value={gcfg.data?.redirect_uri ?? ""} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Klik “Simpan” di formulir atas untuk menyimpan Client ID dan Secret. Halaman tujuan
+          setelah login: <code className="rounded bg-secondary px-1.5 py-0.5">{callback}</code>
         </p>
       </section>
     </div>

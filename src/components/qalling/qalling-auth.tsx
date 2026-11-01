@@ -33,15 +33,24 @@ export function onSessionIssued() {
 }
 
 /**
- * Login Google memakai penyedia OAuth pihak ketiga (di New 12: Lovable Cloud). Di Old tombol berfungsi bila
- * `VITE_GOOGLE_OAUTH_URL` (endpoint pengalihan OAuth milik Anda) diisi; tanpa itu klik memberi pesan jelas.
+ * Login Google (New 12/13: Lovable Cloud) di Old: server memulai OAuth 2.0 dengan OAuth Client milik Anda
+ * (Admin → Login & Pendaftaran), menerima callback, lalu menerbitkan cookie sesi dan kembali ke /qalling/login.
  */
 async function startGoogleOAuth(): Promise<{ redirected: boolean; error?: Error }> {
-  const url = import.meta.env.VITE_GOOGLE_OAUTH_URL as string | undefined;
-  if (!url) return { redirected: false, error: new Error("Login Google belum dikonfigurasi di instalasi ini") };
-  window.location.href = `${url}${url.includes("?") ? "&" : "?"}redirect_uri=${encodeURIComponent(`${window.location.origin}/qalling/login`)}`;
+  window.location.href = "/api/public/auth/google/start";
   return { redirected: true };
 }
+
+export const GOOGLE_ERRORS: Record<string, string> = {
+  disabled: "Login Google sedang dinonaktifkan.",
+  not_configured: "Login Google belum dikonfigurasi admin.",
+  denied: "Login Google dibatalkan.",
+  state: "Sesi login Google tidak valid. Coba lagi.",
+  exchange: "Gagal masuk dengan Google. Coba lagi.",
+  unverified: "Email Google belum terverifikasi.",
+  disposable: "Email sementara tidak diizinkan. Gunakan email pribadi atau perusahaan yang aktif.",
+  inactive: "Akun ini dinonaktifkan.",
+};
 
 export function GoogleButton({ label, onSignedIn, beforeRedirect }: { label: string; onSignedIn: () => void; beforeRedirect?: () => void }) {
   const [busy, setBusy] = useState(false);

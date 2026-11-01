@@ -17,6 +17,7 @@ import {
 } from "@/lib/qalling-auth.functions";
 import {
   GoogleButton,
+  GOOGLE_ERRORS,
   OtpInput,
   QallingAuthFrame,
   SIGNUP_TIER_KEY,
@@ -56,6 +57,17 @@ function QallingLogin() {
   const verify = useServerFn(verifyLoginCode);
   const provisionGoogle = useServerFn(provisionGoogleSignup);
   const handled = useRef(false);
+
+  // Google gagal (dibatalkan, belum dikonfigurasi, dst.): tampilkan alasannya lalu bersihkan parameter dari URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("google_error");
+    if (!err) return;
+    toast.error(GOOGLE_ERRORS[err] ?? "Gagal masuk dengan Google");
+    params.delete("google_error");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+  }, []);
 
   // After Google returns: create the trial for a new user who picked a plan, then open the app.
   useEffect(() => {

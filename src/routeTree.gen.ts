@@ -78,6 +78,8 @@ import { Route as AppWWorkspaceIdGuideRouteImport } from './routes/app/w.$worksp
 import { Route as AppWWorkspaceIdMaintenanceRouteImport } from './routes/app/w.$workspaceId.maintenance'
 import { Route as AppWWorkspaceIdSettingsRouteImport } from './routes/app/w.$workspaceId.settings'
 import { Route as AppWWorkspaceIdTeamRouteImport } from './routes/app/w.$workspaceId.team'
+import { Route as ApiPublicAuthGoogleCallbackRouteImport } from './routes/api/public/auth/google/callback'
+import { Route as ApiPublicAuthGoogleStartRouteImport } from './routes/api/public/auth/google/start'
 import { Route as AppWWorkspaceIdModuleIdIndexRouteImport } from './routes/app/w.$workspaceId.$moduleId.index'
 import { Route as AppWWorkspaceIdModuleIdSubmoduleIdIndexRouteImport } from './routes/app/w.$workspaceId.$moduleId.$submoduleId.index'
 import { Route as AppWWorkspaceIdModuleIdSubmoduleIdDocIdRouteImport } from './routes/app/w.$workspaceId.$moduleId.$submoduleId.$docId'
@@ -432,6 +434,18 @@ const AppWWorkspaceIdTeamRoute = AppWWorkspaceIdTeamRouteImport.update({
   path: '/team',
   getParentRoute: () => AppWWorkspaceIdRoute,
 } as any)
+const ApiPublicAuthGoogleCallbackRoute =
+  ApiPublicAuthGoogleCallbackRouteImport.update({
+    id: '/api/public/auth/google/callback',
+    path: '/api/public/auth/google/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicAuthGoogleStartRoute =
+  ApiPublicAuthGoogleStartRouteImport.update({
+    id: '/api/public/auth/google/start',
+    path: '/api/public/auth/google/start',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppWWorkspaceIdModuleIdIndexRoute =
   AppWWorkspaceIdModuleIdIndexRouteImport.update({
     id: '/',
@@ -520,6 +534,8 @@ export interface FileRoutesByFullPath {
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
   '/app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/api/public/auth/google/callback': typeof ApiPublicAuthGoogleCallbackRoute
+  '/api/public/auth/google/start': typeof ApiPublicAuthGoogleStartRoute
   '/app/w/$workspaceId/$moduleId/': typeof AppWWorkspaceIdModuleIdIndexRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId/$docId': typeof AppWWorkspaceIdModuleIdSubmoduleIdDocIdRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId/': typeof AppWWorkspaceIdModuleIdSubmoduleIdIndexRoute
@@ -588,6 +604,8 @@ export interface FileRoutesByTo {
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdIndexRoute
+  '/api/public/auth/google/callback': typeof ApiPublicAuthGoogleCallbackRoute
+  '/api/public/auth/google/start': typeof ApiPublicAuthGoogleStartRoute
   '/app/w/$workspaceId/$moduleId': typeof AppWWorkspaceIdModuleIdIndexRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId/$docId': typeof AppWWorkspaceIdModuleIdSubmoduleIdDocIdRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId': typeof AppWWorkspaceIdModuleIdSubmoduleIdIndexRoute
@@ -663,6 +681,8 @@ export interface FileRoutesById {
   '/app/w/$workspaceId/settings': typeof AppWWorkspaceIdSettingsRoute
   '/app/w/$workspaceId/team': typeof AppWWorkspaceIdTeamRoute
   '/app/w/$workspaceId/': typeof AppWWorkspaceIdIndexRoute
+  '/api/public/auth/google/callback': typeof ApiPublicAuthGoogleCallbackRoute
+  '/api/public/auth/google/start': typeof ApiPublicAuthGoogleStartRoute
   '/app/w/$workspaceId/$moduleId/': typeof AppWWorkspaceIdModuleIdIndexRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId/$docId': typeof AppWWorkspaceIdModuleIdSubmoduleIdDocIdRoute
   '/app/w/$workspaceId/$moduleId/$submoduleId/': typeof AppWWorkspaceIdModuleIdSubmoduleIdIndexRoute
@@ -738,6 +758,8 @@ export interface FileRouteTypes {
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
     | '/app/w/$workspaceId/'
+    | '/api/public/auth/google/callback'
+    | '/api/public/auth/google/start'
     | '/app/w/$workspaceId/$moduleId/'
     | '/app/w/$workspaceId/$moduleId/$submoduleId/$docId'
     | '/app/w/$workspaceId/$moduleId/$submoduleId/'
@@ -806,6 +828,8 @@ export interface FileRouteTypes {
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
     | '/app/w/$workspaceId'
+    | '/api/public/auth/google/callback'
+    | '/api/public/auth/google/start'
     | '/app/w/$workspaceId/$moduleId'
     | '/app/w/$workspaceId/$moduleId/$submoduleId/$docId'
     | '/app/w/$workspaceId/$moduleId/$submoduleId'
@@ -880,6 +904,8 @@ export interface FileRouteTypes {
     | '/app/w/$workspaceId/settings'
     | '/app/w/$workspaceId/team'
     | '/app/w/$workspaceId/'
+    | '/api/public/auth/google/callback'
+    | '/api/public/auth/google/start'
     | '/app/w/$workspaceId/$moduleId/'
     | '/app/w/$workspaceId/$moduleId/$submoduleId/$docId'
     | '/app/w/$workspaceId/$moduleId/$submoduleId/'
@@ -910,6 +936,8 @@ export interface RootRouteChildren {
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
   ApiPublicWebhooksWalletDokuRoute: typeof ApiPublicWebhooksWalletDokuRoute
   ApiPublicWebhooksWalletMidtransRoute: typeof ApiPublicWebhooksWalletMidtransRoute
+  ApiPublicAuthGoogleCallbackRoute: typeof ApiPublicAuthGoogleCallbackRoute
+  ApiPublicAuthGoogleStartRoute: typeof ApiPublicAuthGoogleStartRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1397,6 +1425,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWWorkspaceIdTeamRouteImport
       parentRoute: typeof AppWWorkspaceIdRoute
     }
+    '/api/public/auth/google/callback': {
+      id: '/api/public/auth/google/callback'
+      path: '/api/public/auth/google/callback'
+      fullPath: '/api/public/auth/google/callback'
+      preLoaderRoute: typeof ApiPublicAuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/auth/google/start': {
+      id: '/api/public/auth/google/start'
+      path: '/api/public/auth/google/start'
+      fullPath: '/api/public/auth/google/start'
+      preLoaderRoute: typeof ApiPublicAuthGoogleStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/w/$workspaceId/$moduleId/': {
       id: '/app/w/$workspaceId/$moduleId/'
       path: '/'
@@ -1602,6 +1644,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
   ApiPublicWebhooksWalletDokuRoute: ApiPublicWebhooksWalletDokuRoute,
   ApiPublicWebhooksWalletMidtransRoute: ApiPublicWebhooksWalletMidtransRoute,
+  ApiPublicAuthGoogleCallbackRoute: ApiPublicAuthGoogleCallbackRoute,
+  ApiPublicAuthGoogleStartRoute: ApiPublicAuthGoogleStartRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

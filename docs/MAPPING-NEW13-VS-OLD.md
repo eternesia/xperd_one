@@ -30,3 +30,22 @@ tabel/kolom baru lewat migrasi bernomor idempoten (berikutnya **033**) dan terda
 - Perbandingan live (admin, super admin seed): Users kini sama strukturnya. Ditemukan & diperbaiki: Packages menampilkan "Visible0"
   (`is_public_signup` bernilai 0 dirender React) — sekarang `Boolean(Number(...))`.
 - Dev: `docker-compose.yml` menambah `DOKU_API_BASE`. **Prod: jalankan `npm run migrate` manual untuk 032 & 033.**
+
+## Ronde 51 — Login Google (Qalling) di Old
+
+New 12/13 memakai Lovable Cloud (`lovable.auth.signInWithOAuth("google")` + Supabase Auth); itu tidak ikut terbawa ke Old, jadi dibangun sendiri:
+
+- `GET /api/public/auth/google/start`: `state` acak di cookie httpOnly (10 mnt) → alihkan ke layar persetujuan Google
+  (`openid email profile`, `prompt=select_account`). `GET /api/public/auth/google/callback`: cocokkan `state`, tukar `code`,
+  ambil profil (email **harus terverifikasi**), buat/temukan akun (`app_users` tanpa kata sandi + `profiles` + `user_roles`
+  `customer`; email sekali pakai untuk akun baru ditolak), terbitkan cookie sesi `xperd_token`, kembali ke `/qalling/login`.
+  Trial tenant dibuat setelahnya oleh `provisionGoogleSignup` (alur Daftar + paket tetap sama seperti New 13).
+- Kunci diisi Super Admin di Admin → Login & Pendaftaran: **Google Client ID** (terbaca) + **Client Secret** (tulis-saja, kosong =
+  pertahankan) di `platform_auth_settings` (migrasi 034); Redirect URI ditampilkan (`<origin>/api/public/auth/google/callback`,
+  origin dari `APP_PUBLIC_URL` bila ada). Saklar "Masuk & daftar dengan Google" tetap `google_enabled`.
+- Galat kembali ke `/qalling/login?google_error=<kode>` dan tampil sebagai toast (dinonaktifkan, belum dikonfigurasi, dibatalkan,
+  state tak valid, gagal tukar kode, email belum terverifikasi, email sekali pakai, akun nonaktif).
+- Env hanya untuk uji: `GOOGLE_OAUTH_BASE` (token/userinfo, server→server) dan `GOOGLE_OAUTH_AUTH_BASE` (layar persetujuan, dibuka
+  browser). `VITE_GOOGLE_OAUTH_URL` dihapus. Spec: `e2e/qalling-google.spec.ts` (Google tiruan :4595).
+- **Prod:** `npm run migrate` untuk 034; isi Client ID/Secret dari Admin; daftarkan Redirect URI di Google Cloud Console.
+  Verifikasi dengan Google asli menunggu Client ID/Secret.
