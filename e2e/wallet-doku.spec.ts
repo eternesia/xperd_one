@@ -199,7 +199,9 @@ test("DOKU: gateway dari admin (kunci tulis-saja), uji checkout, top-up, webhook
   await expect(dlg.getByText("DOKU Secret Key", { exact: true })).toBeVisible();
   await expect(dlg.getByText("Client key (publishable)")).toHaveCount(0);
   await expect(dlg.getByText("Server key secret name")).toHaveCount(0);
-  await expect(dlg.locator("input[readonly]")).toHaveValue(/\/api\/public\/webhooks\/wallet-doku$/);
+  await expect(dlg.locator("#gw-callback-url")).toHaveValue(/\/api\/public\/webhooks\/wallet-doku$/);
+  // URL webhook bisa diatur sesuai domain klien
+  await dlg.locator("#gw-callback-url").fill("https://qalling.id/api/public/webhooks/wallet-doku");
   await dlg.locator("input:not([type])").nth(0).fill("E2E DOKU");
   const idField = dlg
     .locator("div.space-y-2")
@@ -231,6 +233,7 @@ test("DOKU: gateway dari admin (kunci tulis-saja), uji checkout, top-up, webhook
     merchant_id: CLIENT_ID,
     server_key: SECRET,
     mode: "sandbox",
+    callback_url: "https://qalling.id/api/public/webhooks/wallet-doku",
   });
   expect(Number(gw.is_active)).toBe(1);
 

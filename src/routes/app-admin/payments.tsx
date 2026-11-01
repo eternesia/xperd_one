@@ -238,7 +238,9 @@ function PaymentsPage() {
                             display_name: "DOKU Checkout",
                             client_key: "",
                             server_key_secret_name: "",
-                            callback_url: `${window.location.origin}/api/public/webhooks/wallet-doku`,
+                            callback_url:
+                              form.callback_url ||
+                              `${window.location.origin}/api/public/webhooks/wallet-doku`,
                           }
                         : {}),
                     })
@@ -294,14 +296,16 @@ function PaymentsPage() {
               </AdminField>
               <AdminField label="Callback / webhook URL">
                 <Input
-                  readOnly={form.provider === "doku"}
+                  id="gw-callback-url"
+                  placeholder={form.provider === "doku" ? "https://qalling.id/api/public/webhooks/wallet-doku" : undefined}
                   value={form.callback_url}
                   onChange={(e) => setForm({ ...form, callback_url: e.target.value })}
                 />
                 {form.provider === "doku" && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Daftarkan URL ini sebagai Notification URL DOKU setelah versi ini terpasang di domain tersebut. Callback browser
-                    tidak mengkredit saldo; hanya notifikasi terverifikasi.
+                    Isi dengan domain yang dipakai klien (mis. https://qalling.id), path tetap /api/public/webhooks/wallet-doku, lalu
+                    daftarkan URL ini sebagai Notification URL di dashboard DOKU. Kolom ini hanya catatan; DOKU membaca
+                    URL dari dashboard-nya. Callback browser tidak mengkredit saldo; hanya notifikasi terverifikasi.
                   </p>
                 )}
               </AdminField>
