@@ -155,9 +155,10 @@ export const createWalletTopup = createServerFn({ method: "POST" })
     let returnUrl: string | undefined;
     if (gateway.provider === "doku" && data.returnPath) {
       const { getRequest } = await import("@tanstack/react-start/server");
-      const { publicOrigin } = await import("@/lib/crm-media.server");
+      const { requestOrigin } = await import("@/lib/google-oauth.server");
       const { walletReturnUrl } = await import("@/lib/wallet/return-url");
-      returnUrl = walletReturnUrl(publicOrigin(getRequest().url), data.returnPath);
+      // Domain yang sedang dipakai (qalling.id/xperd.id), https di balik proxy; bukan APP_PUBLIC_URL yang bisa salah (http).
+      returnUrl = walletReturnUrl(requestOrigin(getRequest()), data.returnPath);
     }
     const dokuModule = gateway.provider === "doku" ? await import("@/lib/wallet/doku.server") : null;
     const dokuCredentials = dokuModule ? dokuModule.getDokuCredentials(gateway) : null;

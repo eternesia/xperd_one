@@ -7,7 +7,7 @@ export function walletReturnPath(pathname: string): string {
   throw new Error("Halaman asal pembayaran tidak valid.");
 }
 
-/** `origin` = alamat publik aplikasi (APP_PUBLIC_URL atau asal permintaan); provider hanya menerima HTTPS. */
+/** `origin` = alamat publik aplikasi (domain yang dipakai pengguna); provider hanya menerima HTTPS. */
 export function walletReturnUrl(origin: string, returnPath: string): string {
   if (walletReturnPath(returnPath) !== returnPath)
     throw new Error("Tujuan kembali pembayaran tidak valid.");
