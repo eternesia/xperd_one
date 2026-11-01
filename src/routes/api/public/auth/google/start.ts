@@ -13,12 +13,11 @@ export const Route = createFileRoute("/api/public/auth/google/start")({
         const cfg = await g.loadGoogleConfig();
         if (!cfg.enabled) return back("disabled");
         if (!cfg.clientId || !cfg.secret) return back("not_configured");
-        const { publicOrigin } = await import("@/lib/crm-media.server");
         const state = randomBytes(24).toString("hex");
         const url = new URL(g.googleUrls().auth);
         url.search = new URLSearchParams({
           client_id: cfg.clientId,
-          redirect_uri: g.googleRedirectUri(publicOrigin(request.url)),
+          redirect_uri: g.googleRedirectUri(g.requestOrigin(request)),
           response_type: "code",
           scope: "openid email profile",
           state,

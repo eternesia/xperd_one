@@ -38,6 +38,23 @@ export async function loadGoogleConfig() {
   };
 }
 
+/**
+ * Origin yang dipakai pengguna (bukan `APP_PUBLIC_URL`): satu aplikasi melayani beberapa domain (mis. qalling.id dan xperd.id),
+ * jadi Redirect URI mengikuti domain saat ini dengan path tetap. Di balik proxy dibaca dari `X-Forwarded-Host/Proto`;
+ * selain localhost, protokol default https. Google hanya menerima URI yang terdaftar, jadi Host palsu tidak berbahaya.
+ */
+export function requestOrigin(request: Request): string {
+  const u = new URL(request.url);
+  const first = (v: string | null) => v?.split(",")[0]?.trim() || null;
+  const host =
+    first(request.headers.get("x-forwarded-host")) || request.headers.get("host") || u.host;
+  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host);
+  const proto =
+    first(request.headers.get("x-forwarded-proto")) ||
+    (local ? u.protocol.replace(":", "") : "https");
+  return `${proto}://${host}`;
+}
+
 export const googleRedirectUri = (origin: string) =>
   `${origin.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`;
 

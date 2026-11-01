@@ -155,14 +155,13 @@ export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
     const { hasRole } = await import("@/lib/auth-context.server");
     if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden");
     const { getRequest } = await import("@tanstack/react-start/server");
-    const { publicOrigin } = await import("@/lib/crm-media.server");
-    const { loadGoogleConfig, googleRedirectUri } = await import("@/lib/google-oauth.server");
+    const { loadGoogleConfig, googleRedirectUri, requestOrigin } = await import("@/lib/google-oauth.server");
     const cfg = await loadGoogleConfig();
     return {
       client_id: cfg.clientId,
       has_secret: Boolean(cfg.secret),
       secret_from_env: cfg.secretFromEnv,
-      redirect_uri: googleRedirectUri(publicOrigin(getRequest().url)),
+      redirect_uri: googleRedirectUri(requestOrigin(getRequest())),
     };
   });
 

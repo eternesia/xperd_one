@@ -28,7 +28,6 @@ export const Route = createFileRoute("/api/public/auth/google/callback")({
           return fail("state");
         const cfg = await g.loadGoogleConfig();
         if (!cfg.enabled || !cfg.clientId || !cfg.secret) return fail("not_configured");
-        const { publicOrigin } = await import("@/lib/crm-media.server");
         const urls = g.googleUrls();
         let email = "";
         let name = "";
@@ -40,7 +39,7 @@ export const Route = createFileRoute("/api/public/auth/google/callback")({
               code,
               client_id: cfg.clientId,
               client_secret: cfg.secret,
-              redirect_uri: g.googleRedirectUri(publicOrigin(request.url)),
+              redirect_uri: g.googleRedirectUri(g.requestOrigin(request)),
               grant_type: "authorization_code",
             }),
             signal: AbortSignal.timeout(15000),

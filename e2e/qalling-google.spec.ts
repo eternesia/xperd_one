@@ -266,6 +266,20 @@ test("GOOGLE: admin mengisi kunci (tulis-saja) → login/daftar OAuth, akun & tr
     [SECRET],
   );
 
+  /* ---------- redirect_uri mengikuti domain yang dipakai (path tetap), termasuk di balik proxy ---------- */
+  const startLoc = async (headers: Record<string, string>) => {
+    const r = await p2.request.get("/api/public/auth/google/start", { headers, maxRedirects: 0 });
+    expect(r.status()).toBe(302);
+    return new URL(r.headers().location).searchParams.get("redirect_uri");
+  };
+  expect(await startLoc({})).toBe(CALLBACK);
+  expect(await startLoc({ "x-forwarded-host": "qalling.id", "x-forwarded-proto": "https" })).toBe(
+    "https://qalling.id/api/public/auth/google/callback",
+  );
+  expect(await startLoc({ "x-forwarded-host": "xperd.id" })).toBe(
+    "https://xperd.id/api/public/auth/google/callback",
+  ); // domain publik tanpa X-Forwarded-Proto → https
+
   /* ---------- 3. daftar dengan Google + paket → akun baru + trial ---------- */
   const before = authReqs.length;
   await p2.goto("/qalling/daftar?paket=pro");

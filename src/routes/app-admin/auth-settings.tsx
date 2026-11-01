@@ -169,8 +169,8 @@ function AuthSettingsPage() {
           </li>
           <li>Credentials → Create credentials → OAuth Client ID → Web application.</li>
           <li>
-            Tempel alamat di bawah ke “Authorized redirect URIs”, lalu simpan Client ID dan Client
-            Secret di sini.
+            Tempel alamat di bawah ke “Authorized redirect URIs” (satu per domain), lalu simpan
+            Client ID dan Client Secret di sini.
           </li>
         </ol>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -203,8 +203,14 @@ function AuthSettingsPage() {
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="google_redirect_uri">Authorized redirect URI</Label>
+          <Label htmlFor="google_redirect_uri">Authorized redirect URI (domain ini)</Label>
           <Input id="google_redirect_uri" readOnly value={gcfg.data?.redirect_uri ?? ""} />
+          <p className="text-xs text-muted-foreground">
+            Alamat mengikuti domain yang dipakai pengguna; path-nya tetap{" "}
+            <code>/api/public/auth/google/callback</code>. Jika Qalling dilayani di lebih dari satu
+            domain (mis. qalling.id dan xperd.id), daftarkan satu URI per domain di Google Cloud
+            Console.
+          </p>
         </div>
         <p className="text-xs text-muted-foreground">
           Klik “Simpan” di formulir atas untuk menyimpan Client ID dan Secret. Halaman tujuan
