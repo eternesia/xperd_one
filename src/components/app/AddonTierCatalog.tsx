@@ -4,7 +4,7 @@ import { Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -24,6 +24,8 @@ import {
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { adminSaveAddonTier, listAddonTiers } from "@/lib/addon-catalog.functions";
 import { validateTierPrice } from "@/lib/entitlements";
+import { QALLING_FEATURE_LABELS } from "@/lib/qalling-catalog";
+import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
 
 const empty = {
   id: "",
@@ -45,6 +47,9 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
     queryKey: ["addon-tiers"],
     queryFn: () => listAddonTiers(),
   });
+  const pg = usePaged(tiers, rowText);
+  const limitValues = JSON.parse(form.limits) as Record<string, number | null>;
+  const featureValues = JSON.parse(form.features) as Record<string, boolean>;
   const save = useMutation({
     mutationFn: async () => {
       const limits = JSON.parse(form.limits) as Record<string, number | null>;
@@ -105,6 +110,7 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
           New tier
         </Button>
       </header>
+      <TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari paket…" />
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -119,7 +125,7 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tiers.map((t) => (
+            {pg.rows.map((t) => (
               <TableRow key={t.id}>
                 <TableCell>
                   <p className="font-medium">{t.name}</p>
@@ -152,8 +158,9 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
           </TableBody>
         </Table>
       </div>
+      <TablePager {...pg} />
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{form.id ? "Edit tier" : "New tier"}</DialogTitle>
           </DialogHeader>
@@ -201,20 +208,51 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
                   onChange={(e) => setForm({ ...form, monthly_price: Number(e.target.value) })}
                 />
               </AdminField>
-              <AdminField label="Limits (JSON)">
-                <Textarea
-                  rows={8}
-                  value={form.limits}
-                  onChange={(e) => setForm({ ...form, limits: e.target.value })}
-                />
-              </AdminField>
-              <AdminField label="Features (JSON)">
-                <Textarea
-                  rows={8}
-                  value={form.features}
-                  onChange={(e) => setForm({ ...form, features: e.target.value })}
-                />
-              </AdminField>
+              {Object.entries({
+                max_accounts: "Akun sosial",
+                max_users: "Pengguna",
+                storage_gb: "Penyimpanan (GB)",
+                monthly_post_limit: "Posting per bulan",
+                max_video_mb: "Batas video (MB)",
+              }).map(([key, label]) => (
+                <AdminField key={key} label={label}>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="Tanpa batas"
+                    value={limitValues[key] ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        limits: JSON.stringify({
+                          ...limitValues,
+                          [key]: e.target.value === "" ? null : Number(e.target.value),
+                        }),
+                      })
+                    }
+                  />
+                </AdminField>
+              ))}
+              <div className="sm:col-span-2">
+                <h3 className="mb-3 text-sm font-medium">Menu & fitur paket</h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Object.entries(QALLING_FEATURE_LABELS).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={featureValues[key] === true}
+                        onCheckedChange={(v) =>
+                          setForm({
+                            ...form,
+                            features: JSON.stringify({ ...featureValues, [key]: v === true }),
+                          })
+                        }
+                      />
+                      {label.id}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <AdminField label="Sort order">
                 <Input
                   type="number"

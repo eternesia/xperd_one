@@ -93,13 +93,18 @@ test("ADMIN add-on: katalog tier, aturan harga, opsi, tier tenant", async ({ pag
     await dlg.locator("input").nth(0).fill("e2e_tier_mid");
     await dlg.locator("input").nth(1).fill("E2E Mid");
     await dlg.locator("input").nth(2).fill(String(price));
-    await dlg
-      .locator("textarea")
-      .nth(0)
-      .fill(
-        '{"max_accounts":20,"max_users":4,"storage_gb":12,"max_video_mb":500,"monthly_post_limit":null}',
-      );
-    await dlg.locator("textarea").nth(1).fill('{"publishing":true,"crm":true}');
+    const num = (label: string, v: string) =>
+      dlg
+        .locator("div.space-y-2")
+        .filter({ hasText: new RegExp(`^${label}`) })
+        .locator("input")
+        .fill(v);
+    await num("Akun sosial", "20");
+    await num("Pengguna", "4");
+    await num("Penyimpanan \\(GB\\)", "12");
+    await num("Batas video \\(MB\\)", "500");
+    await dlg.getByLabel("Posting, jadwal & pustaka media").click();
+    await dlg.getByLabel("Prospek, pipeline & kontak").click();
     await dlg.getByRole("button", { name: "Save tier" }).click();
     return dlg;
   };
@@ -129,12 +134,31 @@ test("ADMIN add-on: katalog tier, aturan harga, opsi, tier tenant", async ({ pag
     ),
   ).toBe(250000);
   await page.keyboard.press("Escape");
-  // fitur harus boolean
+  // form terstruktur: kolom batas & checkbox fitur terisi dari tier yang diedit; kolom kosong = tanpa batas (null)
   await page.getByRole("button", { name: "Edit E2E Mid" }).click();
-  await page.getByRole("dialog").locator("textarea").nth(1).fill('{"crm":"yes"}');
-  await page.getByRole("dialog").getByRole("button", { name: "Save tier" }).click();
-  await expect(page.getByText("Fitur harus true/false").first()).toBeVisible({ timeout: 15_000 });
+  const dlg2 = page.getByRole("dialog");
+  await expect(dlg2.getByLabel("Posting, jadwal & pustaka media")).toBeChecked();
+  await expect(dlg2.getByLabel("Prospek, pipeline & kontak")).toBeChecked();
+  await expect(dlg2.getByLabel("Integrasi AI (MCP/API)")).not.toBeChecked();
+  await dlg2
+    .locator("div.space-y-2")
+    .filter({ hasText: /^Akun sosial/ })
+    .locator("input")
+    .fill("");
+  await dlg2.getByLabel("Integrasi AI (MCP/API)").click();
+  await dlg2.getByRole("button", { name: "Save tier" }).click();
+  await expect(page.getByText("Tier saved").first()).toBeVisible({ timeout: 15_000 });
+  const [mid2] = await q("SELECT limits, features FROM addon_tiers WHERE code = 'e2e_tier_mid'");
+  expect(mid2.limits.max_accounts).toBeNull();
+  expect(mid2.limits.max_users).toBe(4);
+  expect(mid2.features).toEqual({ publishing: true, crm: true, mcp_api: true });
+
+  // pencarian tier (Cari paket…)
   await page.keyboard.press("Escape");
+  await page.getByPlaceholder("Cari paket…").fill("e2e_tier_mid");
+  await expect(page.getByRole("row").filter({ hasText: "E2E Mid" })).toHaveCount(1);
+  await expect(page.getByRole("row").filter({ hasText: "qalling_pro" })).toHaveCount(0);
+  await page.getByPlaceholder("Cari paket…").fill("");
 
   /* ---------- tab Optional extras: ubah harga/jumlah ---------- */
   [optSnap] = (await q(
