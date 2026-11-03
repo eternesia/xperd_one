@@ -103,39 +103,51 @@ test("CRM: sidebar bergrup, Pipeline Kanban drag & drop, kode lead = tertinggi +
   await page.goto(`/app/w/${ws}/crm/pipeline`);
   const aside = page.locator("aside");
   await expect(aside.getByText("Qalling CRM", { exact: true })).toBeVisible({ timeout: 60_000 });
-  const sections = ["Sales", "Messaging", "Publishing", "Analytics", "Tender", "Settings"];
+  const sections = [
+    "Overview",
+    "Sales",
+    "Content",
+    "Conversations",
+    "Clients & Reports",
+    "Tender",
+    "Settings",
+  ];
   for (const s of sections) await expect(aside.getByText(s, { exact: true })).toBeVisible();
   // urutan seksi & item sama dengan live
   const order = await aside.locator("nav > *").allInnerTexts();
   const flat = order.map((x) => x.trim()).filter(Boolean);
   const expected = [
     "Dashboard",
-    "SALES",
+    "OVERVIEW",
+    "Insights",
     "Leads",
+    "SALES",
     "Pipeline",
     "Contacts",
     "Follow Ups",
     "Sales Targets",
-    "MESSAGING",
-    "Broadcast",
-    "WhatsApp Gateway",
-    "Message Templates",
-    "PUBLISHING",
+    "CONTENT",
+    "Calendar",
     "Posts",
     "Ideas",
     "Media",
     "Social Campaigns",
-    "INTERACTION",
-    "Comments",
+    "CONVERSATIONS",
     "Inbox",
+    "Comments",
     "Automations",
-    "ANALYTICS",
-    "Insights",
+    "Broadcast",
+    "WhatsApp Gateway",
+    "Message Templates",
+    "CLIENTS & REPORTS",
+    "Clients & Brands",
+    "Reports",
     "TENDER",
     "Tender Checklist",
     "Document Library",
     "SETTINGS",
     "Social Accounts",
+    "AI & MCP Integration",
   ];
   expect(flat).toEqual(expected);
 
@@ -146,12 +158,12 @@ test("CRM: sidebar bergrup, Pipeline Kanban drag & drop, kode lead = tertinggi +
     "SELECT SUM(estimated_value) AS v FROM crm_leads WHERE workspace_id = ? AND stage = 'new'",
     [ws],
   );
-  await expect(column(page, "New")).toContainText(`${idr(newAgg.v)} · 10%`);
-  await expect(column(page, "Contacted")).toContainText("· 25%");
+  await expect(column(page, "New inquiry")).toContainText(`${idr(newAgg.v)} · 10%`);
+  await expect(column(page, "Follow up")).toContainText("· 25%");
 
   const alpha = page.getByText("PL Alpha", { exact: true });
   await expect(alpha).toBeVisible({ timeout: 30_000 });
-  await dragCard(page, alpha, column(page, "Contacted"));
+  await dragCard(page, alpha, column(page, "Follow up"));
   await expect
     .poll(
       async () =>
@@ -168,7 +180,7 @@ test("CRM: sidebar bergrup, Pipeline Kanban drag & drop, kode lead = tertinggi +
   expect(Number(moved.probability)).toBe(25);
   expect(moved.status).toBe("open");
 
-  await dragCard(page, page.getByText("PL Beta", { exact: true }), column(page, "Won"));
+  await dragCard(page, page.getByText("PL Beta", { exact: true }), column(page, "Closing / Deal"));
   await expect
     .poll(
       async () =>
@@ -187,12 +199,12 @@ test("CRM: sidebar bergrup, Pipeline Kanban drag & drop, kode lead = tertinggi +
       )[0].probability,
     ),
   ).toBe(100);
-  // total kolom Contacted = hitungan SQL
+  // total kolom Follow up = hitungan SQL
   const [cAgg] = await q(
     "SELECT SUM(estimated_value) AS v FROM crm_leads WHERE workspace_id = ? AND stage = 'contacted'",
     [ws],
   );
-  await expect(column(page, "Contacted")).toContainText(`${idr(cAgg.v)} · 25%`);
+  await expect(column(page, "Follow up")).toContainText(`${idr(cAgg.v)} · 25%`);
 
   /* ---------- 3. kode lead baru = tertinggi + 1 ---------- */
   const codes = await q("SELECT code FROM crm_leads WHERE workspace_id = ?", [ws]);

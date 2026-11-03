@@ -9,6 +9,7 @@ import { execute, executeOne, query, result } from "@/integrations/mysql/pool";
 import { sqlDateTime } from "./datetime";
 import { signMediaUrl } from "./crm-media.server";
 import { workspaceHasQalling } from "./social-interactions.server";
+import { deliveryStatus } from "./post-delivery-rules";
 
 /** Basis Graph API; bisa ditimpa (`META_GRAPH_BASE`) untuk server tiruan saat uji. */
 export const GRAPH = (process.env.META_GRAPH_BASE ?? "https://graph.facebook.com/v21.0").replace(
@@ -41,6 +42,7 @@ export async function verifyMetaApp(appId: string, appSecret: string) {
 export interface PublishResultRow {
   account_id: string;
   ok: boolean;
+  pending?: boolean;
   id?: string;
   permalink?: string;
   error?: string | null;
@@ -127,6 +129,7 @@ export async function publishPost(
         results.push({
           account_id: a.id,
           ok: !!t?.ok,
+          pending: t?.pending,
           id: t?.post_id,
           ...(t?.permalink ? { permalink: t.permalink } : {}),
           ...(t && !t.ok ? { error: t.error } : !t ? { error: "Tidak ada respons Tebar" } : {}),
@@ -185,7 +188,7 @@ export async function publishPost(
     results.push({ account_id: "-", ok: false, error: "No accounts selected" });
 
   const ok = results.every((r) => r.ok);
-  const anyOk = results.some((r) => r.ok);
+  const status = deliveryStatus(results);
   const errors = results
     .filter((r) => !r.ok)
     .map((r) => r.error)
@@ -193,8 +196,8 @@ export async function publishPost(
   await execute(
     `UPDATE crm_scheduled_posts SET status = ?, published_at = ?, last_error = ?, results = ?, permalinks = ?${externalId ? ", external_id = ?" : ""} WHERE id = ?`,
     [
-      anyOk ? "published" : "failed",
-      anyOk ? sqlDateTime() : null,
+      status,
+      status === "published" ? sqlDateTime() : null,
       ok ? null : errors,
       JSON.stringify(results),
       JSON.stringify(results.map((r) => r.permalink).filter((p): p is string => !!p)),
@@ -212,7 +215,7 @@ export async function publishDuePosts(
 ): Promise<{ processed: number; ok: number; failed: number }> {
   const due = await execute<{ id: string; workspace_id: string }>(
     `SELECT id, workspace_id FROM crm_scheduled_posts
-      WHERE status = 'scheduled' AND source <> 'tebar' AND scheduled_at <= NOW()
+      WHERE status = 'scheduled' AND source <> 'tebar' AND external_id IS NULL AND scheduled_at <= NOW()
       ORDER BY scheduled_at ASC LIMIT ${Math.max(1, Math.min(limit, 100))}`,
   );
   let ok = 0;
@@ -220,7 +223,7 @@ export async function publishDuePosts(
   for (const post of due) {
     // Klaim atomik: hanya satu pemanggil cron yang memproses baris ini.
     const claimed = await result(
-      "UPDATE crm_scheduled_posts SET status = 'publishing' WHERE id = ? AND status = 'scheduled'",
+      "UPDATE crm_scheduled_posts SET status = 'publishing' WHERE id = ? AND status = 'scheduled' AND source <> 'tebar' AND external_id IS NULL AND scheduled_at <= NOW()",
       [post.id],
     );
     if (!claimed.affectedRows) continue;
@@ -228,9 +231,12 @@ export async function publishDuePosts(
       const outcome = await publishPost(post.workspace_id, post.id, origin);
       if (outcome.ok) ok += 1;
       else failed += 1;
-    } catch {
+    } catch (e) {
       failed += 1;
-      await execute("UPDATE crm_scheduled_posts SET status = 'failed' WHERE id = ?", [post.id]);
+      await execute(
+        "UPDATE crm_scheduled_posts SET status = 'failed', last_error = ? WHERE id = ? AND status = 'publishing'",
+        [(e as Error).message, post.id],
+      );
     }
   }
   return { processed: due.length, ok, failed };

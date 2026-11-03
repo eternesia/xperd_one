@@ -143,7 +143,9 @@ function ModuleShell() {
           )}
           <SubmoduleNav
             lang={lang}
-            subs={mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id))}
+            subs={mod.submodules.filter(
+              (sub) => canViewSubmodule(mod.id, sub.id) && !(mod.id === "crm" && sub.id === "team"),
+            )}
             renderLink={(sub, content) => {
               const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
               return (
@@ -221,7 +223,10 @@ function ModuleShell() {
                 )}
                 <SubmoduleNav
                   lang={lang}
-                  subs={mod.submodules.filter((sub) => canViewSubmodule(mod.id, sub.id))}
+                  subs={mod.submodules.filter(
+                    (sub) =>
+                      canViewSubmodule(mod.id, sub.id) && !(mod.id === "crm" && sub.id === "team"),
+                  )}
                   renderLink={(sub, content) => {
                     const to = `/app/w/${workspaceId}/${mod.id}/${sub.id}`;
                     return (

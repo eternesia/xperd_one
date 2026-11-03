@@ -41,7 +41,10 @@ export const adminListUsers = createServerFn({ method: "POST" })
 
     const tenantName = new Map((tenants ?? []).map((t) => [t.id, t.name]));
     const wsInfo = new Map(
-      (workspaces ?? []).map((w) => [w.id, { name: w.name, tenant: w.tenant_id ? (tenantName.get(w.tenant_id) ?? "-") : "-" }]),
+      (workspaces ?? []).map((w) => [
+        w.id,
+        { name: w.name, tenant: w.tenant_id ? (tenantName.get(w.tenant_id) ?? "-") : "-" },
+      ]),
     );
 
     return (profiles ?? []).map((p) => ({
@@ -91,11 +94,87 @@ export interface AdminCreateUserInput {
   makeAdmin?: boolean;
 }
 
+/** Paket Qalling tiap workspace yang bisa diakses user (untuk dialog "Paket"). */
+export const adminUserQallingPlans = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((data: { targetUserId: string }) => {
+    if (!data?.targetUserId) throw new Error("Missing user");
+    return data;
+  })
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+    await requireAdmin(context.userId);
+    const addon = (await execute("SELECT id FROM addons WHERE code = 'qalling' LIMIT 1"))[0];
+    if (!addon) throw new Error("Qalling tidak tersedia");
+    const d10 = (v: unknown) =>
+      v == null ? null : (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+    const [members, workspaces, tenants, tiers, plans] = await Promise.all([
+      execute("SELECT workspace_id FROM workspace_members WHERE user_id = ?", [data.targetUserId]),
+      execute("SELECT id, name, tenant_id FROM workspaces"),
+      execute("SELECT id, name, owner_id FROM tenants"),
+      execute(
+        "SELECT id, name, monthly_price, features, limits, is_active FROM addon_tiers WHERE addon_id = ? ORDER BY sort_order",
+        [addon.id],
+      ),
+      execute(
+        "SELECT tenant_id, tier_id, status, starts_at, ends_at FROM tenant_addons WHERE addon_id = ?",
+        [addon.id],
+      ),
+    ]);
+    const ids = new Set((members ?? []).map((m) => m.workspace_id));
+    return {
+      tiers: (tiers ?? []).map((t) => ({ ...t, monthly_price: Number(t.monthly_price) })),
+      workspaces: (workspaces ?? [])
+        .filter(
+          (w) =>
+            ids.has(w.id) ||
+            (tenants ?? []).some((t) => t.id === w.tenant_id && t.owner_id === data.targetUserId),
+        )
+        .map((w) => {
+          const plan = (plans ?? []).find((p) => p.tenant_id === w.tenant_id);
+          return {
+            ...w,
+            tenantName: (tenants ?? []).find((t) => t.id === w.tenant_id)?.name ?? "—",
+            plan: plan
+              ? { ...plan, starts_at: d10(plan.starts_at), ends_at: d10(plan.ends_at) }
+              : null,
+          };
+        }),
+    };
+  });
+
+/** Ganti paket Qalling workspace user tanpa potong saldo (periode/harga/perpanjangan tetap). */
+export const adminSwitchUserQallingTier = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(
+    (data: {
+      targetUserId: string;
+      workspaceId: string;
+      tierId: string;
+      expectedTierId: string | null;
+    }) => {
+      if (!data?.targetUserId || !data.workspaceId || !data.tierId)
+        throw new Error("Pilih user, workspace dan paket");
+      return data;
+    },
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    await requireAdmin(context.userId);
+    const { adminSwitchQallingTier } = await import("@/lib/qalling-tier-switch.server");
+    return adminSwitchQallingTier({
+      actor: { id: context.userId, email: context.user?.email ?? null },
+      ...data,
+    });
+  });
+
 export const adminCreateUser = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((data: AdminCreateUserInput) => {
     if (!data?.email?.includes("@")) throw new Error("Valid email is required");
-    if (!data.password || data.password.length < 8) throw new Error("Password must be at least 8 characters");
+    if (!data.password || data.password.length < 8)
+      throw new Error("Password must be at least 8 characters");
     return data;
   })
   .handler(async ({ data, context }) => {
@@ -105,7 +184,10 @@ export const adminCreateUser = createServerFn({ method: "POST" })
     await requireAdmin(context.userId);
 
     const email = data.email.trim().toLowerCase();
-    const existing = await executeOne<{ id: string }>("SELECT id FROM app_users WHERE email = ? LIMIT 1", [email]);
+    const existing = await executeOne<{ id: string }>(
+      "SELECT id FROM app_users WHERE email = ? LIMIT 1",
+      [email],
+    );
     const newUserId = existing?.id ?? uuid();
 
     if (!existing) {
@@ -119,13 +201,16 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       [newUserId, email, data.fullName, data.phone ?? null],
     );
     if (!existing) {
-      await execute("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'customer')", [uuid(), newUserId]);
-    }
-    if (data.makeAdmin) {
-      await execute("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'admin') ON DUPLICATE KEY UPDATE role = VALUES(role)", [
+      await execute("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'customer')", [
         uuid(),
         newUserId,
       ]);
+    }
+    if (data.makeAdmin) {
+      await execute(
+        "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'admin') ON DUPLICATE KEY UPDATE role = VALUES(role)",
+        [uuid(), newUserId],
+      );
     }
     return { userId: newUserId };
   });
@@ -141,7 +226,8 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((data: AdminUpdateUserInput) => {
     if (!data?.targetUserId) throw new Error("Missing user");
-    if (data.password && data.password.length < 8) throw new Error("Password must be at least 8 characters");
+    if (data.password && data.password.length < 8)
+      throw new Error("Password must be at least 8 characters");
     return data;
   })
   .handler(async ({ data, context }) => {
@@ -151,7 +237,10 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
     await requireAdmin(context.userId);
 
     if (data.password) {
-      await execute("UPDATE app_users SET password_hash = ? WHERE id = ?", [await hashPassword(data.password), data.targetUserId]);
+      await execute("UPDATE app_users SET password_hash = ? WHERE id = ?", [
+        await hashPassword(data.password),
+        data.targetUserId,
+      ]);
     }
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -185,7 +274,8 @@ export const adminSetPlatformAdmin = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
-    if (data.targetUserId === context.userId && !data.makeAdmin) throw new Error("You cannot remove your own admin access");
+    if (data.targetUserId === context.userId && !data.makeAdmin)
+      throw new Error("You cannot remove your own admin access");
 
     if (data.makeAdmin) {
       const existing = await executeOne<{ id: string }>(
@@ -193,10 +283,15 @@ export const adminSetPlatformAdmin = createServerFn({ method: "POST" })
         [data.targetUserId],
       );
       if (!existing) {
-        await execute("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'admin')", [uuid(), data.targetUserId]);
+        await execute("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'admin')", [
+          uuid(),
+          data.targetUserId,
+        ]);
       }
     } else {
-      await execute("DELETE FROM user_roles WHERE user_id = ? AND role = 'admin'", [data.targetUserId]);
+      await execute("DELETE FROM user_roles WHERE user_id = ? AND role = 'admin'", [
+        data.targetUserId,
+      ]);
     }
     return { ok: true };
   });
@@ -211,7 +306,8 @@ export const adminDeleteUser = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("@/lib/auth-context.server");
     const { transaction } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
-    if (data.targetUserId === context.userId) throw new Error("Anda tidak bisa menghapus akun sendiri");
+    if (data.targetUserId === context.userId)
+      throw new Error("Anda tidak bisa menghapus akun sendiri");
     await transaction(async (conn) => {
       await conn.execute("DELETE FROM workspace_members WHERE user_id = ?", [data.targetUserId]);
       await conn.execute("DELETE FROM user_roles WHERE user_id = ?", [data.targetUserId]);
@@ -311,9 +407,10 @@ export const adminResetTenantTransactions = createServerFn({ method: "POST" })
     const { transaction } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
 
-    const workspaces = await execute<{ id: string }>("SELECT id FROM workspaces WHERE tenant_id = ?", [
-      data.tenantId,
-    ]);
+    const workspaces = await execute<{ id: string }>(
+      "SELECT id FROM workspaces WHERE tenant_id = ?",
+      [data.tenantId],
+    );
     const ids = workspaces.map((w) => w.id);
     if (!ids.length) return { workspaces: 0, deleted: {} as Record<string, number> };
 

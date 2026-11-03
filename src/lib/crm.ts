@@ -9,13 +9,13 @@ export interface CrmStage {
 }
 
 export const CRM_STAGES: CrmStage[] = [
-  { id: "new", en: "New", id_: "Baru", probability: 10 },
-  { id: "contacted", en: "Contacted", id_: "Dihubungi", probability: 25 },
-  { id: "qualified", en: "Qualified", id_: "Terkualifikasi", probability: 50 },
-  { id: "proposal", en: "Proposal", id_: "Penawaran", probability: 70 },
-  { id: "negotiation", en: "Negotiation", id_: "Negosiasi", probability: 85 },
-  { id: "won", en: "Won", id_: "Menang", probability: 100 },
-  { id: "lost", en: "Lost", id_: "Kalah", probability: 0 },
+  { id: "new", en: "New inquiry", id_: "Tanya Harga", probability: 10 },
+  { id: "contacted", en: "Follow up", id_: "Follow Up", probability: 25 },
+  { id: "qualified", en: "Consultation", id_: "Konsultasi", probability: 50 },
+  { id: "proposal", en: "Quote / Invoice sent", id_: "Kirim Penawaran", probability: 70 },
+  { id: "negotiation", en: "Awaiting payment", id_: "Nego / Tunggu Bayar", probability: 85 },
+  { id: "won", en: "Closing / Deal", id_: "Closing", probability: 100 },
+  { id: "lost", en: "Lost", id_: "Batal", probability: 0 },
 ];
 
 export const CRM_SOURCES = [

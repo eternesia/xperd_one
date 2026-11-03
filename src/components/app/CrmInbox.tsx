@@ -19,6 +19,7 @@ import {
   updateConversation,
 } from "@/lib/social-interactions.functions";
 import { cn } from "@/lib/utils";
+import { QuickInvoice, QuickReplies } from "@/components/app/QuickReplies";
 
 /**
  * Qalling **Inbox** (DM Facebook/Instagram) — diporting dari BS New 11 `CrmInbox.tsx`; data lewat
@@ -323,6 +324,14 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
                 )}
               </div>
               <div className="space-y-3 border-t py-4">
+                <div className="flex flex-wrap gap-2">
+                  <QuickReplies workspaceId={workspaceId} onPick={(t) => setBody(t)} />
+                  <QuickInvoice
+                    workspaceId={workspaceId}
+                    customer={active.participant_name ?? ""}
+                    onUse={(t) => setBody(t)}
+                  />
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex gap-1">
                     <Button

@@ -35,6 +35,11 @@ import {
   LineChart,
   ClipboardCheck,
   FolderOpen,
+  CalendarRange,
+  Building,
+  FileBarChart,
+  UsersRound,
+  Sparkles,
   Share2,
   type LucideIcon,
 } from "lucide-react";
@@ -91,12 +96,12 @@ export function groupSubmodules(
 
 // Seksi sidebar CRM (Qalling) — urutan & label sama dengan xperd-one.lovable.app (BS New 11).
 const SALES: [string, string] = ["Sales", "Penjualan"];
-const MSG: [string, string] = ["Messaging", "Pesan"];
-const PUB: [string, string] = ["Publishing", "Publikasi"];
-const INTER: [string, string] = ["Interaction", "Interaksi"];
-const ANALYTICS: [string, string] = ["Analytics", "Analitik"];
 const TENDER: [string, string] = ["Tender", "Tender"];
 const SETUP: [string, string] = ["Settings", "Pengaturan"];
+const OVERVIEW: [string, string] = ["Overview", "Ringkasan"];
+const CONTENT: [string, string] = ["Content", "Konten"];
+const CHAT: [string, string] = ["Conversations", "Percakapan"];
+const CLIENTS: [string, string] = ["Clients & Reports", "Klien & Laporan"];
 
 const MODULE_DEFS: AppModule[] = [
   {
@@ -305,25 +310,30 @@ const MODULE_DEFS: AppModule[] = [
       // Halaman indeks modul sudah merender dasbor CRM yang sama, sehingga
       // mendaftarkannya akan memunculkan dua menu "Dashboard" di sidebar.
       // Ronde 37 (BS New 11): sidebar bergrup + ikon, sama dengan live.
-      g(SALES, UserPlus, "leads", "Leads", "Prospek"),
+      g(OVERVIEW, LineChart, "social-dashboard", "Insights", "Insight Sosial"),
+      g(OVERVIEW, UserPlus, "leads", "Leads", "Prospek"),
       g(SALES, KanbanSquare, "pipeline", "Pipeline", "Pipeline"),
       g(SALES, Contact, "contacts", "Contacts", "Kontak"),
       g(SALES, CalendarCheck, "follow-ups", "Follow Ups", "Follow Up"),
       g(SALES, Target, "targets", "Sales Targets", "Target Sales"),
-      g(MSG, Megaphone, "broadcast", "Broadcast", "Broadcast Pesan"),
-      g(MSG, MessageCircle, "wa-gateway", "WhatsApp Gateway", "WhatsApp Gateway"),
-      g(MSG, FileText, "templates", "Message Templates", "Template Pesan"),
-      g(PUB, CalendarDays, "post-scheduler", "Posts", "Posts"),
-      g(PUB, Lightbulb, "ideas", "Ideas", "Ide Konten"),
-      g(PUB, Image, "media", "Media", "Media"),
-      g(PUB, Rocket, "campaigns", "Social Campaigns", "Kampanye Sosial"),
-      g(INTER, MessagesSquare, "comments", "Comments", "Komentar"),
-      g(INTER, Inbox, "inbox", "Inbox", "Inbox"),
-      g(INTER, Zap, "automations", "Automations", "Otomasi"),
-      g(ANALYTICS, LineChart, "social-dashboard", "Insights", "Insight Sosial"),
+      g(CONTENT, CalendarRange, "calendar", "Calendar", "Kalender"),
+      g(CONTENT, CalendarDays, "post-scheduler", "Posts", "Posts"),
+      g(CONTENT, Lightbulb, "ideas", "Ideas", "Ide Konten"),
+      g(CONTENT, Image, "media", "Media", "Media"),
+      g(CONTENT, Rocket, "campaigns", "Social Campaigns", "Kampanye Sosial"),
+      g(CHAT, Inbox, "inbox", "Inbox", "Inbox"),
+      g(CHAT, MessagesSquare, "comments", "Comments", "Komentar"),
+      g(CHAT, Zap, "automations", "Automations", "Otomasi"),
+      g(CHAT, Megaphone, "broadcast", "Broadcast", "Broadcast Pesan"),
+      g(CHAT, MessageCircle, "wa-gateway", "WhatsApp Gateway", "WhatsApp Gateway"),
+      g(CHAT, FileText, "templates", "Message Templates", "Template Pesan"),
+      g(CLIENTS, Building, "clients", "Clients & Brands", "Klien & Brand"),
+      g(CLIENTS, FileBarChart, "reports", "Reports", "Laporan"),
       g(TENDER, ClipboardCheck, "tenders", "Tender Checklist", "Checklist Tender"),
       g(TENDER, FolderOpen, "doc-library", "Document Library", "Pustaka Dokumen"),
       g(SETUP, Share2, "social-accounts", "Social Accounts", "Akun Media Sosial"),
+      g(SETUP, Sparkles, "ai", "AI & MCP Integration", "Integrasi AI & MCP"),
+      g(SETUP, UsersRound, "team", "Team & Members", "Tim & Anggota"),
     ],
   },
   {

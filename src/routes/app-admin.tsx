@@ -18,10 +18,12 @@ import {
   Share2,
   Wallet,
   Settings,
+  Menu,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +47,7 @@ function AdminLayout() {
   const isAdmin = useIsAdmin(session?.user.id);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (st) => st.location.pathname });
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (loading) {
     return (
@@ -90,104 +93,113 @@ function AdminLayout() {
   }
 
   const inSettings = SETTINGS.some(([to]) => pathname.startsWith(to));
+  const sidebarBody = (
+    <div className="flex min-h-full flex-col">
+      <div className="flex items-center gap-2 text-sm font-semibold tracking-[0.22em] text-gold">
+        <ShieldCheck className="h-4 w-4" /> SUPER ADMIN
+      </div>
+      <nav className="mt-6 flex flex-col gap-1">
+        <NavItem to="/app-admin" icon={<LayoutDashboard className="h-4 w-4" />} exact>
+          Dashboard
+        </NavItem>
+        <NavItem to="/app-admin/visitors" icon={<Users className="h-4 w-4" />}>
+          Pengunjung
+        </NavItem>
+        <Group>Pelanggan</Group>
+        <NavItem to="/app-admin/tenancy" icon={<Building2 className="h-4 w-4" />}>
+          Tenancy
+        </NavItem>
+        <NavItem to="/app-admin/registrations" icon={<ClipboardCheck className="h-4 w-4" />}>
+          Pendaftaran
+        </NavItem>
+        <NavItem to="/app-admin/users" icon={<Users className="h-4 w-4" />}>
+          Users
+        </NavItem>
+        <Group>Keuangan & Katalog</Group>
+        <NavItem to="/app-admin/invoices" icon={<ReceiptText className="h-4 w-4" />}>
+          Invoices
+        </NavItem>
+        <NavItem to="/app-admin/wallet" icon={<Wallet className="h-4 w-4" />}>
+          Deposit & Top-up
+        </NavItem>
+        <NavItem to="/app-admin/packages" icon={<LayoutList className="h-4 w-4" />}>
+          Paket
+        </NavItem>
+        <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
+          Add-on
+        </NavItem>
+        <Group>Layanan</Group>
+        <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>
+          Konten Website
+        </NavItem>
+        <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
+          Pengumuman
+        </NavItem>
+        <NavItem to="/app-admin/tickets" icon={<LifeBuoy className="h-4 w-4" />}>
+          Help Desk
+        </NavItem>
+        <Group>Sistem</Group>
+        <Link
+          to="/app-admin/auth-settings"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-primary-foreground/65 transition-colors hover:bg-white/10 hover:text-primary-foreground",
+            inSettings && "bg-white/10 text-gold",
+          )}
+        >
+          <Settings className="h-4 w-4" /> Pengaturan
+        </Link>
+      </nav>
+      <div className="mt-auto space-y-3 pt-6">
+        <p className="truncate text-xs text-primary-foreground/50">{session.user.email}</p>
+        <Button
+          variant="onDark"
+          size="sm"
+          className="w-full"
+          onClick={async () => {
+            await logoutAppUser();
+            emitAuthChange();
+            toast.success("Signed out");
+          }}
+        >
+          <LogOut /> Sign out
+        </Button>
+      </div>
+    </div>
+  );
   return (
     <div className="flex min-h-screen bg-secondary/40">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-navy p-5 text-primary-foreground lg:flex">
-        <div className="flex items-center gap-2 text-sm font-semibold tracking-[0.22em] text-gold">
-          <ShieldCheck className="h-4 w-4" /> SUPER ADMIN
-        </div>
-        <nav className="mt-6 flex flex-col gap-1">
-          <NavItem to="/app-admin" icon={<LayoutDashboard className="h-4 w-4" />} exact>
-            Dashboard
-          </NavItem>
-          <NavItem to="/app-admin/visitors" icon={<Users className="h-4 w-4" />}>
-            Pengunjung
-          </NavItem>
-          <Group>Pelanggan</Group>
-          <NavItem to="/app-admin/tenancy" icon={<Building2 className="h-4 w-4" />}>
-            Tenancy
-          </NavItem>
-          <NavItem to="/app-admin/registrations" icon={<ClipboardCheck className="h-4 w-4" />}>
-            Pendaftaran
-          </NavItem>
-          <NavItem to="/app-admin/users" icon={<Users className="h-4 w-4" />}>
-            Users
-          </NavItem>
-          <Group>Keuangan & Katalog</Group>
-          <NavItem to="/app-admin/invoices" icon={<ReceiptText className="h-4 w-4" />}>
-            Invoices
-          </NavItem>
-          <NavItem to="/app-admin/wallet" icon={<Wallet className="h-4 w-4" />}>
-            Deposit & Top-up
-          </NavItem>
-          <NavItem to="/app-admin/packages" icon={<LayoutList className="h-4 w-4" />}>
-            Paket
-          </NavItem>
-          <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
-            Add-on
-          </NavItem>
-          <Group>Layanan</Group>
-          <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>
-            Konten Website
-          </NavItem>
-          <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
-            Pengumuman
-          </NavItem>
-          <NavItem to="/app-admin/tickets" icon={<LifeBuoy className="h-4 w-4" />}>
-            Help Desk
-          </NavItem>
-          <Group>Sistem</Group>
-          <Link
-            to="/app-admin/auth-settings"
-            className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-primary-foreground/65 transition-colors hover:bg-white/10 hover:text-primary-foreground",
-              inSettings && "bg-white/10 text-gold",
-            )}
-          >
-            <Settings className="h-4 w-4" /> Pengaturan
-          </Link>
-        </nav>
-        <div className="mt-auto space-y-3 pt-6">
-          <p className="truncate text-xs text-primary-foreground/50">{session.user.email}</p>
-          <Button
-            variant="onDark"
-            size="sm"
-            className="w-full"
-            onClick={async () => {
-              await logoutAppUser();
-              emitAuthChange();
-              toast.success("Signed out");
-            }}
-          >
-            <LogOut /> Sign out
-          </Button>
-        </div>
+        {sidebarBody}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-4 border-b border-border bg-background px-6 lg:hidden">
-          <span className="text-sm font-semibold tracking-[0.2em] text-navy">SUPER ADMIN</span>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {[
-              ["/app-admin", "Dashboard"],
-              ["/app-admin/tenancy", "Tenancy"],
-              ["/app-admin/users", "Users"],
-              ["/app-admin/invoices", "Invoices"],
-              ["/app-admin/wallet", "Top-up"],
-              ["/app-admin/packages", "Paket"],
-              ["/app-admin/addons", "Add-on"],
-              ["/app-admin/content", "Konten"],
-              ["/app-admin/tickets", "Help Desk"],
-              ["/app-admin/auth-settings", "Pengaturan"],
-            ].map(([to, l]) => (
-              <Link key={to} to={to} className="text-muted-foreground">
-                {l}
-              </Link>
-            ))}
-          </div>
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-border bg-background px-3 lg:hidden">
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent
+              side="left"
+              className="w-[84vw] max-w-xs overflow-y-auto border-r-0 bg-navy p-5 text-primary-foreground"
+            >
+              <SheetTitle className="sr-only">Menu</SheetTitle>
+              <div
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest("a")) setMenuOpen(false);
+                }}
+              >
+                {sidebarBody}
+              </div>
+            </SheetContent>
+          </Sheet>
+          <span className="truncate text-sm font-semibold tracking-[0.2em] text-navy dark:text-foreground">
+            SUPER ADMIN
+          </span>
         </header>
         <AdminLoadingBar />
-        <main className="min-w-0 flex-1 p-6 lg:p-10">
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 sm:p-6 lg:p-10">
           {inSettings && (
             <div className="mb-6 space-y-3">
               <div>
@@ -225,6 +237,7 @@ const SETTINGS = [
   ["/app-admin/payments", "Payment Gateway"],
   ["/app-admin/tebar", "API Tebar & Sosial"],
   ["/app-admin/storage", "Object Storage"],
+  ["/app-admin/referral", "Referral"],
 ] as const;
 
 function Group({ children }: { children: React.ReactNode }) {

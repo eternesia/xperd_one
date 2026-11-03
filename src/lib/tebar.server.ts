@@ -2,7 +2,10 @@
 import { executeOne } from "@/integrations/mysql/pool";
 
 /** Basis API Tebar; dapat ditimpa (`TEBAR_API_BASE`) untuk server tiruan saat uji. */
-export const TEBAR_API = (process.env.TEBAR_API_BASE ?? "https://api.tebar.app/v1").replace(/\/$/, "");
+export const TEBAR_API = (process.env.TEBAR_API_BASE ?? "https://api.tebar.app/v1").replace(
+  /\/$/,
+  "",
+);
 
 export type TebarAccount = {
   id: string;
@@ -95,6 +98,7 @@ export async function uploadTebarMedia(apiKey: string, url: string, profile: str
 export type TebarPublishTarget = {
   account_id: string;
   ok: boolean;
+  pending?: boolean;
   post_id?: string;
   permalink?: string;
   error?: string;
@@ -132,13 +136,14 @@ export async function publishTebar(
         method: "POST",
         headers: {
           ...profileHeader(profile || null),
-          "Idempotency-Key": `xperd-${postId}-${crypto.randomUUID()}`,
+          "Idempotency-Key": `xperd-${postId}-${profile || "default"}`,
         },
         body: JSON.stringify(body),
       });
       const p = r.data ?? r;
       const pid = String(p.id ?? "");
-      if (pid) postIds.push(pid);
+      if (!pid) throw new Error("Respons pengiriman belum dapat dikonfirmasi; jangan kirim ulang");
+      postIds.push(pid);
       const tg = new Map<string, any>(
         (Array.isArray(p.targets) ? p.targets : []).map((t: any) => [String(t.account_id), t]),
       );
@@ -148,6 +153,7 @@ export async function publishTebar(
         targets.push({
           account_id: a,
           ok: !failed,
+          pending: !failed && t?.status !== "published",
           post_id: pid,
           ...(t?.permalink ? { permalink: t.permalink } : {}),
           ...(failed ? { error: String(t?.error?.message ?? t?.error_code ?? "Gagal") } : {}),

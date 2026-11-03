@@ -5,6 +5,10 @@ import {
   ChevronDown,
   FileBarChart,
   Gift,
+  CalendarDays,
+  MessageSquare,
+  UserCog,
+  UsersRound,
   Users,
   CreditCard,
   LayoutDashboard,
@@ -33,14 +37,7 @@ import { SIGNUP_TIER_KEY } from "@/components/qalling/qalling-auth";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { QallingPreferences } from "@/components/qalling/QallingPreferences";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { logoutAppUser } from "@/lib/auth.functions";
 import { emitAuthChange } from "@/hooks/use-session";
 import { claimReferral } from "@/lib/referral.functions";
@@ -91,8 +88,14 @@ function QallingShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => { setCollapsed(localStorage.getItem("qalling-sidebar-collapsed") === "1"); }, []);
-  const toggleCollapsed = () => setCollapsed((c) => { localStorage.setItem("qalling-sidebar-collapsed", c ? "0" : "1"); return !c; });
+  useEffect(() => {
+    setCollapsed(localStorage.getItem("qalling-sidebar-collapsed") === "1");
+  }, []);
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      localStorage.setItem("qalling-sidebar-collapsed", c ? "0" : "1");
+      return !c;
+    });
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -210,7 +213,14 @@ function QallingShell() {
   const section = (key: string, label: string, entries: (React.ReactNode | string)[]) => {
     const links = entries.map((e) => (typeof e === "string" ? subLink(e) : e)).filter(Boolean);
     if (!links.length) return null;
-    const isOpen = openGroups[key] ?? true;
+    // Grup utama terbuka; grup lain terbuka bila berisi halaman yang sedang dibuka (BS New 14).
+    const isOpen =
+      openGroups[key] ??
+      (["sales", "content", "chat"].includes(key) ||
+        links.some((l) => {
+          const k = (l as { key?: string }).key;
+          return !!k && pathname.endsWith(`/${k}`);
+        }));
     return (
       <div key={key} className="mt-2">
         <button
@@ -219,36 +229,81 @@ function QallingShell() {
           className="qs-label flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80 hover:text-foreground"
         >
           {label}
-          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "-rotate-90")} />
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "-rotate-90")}
+          />
         </button>
         {isOpen && <div className="flex flex-col gap-0.5">{links}</div>}
       </div>
     );
   };
   const settingsItems = [
-    ...(subs.has("social-accounts") ? [{ to: "/qalling/app/social-accounts", icon: Share2, label: id ? "Akun Sosial" : "Social Accounts" }] : []),
-    { to: "/qalling/app/billing", icon: CreditCard, label: id ? "Tagihan & Saldo" : "Billing & Balance" },
+    ...(subs.has("social-accounts")
+      ? [
+          {
+            to: "/qalling/app/social-accounts",
+            icon: Share2,
+            label: id ? "Akun Sosial" : "Social Accounts",
+          },
+        ]
+      : []),
+    ...(subs.has("team")
+      ? [
+          {
+            to: "/qalling/app/team",
+            icon: UsersRound,
+            label: id ? "Tim & Anggota" : "Team & Members",
+          },
+        ]
+      : []),
+    {
+      to: "/qalling/app/profile",
+      icon: UserCog,
+      label: id ? "Profil & Rekening" : "Profile & Bank",
+    },
+    {
+      to: "/qalling/app/billing",
+      icon: CreditCard,
+      label: id ? "Tagihan & Saldo" : "Billing & Balance",
+    },
     { to: "/qalling/app/referral", icon: Gift, label: "Referral" },
   ];
   const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
   const nav = (
     <nav className="flex flex-col gap-0.5">
-      <Link to="/qalling/app" activeOptions={{ exact: true }} className={item(pathname === "/qalling/app")}>
+      <Link
+        to="/qalling/app"
+        activeOptions={{ exact: true }}
+        className={item(pathname === "/qalling/app")}
+      >
         <LayoutDashboard className="h-4 w-4 shrink-0" />
         <span className="qs-label">{id ? "Beranda" : "Home"}</span>
       </Link>
       {subLink("social-dashboard")}
       {subLink("leads")}
-      {section("sales", id ? "Penjualan" : "Sales", ["pipeline", "contacts", "follow-ups", "targets"])}
+      {subLink("ai")}
+      {section("sales", id ? "Penjualan" : "Sales", [
+        "pipeline",
+        "contacts",
+        "follow-ups",
+        "targets",
+      ])}
       {section("content", id ? "Konten" : "Content", [
-        link("/qalling/app/calendar", CalendarRange, id ? "Kalender" : "Calendar"),
-        "post-scheduler", "ideas", "media", "campaigns",
+        "calendar",
+        "post-scheduler",
+        "ideas",
+        "media",
+        "campaigns",
       ])}
-      {section("chat", id ? "Percakapan" : "Conversations", ["inbox", "comments", "automations", "broadcast", "wa-gateway", "templates"])}
-      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", [
-        link("/qalling/app/clients", Users, id ? "Klien & Brand" : "Clients & Brands"),
-        link("/qalling/app/reports", FileBarChart, id ? "Laporan" : "Reports"),
+      {section("chat", id ? "Percakapan" : "Conversations", [
+        "inbox",
+        "comments",
+        "automations",
+        "broadcast",
+        "wa-gateway",
+        "templates",
       ])}
+      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", ["clients", "reports"])}
       {section("tender", "Tender", ["tenders", "doc-library"])}
     </nav>
   );
@@ -259,11 +314,6 @@ function QallingShell() {
         <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="md:hidden" aria-label="Menu">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
               <SheetContent side="left" className="w-[86vw] max-w-sm overflow-y-auto p-4">
                 <SheetHeader className="pr-10 text-left">
                   <SheetTitle className="flex items-center gap-2">
@@ -298,16 +348,30 @@ function QallingShell() {
       </header>
 
       <div className="flex">
-        <aside className={cn("sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-border bg-card transition-[width] md:flex", collapsed ? "w-16 [&_.qs-label]:hidden [&_a]:justify-center" : "w-64")}>
+        <aside
+          className={cn(
+            "sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-border bg-card transition-[width] md:flex",
+            collapsed ? "w-16 [&_.qs-label]:hidden [&_a]:justify-center" : "w-64",
+          )}
+        >
           <div className="flex-1 overflow-y-auto p-3">{nav}</div>
           <div className="flex items-center gap-1 border-t border-border p-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-left hover:bg-secondary">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}</span>
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-2 text-left hover:bg-secondary"
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                    {(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}
+                  </span>
                   <span className="qs-label min-w-0">
-                    <span className="block truncate text-sm font-medium">{activeWorkspace?.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{tenant?.name ?? ""}</span>
+                    <span className="block truncate text-sm font-medium">
+                      {activeWorkspace?.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {tenant?.name ?? ""}
+                    </span>
                   </span>
                 </button>
               </DropdownMenuTrigger>
@@ -318,28 +382,102 @@ function QallingShell() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {settingsItems.map((s) => (
-                  <DropdownMenuItem key={s.to} onSelect={() => navigate({ to: s.to as "/qalling/app" })}>
-                    <s.icon className="h-4 w-4" />{s.label}
+                  <DropdownMenuItem
+                    key={s.to}
+                    onSelect={() => navigate({ to: s.to as "/qalling/app" })}
+                  >
+                    <s.icon className="h-4 w-4" />
+                    {s.label}
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={signOut}><LogOut className="h-4 w-4" />{id ? "Keluar" : "Sign out"}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={signOut}>
+                  <LogOut className="h-4 w-4" />
+                  {id ? "Keluar" : "Sign out"}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="ghost" size="icon" onClick={toggleCollapsed} aria-label={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"} title={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"} className={cn(collapsed && "hidden")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"}
+              title={collapsed ? "Perbesar sidebar" : "Perkecil sidebar"}
+              className={cn(collapsed && "hidden")}
+            >
               <PanelLeftClose className="h-4 w-4" />
             </Button>
           </div>
           {collapsed && (
-            <Button variant="ghost" size="icon" onClick={toggleCollapsed} aria-label="Perbesar sidebar" title="Perbesar sidebar" className="mx-auto mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleCollapsed}
+              aria-label="Perbesar sidebar"
+              title="Perbesar sidebar"
+              className="mx-auto mb-2"
+            >
               <PanelLeftOpen className="h-4 w-4" />
             </Button>
           )}
         </aside>
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
+        <main className="min-w-0 flex-1 p-4 pb-28 sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
           <Outlet />
         </main>
       </div>
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+        aria-label={id ? "Navigasi bawah" : "Bottom navigation"}
+      >
+        <div className="grid h-16 grid-cols-5 items-center">
+          {[
+            { to: "/qalling/app", icon: LayoutDashboard, label: id ? "Beranda" : "Home" },
+            { to: "/qalling/app/calendar", icon: CalendarDays, label: id ? "Jadwal" : "Schedule" },
+            {
+              to: "/qalling/app/post-scheduler",
+              icon: Plus,
+              label: id ? "Posting" : "Post",
+              primary: true,
+            },
+            { to: "/qalling/app/inbox", icon: MessageSquare, label: id ? "Pesan" : "Inbox" },
+          ].map((b) => {
+            const active = pathname === b.to;
+            return b.primary ? (
+              <Link
+                key={b.to}
+                to={b.to as "/qalling/app"}
+                className="flex flex-col items-center gap-0.5 text-[11px] font-medium text-primary"
+              >
+                <span className="-mt-7 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background">
+                  <b.icon className="h-6 w-6" />
+                </span>
+                {b.label}
+              </Link>
+            ) : (
+              <Link
+                key={b.to}
+                to={b.to as "/qalling/app"}
+                className={cn(
+                  "flex flex-col items-center gap-1 text-[11px] text-muted-foreground",
+                  active && "font-medium text-primary",
+                )}
+              >
+                <b.icon className="h-5 w-5" />
+                {b.label}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            aria-label="Menu"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground"
+          >
+            <Menu className="h-5 w-5" />
+            Menu
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

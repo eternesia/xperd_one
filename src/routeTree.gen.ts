@@ -13,6 +13,9 @@ import { Route as SiteRouteImport } from './routes/_site'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AppAdminRouteImport } from './routes/app-admin'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as Char91DotwellKnownChar93OauthAuthorizationServerRouteImport } from './routes/[.well-known]/oauth-authorization-server'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as SiteIndexRouteImport } from './routes/_site/index'
 import { Route as SiteAboutRouteImport } from './routes/_site/about'
 import { Route as SiteContactRouteImport } from './routes/_site/contact'
@@ -32,6 +35,7 @@ import { Route as AppAdminEmailRouteImport } from './routes/app-admin/email'
 import { Route as AppAdminInvoicesRouteImport } from './routes/app-admin/invoices'
 import { Route as AppAdminPackagesRouteImport } from './routes/app-admin/packages'
 import { Route as AppAdminPaymentsRouteImport } from './routes/app-admin/payments'
+import { Route as AppAdminReferralRouteImport } from './routes/app-admin/referral'
 import { Route as AppAdminRegistrationsRouteImport } from './routes/app-admin/registrations'
 import { Route as AppAdminStorageRouteImport } from './routes/app-admin/storage'
 import { Route as AppAdminTebarRouteImport } from './routes/app-admin/tebar'
@@ -43,6 +47,9 @@ import { Route as AppAdminWalletRouteImport } from './routes/app-admin/wallet'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as LRuleIdRouteImport } from './routes/l.$ruleId'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
+import { Route as OauthRegisterRouteImport } from './routes/oauth.register'
+import { Route as OauthTokenRouteImport } from './routes/oauth.token'
 import { Route as QallingIndexRouteImport } from './routes/qalling.index'
 import { Route as QallingAppRouteImport } from './routes/qalling.app'
 import { Route as QallingDaftarRouteImport } from './routes/qalling.daftar'
@@ -52,6 +59,7 @@ import { Route as QallingKelebihanRouteImport } from './routes/qalling.kelebihan
 import { Route as QallingKontakRouteImport } from './routes/qalling.kontak'
 import { Route as QallingLoginRouteImport } from './routes/qalling.login'
 import { Route as QallingSolusiRouteImport } from './routes/qalling.solusi'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport } from './routes/[.well-known]/oauth-protected-resource/mcp'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as ApiPublicCrmMediaRouteImport } from './routes/api/public/crm-media'
@@ -59,9 +67,11 @@ import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
 import { Route as QallingAppIndexRouteImport } from './routes/qalling.app.index'
 import { Route as QallingAppSubmoduleIdRouteImport } from './routes/qalling.app.$submoduleId'
+import { Route as QallingAppAiRouteImport } from './routes/qalling.app.ai'
 import { Route as QallingAppBillingRouteImport } from './routes/qalling.app.billing'
 import { Route as QallingAppCalendarRouteImport } from './routes/qalling.app.calendar'
 import { Route as QallingAppClientsRouteImport } from './routes/qalling.app.clients'
+import { Route as QallingAppProfileRouteImport } from './routes/qalling.app.profile'
 import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.referral'
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
@@ -103,6 +113,23 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotwellKnownChar93OauthAuthorizationServerRoute =
+  Char91DotwellKnownChar93OauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const SiteIndexRoute = SiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -198,6 +225,11 @@ const AppAdminPaymentsRoute = AppAdminPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => AppAdminRoute,
 } as any)
+const AppAdminReferralRoute = AppAdminReferralRouteImport.update({
+  id: '/referral',
+  path: '/referral',
+  getParentRoute: () => AppAdminRoute,
+} as any)
 const AppAdminRegistrationsRoute = AppAdminRegistrationsRouteImport.update({
   id: '/registrations',
   path: '/registrations',
@@ -253,6 +285,21 @@ const LRuleIdRoute = LRuleIdRouteImport.update({
   path: '/l/$ruleId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthRegisterRoute = OauthRegisterRouteImport.update({
+  id: '/oauth/register',
+  path: '/oauth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthTokenRoute = OauthTokenRouteImport.update({
+  id: '/oauth/token',
+  path: '/oauth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QallingIndexRoute = QallingIndexRouteImport.update({
   id: '/qalling/',
   path: '/qalling/',
@@ -298,6 +345,12 @@ const QallingSolusiRoute = QallingSolusiRouteImport.update({
   path: '/qalling/solusi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceMcpRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport.update({
+    id: '/mcp',
+    path: '/mcp',
+    getParentRoute: () => Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  } as any)
 const SiteProductsIndexRoute = SiteProductsIndexRouteImport.update({
   id: '/products/',
   path: '/products/',
@@ -333,6 +386,11 @@ const QallingAppSubmoduleIdRoute = QallingAppSubmoduleIdRouteImport.update({
   path: '/$submoduleId',
   getParentRoute: () => QallingAppRoute,
 } as any)
+const QallingAppAiRoute = QallingAppAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => QallingAppRoute,
+} as any)
 const QallingAppBillingRoute = QallingAppBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -346,6 +404,11 @@ const QallingAppCalendarRoute = QallingAppCalendarRouteImport.update({
 const QallingAppClientsRoute = QallingAppClientsRouteImport.update({
   id: '/clients',
   path: '/clients',
+  getParentRoute: () => QallingAppRoute,
+} as any)
+const QallingAppProfileRoute = QallingAppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => QallingAppRoute,
 } as any)
 const QallingAppReferralRoute = QallingAppReferralRouteImport.update({
@@ -470,6 +533,9 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteWithChildren
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/about': typeof SiteAboutRoute
   '/contact': typeof SiteContactRoute
   '/industries': typeof SiteIndustriesRoute
@@ -487,6 +553,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
+  '/app-admin/referral': typeof AppAdminReferralRoute
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
@@ -497,6 +564,9 @@ export interface FileRoutesByFullPath {
   '/app-admin/wallet': typeof AppAdminWalletRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/l/$ruleId': typeof LRuleIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/qalling/app': typeof QallingAppRouteWithChildren
   '/qalling/daftar': typeof QallingDaftarRoute
   '/qalling/fitur': typeof QallingFiturRoute
@@ -508,14 +578,17 @@ export interface FileRoutesByFullPath {
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/qalling/': typeof QallingIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
+  '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
   '/qalling/app/calendar': typeof QallingAppCalendarRoute
   '/qalling/app/clients': typeof QallingAppClientsRoute
+  '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/products/': typeof SiteProductsIndexRoute
@@ -542,6 +615,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/about': typeof SiteAboutRoute
   '/contact': typeof SiteContactRoute
   '/industries': typeof SiteIndustriesRoute
@@ -559,6 +635,7 @@ export interface FileRoutesByTo {
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
+  '/app-admin/referral': typeof AppAdminReferralRoute
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
@@ -569,6 +646,9 @@ export interface FileRoutesByTo {
   '/app-admin/wallet': typeof AppAdminWalletRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/l/$ruleId': typeof LRuleIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/qalling/daftar': typeof QallingDaftarRoute
   '/qalling/fitur': typeof QallingFiturRoute
   '/qalling/harga': typeof QallingHargaRoute
@@ -580,13 +660,16 @@ export interface FileRoutesByTo {
   '/app-admin': typeof AppAdminIndexRoute
   '/app': typeof AppIndexRoute
   '/qalling': typeof QallingIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
+  '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
   '/qalling/app/calendar': typeof QallingAppCalendarRoute
   '/qalling/app/clients': typeof QallingAppClientsRoute
+  '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/products': typeof SiteProductsIndexRoute
@@ -616,6 +699,9 @@ export interface FileRoutesById {
   '/app': typeof AppRouteWithChildren
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
+  '/mcp': typeof McpRoute
+  '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/_site/about': typeof SiteAboutRoute
   '/_site/contact': typeof SiteContactRoute
   '/_site/industries': typeof SiteIndustriesRoute
@@ -633,6 +719,7 @@ export interface FileRoutesById {
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
+  '/app-admin/referral': typeof AppAdminReferralRoute
   '/app-admin/registrations': typeof AppAdminRegistrationsRoute
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
@@ -643,6 +730,9 @@ export interface FileRoutesById {
   '/app-admin/wallet': typeof AppAdminWalletRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/l/$ruleId': typeof LRuleIdRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/token': typeof OauthTokenRoute
   '/qalling/app': typeof QallingAppRouteWithChildren
   '/qalling/daftar': typeof QallingDaftarRoute
   '/qalling/fitur': typeof QallingFiturRoute
@@ -655,14 +745,17 @@ export interface FileRoutesById {
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/qalling/': typeof QallingIndexRoute
+  '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
+  '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
   '/qalling/app/calendar': typeof QallingAppCalendarRoute
   '/qalling/app/clients': typeof QallingAppClientsRoute
+  '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/_site/products/': typeof SiteProductsIndexRoute
@@ -694,6 +787,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/app-admin'
     | '/auth'
+    | '/mcp'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/about'
     | '/contact'
     | '/industries'
@@ -711,6 +807,7 @@ export interface FileRouteTypes {
     | '/app-admin/invoices'
     | '/app-admin/packages'
     | '/app-admin/payments'
+    | '/app-admin/referral'
     | '/app-admin/registrations'
     | '/app-admin/storage'
     | '/app-admin/tebar'
@@ -721,6 +818,9 @@ export interface FileRouteTypes {
     | '/app-admin/wallet'
     | '/app/onboarding'
     | '/l/$ruleId'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/qalling/app'
     | '/qalling/daftar'
     | '/qalling/fitur'
@@ -732,14 +832,17 @@ export interface FileRouteTypes {
     | '/app-admin/'
     | '/app/'
     | '/qalling/'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
     | '/api/public/crm-media'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/qalling/app/$submoduleId'
+    | '/qalling/app/ai'
     | '/qalling/app/billing'
     | '/qalling/app/calendar'
     | '/qalling/app/clients'
+    | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
     | '/products/'
@@ -766,6 +869,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/mcp'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/about'
     | '/contact'
     | '/industries'
@@ -783,6 +889,7 @@ export interface FileRouteTypes {
     | '/app-admin/invoices'
     | '/app-admin/packages'
     | '/app-admin/payments'
+    | '/app-admin/referral'
     | '/app-admin/registrations'
     | '/app-admin/storage'
     | '/app-admin/tebar'
@@ -793,6 +900,9 @@ export interface FileRouteTypes {
     | '/app-admin/wallet'
     | '/app/onboarding'
     | '/l/$ruleId'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/qalling/daftar'
     | '/qalling/fitur'
     | '/qalling/harga'
@@ -804,13 +914,16 @@ export interface FileRouteTypes {
     | '/app-admin'
     | '/app'
     | '/qalling'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
     | '/api/public/crm-media'
     | '/api/public/visit'
     | '/qalling/app/$submoduleId'
+    | '/qalling/app/ai'
     | '/qalling/app/billing'
     | '/qalling/app/calendar'
     | '/qalling/app/clients'
+    | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
     | '/products'
@@ -839,6 +952,9 @@ export interface FileRouteTypes {
     | '/app'
     | '/app-admin'
     | '/auth'
+    | '/mcp'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/_site/about'
     | '/_site/contact'
     | '/_site/industries'
@@ -856,6 +972,7 @@ export interface FileRouteTypes {
     | '/app-admin/invoices'
     | '/app-admin/packages'
     | '/app-admin/payments'
+    | '/app-admin/referral'
     | '/app-admin/registrations'
     | '/app-admin/storage'
     | '/app-admin/tebar'
@@ -866,6 +983,9 @@ export interface FileRouteTypes {
     | '/app-admin/wallet'
     | '/app/onboarding'
     | '/l/$ruleId'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/token'
     | '/qalling/app'
     | '/qalling/daftar'
     | '/qalling/fitur'
@@ -878,14 +998,17 @@ export interface FileRouteTypes {
     | '/app-admin/'
     | '/app/'
     | '/qalling/'
+    | '/.well-known/oauth-protected-resource/mcp'
     | '/_site/products/$slug'
     | '/api/public/crm-media'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/qalling/app/$submoduleId'
+    | '/qalling/app/ai'
     | '/qalling/app/billing'
     | '/qalling/app/calendar'
     | '/qalling/app/clients'
+    | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
     | '/_site/products/'
@@ -916,8 +1039,14 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AuthRoute: typeof AuthRoute
+  McpRoute: typeof McpRoute
+  Char91DotwellKnownChar93OauthAuthorizationServerRoute: typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   ApiWorkspaceFilesRoute: typeof ApiWorkspaceFilesRoute
   LRuleIdRoute: typeof LRuleIdRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  OauthRegisterRoute: typeof OauthRegisterRoute
+  OauthTokenRoute: typeof OauthTokenRoute
   QallingAppRoute: typeof QallingAppRouteWithChildren
   QallingDaftarRoute: typeof QallingDaftarRoute
   QallingFiturRoute: typeof QallingFiturRoute
@@ -968,6 +1097,27 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_site/': {
@@ -1103,6 +1253,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminPaymentsRouteImport
       parentRoute: typeof AppAdminRoute
     }
+    '/app-admin/referral': {
+      id: '/app-admin/referral'
+      path: '/referral'
+      fullPath: '/app-admin/referral'
+      preLoaderRoute: typeof AppAdminReferralRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/app-admin/registrations': {
       id: '/app-admin/registrations'
       path: '/registrations'
@@ -1180,6 +1337,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LRuleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/register': {
+      id: '/oauth/register'
+      path: '/oauth/register'
+      fullPath: '/oauth/register'
+      preLoaderRoute: typeof OauthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/token': {
+      id: '/oauth/token'
+      path: '/oauth/token'
+      fullPath: '/oauth/token'
+      preLoaderRoute: typeof OauthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qalling/': {
       id: '/qalling/'
       path: '/qalling'
@@ -1243,6 +1421,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingSolusiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-protected-resource/mcp': {
+      id: '/.well-known/oauth-protected-resource/mcp'
+      path: '/mcp'
+      fullPath: '/.well-known/oauth-protected-resource/mcp'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport
+      parentRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+    }
     '/_site/products/': {
       id: '/_site/products/'
       path: '/products'
@@ -1292,6 +1477,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingAppSubmoduleIdRouteImport
       parentRoute: typeof QallingAppRoute
     }
+    '/qalling/app/ai': {
+      id: '/qalling/app/ai'
+      path: '/ai'
+      fullPath: '/qalling/app/ai'
+      preLoaderRoute: typeof QallingAppAiRouteImport
+      parentRoute: typeof QallingAppRoute
+    }
     '/qalling/app/billing': {
       id: '/qalling/app/billing'
       path: '/billing'
@@ -1311,6 +1503,13 @@ declare module '@tanstack/react-router' {
       path: '/clients'
       fullPath: '/qalling/app/clients'
       preLoaderRoute: typeof QallingAppClientsRouteImport
+      parentRoute: typeof QallingAppRoute
+    }
+    '/qalling/app/profile': {
+      id: '/qalling/app/profile'
+      path: '/profile'
+      fullPath: '/qalling/app/profile'
+      preLoaderRoute: typeof QallingAppProfileRouteImport
       parentRoute: typeof QallingAppRoute
     }
     '/qalling/app/referral': {
@@ -1560,6 +1759,7 @@ interface AppAdminRouteChildren {
   AppAdminInvoicesRoute: typeof AppAdminInvoicesRoute
   AppAdminPackagesRoute: typeof AppAdminPackagesRoute
   AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
+  AppAdminReferralRoute: typeof AppAdminReferralRoute
   AppAdminRegistrationsRoute: typeof AppAdminRegistrationsRoute
   AppAdminStorageRoute: typeof AppAdminStorageRoute
   AppAdminTebarRoute: typeof AppAdminTebarRoute
@@ -1580,6 +1780,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminInvoicesRoute: AppAdminInvoicesRoute,
   AppAdminPackagesRoute: AppAdminPackagesRoute,
   AppAdminPaymentsRoute: AppAdminPaymentsRoute,
+  AppAdminReferralRoute: AppAdminReferralRoute,
   AppAdminRegistrationsRoute: AppAdminRegistrationsRoute,
   AppAdminStorageRoute: AppAdminStorageRoute,
   AppAdminTebarRoute: AppAdminTebarRoute,
@@ -1595,11 +1796,28 @@ const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
   AppAdminRouteChildren,
 )
 
+interface Char91DotwellKnownChar93OauthProtectedResourceRouteChildren {
+  Char91DotwellKnownChar93OauthProtectedResourceMcpRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
+}
+
+const Char91DotwellKnownChar93OauthProtectedResourceRouteChildren: Char91DotwellKnownChar93OauthProtectedResourceRouteChildren =
+  {
+    Char91DotwellKnownChar93OauthProtectedResourceMcpRoute:
+      Char91DotwellKnownChar93OauthProtectedResourceMcpRoute,
+  }
+
+const Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren =
+  Char91DotwellKnownChar93OauthProtectedResourceRoute._addFileChildren(
+    Char91DotwellKnownChar93OauthProtectedResourceRouteChildren,
+  )
+
 interface QallingAppRouteChildren {
   QallingAppSubmoduleIdRoute: typeof QallingAppSubmoduleIdRoute
+  QallingAppAiRoute: typeof QallingAppAiRoute
   QallingAppBillingRoute: typeof QallingAppBillingRoute
   QallingAppCalendarRoute: typeof QallingAppCalendarRoute
   QallingAppClientsRoute: typeof QallingAppClientsRoute
+  QallingAppProfileRoute: typeof QallingAppProfileRoute
   QallingAppReferralRoute: typeof QallingAppReferralRoute
   QallingAppReportsRoute: typeof QallingAppReportsRoute
   QallingAppIndexRoute: typeof QallingAppIndexRoute
@@ -1607,9 +1825,11 @@ interface QallingAppRouteChildren {
 
 const QallingAppRouteChildren: QallingAppRouteChildren = {
   QallingAppSubmoduleIdRoute: QallingAppSubmoduleIdRoute,
+  QallingAppAiRoute: QallingAppAiRoute,
   QallingAppBillingRoute: QallingAppBillingRoute,
   QallingAppCalendarRoute: QallingAppCalendarRoute,
   QallingAppClientsRoute: QallingAppClientsRoute,
+  QallingAppProfileRoute: QallingAppProfileRoute,
   QallingAppReferralRoute: QallingAppReferralRoute,
   QallingAppReportsRoute: QallingAppReportsRoute,
   QallingAppIndexRoute: QallingAppIndexRoute,
@@ -1624,8 +1844,16 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AppAdminRoute: AppAdminRouteWithChildren,
   AuthRoute: AuthRoute,
+  McpRoute: McpRoute,
+  Char91DotwellKnownChar93OauthAuthorizationServerRoute:
+    Char91DotwellKnownChar93OauthAuthorizationServerRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren,
   ApiWorkspaceFilesRoute: ApiWorkspaceFilesRoute,
   LRuleIdRoute: LRuleIdRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
+  OauthRegisterRoute: OauthRegisterRoute,
+  OauthTokenRoute: OauthTokenRoute,
   QallingAppRoute: QallingAppRouteWithChildren,
   QallingDaftarRoute: QallingDaftarRoute,
   QallingFiturRoute: QallingFiturRoute,

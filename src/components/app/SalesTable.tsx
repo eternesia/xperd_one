@@ -303,14 +303,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
 
   const create = useMutation({
     mutationFn: async () => {
-      // Mengedit penawaran yang sudah dikirim mempertahankan statusnya — penawaran tetap bisa diedit
-      // walau SO sudah dibuat darinya (New 11).
-      const docStatus: PrcStatus =
-        editingId && entity.docType === "quotation"
-          ? (editingStatus ?? entity.openStatus)
-          : isDraft
-            ? "draft"
-            : entity.openStatus;
+      // Mengedit mengikuti centang Draft (New 14): hilangkan centang untuk mengirim, centang untuk tetap draf.
+      const docStatus: PrcStatus = isDraft ? "draft" : entity.openStatus;
       const sourceDoc = sourceDocs.find((d) => d.id === sourceId) ?? null;
       const doc_number = header.doc_number.trim() || nextDocNumber(entity.prefix, total + 1);
 
@@ -621,7 +615,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
 
       setEditingId(doc.id);
       setEditingStatus(doc.status);
-      setIsDraft(true);
+      setIsDraft(doc.status === "draft");
       setSourceId(doc.source_document_id ?? "");
       setSourceLines(upstreamLines);
       setSourceOpenTotal(sourceOpen);

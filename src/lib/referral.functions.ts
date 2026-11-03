@@ -65,3 +65,48 @@ export const getReferralOverview = createServerFn({ method: "POST" })
       })),
     };
   });
+
+export type ReferralSettings = {
+  enabled: boolean;
+  percent: number;
+  max_idr: number;
+  min_topup_idr: number;
+};
+
+/** Pengaturan program referral (hanya Super Admin). */
+export const getReferralSettings = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }): Promise<ReferralSettings> => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    await requireAdmin(context.userId);
+    const r = await executeOne<Record<string, unknown>>(
+      "SELECT enabled, percent, max_idr, min_topup_idr FROM referral_settings WHERE singleton = 1",
+    );
+    return {
+      enabled: Boolean(Number(r?.enabled ?? 1)),
+      percent: Number(r?.percent ?? 10),
+      max_idr: Number(r?.max_idr ?? 100000),
+      min_topup_idr: Number(r?.min_topup_idr ?? 50000),
+    };
+  });
+
+export const saveReferralSettings = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((d: ReferralSettings) => d)
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    const { execute } = await import("@/integrations/mysql/pool");
+    await requireAdmin(context.userId);
+    const percent = Number(data.percent);
+    const max = Number(data.max_idr);
+    const min = Number(data.min_topup_idr);
+    if (!(percent >= 0 && percent <= 100)) throw new Error("Persentase harus 0–100");
+    if (!(max >= 0) || !(min >= 0) || !Number.isFinite(max) || !Number.isFinite(min))
+      throw new Error("Nominal tidak boleh negatif");
+    await execute(
+      "UPDATE referral_settings SET enabled = ?, percent = ?, max_idr = ?, min_topup_idr = ? WHERE singleton = 1",
+      [data.enabled ? 1 : 0, percent, Math.round(max), Math.round(min)],
+    );
+    return { ok: true };
+  });

@@ -34,6 +34,11 @@ export const CRM_FEATURES: Record<string, string> = {
   "social-dashboard": "insights",
   tenders: "tender",
   "doc-library": "tender",
+  calendar: "publishing",
+  clients: "publishing",
+  reports: "insights",
+  ai: "mcp_api",
+  team: "publishing",
 };
 export function hasCatalogFeature(
   entitlements: Entitlements,

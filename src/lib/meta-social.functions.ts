@@ -197,14 +197,27 @@ export const publishPostNow = createServerFn({ method: "POST" })
     );
     if (!post) throw new Error("Post not found");
     await assertPublisher(post.workspace_id, context.userId);
+    const { result, execute } = await import("@/integrations/mysql/pool");
+    // Klaim atomik: hanya draf/terjadwal lokal yang belum pernah dikirim; cegah kirim dobel.
+    const claimed = await result(
+      "UPDATE crm_scheduled_posts SET status = 'publishing' WHERE id = ? AND status IN ('draft','scheduled') AND source <> 'tebar' AND external_id IS NULL",
+      [data.postId],
+    );
+    if (!claimed.affectedRows)
+      throw new Error("Postingan sudah diproses atau tidak dapat dikirim ulang");
     const { publishPost } = await import("@/lib/meta-publish.server");
     const { publicOrigin } = await import("@/lib/crm-media.server");
     const { getRequest } = await import("@tanstack/react-start/server");
-    const outcome = await publishPost(
-      post.workspace_id,
-      data.postId,
-      publicOrigin(getRequest().url),
-    );
+    let outcome;
+    try {
+      outcome = await publishPost(post.workspace_id, data.postId, publicOrigin(getRequest().url));
+    } catch (e) {
+      await execute(
+        "UPDATE crm_scheduled_posts SET status = 'failed', last_error = ? WHERE id = ? AND status = 'publishing'",
+        [(e as Error).message, data.postId],
+      );
+      throw e;
+    }
     return {
       ok: outcome.ok,
       results: outcome.results.map((r) => ({

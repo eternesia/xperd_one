@@ -5,6 +5,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
+import type { DeliveryResult } from "@/lib/post-delivery-rules";
 
 const isId = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
 
@@ -239,6 +240,7 @@ export const syncTebarPosts = createServerFn({ method: "POST" })
     const { execute, uuid } = await import("@/integrations/mysql/pool");
     const { sqlDateTime } = await import("@/lib/datetime");
     const t = await import("@/lib/tebar.server");
+    const { reconcileDelivery } = await import("@/lib/post-delivery-rules");
     const { mapTebarPost } = await import("@/lib/tebar-posts");
     const key = await t.getTebarKey();
     if (!key) throw new Error("Koneksi sosial belum diaktifkan oleh admin XPERD");
@@ -259,14 +261,36 @@ export const syncTebarPosts = createServerFn({ method: "POST" })
       id: string;
       external_id: string | null;
       source: string;
+      status: string;
       results: unknown;
-    }>("SELECT id, external_id, source, results FROM crm_scheduled_posts WHERE workspace_id = ?", [
-      data.workspaceId,
-    ]);
-    const byExt = new Map<string, { id: string; source: string }>();
+    }>(
+      "SELECT id, external_id, source, status, results FROM crm_scheduled_posts WHERE workspace_id = ?",
+      [data.workspaceId],
+    );
+    const parseResults = (v: unknown): DeliveryResult[] => {
+      let r = v;
+      if (typeof r === "string") {
+        try {
+          r = JSON.parse(r);
+        } catch {
+          r = [];
+        }
+      }
+      return Array.isArray(r) ? (r as DeliveryResult[]) : [];
+    };
+    const byExt = new Map<
+      string,
+      { id: string; source: string; status: string; results: unknown }
+    >();
     const knownIds = new Set<string>();
     for (const e of existing) {
-      if (e.external_id) byExt.set(e.external_id, { id: e.id, source: e.source });
+      if (e.external_id)
+        byExt.set(e.external_id, {
+          id: e.id,
+          source: e.source,
+          status: e.status,
+          results: e.results,
+        });
       let results: unknown = e.results;
       if (typeof results === "string") {
         try {
@@ -306,9 +330,26 @@ export const syncTebarPosts = createServerFn({ method: "POST" })
             ],
           );
         } else {
+          // Post lokal: yang masih draf/terjadwal tidak disentuh; hasil kirim lokal digabung, bukan ditimpa.
+          if (["scheduled", "draft"].includes(hit.status)) continue;
+          const merged = reconcileDelivery(parseResults(hit.results), m.results, m.status);
+          const permalinks = merged.results.map((r) => r.permalink).filter((p): p is string => !!p);
+          const errors = merged.results
+            .filter((r) => !r.ok)
+            .map((r) => r.error)
+            .filter(Boolean)
+            .join("; ");
           await execute(
-            "UPDATE crm_scheduled_posts SET status = ?, published_at = ?, last_error = ?, permalinks = ?, results = ? WHERE id = ?",
-            [...status, hit.id],
+            "UPDATE crm_scheduled_posts SET status = ?, published_at = ?, last_error = ?, permalinks = ?, results = ? WHERE id = ? AND status = ?",
+            [
+              merged.status,
+              merged.status === "published" ? (dt(m.published_at) ?? sqlDateTime()) : null,
+              errors || null,
+              JSON.stringify(permalinks),
+              JSON.stringify(merged.results),
+              hit.id,
+              hit.status,
+            ],
           );
         }
         updated++;

@@ -44,6 +44,13 @@ export const Route = createFileRoute("/qalling/login")({
   component: QallingLogin,
 });
 
+/** Tujuan setelah masuk: halaman persetujuan OAuth/MCP (server-side, dimuat penuh) atau beranda Qalling. */
+function afterLogin(navigate: ReturnType<typeof useNavigate>) {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/oauth/") && !next.startsWith("//")) window.location.replace(next);
+  else navigate({ to: "/qalling/app", replace: true });
+}
+
 function QallingLogin() {
   const { pick } = useI18n();
   const [email, setEmail] = useState("");
@@ -83,7 +90,7 @@ function QallingLogin() {
         }
         sessionStorage.removeItem(SIGNUP_TIER_KEY);
       }
-      navigate({ to: "/qalling/app", replace: true });
+      afterLogin(navigate);
     })();
   }, [loading, session, navigate, provisionGoogle]);
 
@@ -107,7 +114,7 @@ function QallingLogin() {
     try {
       await verify({ data: { email, code } });
       onSessionIssued();
-      navigate({ to: "/qalling/app", replace: true });
+      afterLogin(navigate);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Kode salah");
       setBusy(false);

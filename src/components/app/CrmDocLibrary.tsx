@@ -262,7 +262,7 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
             setOpen(true);
           }}
         >
-          <Plus /> {lang === "id" ? "Unggah dokumen" : "Upload document"}
+          <Plus /> {lang === "id" ? "Upload dokumen" : "Upload document"}
         </Button>
       </div>
 
@@ -415,7 +415,7 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
                   ? "Ubah / ganti versi dokumen"
                   : "Edit / new version"
                 : lang === "id"
-                  ? "Unggah dokumen"
+                  ? "Upload dokumen"
                   : "Upload document"}
             </DialogTitle>
           </DialogHeader>

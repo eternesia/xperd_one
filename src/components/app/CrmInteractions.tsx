@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { QuickReplies } from "@/components/app/QuickReplies";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -173,6 +174,7 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
           <DialogHeader>
             <DialogTitle>Balas komentar</DialogTitle>
           </DialogHeader>
+          <QuickReplies workspaceId={workspaceId} onPick={setBody} />
           <Textarea
             aria-label="Balasan komentar"
             maxLength={2000}

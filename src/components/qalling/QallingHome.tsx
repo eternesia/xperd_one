@@ -66,7 +66,10 @@ export function useWorkspaceEntitlements(workspaceId?: string) {
   return useQuery({
     queryKey: ["workspace-entitlements", workspaceId],
     enabled: Boolean(workspaceId),
-    queryFn: () => getWorkspaceEntitlements({ data: { workspaceId: workspaceId ?? "" } }) as Promise<Entitlements>,
+    queryFn: () =>
+      getWorkspaceEntitlements({
+        data: { workspaceId: workspaceId ?? "" },
+      }) as Promise<Entitlements>,
   });
 }
 
@@ -83,8 +86,15 @@ export function QallingHome() {
     queryKey: ["qalling-home-accounts", workspaceId],
     enabled: Boolean(workspaceId),
     queryFn: async () => {
-      const res = await listWorkspaceRows({ data: { table: "crm_social_accounts", workspaceId: workspaceId ?? "", limit: 500 } });
-      return (res?.rows ?? []) as { id: string; platform: string; account_name: string; source: string }[];
+      const res = await listWorkspaceRows({
+        data: { table: "crm_social_accounts", workspaceId: workspaceId ?? "", limit: 500 },
+      });
+      return (res?.rows ?? []) as {
+        id: string;
+        platform: string;
+        account_name: string;
+        source: string;
+      }[];
     },
   });
   const { data: allPosts = [] } = useQuery({
@@ -93,10 +103,19 @@ export function QallingHome() {
     queryFn: async () => {
       const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
       const res = await listWorkspaceRows({
-        data: { table: "crm_scheduled_posts", workspaceId: workspaceId ?? "", orderBy: "scheduled_at", orderDir: "asc", limit: 2000 },
+        data: {
+          table: "crm_scheduled_posts",
+          workspaceId: workspaceId ?? "",
+          orderBy: "scheduled_at",
+          orderDir: "asc",
+          limit: 2000,
+        },
       });
       return ((res?.rows ?? []) as Post[])
-        .map((p) => ({ ...p, scheduled_at: new Date(`${String(p.scheduled_at).replace(" ", "T")}Z`).toISOString() }))
+        .map((p) => ({
+          ...p,
+          scheduled_at: new Date(`${String(p.scheduled_at).replace(" ", "T")}Z`).toISOString(),
+        }))
         .filter((p) => p.scheduled_at >= since);
     },
   });
@@ -435,6 +454,28 @@ export function QallingHome() {
             </p>
           )}
         </div>
+      </section>
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-gradient-to-r from-primary/10 to-transparent p-5">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">XPERD ERP</p>
+          <h2 className="mt-1 text-base font-semibold">
+            {pick(
+              "Closed the deal? Let XPERD handle the books.",
+              "Sudah closing? Lanjutkan pembukuan di XPERD.",
+            )}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {pick(
+              "Accounting, inventory, sales invoices and tax in one ERP connected to your Qalling workspace.",
+              "Akuntansi, stok gudang, faktur penjualan, dan pajak dalam satu ERP yang terhubung dengan workspace Qalling Anda.",
+            )}
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <a href="https://xperd.id" target="_blank" rel="noopener noreferrer">
+            {pick("Explore XPERD", "Lihat XPERD")}
+          </a>
+        </Button>
       </section>
     </div>
   );

@@ -4,20 +4,47 @@ import { Copy, Plus, ShieldAlert, Target, Trash2, TrendingUp } from "lucide-reac
 import { toast } from "sonner";
 
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
-import { PaginationBar, SearchInput, TableSkeletonRows, usePagination, useSearchFilter } from "@/components/app/ui-states";
+import {
+  PaginationBar,
+  SearchInput,
+  TableSkeletonRows,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { CRM_BROADCAST_CHANNELS, CRM_STAGES, stageLabel } from "@/lib/crm";
 import { useI18n } from "@/lib/i18n";
 
-function Header({ title, kicker, children }: { title: string; kicker: string; children?: React.ReactNode }) {
+function Header({
+  title,
+  kicker,
+  children,
+}: {
+  title: string;
+  kicker: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -34,7 +61,9 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
     <Card>
       <CardContent className="p-5">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-2 text-2xl font-semibold text-navy dark:text-primary-foreground">{value}</p>
+        <p className="mt-2 text-2xl font-semibold text-navy dark:text-primary-foreground">
+          {value}
+        </p>
         {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
       </CardContent>
     </Card>
@@ -70,7 +99,13 @@ function ExpiringDocsAlert({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-doc-library", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_doc_library", workspaceId, orderBy: "expiry_date", orderDir: "asc", limit: 500 },
+        data: {
+          table: "crm_doc_library",
+          workspaceId,
+          orderBy: "expiry_date",
+          orderDir: "asc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((r) => ({
         name: String(r.name ?? ""),
@@ -111,7 +146,13 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-dashboard-leads", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_leads", workspaceId, orderBy: "created_at", orderDir: "desc", limit: 2000 },
+        data: {
+          table: "crm_leads",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 2000,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((r) => ({
         id: r.id,
@@ -133,7 +174,10 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
     const won = leads.filter((l) => l.stage === "won");
     const lost = leads.filter((l) => l.stage === "lost");
     const pipeline = open.reduce((s, l) => s + Number(l.estimated_value), 0);
-    const forecast = open.reduce((s, l) => s + (Number(l.estimated_value) * Number(l.probability)) / 100, 0);
+    const forecast = open.reduce(
+      (s, l) => s + (Number(l.estimated_value) * Number(l.probability)) / 100,
+      0,
+    );
     const closed = won.length + lost.length;
     const winRate = closed ? Math.round((won.length / closed) * 100) : 0;
     const since = Date.now() - 30 * 86_400_000;
@@ -141,7 +185,11 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
 
     const byStage = CRM_STAGES.map((s) => {
       const rows = leads.filter((l) => l.stage === s.id);
-      return { stage: s.id, count: rows.length, value: rows.reduce((a, l) => a + Number(l.estimated_value), 0) };
+      return {
+        stage: s.id,
+        count: rows.length,
+        value: rows.reduce((a, l) => a + Number(l.estimated_value), 0),
+      };
     });
 
     const owners = new Map<string, { open: number; value: number; won: number }>();
@@ -170,7 +218,17 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
 
     const maxStageValue = Math.max(1, ...byStage.map((s) => s.value));
 
-    return { pipeline, forecast, winRate, fresh, byStage, owners: [...owners.entries()], stuck, lostReasons: [...lostReasons.entries()], maxStageValue };
+    return {
+      pipeline,
+      forecast,
+      winRate,
+      fresh,
+      byStage,
+      owners: [...owners.entries()],
+      stuck,
+      lostReasons: [...lostReasons.entries()],
+      maxStageValue,
+    };
   }, [leads, lang]);
 
   return (
@@ -180,28 +238,40 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
       <ExpiringDocsAlert workspaceId={workspaceId} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label={lang === "id" ? "Nilai pipeline" : "Pipeline value"} value={fmtIDR(stats.pipeline)} />
+        <Metric
+          label={lang === "id" ? "Nilai pipeline" : "Pipeline value"}
+          value={fmtIDR(stats.pipeline)}
+        />
         <Metric
           label={lang === "id" ? "Forecast tertimbang" : "Weighted forecast"}
           value={fmtIDR(stats.forecast)}
           hint={lang === "id" ? "Nilai × probabilitas" : "Value × probability"}
         />
         <Metric label={lang === "id" ? "Win rate" : "Win rate"} value={`${stats.winRate}%`} />
-        <Metric label={lang === "id" ? "Prospek baru (30 hari)" : "New leads (30 days)"} value={String(stats.fresh)} />
+        <Metric
+          label={lang === "id" ? "Prospek baru (30 hari)" : "New leads (30 days)"}
+          value={String(stats.fresh)}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="space-y-4 p-6">
             <p className="flex items-center gap-2 font-medium text-navy dark:text-primary-foreground">
-              <TrendingUp className="h-4 w-4 text-gold" /> {lang === "id" ? "Nilai per tahap" : "Value by stage"}
+              <TrendingUp className="h-4 w-4 text-gold" />{" "}
+              {lang === "id" ? "Nilai per tahap" : "Value by stage"}
             </p>
-            {isLoading && <p className="text-sm text-muted-foreground">{lang === "id" ? "Memuat…" : "Loading…"}</p>}
+            {isLoading && (
+              <p className="text-sm text-muted-foreground">
+                {lang === "id" ? "Memuat…" : "Loading…"}
+              </p>
+            )}
             {stats.byStage.map((s) => (
               <div key={s.stage} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span>
-                    {stageLabel(s.stage, lang)} <span className="text-muted-foreground">({s.count})</span>
+                    {stageLabel(s.stage, lang)}{" "}
+                    <span className="text-muted-foreground">({s.count})</span>
                   </span>
                   <span className="font-medium">{fmtIDR(s.value)}</span>
                 </div>
@@ -217,7 +287,9 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>{lang === "id" ? "Sales" : "Owner"}</TableHead>
-                  <TableHead className="text-right">{lang === "id" ? "Prospek aktif" : "Open leads"}</TableHead>
+                  <TableHead className="text-right">
+                    {lang === "id" ? "Prospek aktif" : "Open leads"}
+                  </TableHead>
                   <TableHead className="text-right">{lang === "id" ? "Nilai" : "Value"}</TableHead>
                   <TableHead className="text-right">{lang === "id" ? "Menang" : "Won"}</TableHead>
                 </TableRow>
@@ -225,7 +297,10 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
               <TableBody>
                 {stats.owners.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell
+                      colSpan={4}
+                      className="py-10 text-center text-sm text-muted-foreground"
+                    >
                       {lang === "id" ? "Belum ada data." : "No data yet."}
                     </TableCell>
                   </TableRow>
@@ -251,14 +326,21 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
               {lang === "id" ? "Prospek mandek (≥ 14 hari)" : "Stuck leads (14+ days)"}
             </p>
             {stats.stuck.length === 0 && (
-              <p className="text-sm text-muted-foreground">{lang === "id" ? "Semua prospek bergerak." : "Everything is moving."}</p>
+              <p className="text-sm text-muted-foreground">
+                {lang === "id" ? "Semua prospek bergerak." : "Everything is moving."}
+              </p>
             )}
             {stats.stuck.map((l) => (
-              <div key={l.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+              <div
+                key={l.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
+              >
                 <span className="truncate">{l.name}</span>
                 <span className="flex items-center gap-2">
                   <Badge variant="secondary">{stageLabel(l.stage, lang)}</Badge>
-                  <Badge variant="outline">{l.age} {lang === "id" ? "hari" : "days"}</Badge>
+                  <Badge variant="outline">
+                    {l.age} {lang === "id" ? "hari" : "days"}
+                  </Badge>
                 </span>
               </div>
             ))}
@@ -271,10 +353,15 @@ export function CrmDashboardView({ workspaceId }: { workspaceId: string }) {
               {lang === "id" ? "Alasan kalah" : "Lost reasons"}
             </p>
             {stats.lostReasons.length === 0 && (
-              <p className="text-sm text-muted-foreground">{lang === "id" ? "Belum ada prospek kalah." : "No lost leads yet."}</p>
+              <p className="text-sm text-muted-foreground">
+                {lang === "id" ? "Belum ada prospek kalah." : "No lost leads yet."}
+              </p>
             )}
             {stats.lostReasons.map(([reason, count]) => (
-              <div key={reason} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+              <div
+                key={reason}
+                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+              >
                 <span className="truncate">{reason}</span>
                 <Badge variant="outline">{count}</Badge>
               </div>
@@ -299,7 +386,13 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const month = new Date().toISOString().slice(0, 7);
-  const [form, setForm] = useState({ id: "", owner_name: "", period_month: month, target_amount: 0, notes: "" });
+  const [form, setForm] = useState({
+    id: "",
+    owner_name: "",
+    period_month: month,
+    target_amount: 0,
+    notes: "",
+  });
   // #57: pencarian + paginasi tabel bersama.
   const [term, setTerm] = useState("");
 
@@ -307,7 +400,13 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-targets", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_targets", workspaceId, orderBy: "period_month", orderDir: "desc", limit: 500 },
+        data: {
+          table: "crm_targets",
+          workspaceId,
+          orderBy: "period_month",
+          orderDir: "desc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((r) => ({
         id: r.id,
@@ -323,22 +422,41 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-won-leads", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_leads", workspaceId, filters: { stage: "won" }, orderBy: "created_at", orderDir: "desc", limit: 2000 },
+        data: {
+          table: "crm_leads",
+          workspaceId,
+          filters: { stage: "won" },
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 2000,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((r) => ({
         owner_name: r.owner_name ?? null,
         estimated_value: Number(r.estimated_value) || 0,
         stage_changed_at: r.stage_changed_at ?? null,
-      })) as { owner_name: string | null; estimated_value: number; stage_changed_at: string | null }[];
+      })) as {
+        owner_name: string | null;
+        estimated_value: number;
+        stage_changed_at: string | null;
+      }[];
     },
   });
 
   const realized = (owner: string, period: string) =>
     wonLeads
-      .filter((l) => (l.owner_name ?? "") === owner && (l.stage_changed_at ?? "").slice(0, 7) === period.slice(0, 7))
+      .filter(
+        (l) =>
+          (l.owner_name ?? "") === owner &&
+          (l.stage_changed_at ?? "").slice(0, 7) === period.slice(0, 7),
+      )
       .reduce((s, l) => s + Number(l.estimated_value), 0);
 
-  const visibleTargets = useSearchFilter(targets, term, (r) => [r.owner_name, r.period_month, r.notes]);
+  const visibleTargets = useSearchFilter(targets, term, (r) => [
+    r.owner_name,
+    r.period_month,
+    r.notes,
+  ]);
   const pager = usePagination(visibleTargets);
 
   const save = useMutation({
@@ -349,7 +467,9 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
         target_amount: Number(form.target_amount) || 0,
         notes: form.notes || null,
       };
-      await saveWorkspaceRow({ data: { table: "crm_targets", workspaceId, id: form.id || undefined, data: payload } });
+      await saveWorkspaceRow({
+        data: { table: "crm_targets", workspaceId, id: form.id || undefined, data: payload },
+      });
     },
     onSuccess: () => {
       toast.success(lang === "id" ? "Target tersimpan" : "Target saved");
@@ -395,8 +515,12 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
                 <TableHead>{lang === "id" ? "Periode" : "Period"}</TableHead>
                 <TableHead>{lang === "id" ? "Sales" : "Owner"}</TableHead>
                 <TableHead className="text-right">Target</TableHead>
-                <TableHead className="text-right">{lang === "id" ? "Realisasi" : "Achieved"}</TableHead>
-                <TableHead className="w-40">{lang === "id" ? "Pencapaian" : "Attainment"}</TableHead>
+                <TableHead className="text-right">
+                  {lang === "id" ? "Realisasi" : "Achieved"}
+                </TableHead>
+                <TableHead className="w-40">
+                  {lang === "id" ? "Pencapaian" : "Attainment"}
+                </TableHead>
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
@@ -404,14 +528,19 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
               {targetsLoading && <TableSkeletonRows columns={7} />}
               {!targetsLoading && visibleTargets.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {lang === "id" ? "Belum ada target." : "No targets yet."}
                   </TableCell>
                 </TableRow>
               )}
               {pager.items.map((t, idx) => {
                 const got = realized(t.owner_name, t.period_month);
-                const pct = t.target_amount ? Math.min(100, Math.round((got / Number(t.target_amount)) * 100)) : 0;
+                const pct = t.target_amount
+                  ? Math.min(100, Math.round((got / Number(t.target_amount)) * 100))
+                  : 0;
                 return (
                   <TableRow key={t.id}>
                     <TableCell className="text-muted-foreground">{pager.start + idx + 1}</TableCell>
@@ -422,7 +551,9 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Progress value={pct} />
-                        <span className="w-10 text-right text-xs text-muted-foreground">{pct}%</span>
+                        <span className="w-10 text-right text-xs text-muted-foreground">
+                          {pct}%
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -443,28 +574,47 @@ export function CrmTargetsView({ workspaceId }: { workspaceId: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-gold" /> {lang === "id" ? "Target bulanan" : "Monthly target"}
+              <Target className="h-4 w-4 text-gold" />{" "}
+              {lang === "id" ? "Target bulanan" : "Monthly target"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <AdminField label={lang === "id" ? "Sales" : "Owner"}>
-              <Input value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
+              <Input
+                value={form.owner_name}
+                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Periode" : "Period"}>
-              <Input type="month" value={form.period_month.slice(0, 7)} onChange={(e) => setForm({ ...form, period_month: e.target.value })} />
+              <Input
+                type="month"
+                value={form.period_month.slice(0, 7)}
+                onChange={(e) => setForm({ ...form, period_month: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Nilai target" : "Target amount"}>
-              <Input type="number" value={form.target_amount} onChange={(e) => setForm({ ...form, target_amount: Number(e.target.value) })} />
+              <Input
+                type="number"
+                value={form.target_amount}
+                onChange={(e) => setForm({ ...form, target_amount: Number(e.target.value) })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Catatan" : "Notes"}>
-              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </AdminField>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               {lang === "id" ? "Batal" : "Cancel"}
             </Button>
-            <Button variant="navy" disabled={!form.owner_name.trim() || save.isPending} onClick={() => save.mutate()}>
+            <Button
+              variant="navy"
+              disabled={!form.owner_name.trim() || save.isPending}
+              onClick={() => save.mutate()}
+            >
               {lang === "id" ? "Simpan" : "Save"}
             </Button>
           </DialogFooter>
@@ -494,22 +644,33 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-templates", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_templates", workspaceId, orderBy: "created_at", orderDir: "desc", limit: 500 },
+        data: {
+          table: "crm_templates",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
-      return (data.rows ?? []).map((r) => ({
-        id: r.id,
-        name: r.name,
-        channel: r.channel,
-        body: r.body,
-        is_active: Boolean(r.is_active),
-      })) as TemplateRow[];
+      // Balasan cepat & katalog invoice cepat memakai tabel yang sama; jangan campur ke Template Pesan.
+      return (data.rows ?? [])
+        .filter((r) => r.channel !== "quick_reply" && r.channel !== "catalog")
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          channel: r.channel,
+          body: r.body,
+          is_active: Boolean(r.is_active),
+        })) as TemplateRow[];
     },
   });
 
   const save = useMutation({
     mutationFn: async () => {
       const payload = { name: form.name.trim(), channel: form.channel, body: form.body };
-      await saveWorkspaceRow({ data: { table: "crm_templates", workspaceId, id: form.id || undefined, data: payload } });
+      await saveWorkspaceRow({
+        data: { table: "crm_templates", workspaceId, id: form.id || undefined, data: payload },
+      });
     },
     onSuccess: () => {
       toast.success(lang === "id" ? "Template tersimpan" : "Template saved");
@@ -618,7 +779,10 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
           </DialogHeader>
           <div className="space-y-4">
             <AdminField label={lang === "id" ? "Nama" : "Name"}>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Kanal" : "Channel"}>
               <AdminSelect value={form.channel} onChange={(v) => setForm({ ...form, channel: v })}>
@@ -630,7 +794,11 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
               </AdminSelect>
             </AdminField>
             <AdminField label={lang === "id" ? "Isi pesan" : "Message body"}>
-              <Textarea rows={6} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+              <Textarea
+                rows={6}
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+              />
             </AdminField>
             <p className="text-xs text-muted-foreground">
               {lang === "id" ? "Variabel tersedia: {{name}}" : "Available variable: {{name}}"}
@@ -640,7 +808,11 @@ export function CrmTemplatesView({ workspaceId }: { workspaceId: string }) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               {lang === "id" ? "Batal" : "Cancel"}
             </Button>
-            <Button variant="navy" disabled={!form.name.trim() || !form.body.trim() || save.isPending} onClick={() => save.mutate()}>
+            <Button
+              variant="navy"
+              disabled={!form.name.trim() || !form.body.trim() || save.isPending}
+              onClick={() => save.mutate()}
+            >
               {lang === "id" ? "Simpan" : "Save"}
             </Button>
           </DialogFooter>

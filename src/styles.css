@@ -311,11 +311,9 @@
   --border: oklch(1 0 0 / 14%);
   --gold: oklch(0.75 0.13 245);
 }
-.dark .qalling-theme .qalling-logo, .qalling-theme:has(.dark) .qalling-logo, .qalling-theme.dark .qalling-logo {
-  background: oklch(1 0 0);
-  padding: 0.35rem;
-  border-radius: 0.375rem;
-}
+.qalling-logo-dark { display: none; }
+.dark .qalling-theme .qalling-logo-light, .qalling-theme:has(.dark) .qalling-logo-light, .qalling-theme.dark .qalling-logo-light { display: none; }
+.dark .qalling-theme .qalling-logo-dark, .qalling-theme:has(.dark) .qalling-logo-dark, .qalling-theme.dark .qalling-logo-dark { display: block; }
 
 /* Keep module-specific wide/tall dialog overrides within a phone's visible
    viewport, including landscape and the reduced viewport above a keyboard. */

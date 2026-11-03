@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { validateScheduleTime } from "@/lib/post-delivery-rules";
+import { GOLDEN_HOURS, nextGoldenSlot, toLocalInputValue } from "@/lib/golden-hours";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouter } from "@tanstack/react-router";
@@ -579,10 +581,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-const toLocalInput = (d: Date) => {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-};
+const toLocalInput = toLocalInputValue;
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const startOfWeek = (d: Date) => {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -786,7 +785,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       );
   };
 
-  const persist = async (d: Draft, status: string) => {
+  const persist = async (d: Draft, status: string, immediate = false) => {
     validate(d, status);
     const payload = {
       title:
@@ -797,7 +796,13 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       media_url: d.media_url.trim() || null,
       media_paths: JSON.stringify(d.media_paths),
       account_ids: JSON.stringify(d.account_ids),
-      scheduled_at: sqlDateTime(new Date(d.when || Date.now())),
+      scheduled_at: sqlDateTime(
+        status === "scheduled" && !immediate
+          ? new Date(validateScheduleTime(d.when, Date.now()))
+          : status === "draft" && d.when && Number.isFinite(Date.parse(d.when))
+            ? new Date(d.when)
+            : new Date(),
+      ),
       status,
       last_error: null,
     };
@@ -829,6 +834,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       const pid = await persist(
         { ...editing!, when: editing!.when || toLocalInput(new Date()) },
         "scheduled",
+        true,
       );
       setEditing((e) => (e ? { ...e, id: pid } : e));
       return publishFn({ data: { postId: pid } });
@@ -963,7 +969,13 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
               disabled={syncPosts.isPending}
             >
               <RefreshCw className={cn("h-4 w-4", syncPosts.isPending && "animate-spin")} />{" "}
-              {syncPosts.isPending ? (id ? "Menyinkronkan..." : "Syncing...") : id ? "Sinkronkan" : "Sync"}
+              {syncPosts.isPending
+                ? id
+                  ? "Menyinkronkan..."
+                  : "Syncing..."
+                : id
+                  ? "Sinkronkan"
+                  : "Sync"}
             </Button>
           )}
           <Button variant="outline" onClick={() => goSub("social-accounts")}>
@@ -1330,6 +1342,26 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                       value={editing.when}
                       onChange={(e) => setEditing({ ...editing, when: e.target.value })}
                     />
+                    <div
+                      className="mt-2 flex flex-wrap gap-1"
+                      aria-label={id ? "Jam emas WIB" : "Golden hours WIB"}
+                    >
+                      {GOLDEN_HOURS.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary hover:text-primary"
+                          onClick={() =>
+                            setEditing({
+                              ...editing,
+                              when: toLocalInputValue(nextGoldenSlot(new Date(), g.id)),
+                            })
+                          }
+                        >
+                          ⭐ {id ? g.label : g.en} {g.start}
+                        </button>
+                      ))}
+                    </div>
                   </AdminField>
                   <AdminField
                     label={id ? "Judul internal (opsional)" : "Internal title (optional)"}
@@ -1407,35 +1439,37 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
             >
               <Copy className="h-4 w-4" /> {id ? "Salin" : "Copy"}
             </Button>
-            {editing?.status !== "published" && editing?.source !== "tebar" && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => save.mutate({ status: "draft" })}
-                  disabled={save.isPending}
-                >
-                  {id ? "Simpan draft" : "Save draft"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => publishNow.mutate()}
-                  disabled={publishNow.isPending}
-                >
-                  {publishNow.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}{" "}
-                  {id ? "Posting sekarang" : "Post now"}
-                </Button>
-                <Button
-                  onClick={() => save.mutate({ status: "scheduled" })}
-                  disabled={save.isPending}
-                >
-                  <CalendarDays className="h-4 w-4" /> {id ? "Jadwalkan" : "Schedule"}
-                </Button>
-              </>
-            )}
+            {editing &&
+              ["draft", "scheduled"].includes(editing.status) &&
+              editing.source !== "tebar" && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => save.mutate({ status: "draft" })}
+                    disabled={save.isPending}
+                  >
+                    {id ? "Simpan draft" : "Save draft"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => publishNow.mutate()}
+                    disabled={publishNow.isPending}
+                  >
+                    {publishNow.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}{" "}
+                    {id ? "Posting sekarang" : "Post now"}
+                  </Button>
+                  <Button
+                    onClick={() => save.mutate({ status: "scheduled" })}
+                    disabled={save.isPending}
+                  >
+                    <CalendarDays className="h-4 w-4" /> {id ? "Jadwalkan" : "Schedule"}
+                  </Button>
+                </>
+              )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

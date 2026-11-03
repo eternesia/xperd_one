@@ -2,18 +2,49 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, MessageCircle, Check, Construction, FileOutput, Loader2, Pencil, Plus, Search, Trash2, Upload, UserRound } from "lucide-react";
+import {
+  CalendarClock,
+  MessageCircle,
+  Check,
+  Construction,
+  FileOutput,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
-import { PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
+import {
+  PaginationBar,
+  SearchInput,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
 import { BroadcastView, CampaignView, WaGatewayView } from "@/components/app/CrmOutreach";
 import { CrmDashboardView, CrmTargetsView, CrmTemplatesView } from "@/components/app/CrmInsights";
 // #50 (BS New 3): checklist dokumen tender.
@@ -27,11 +58,33 @@ import { MediaLibraryView } from "@/components/app/CrmMedia";
 import { CrmIdeasView } from "@/components/app/CrmIdeas";
 import { CrmInboxView } from "@/components/app/CrmInbox";
 import { CrmCommentsView, CrmAutomationsView } from "@/components/app/CrmInteractions";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import {
+  deleteWorkspaceRow,
+  listWorkspaceRows,
+  saveWorkspaceRow,
+  upsertWorkspaceRows,
+} from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
+import { QuickInvoice } from "@/components/app/QuickReplies";
+import { CalendarPage } from "@/components/qalling/pages/CalendarPage";
+import { ClientsPage } from "@/components/qalling/pages/ClientsPage";
+import { ReportsPage } from "@/components/qalling/pages/ReportsPage";
+import { TeamPage } from "@/components/app/TeamPage";
+import { AiPage } from "@/components/qalling/pages/AiPage";
 import { useI18n } from "@/lib/i18n";
-import { CRM_ACTIVITY_TYPES, CRM_SOURCES, CRM_STAGES, nextLeadCode, stageLabel, waLink } from "@/lib/crm";
-import { convertLeadToQuotation, listWorkspaceOwners, type WorkspaceOwner } from "@/lib/crm.functions";
+import {
+  CRM_ACTIVITY_TYPES,
+  CRM_SOURCES,
+  CRM_STAGES,
+  nextLeadCode,
+  stageLabel,
+  waLink,
+} from "@/lib/crm";
+import {
+  convertLeadToQuotation,
+  listWorkspaceOwners,
+  type WorkspaceOwner,
+} from "@/lib/crm.functions";
 
 interface LeadRow {
   id: string;
@@ -90,7 +143,13 @@ function useLeads(workspaceId: string) {
     queryKey: ["crm-leads", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_leads", workspaceId, orderBy: "created_at", orderDir: "desc", limit: 500 },
+        data: {
+          table: "crm_leads",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((row) => {
         return {
@@ -103,7 +162,15 @@ function useLeads(workspaceId: string) {
   });
 }
 
-function PageHeader({ title, kicker, children }: { title: string; kicker: string; children?: React.ReactNode }) {
+function PageHeader({
+  title,
+  kicker,
+  children,
+}: {
+  title: string;
+  kicker: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -115,8 +182,19 @@ function PageHeader({ title, kicker, children }: { title: string; kicker: string
   );
 }
 
-export function CrmView({ submoduleId, workspaceId }: { submoduleId: string; workspaceId: string }) {
+export function CrmView({
+  submoduleId,
+  workspaceId,
+}: {
+  submoduleId: string;
+  workspaceId: string;
+}) {
   if (submoduleId === "dashboard") return <CrmDashboardView workspaceId={workspaceId} />;
+  if (submoduleId === "calendar") return <CalendarPage />;
+  if (submoduleId === "clients") return <ClientsPage />;
+  if (submoduleId === "reports") return <ReportsPage />;
+  if (submoduleId === "ai") return <AiPage />;
+  if (submoduleId === "team") return <TeamPage embedded />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;
   if (submoduleId === "pipeline") return <PipelineView workspaceId={workspaceId} />;
   if (submoduleId === "contacts") return <ContactsView workspaceId={workspaceId} />;
@@ -172,7 +250,9 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
     const q = term.trim().toLowerCase();
     if (!q) return list;
     return list.filter((r) =>
-      [r.code, r.name, r.company_name, r.email, r.phone, r.owner_name].some((v) => (v ?? "").toLowerCase().includes(q)),
+      [r.code, r.name, r.company_name, r.email, r.phone, r.owner_name].some((v) =>
+        (v ?? "").toLowerCase().includes(q),
+      ),
     );
   }, [rows, term, mineOnly, me]);
   const pager = usePagination(filtered);
@@ -182,7 +262,9 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
     setConverting(id);
     try {
       const res = await convert({ data: { workspaceId, leadId: id } });
-      toast.success(lang === "id" ? `Penawaran ${res.docNumber} dibuat` : `Quotation ${res.docNumber} created`);
+      toast.success(
+        lang === "id" ? `Penawaran ${res.docNumber} dibuat` : `Quotation ${res.docNumber} created`,
+      );
       qc.invalidateQueries({ queryKey: ["crm-leads", workspaceId] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Convert failed");
@@ -200,7 +282,9 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
       const sheet = wb.Sheets[wb.SheetNames[0]!];
       const parsed = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet!);
       const seenEmail = new Set(rows.map((r) => (r.email ?? "").toLowerCase()).filter(Boolean));
-      const seenPhone = new Set(rows.map((r) => (r.phone ?? "").replace(/\D/g, "")).filter(Boolean));
+      const seenPhone = new Set(
+        rows.map((r) => (r.phone ?? "").replace(/\D/g, "")).filter(Boolean),
+      );
       const payload: Record<string, unknown>[] = [];
       let skipped = 0;
       parsed.forEach((raw) => {
@@ -224,7 +308,10 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         if (email) seenEmail.add(email);
         if (digits) seenPhone.add(digits);
         payload.push({
-          code: nextLeadCode(rows.map((r) => r.code), payload.length),
+          code: nextLeadCode(
+            rows.map((r) => r.code),
+            payload.length,
+          ),
           name,
           company_name: pick("company", "perusahaan") || null,
           email: email || null,
@@ -239,7 +326,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         });
       });
       if (!payload.length) {
-        toast.info(lang === "id" ? `Tidak ada baris baru (${skipped} duplikat)` : `No new rows (${skipped} duplicates)`);
+        toast.info(
+          lang === "id"
+            ? `Tidak ada baris baru (${skipped} duplikat)`
+            : `No new rows (${skipped} duplicates)`,
+        );
         return;
       }
       // Insert massal lewat server fn (nama kolom difilter whitelist di server).
@@ -319,7 +410,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             if (f) void handleImport(f);
           }}
         />
-        <Button variant="outline" disabled={importing} onClick={() => document.getElementById("crm-lead-import")?.click()}>
+        <Button
+          variant="outline"
+          disabled={importing}
+          onClick={() => document.getElementById("crm-lead-import")?.click()}
+        >
           {importing ? <Loader2 className="animate-spin" /> : <Upload />}{" "}
           {lang === "id" ? "Impor Excel" : "Import Excel"}
         </Button>
@@ -329,7 +424,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         <Button
           variant="navy"
           onClick={() => {
-            setForm({ ...EMPTY_LEAD, code: nextLeadCode(rows.map((r) => r.code)), owner_name: me ?? "" });
+            setForm({
+              ...EMPTY_LEAD,
+              code: nextLeadCode(rows.map((r) => r.code)),
+              owner_name: me ?? "",
+            });
             setOpen(true);
           }}
         >
@@ -356,14 +455,20 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={9}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {lang === "id" ? "Memuat…" : "Loading…"}
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={9}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {lang === "id" ? "Belum ada prospek." : "No leads yet."}
                   </TableCell>
                 </TableRow>
@@ -384,7 +489,10 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                     {r.phone && (
                       <Button asChild size="icon" variant="ghost" title="WhatsApp">
                         <a
-                          href={waLink(r.phone, lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `)}
+                          href={waLink(
+                            r.phone,
+                            lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `,
+                          )}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -392,6 +500,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                         </a>
                       </Button>
                     )}
+                    <QuickInvoice workspaceId={workspaceId} customer={r.name} phone={r.phone} />
                     {r.status === "open" && !r.quotation_id && (
                       <Button
                         size="icon"
@@ -407,7 +516,17 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                       size="icon"
                       variant="ghost"
                       onClick={() => {
-                        setForm({ ...r, company_name: r.company_name ?? "", email: r.email ?? "", phone: r.phone ?? "", source: r.source ?? "", owner_name: r.owner_name ?? "", next_follow_up_at: r.next_follow_up_at ?? "", notes: r.notes ?? "", lost_reason: r.lost_reason ?? "" });
+                        setForm({
+                          ...r,
+                          company_name: r.company_name ?? "",
+                          email: r.email ?? "",
+                          phone: r.phone ?? "",
+                          source: r.source ?? "",
+                          owner_name: r.owner_name ?? "",
+                          next_follow_up_at: r.next_follow_up_at ?? "",
+                          notes: r.notes ?? "",
+                          lost_reason: r.lost_reason ?? "",
+                        });
                         setOpen(true);
                       }}
                     >
@@ -428,26 +547,52 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{form.id ? (lang === "id" ? "Ubah prospek" : "Edit lead") : lang === "id" ? "Prospek baru" : "New lead"}</DialogTitle>
+            <DialogTitle>
+              {form.id
+                ? lang === "id"
+                  ? "Ubah prospek"
+                  : "Edit lead"
+                : lang === "id"
+                  ? "Prospek baru"
+                  : "New lead"}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <AdminField label={lang === "id" ? "Kode" : "Code"}>
-              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Nama kontak" : "Contact name"}>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Perusahaan" : "Company"}>
-              <Input value={form.company_name ?? ""} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+              <Input
+                value={form.company_name ?? ""}
+                onChange={(e) => setForm({ ...form, company_name: e.target.value })}
+              />
             </AdminField>
             <AdminField label="Email">
-              <Input value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Input
+                value={form.email ?? ""}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Telepon / WA" : "Phone / WA"}>
-              <Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <Input
+                value={form.phone ?? ""}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Sumber" : "Source"}>
-              <AdminSelect value={form.source ?? ""} onChange={(v) => setForm({ ...form, source: v })}>
+              <AdminSelect
+                value={form.source ?? ""}
+                onChange={(v) => setForm({ ...form, source: v })}
+              >
                 {CRM_SOURCES.map((s) => (
                   <option key={s} value={s}>
                     {s}
@@ -478,7 +623,10 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
               />
             </AdminField>
             <AdminField label={lang === "id" ? "Sales penanggung jawab" : "Assigned sales"}>
-              <AdminSelect value={form.owner_name ?? ""} onChange={(v) => setForm({ ...form, owner_name: v })}>
+              <AdminSelect
+                value={form.owner_name ?? ""}
+                onChange={(v) => setForm({ ...form, owner_name: v })}
+              >
                 <option value="">—</option>
                 {owners.map((o) => (
                   <option key={o.id} value={o.name}>
@@ -492,7 +640,10 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             </AdminField>
             {form.stage === "lost" && (
               <AdminField label={lang === "id" ? "Alasan kalah" : "Lost reason"}>
-                <Input value={form.lost_reason ?? ""} onChange={(e) => setForm({ ...form, lost_reason: e.target.value })} />
+                <Input
+                  value={form.lost_reason ?? ""}
+                  onChange={(e) => setForm({ ...form, lost_reason: e.target.value })}
+                />
               </AdminField>
             )}
             <AdminField label={lang === "id" ? "Follow up berikutnya" : "Next follow up"}>
@@ -504,7 +655,10 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             </AdminField>
             <div className="sm:col-span-2">
               <AdminField label={lang === "id" ? "Catatan" : "Notes"}>
-                <Textarea value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <Textarea
+                  value={form.notes ?? ""}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
               </AdminField>
             </div>
           </div>
@@ -514,7 +668,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
             </Button>
             <Button
               variant="navy"
-              disabled={!form.name.trim() || save.isPending || (form.stage === "lost" && !(form.lost_reason ?? "").trim())}
+              disabled={
+                !form.name.trim() ||
+                save.isPending ||
+                (form.stage === "lost" && !(form.lost_reason ?? "").trim())
+              }
               onClick={() => save.mutate(form)}
             >
               {lang === "id" ? "Simpan" : "Save"}
@@ -568,7 +726,9 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title="Pipeline" />
       <p className="text-xs text-muted-foreground">
-        {lang === "id" ? "Seret kartu ke kolom lain untuk memindahkan tahap." : "Drag a card to another column to change its stage."}
+        {lang === "id"
+          ? "Seret kartu ke kolom lain untuk memindahkan tahap."
+          : "Drag a card to another column to change its stage."}
       </p>
       <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
         <div className="flex min-w-max gap-4">
@@ -580,14 +740,19 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
             return (
               <div
                 key={stage.id}
-                onDragOver={(e) => { e.preventDefault(); setOverStage(stage.id); }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setOverStage(stage.id);
+                }}
                 onDragLeave={() => setOverStage((s) => (s === stage.id ? null : s))}
                 onDrop={(e) => {
                   e.preventDefault();
                   const id = e.dataTransfer.getData("text/plain") || dragId;
-                  setOverStage(null); setDragId(null);
+                  setOverStage(null);
+                  setDragId(null);
                   const lead = rows.find((r) => r.id === id);
-                  if (lead && lead.stage !== stage.id) move.mutate({ id: lead.id, stage: stage.id });
+                  if (lead && lead.stage !== stage.id)
+                    move.mutate({ id: lead.id, stage: stage.id });
                 }}
                 className={cn(
                   "flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-border transition-all",
@@ -605,14 +770,23 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                   </div>
                   <Badge variant="secondary">{items.length}</Badge>
                 </div>
-                <p className="px-4 text-xs font-medium text-muted-foreground">{fmtIDR(total)} · {stage.probability}%</p>
+                <p className="px-4 text-xs font-medium text-muted-foreground">
+                  {fmtIDR(total)} · {stage.probability}%
+                </p>
                 <div className="mt-3 min-h-[60vh] flex-1 space-y-2.5 px-3 pb-3">
                   {items.map((lead) => (
                     <div
                       key={lead.id}
                       draggable
-                      onDragStart={(e) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setDragId(lead.id); }}
-                      onDragEnd={() => { setDragId(null); setOverStage(null); }}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", lead.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        setDragId(lead.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setOverStage(null);
+                      }}
                       className={cn(
                         "cursor-grab rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
                         dragId === lead.id && "opacity-50",
@@ -621,11 +795,17 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                       <div className="flex items-start gap-2">
                         <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", tone.dot)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-navy dark:text-foreground">{lead.name}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">{lead.company_name ?? lead.code}</p>
+                          <p className="truncate text-sm font-semibold text-navy dark:text-foreground">
+                            {lead.name}
+                          </p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {lead.company_name ?? lead.code}
+                          </p>
                         </div>
                       </div>
-                      <p className="mt-2 text-sm font-semibold">{fmtIDR(Number(lead.estimated_value))}</p>
+                      <p className="mt-2 text-sm font-semibold">
+                        {fmtIDR(Number(lead.estimated_value))}
+                      </p>
                       <AdminSelect
                         className="mt-2 h-8 text-xs md:hidden"
                         value={lead.stage}
@@ -675,12 +855,22 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
     },
   });
 
-  const visibleContacts = useSearchFilter(rows, term, (r) => [r.code, r.name, r.contact_name, r.email, r.phone, r.city]);
+  const visibleContacts = useSearchFilter(rows, term, (r) => [
+    r.code,
+    r.name,
+    r.contact_name,
+    r.email,
+    r.phone,
+    r.city,
+  ]);
   const pager = usePagination(visibleContacts);
 
   return (
     <div className="space-y-6">
-      <PageHeader kicker="QALLING CRM" title={lang === "id" ? "Kontak Pelanggan" : "Customer Contacts"}>
+      <PageHeader
+        kicker="QALLING CRM"
+        title={lang === "id" ? "Kontak Pelanggan" : "Customer Contacts"}
+      >
         <SearchInput
           value={term}
           onChange={setTerm}
@@ -704,7 +894,10 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || visibleContacts.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {isLoading
                       ? lang === "id"
                         ? "Memuat…"
@@ -750,13 +943,26 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const { data: leads = [] } = useLeads(workspaceId);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ lead_id: "", activity_type: "call", subject: "", body: "", due_at: "", owner_name: "" });
+  const [form, setForm] = useState({
+    lead_id: "",
+    activity_type: "call",
+    subject: "",
+    body: "",
+    due_at: "",
+    owner_name: "",
+  });
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["crm-activities", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_activities", workspaceId, orderBy: "due_at", orderDir: "asc", limit: 500 },
+        data: {
+          table: "crm_activities",
+          workspaceId,
+          orderBy: "due_at",
+          orderDir: "asc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []) as unknown as ActivityRow[];
     },
@@ -782,7 +988,14 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
     onSuccess: () => {
       toast.success(lang === "id" ? "Aktivitas tersimpan" : "Activity saved");
       setOpen(false);
-      setForm({ lead_id: "", activity_type: "call", subject: "", body: "", due_at: "", owner_name: "" });
+      setForm({
+        lead_id: "",
+        activity_type: "call",
+        subject: "",
+        body: "",
+        due_at: "",
+        owner_name: "",
+      });
       qc.invalidateQueries({ queryKey: ["crm-activities", workspaceId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -804,12 +1017,24 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
   });
 
   const leadName = (id: string | null) => leads.find((l) => l.id === id)?.name ?? "—";
-  // Parity live: Follow Ups memakai kolom # dan paginasi.
-  const pager = usePagination(rows);
+  // Parity live: Follow Ups memakai kolom #, pencarian, dan paginasi.
+  const [term, setTerm] = useState("");
+  const shown = useSearchFilter(rows, term, (r) => [
+    r.subject,
+    r.activity_type,
+    r.owner_name,
+    leadName(r.lead_id),
+  ]);
+  const pager = usePagination(shown);
 
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={lang === "id" ? "Follow Up" : "Follow Ups"}>
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={lang === "id" ? "Cari follow up…" : "Search follow ups…"}
+        />
         <Button variant="navy" onClick={() => setOpen(true)}>
           <Plus /> {lang === "id" ? "Jadwalkan" : "Schedule"}
         </Button>
@@ -833,8 +1058,17 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || rows.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
-                    {isLoading ? (lang === "id" ? "Memuat…" : "Loading…") : lang === "id" ? "Belum ada aktivitas." : "No activities yet."}
+                  <TableCell
+                    colSpan={8}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    {isLoading
+                      ? lang === "id"
+                        ? "Memuat…"
+                        : "Loading…"
+                      : lang === "id"
+                        ? "Belum ada aktivitas."
+                        : "No activities yet."}
                   </TableCell>
                 </TableRow>
               )}
@@ -848,7 +1082,13 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
                   <TableCell>{r.owner_name ?? "—"}</TableCell>
                   <TableCell>
                     <Badge variant={r.done_at ? "secondary" : "outline"}>
-                      {r.done_at ? (lang === "id" ? "Selesai" : "Done") : lang === "id" ? "Terjadwal" : "Open"}
+                      {r.done_at
+                        ? lang === "id"
+                          ? "Selesai"
+                          : "Done"
+                        : lang === "id"
+                          ? "Terjadwal"
+                          : "Open"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -886,7 +1126,10 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
               </AdminSelect>
             </AdminField>
             <AdminField label={lang === "id" ? "Jenis" : "Type"}>
-              <AdminSelect value={form.activity_type} onChange={(v) => setForm({ ...form, activity_type: v })}>
+              <AdminSelect
+                value={form.activity_type}
+                onChange={(v) => setForm({ ...form, activity_type: v })}
+              >
                 {CRM_ACTIVITY_TYPES.map((t) => (
                   <option key={t.id} value={t.id}>
                     {lang === "id" ? t.id_ : t.en}
@@ -895,23 +1138,40 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
               </AdminSelect>
             </AdminField>
             <AdminField label={lang === "id" ? "Judul" : "Subject"}>
-              <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} />
+              <Input
+                value={form.subject}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Jadwal" : "Due"}>
-              <Input type="datetime-local" value={form.due_at} onChange={(e) => setForm({ ...form, due_at: e.target.value })} />
+              <Input
+                type="datetime-local"
+                value={form.due_at}
+                onChange={(e) => setForm({ ...form, due_at: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Sales" : "Owner"}>
-              <Input value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
+              <Input
+                value={form.owner_name}
+                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={lang === "id" ? "Catatan" : "Notes"}>
-              <Textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />
+              <Textarea
+                value={form.body}
+                onChange={(e) => setForm({ ...form, body: e.target.value })}
+              />
             </AdminField>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
               {lang === "id" ? "Batal" : "Cancel"}
             </Button>
-            <Button variant="navy" disabled={!form.subject.trim() || save.isPending} onClick={() => save.mutate()}>
+            <Button
+              variant="navy"
+              disabled={!form.subject.trim() || save.isPending}
+              onClick={() => save.mutate()}
+            >
               {lang === "id" ? "Simpan" : "Save"}
             </Button>
           </DialogFooter>

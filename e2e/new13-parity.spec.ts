@@ -109,9 +109,9 @@ test("ADMIN: Users per workspace + hapus akun; Content Qalling punya tombol tamb
   await expect(page.getByText("Akun dikelompokkan per workspace.")).toBeVisible({
     timeout: 60_000,
   });
-  // kartu per workspace dengan kolom User / Role / Platform role / Actions
-  const firstCard = page.locator("h2").first();
-  await expect(firstCard).toContainText("/");
+  // satu tabel; baris pembatas per workspace + kolom User / Role / Platform role / Terdaftar / Actions
+  await expect(page.getByRole("columnheader", { name: "Terdaftar" })).toBeVisible();
+  await expect(page.locator("tbody tr").first()).toContainText("/");
   await expect(page.getByRole("columnheader", { name: "Platform role" }).first()).toBeVisible();
 
   // akun baru tanpa workspace → kelompok "Tanpa workspace"
@@ -139,11 +139,14 @@ test("ADMIN: Users per workspace + hapus akun; Content Qalling punya tombol tamb
     })
     .toBe(1);
   await page.getByPlaceholder("Cari nama, email, workspace…").fill(TAG);
-  const group = page
-    .locator("div.rounded-xl, div[class*=card]")
-    .filter({ has: page.getByRole("heading", { name: "Tanpa workspace" }) });
-  await expect(group.getByText(email)).toBeVisible({ timeout: 30_000 });
-  await expect(group.getByText("1 user")).toBeVisible();
+  const group = page.locator("tbody");
+  await expect(group.getByRole("row").filter({ hasText: "Tanpa workspace" })).toContainText(
+    "1 user",
+    {
+      timeout: 30_000,
+    },
+  );
+  await expect(group.getByText(email)).toBeVisible();
 
   // hapus (konfirmasi) → baris profil/app_users hilang
   page.once("dialog", (d) => void d.accept());

@@ -42,8 +42,15 @@ function AuthPage() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
 
+  // Tujuan server-side (halaman persetujuan OAuth/MCP) harus dimuat penuh, bukan lewat router klien.
+  const go = (to: string) => {
+    if (to.startsWith("/oauth/")) window.location.replace(to);
+    else navigate({ to, replace: true });
+  };
+
   useEffect(() => {
-    if (!loading && session) navigate({ to: next ?? "/app", replace: true });
+    if (!loading && session) go(next ?? "/app");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, session, navigate, next]);
 
   async function submit(e: React.FormEvent) {
@@ -55,7 +62,7 @@ function AuthPage() {
       // serverFn RPCs). No Supabase session is created anymore.
       await loginAppUser({ data: { email, password } });
       emitAuthChange();
-      navigate({ to: next ?? "/app", replace: true });
+      go(next ?? "/app");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");
     } finally {

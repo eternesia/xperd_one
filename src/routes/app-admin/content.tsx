@@ -18,12 +18,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
 
 export const Route = createFileRoute("/app-admin/content")({
-  head: () => ({meta:[{title:"Konten Website — XPERD Super Admin"},{name:"description",content:"Kelola banner, fitur dan konten XPERD serta Qalling."},{property:"og:title",content:"Konten Website — XPERD"},{property:"og:description",content:"Pengelolaan konten website XPERD dan Qalling."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary"}]}),
+  head: () => ({
+    meta: [
+      { title: "Konten Website — XPERD Super Admin" },
+      { name: "description", content: "Kelola banner, fitur dan konten XPERD serta Qalling." },
+      { property: "og:title", content: "Konten Website — XPERD" },
+      { property: "og:description", content: "Pengelolaan konten website XPERD dan Qalling." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: ContentPage,
 });
 
@@ -62,7 +78,9 @@ function ContentPage() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["admin-site-content"],
     queryFn: async () => {
-      const data = await adminList({ data: { table: "site_content", orderBy: "section", orderDir: "asc" } });
+      const data = await adminList({
+        data: { table: "site_content", orderBy: "section", orderDir: "asc" },
+      });
       return data?.rows ?? [];
     },
   });
@@ -81,11 +99,32 @@ function ContentPage() {
         sort_order: Number(values.sort_order) || 0,
         is_published: values.is_published,
       };
-      await adminSave({ data: { table: "site_content", id: values.id ?? undefined, data: payload } });
+      await adminSave({
+        data: { table: "site_content", id: values.id ?? undefined, data: payload },
+      });
     },
     onSuccess: () => {
       toast.success("Content saved");
       setOpen(false);
+      qc.invalidateQueries({ queryKey: ["admin-site-content"] });
+      qc.invalidateQueries({ queryKey: ["site-content"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const preset = useMutation({
+    mutationFn: async () => {
+      const have = new Set(items.map((c) => `${c.section}/${c.key}`));
+      const rows = QALLING_PRESET.filter((r) => !have.has(`${r.section}/${r.key}`));
+      if (!rows.length) throw new Error("Semua konten default sudah ada");
+      for (const [i, r] of rows.entries())
+        await adminSave({
+          data: { table: "site_content", data: { ...r, sort_order: i, is_published: true } },
+        });
+      return rows.length;
+    },
+    onSuccess: (n) => {
+      toast.success(`${n} konten default ditambahkan`);
       qc.invalidateQueries({ queryKey: ["admin-site-content"] });
       qc.invalidateQueries({ queryKey: ["site-content"] });
     },
@@ -119,7 +158,11 @@ function ContentPage() {
         <Button
           variant="gold"
           onClick={() => {
-            setForm({ ...EMPTY, section: site === "qalling" ? "qalling.hero" : "home", key: site === "qalling" ? "main" : "" });
+            setForm({
+              ...EMPTY,
+              section: site === "qalling" ? "qalling.hero" : "home",
+              key: site === "qalling" ? "main" : "",
+            });
             setOpen(true);
           }}
         >
@@ -131,21 +174,66 @@ function ContentPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="flex gap-2">
             {(["xperd", "qalling"] as const).map((k) => (
-              <Button key={k} size="sm" variant={site === k ? "gold" : "outline"} onClick={() => setSite(k)}>
-                {k === "xperd" ? "Website XPERD" : "Website Qalling"} ({items.filter((c) => (k === "qalling") === c.section.startsWith("qalling.")).length})
+              <Button
+                key={k}
+                size="sm"
+                variant={site === k ? "gold" : "outline"}
+                onClick={() => setSite(k)}
+              >
+                {k === "xperd" ? "Website XPERD" : "Website Qalling"} (
+                {items.filter((c) => (k === "qalling") === c.section.startsWith("qalling.")).length}
+                )
               </Button>
             ))}
           </div>
           {site === "qalling" && (
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => { setForm({ ...EMPTY, section: "qalling.hero", key: "main" }); setOpen(true); }}>+ Banner utama</Button>
-              <Button size="sm" variant="outline" onClick={() => { setForm({ ...EMPTY, section: "qalling.features", key: `fitur-${Date.now().toString(36)}` }); setOpen(true); }}>+ Fitur</Button>
+              <Button
+                size="sm"
+                variant="gold"
+                disabled={preset.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Muat konten default Qalling? Konten yang sudah ada tidak ditimpa.",
+                    )
+                  )
+                    preset.mutate();
+                }}
+              >
+                Muat Konten Default
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setForm({ ...EMPTY, section: "qalling.hero", key: "main" });
+                  setOpen(true);
+                }}
+              >
+                + Banner utama
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setForm({
+                    ...EMPTY,
+                    section: "qalling.features",
+                    key: `fitur-${Date.now().toString(36)}`,
+                  });
+                  setOpen(true);
+                }}
+              >
+                + Fitur
+              </Button>
             </div>
           )}
           <TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari konten…" />
         </div>
         <p className="px-4 pt-3 text-xs text-muted-foreground">
-          Konten Qalling memakai awalan section <code>qalling.</code> (mis. qalling.hero, qalling.kontak).
+          Konten Qalling memakai awalan section <code>qalling.</code> (mis. qalling.hero,
+          qalling.kontak).
         </p>
         <CardContent className="overflow-x-auto p-0">
           <Table>
@@ -161,12 +249,16 @@ function ContentPage() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-sm text-muted-foreground">Loading…</TableCell>
+                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                    Loading…
+                  </TableCell>
                 </TableRow>
               )}
               {!isLoading && siteItems.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-sm text-muted-foreground">No content entries yet.</TableCell>
+                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                    No content entries yet.
+                  </TableCell>
                 </TableRow>
               )}
               {pg.rows.map((c) => (
@@ -245,47 +337,112 @@ function ContentPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Section">
-                {site==="qalling"?<select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.section} onChange={e=>setForm({...form,section:e.target.value})}><option value="qalling.hero">Banner Beranda</option><option value="qalling.features">Fitur Aplikasi</option><option value="qalling.kontak">Kontak</option>{!["qalling.hero","qalling.features","qalling.kontak"].includes(form.section)&&<option value={form.section}>{form.section}</option>}</select>:<Input value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} required />}
+                {site === "qalling" ? (
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    value={form.section}
+                    onChange={(e) => setForm({ ...form, section: e.target.value })}
+                  >
+                    <option value="qalling.hero">Banner Beranda</option>
+                    <option value="qalling.features">Fitur Aplikasi</option>
+                    <option value="qalling.kontak">Kontak</option>
+                    {!["qalling.hero", "qalling.features", "qalling.kontak"].includes(
+                      form.section,
+                    ) && <option value={form.section}>{form.section}</option>}
+                  </select>
+                ) : (
+                  <Input
+                    value={form.section}
+                    onChange={(e) => setForm({ ...form, section: e.target.value })}
+                    required
+                  />
+                )}
               </Field>
               <Field label="Key">
-                <Input value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} required />
+                <Input
+                  value={form.key}
+                  onChange={(e) => setForm({ ...form, key: e.target.value })}
+                  required
+                />
               </Field>
               <Field label="Title (EN)">
-                <Input value={form.title_en} onChange={(e) => setForm({ ...form, title_en: e.target.value })} />
+                <Input
+                  value={form.title_en}
+                  onChange={(e) => setForm({ ...form, title_en: e.target.value })}
+                />
               </Field>
               <Field label="Title (ID)">
-                <Input value={form.title_id} onChange={(e) => setForm({ ...form, title_id: e.target.value })} />
+                <Input
+                  value={form.title_id}
+                  onChange={(e) => setForm({ ...form, title_id: e.target.value })}
+                />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Body (EN)">
-                <Textarea rows={4} value={form.body_en} onChange={(e) => setForm({ ...form, body_en: e.target.value })} />
+                <Textarea
+                  rows={4}
+                  value={form.body_en}
+                  onChange={(e) => setForm({ ...form, body_en: e.target.value })}
+                />
               </Field>
               <Field label="Body (ID)">
-                <Textarea rows={4} value={form.body_id} onChange={(e) => setForm({ ...form, body_id: e.target.value })} />
+                <Textarea
+                  rows={4}
+                  value={form.body_id}
+                  onChange={(e) => setForm({ ...form, body_id: e.target.value })}
+                />
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Image URL">
-                <Input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} />
-                <Input aria-label="Unggah gambar banner atau fitur" type="file" accept="image/png,image/jpeg,image/webp" onChange={async e=>{
-                  const file=e.target.files?.[0];if(!file)return;
-                  if(file.size>5_000_000){toast.error("Gambar maksimal 5 MB");return;}
-                  try {
-                    const bitmap=await createImageBitmap(file);
-                    const scale=Math.min(1,1600/bitmap.width);
-                    const canvas=document.createElement("canvas");canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
-                    const context=canvas.getContext("2d");if(!context)throw new Error("Gambar tidak dapat diproses");
-                    context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-                    const value=canvas.toDataURL("image/webp",0.8);
-                    if(value.length>1_000_000)throw new Error("Gambar terlalu besar setelah kompresi");
-                    setForm(v=>({...v,image_url:value}));
-                  }catch(err){toast.error(err instanceof Error?err.message:"Gambar tidak valid");}
-                }} />
-                {form.image_url&&<img src={form.image_url} alt="Pratinjau gambar" className="max-h-40 w-full rounded-md object-contain" />}
+                <Input
+                  value={form.image_url}
+                  onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                />
+                <Input
+                  aria-label="Unggah gambar banner atau fitur"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5_000_000) {
+                      toast.error("Gambar maksimal 5 MB");
+                      return;
+                    }
+                    try {
+                      const bitmap = await createImageBitmap(file);
+                      const scale = Math.min(1, 1600 / bitmap.width);
+                      const canvas = document.createElement("canvas");
+                      canvas.width = Math.round(bitmap.width * scale);
+                      canvas.height = Math.round(bitmap.height * scale);
+                      const context = canvas.getContext("2d");
+                      if (!context) throw new Error("Gambar tidak dapat diproses");
+                      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                      bitmap.close();
+                      const value = canvas.toDataURL("image/webp", 0.8);
+                      if (value.length > 1_000_000)
+                        throw new Error("Gambar terlalu besar setelah kompresi");
+                      setForm((v) => ({ ...v, image_url: value }));
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Gambar tidak valid");
+                    }
+                  }}
+                />
+                {form.image_url && (
+                  <img
+                    src={form.image_url}
+                    alt="Pratinjau gambar"
+                    className="max-h-40 w-full rounded-md object-contain"
+                  />
+                )}
               </Field>
               <Field label="Link URL">
-                <Input value={form.link_url} onChange={(e) => setForm({ ...form, link_url: e.target.value })} />
+                <Input
+                  value={form.link_url}
+                  onChange={(e) => setForm({ ...form, link_url: e.target.value })}
+                />
               </Field>
               <Field label="Sort order">
                 <Input
@@ -304,7 +461,9 @@ function ContentPage() {
               <Label htmlFor="published">Published</Label>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
               <Button type="submit" variant="gold" disabled={save.isPending}>
                 {save.isPending ? "Saving…" : "Save content"}
               </Button>
@@ -324,3 +483,68 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+// Preset konten Qalling (BS New 14).
+const QALLING_PRESET = [
+  {
+    section: "qalling.hero",
+    key: "main",
+    title_id: "Kelola media sosial, leads, dan closing dari satu tempat",
+    title_en: "Manage social media, leads and closing in one place",
+    body_id:
+      "Posting lewat chat AI, balas komentar & DM otomatis, leads masuk rapi ke pipeline, lalu tarik laporan untuk klien.",
+    body_en:
+      "Post via AI chat, auto-reply comments & DMs, organise leads in a pipeline, and export client reports.",
+    link_url: "/qalling/daftar",
+  },
+  {
+    section: "qalling.features",
+    key: "publishing",
+    title_id: "Jadwal posting multi-akun",
+    title_en: "Multi-account scheduling",
+    body_id:
+      "Instagram, TikTok, Facebook, LinkedIn, X, Threads, dan YouTube dalam satu kalender, lengkap dengan rekomendasi jam emas WIB.",
+    body_en: "All major networks in one calendar with Indonesian golden-hour suggestions.",
+  },
+  {
+    section: "qalling.features",
+    key: "inbox",
+    title_id: "Kotak masuk terpadu",
+    title_en: "Unified inbox",
+    body_id:
+      "DM dan komentar dari semua akun dalam satu layar, dengan template pesan cepat dan invoice kilat.",
+    body_en: "DMs and comments in one screen with quick replies and instant invoices.",
+  },
+  {
+    section: "qalling.features",
+    key: "automation",
+    title_id: "Automasi komentar → DM",
+    title_en: "Comment → DM automation",
+    body_id: "Kirim link otomatis, wajib follow dulu, dan lacak klik untuk setiap kampanye.",
+    body_en: "Auto-send links, follow gates and click tracking.",
+  },
+  {
+    section: "qalling.features",
+    key: "crm",
+    title_id: "Leads & pipeline penjualan",
+    title_en: "Leads & sales pipeline",
+    body_id: "Dari Tanya Harga sampai Closing, follow up lewat WhatsApp dalam satu klik.",
+    body_en: "From inquiry to closing, with one-click WhatsApp follow-up.",
+  },
+  {
+    section: "qalling.features",
+    key: "reports",
+    title_id: "Laporan klien PDF & Excel",
+    title_en: "Client reports in PDF & Excel",
+    body_id: "Kelompokkan akun per klien dan ekspor performa dalam hitungan detik.",
+    body_en: "Group accounts per client and export performance in seconds.",
+  },
+  {
+    section: "qalling.features",
+    key: "ai",
+    title_id: "Terhubung ChatGPT & Claude",
+    title_en: "Works with ChatGPT & Claude",
+    body_id: "Buat ide konten dan draf postingan langsung dari chat AI melalui MCP.",
+    body_en: "Create ideas and post drafts straight from AI chat via MCP.",
+  },
+];

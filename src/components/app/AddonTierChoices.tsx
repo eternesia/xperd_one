@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SubscriptionCheckout } from "@/components/app/SubscriptionCheckout";
 import { useApp } from "@/lib/app-context";
 import { listAddonOptions, listAddonTiers } from "@/lib/addon-catalog.functions";
+import { getTrialTierState } from "@/lib/trial-tier.functions";
+import { TrialTierSwitch } from "@/components/app/TrialTierSwitch";
 
 const money = (n: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -14,7 +17,17 @@ const money = (n: number) =>
   }).format(n);
 
 export function AddonTierChoices() {
-  const { tenant, workspaceRole, entitlements } = useApp();
+  const { tenant, activeWorkspace, workspaceRole, entitlements } = useApp();
+  const tenantId = activeWorkspace?.tenant_id ?? tenant?.id;
+  const fetchTrial = useServerFn(getTrialTierState);
+  const trial = useQuery({
+    queryKey: ["qalling-trial-tier", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: () => {
+      if (!tenantId) throw new Error("Tenant tidak tersedia");
+      return fetchTrial({ data: { tenantId } });
+    },
+  });
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const { data: tiers = [] } = useQuery({
     queryKey: ["addon-tiers"],
@@ -27,6 +40,16 @@ export function AddonTierChoices() {
   return (
     <section className="space-y-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
       <h2 className="text-base font-semibold">Qalling · Pilihan paket</h2>
+      {trial.data?.canSwitch && (
+        <p className="text-sm text-muted-foreground">
+          Uji coba sampai {trial.data.endsAt} · Pergantian paket Rp0 · Masa trial tidak diperpanjang
+        </p>
+      )}
+      {trial.isError && (
+        <p className="text-sm text-destructive">
+          Paket trial belum dapat dimuat. Muat ulang halaman sebelum memilih paket.
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {tiers
           .filter((t) => t.is_active && t.code !== "qalling_free")
@@ -38,7 +61,9 @@ export function AddonTierChoices() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold">{t.name}</h3>
-                {entitlements.qalling?.tier === t.code && <Badge>Aktif</Badge>}
+                {entitlements.qalling?.tier === t.code && (
+                  <Badge>{trial.data?.canSwitch ? "Uji coba" : "Aktif"}</Badge>
+                )}
               </div>
               <p className="mt-3 text-lg font-semibold">
                 {money(t.monthly_price)}
@@ -54,13 +79,25 @@ export function AddonTierChoices() {
                 <dt className="text-muted-foreground">Posting /bulan</dt>
                 <dd>{t.limits.monthly_post_limit ?? "∞"}</dd>
               </dl>
-              {tenant && workspaceRole === "owner" && (
-                <SubscriptionCheckout
-                  tenantId={tenant.id}
-                  kind="tier"
-                  itemId={t.id}
-                  label={`Pilih ${t.name}`}
+              {tenantId && trial.data?.canSwitch ? (
+                <TrialTierSwitch
+                  tenantId={tenantId}
+                  tierId={t.id}
+                  expectedTierId={trial.data.tierId}
+                  name={t.name}
+                  current={trial.data.tierId === t.id}
                 />
+              ) : (
+                tenant &&
+                workspaceRole === "owner" &&
+                trial.isSuccess && (
+                  <SubscriptionCheckout
+                    tenantId={tenant.id}
+                    kind="tier"
+                    itemId={t.id}
+                    label={`Pilih ${t.name}`}
+                  />
+                )
               )}
             </article>
           ))}

@@ -60,7 +60,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   server?.close();
   if (!conn) return;
-  const tenants = await q("SELECT id FROM tenants WHERE pic_email LIKE ?", [`e2e-g-%-${STAMP}@%`]);
+  const tenants = await q("SELECT id FROM tenants WHERE pic_email LIKE ?", [`e2e-g-%${STAMP}@%`]);
   for (const t of tenants)
     for (const sql of [
       "DELETE FROM wallet_ledger WHERE tenant_id = ?",
@@ -74,14 +74,14 @@ test.afterAll(async () => {
       "DELETE FROM tenants WHERE id = ?",
     ])
       await conn.execute(sql, [String(t.id)]).catch(() => undefined);
-  await conn.execute("DELETE FROM registrations WHERE email LIKE ?", [`e2e-g-%-${STAMP}@%`]);
+  await conn.execute("DELETE FROM registrations WHERE email LIKE ?", [`e2e-g-%${STAMP}@%`]);
   for (const sql of [
     "DELETE FROM user_roles WHERE user_id IN (SELECT id FROM app_users WHERE email LIKE ?)",
     "DELETE FROM workspace_members WHERE user_id IN (SELECT id FROM app_users WHERE email LIKE ?)",
     "DELETE FROM profiles WHERE email LIKE ?",
     "DELETE FROM app_users WHERE email LIKE ?",
   ])
-    await conn.execute(sql, [`e2e-g-%-${STAMP}@%`]).catch(() => undefined);
+    await conn.execute(sql, [`e2e-g-%${STAMP}@%`]).catch(() => undefined);
   if (snap)
     await conn.execute(
       "UPDATE platform_auth_settings SET google_enabled = ?, google_client_id = ?, google_client_secret = ? WHERE singleton = 1",
