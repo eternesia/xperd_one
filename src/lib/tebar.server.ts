@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { executeOne } from "@/integrations/mysql/pool";
+import { targetEnhancementOptions, type FirstCommentOutcome } from "./post-enhancements";
+import { accountPagePath, normalizeAccountPage } from "./tebar-account-page";
 
 /** Basis API Tebar; dapat ditimpa (`TEBAR_API_BASE`) untuk server tiruan saat uji. */
 export const TEBAR_API = (process.env.TEBAR_API_BASE ?? "https://api.tebar.app/v1").replace(
@@ -39,6 +41,15 @@ export async function tebarFetch(apiKey: string, path: string, init: RequestInit
 
 const profileHeader = (profile: string | null): Record<string, string> =>
   profile ? { "Tebar-Profile": profile } : {};
+
+/** Satu halaman akun Tebar (kursor) untuk Admin → Tebar; tidak memuat semua akun sekaligus. */
+export async function listTebarAccountPage(
+  apiKey: string,
+  cursor: string | null = null,
+  limit = 25,
+) {
+  return normalizeAccountPage(await tebarFetch(apiKey, accountPagePath(cursor, limit)));
+}
 
 /** Normalises Tebar account rows; field names are read defensively. */
 export async function listTebarAccounts(apiKey: string): Promise<TebarAccount[]> {
@@ -102,6 +113,7 @@ export type TebarPublishTarget = {
   post_id?: string;
   permalink?: string;
   error?: string;
+  first_comment?: FirstCommentOutcome;
 };
 
 /**
@@ -114,6 +126,12 @@ export async function publishTebar(
   accountIds: string[],
   content: string,
   mediaUrls: string[],
+  enhancements?: {
+    firstComment: string;
+    coverUrl?: string;
+    platforms: Record<string, string>;
+    title: string;
+  },
 ) {
   const groups = new Map<string, string[]>();
   for (const acc of accountIds) {
@@ -127,9 +145,22 @@ export async function publishTebar(
       const mediaIds: string[] = [];
       for (const url of mediaUrls.slice(0, 10))
         mediaIds.push(await uploadTebarMedia(apiKey, url, profile || null));
+      const coverId = enhancements?.coverUrl
+        ? await uploadTebarMedia(apiKey, enhancements.coverUrl, profile || null)
+        : undefined;
       const body: Record<string, unknown> = {
         content,
-        targets: accs.map((account_id) => ({ account_id })),
+        targets: accs.map((account_id) => {
+          const options = enhancements
+            ? targetEnhancementOptions(
+                enhancements.platforms[account_id],
+                enhancements.firstComment,
+                coverId,
+                enhancements.title,
+              )
+            : {};
+          return { account_id, ...(Object.keys(options).length ? { options } : {}) };
+        }),
       };
       if (mediaIds.length) body.media_ids = mediaIds;
       const r = await tebarFetch(apiKey, "/posts", {
@@ -155,6 +186,7 @@ export async function publishTebar(
           ok: !failed,
           pending: !failed && t?.status !== "published",
           post_id: pid,
+          ...(t?.first_comment ? { first_comment: t.first_comment as FirstCommentOutcome } : {}),
           ...(t?.permalink ? { permalink: t.permalink } : {}),
           ...(failed ? { error: String(t?.error?.message ?? t?.error_code ?? "Gagal") } : {}),
         });
@@ -205,13 +237,35 @@ export async function createTebarConnectLink(
   state: string,
   platforms?: string[],
 ) {
+  const path = `/profiles/${encodeURIComponent(workspaceId)}/connect-links`;
   const body: Record<string, unknown> = { redirect_url: redirectUrl, state };
   if (platforms?.length) body.platforms = platforms;
-  const r = await tebarFetch(apiKey, `/profiles/${encodeURIComponent(workspaceId)}/connect-links`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return { url: String(r.url ?? r.data?.url), expiresAt: (r.expires_at ?? null) as string | null };
+  // Headless (white-label): langsung ke halaman OAuth jaringan. Butuh paket Tebar Agency; jika tidak memenuhi, pakai tautan standar.
+  if (platforms?.length === 1) {
+    try {
+      const h = await tebarFetch(apiKey, path, {
+        method: "POST",
+        body: JSON.stringify({ ...body, headless: true }),
+      });
+      const d = h.data ?? h;
+      const starts = (d.start_urls ?? {}) as Record<string, string>;
+      const direct = starts[platforms[0]] ?? Object.values(starts)[0];
+      if (direct)
+        return {
+          url: String(direct),
+          expiresAt: (d.expires_at ?? null) as string | null,
+          headless: true,
+        };
+    } catch {
+      /* paket tidak memenuhi → tautan standar */
+    }
+  }
+  const r = await tebarFetch(apiKey, path, { method: "POST", body: JSON.stringify(body) });
+  return {
+    url: String(r.url ?? r.data?.url),
+    expiresAt: (r.expires_at ?? null) as string | null,
+    headless: false,
+  };
 }
 
 export async function registerTebarOrigin(apiKey: string, origin: string) {

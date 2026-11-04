@@ -156,7 +156,7 @@ export function Pagination({
             onPage(1);
           }}
         >
-          <SelectTrigger className="h-8 w-[88px]">
+          <SelectTrigger className="h-8 w-[108px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -253,5 +253,16 @@ export function SearchInput({
         placeholder={placeholder ?? (lang === "id" ? "Cari…" : "Search…")}
       />
     </div>
+  );
+}
+
+/** Case-insensitive search across every primitive field of a row (client-side tables). */
+export function searchRows<T>(rows: T[], q: string): T[] {
+  const s = q.trim().toLowerCase();
+  if (!s) return rows;
+  return rows.filter((r) =>
+    Object.values(r as Record<string, unknown>).some(
+      (v) => v != null && typeof v !== "object" && String(v).toLowerCase().includes(s),
+    ),
   );
 }

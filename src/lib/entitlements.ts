@@ -45,6 +45,10 @@ export function hasCatalogFeature(
   moduleId: string,
   submoduleId: string,
 ) {
+  if (moduleId === "manufacturing") {
+    const e = entitlements.manufacturing;
+    return e?.features.legacy === true || e?.features.mfg_basic === true;
+  }
   if (moduleId !== "crm") return true;
   const entitlement = entitlements.qalling;
   if (!entitlement) return false;

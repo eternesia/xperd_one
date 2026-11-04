@@ -64,7 +64,7 @@ function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Gagal membaca berkas"));
+    reader.onerror = () => reject(new Error("Gagal membaca file"));
     reader.readAsDataURL(file);
   });
 }
@@ -76,7 +76,7 @@ export async function uploadWsFile(
   file: File,
   uploadFn: (args: { data: { workspaceId: string; folder: string; fileName: string; dataUrl: string } }) => Promise<{ path: string }>,
 ) {
-  if (file.size > MAX_FILE) throw new Error(`Berkas melebihi ${Math.round(MAX_FILE / 1024 / 1024)} MB`);
+  if (file.size > MAX_FILE) throw new Error(`File > ${Math.round(MAX_FILE / 1024 / 1024)} MB`);
   const dataUrl = await fileToDataUrl(file);
   const result = await uploadFn({ data: { workspaceId, folder, fileName: file.name, dataUrl } });
   return result.path;
@@ -252,7 +252,7 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
             {lang === "id" ? "Pustaka Dokumen Tender" : "Tender Document Library"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {lang === "id" ? "Unggah sekali, pakai berulang di setiap tender." : "Upload once, reuse in every tender."}
+            {lang === "id" ? "Upload sekali, pakai berulang kali di setiap tender." : "Upload once, reuse in every tender."}
           </p>
         </div>
         <Button
@@ -275,7 +275,7 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">{lang === "id" ? "Belum ada berkas" : "Missing file"}</p>
+            <p className="text-xs text-muted-foreground">{lang === "id" ? "Belum ada file" : "Missing file"}</p>
             <p className="text-2xl font-semibold">{docs.filter((d) => !d.file_path).length}</p>
           </CardContent>
         </Card>
@@ -359,7 +359,7 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
                             {d.file_name}
                           </button>
                         ) : (
-                          <span className="text-destructive">{lang === "id" ? "Belum diunggah" : "Not uploaded"}</span>
+                          <span className="text-destructive">{lang === "id" ? "Belum upload" : "Not uploaded"}</span>
                         )}
                       </TableCell>
                       <TableCell className="flex gap-1">
@@ -455,17 +455,17 @@ export function DocLibraryView({ workspaceId }: { workspaceId: string }) {
                 />
               </AdminField>
             </div>
-            <AdminField label={lang === "id" ? "Berkas (maks 20 MB)" : "File (max 20 MB)"}>
+            <AdminField label={lang === "id" ? "File (PDF/gambar/Word/Excel, maks 20 MB)" : "File (max 20 MB)"}>
               <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border p-3 text-sm">
                 <Upload className="h-4 w-4" />
                 <span className="truncate">
                   {form.file?.name ??
                     (form.id
                       ? lang === "id"
-                        ? "Pilih berkas untuk versi baru (opsional)"
+                        ? "Pilih file untuk versi baru (opsional)"
                         : "Choose a file for a new version (optional)"
                       : lang === "id"
-                        ? "Pilih berkas"
+                        ? "Pilih file"
                         : "Choose file")}
                 </span>
                 <input

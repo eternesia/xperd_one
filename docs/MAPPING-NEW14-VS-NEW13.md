@@ -214,3 +214,23 @@ Keputusan berubah: MCP dibangun ulang **tanpa paket Lovable** (`@lovable.dev/mcp
 - Spec: `e2e/mcp.spec.ts` (401 + metadata, token pribadi di DB hanya hash, protokol, 15 tool, tulis/baca di SQL, validasi, batas paket Pro vs Agency, OAuth lengkap
   termasuk tolak/izinkan, verifier salah, kode sekali pakai, refresh dirotasi, kedaluwarsa, cabut dari UI, alur login → persetujuan).
 - Belum diuji dengan klien AI sungguhan (ChatGPT/Claude/Claude Code); hanya klien HTTP uji yang meniru alurnya.
+
+## Perbandingan UI mendalam dengan live (Ronde 54)
+
+Metode: crawl hanya-baca `xperd-new.lovable.app` (akun Super Admin seeder + akun pelanggan Qalling) vs Old — 18 halaman app-admin dan 27 halaman Qalling
+(termasuk tab dan dialog pembuka), ikon per elemen interaktif (kelas `lucide-*`), gambar rusak, favicon, 127 halaman modul ERP, dan halaman publik;
+ditambah perbandingan teks tersurat New 14 vs Old per berkas. Live **lebih baru** dari kode New 14/15 (tidak ada di zip mana pun), jadi sebagian dikerjakan dari tampilan live.
+
+**Sudah disamakan**
+- Wording Pustaka Dokumen/Tender memakai "file"/"Upload" (sebelumnya "berkas"/"Unggah").
+- Landing publik Qalling: menu & halaman **Testimoni**; strip **platform sosial** (10 ikon merek) dan **klien AI** (6 ikon, ChatGPT/Claude/Gemini/Cursor/Perplexity/MCP) —
+  ini ikon yang sebelumnya tidak muncul; tiga kartu keunggulan (jam emas, komisi referral, posting via chat AI); seksi Testimoni; footer dan halaman Kontak
+  berikon (email + WhatsApp dari `qalling.kontak`, tautan `mailto:`/`wa.me`); halaman Kelebihan memuat kartu & strip yang sama.
+- Referral: Admin → "Materi Promosi Referral" (saklar tampil, pesan WhatsApp, caption media sosial dengan `{link}`/`{code}`, poster PNG/JPG/WebP ≤ 5 MB dengan cek magic byte,
+  disimpan di tabel `site_assets` + `site_content` section `qalling.referral`; migrasi **036**); Qalling → Referral "Materi Promosi Siap Share" (Salin caption, Bagikan, Unduh poster, WhatsApp).
+- Situs XPERD: urutan kontak email → telepon → **WhatsApp** → alamat (footer, Kontak, Tentang) dan form Admin → Konten "Kontak website XPERD" (email, telepon, WhatsApp, alamat, jam layanan, website; kosong = bawaan; section `xperd.kontak`).
+- Admin → Tebar: pencarian "Cari di halaman ini…" + pager (10/25/50/100, default 25).
+- Ikon pada seluruh halaman app-admin dan Qalling (tombol/menu/tab) identik dengan live; selisih sisa hanya data (baris contoh).
+
+**Belum (live lebih baru, butuh keputusan/kode)**: Admin → Users per tenant (tabel Tenant + Detail); Object Storage → "Unggahan & kualitas media"; Tim → tab Custom Roles;
+Tenancy kolom "Sumber daftar"; Kas & Bank → "Laporan Kas & Bank" (+ POS "Pilih kas / bank"); modul Production (BOM/Lot/Quality/…); katalog paket live hasil edit (Lite 10 akun) — mengikuti kode.

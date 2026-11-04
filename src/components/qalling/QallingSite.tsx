@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getQallingContactRows } from "@/lib/qalling-site.functions";
+import { getWebsiteContacts } from "@/lib/xperd-contact.functions";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -8,6 +8,9 @@ import {
   CalendarClock,
   Check,
   Clock,
+  Globe,
+  MapPin,
+  Phone,
   Image,
   Inbox,
   Layers,
@@ -40,19 +43,20 @@ import { QallingLogo } from "./QallingLogo";
 // Placeholder contact details — replace with the real ones.
 export const QALLING_CONTACT = { whatsapp: "6281200000000", email: "halo@qalling.id" };
 
-/** Contact details managed in Super Admin → Website Content (section "qalling.kontak", keys whatsapp/email, value in Judul ID). */
+/** Kontak Qalling dikelola di Super Admin → Konten Website (section "qalling.kontak"): email, telepon, WhatsApp, alamat, jam layanan, website. */
 export function useQallingContact() {
   const { data } = useQuery({
     queryKey: ["site-content", "qalling.kontak"],
-    queryFn: () => getQallingContactRows(),
+    queryFn: () => getWebsiteContacts({ data: { site: "qalling" } }),
     staleTime: 60_000,
   });
-  const get = (k: string) =>
-    data?.find((r) => r.key === k)?.title_id?.trim() ||
-    data?.find((r) => r.key === k)?.title_en?.trim();
   return {
-    whatsapp: (get("whatsapp") ?? QALLING_CONTACT.whatsapp).replace(/\D/g, ""),
-    email: get("email") ?? QALLING_CONTACT.email,
+    whatsapp: (data?.whatsapp ?? QALLING_CONTACT.whatsapp).replace(/\D/g, ""),
+    email: data?.email ?? QALLING_CONTACT.email,
+    phone: data?.phone ?? "",
+    address: data?.address ?? "",
+    hours: data?.hours ?? "",
+    website: data?.website ?? "",
   };
 }
 
@@ -61,6 +65,7 @@ const NAV = [
   { to: "/qalling/fitur", label: "Fitur" },
   { to: "/qalling/kelebihan", label: "Kelebihan" },
   { to: "/qalling/harga", label: "Harga" },
+  { to: "/qalling/testimoni", label: "Testimoni" },
   { to: "/qalling/kontak", label: "Kontak" },
 ] as const;
 
@@ -75,6 +80,7 @@ export function QallingShell({ children }: { children: ReactNode }) {
           Fitur: "Features",
           Kelebihan: "Benefits",
           Harga: "Pricing",
+          Testimoni: "Testimonials",
           Kontak: "Contact",
         } as Record<string, string>
       )[label],
@@ -180,9 +186,60 @@ export function QallingShell({ children }: { children: ReactNode }) {
             ))}
           </div>
           <div className="flex flex-col gap-1">
-            <a href={`mailto:${QALLING_CONTACT.email}`} className="hover:text-foreground">
-              {QALLING_CONTACT.email}
-            </a>
+            <span className="flex items-center gap-2">
+              <Mail className="h-4 w-4 shrink-0 text-gold" />
+              <a
+                href={`mailto:${QALLING_CONTACT.email}`}
+                className="min-w-0 break-words hover:text-foreground"
+              >
+                {QALLING_CONTACT.email}
+              </a>
+            </span>
+            <span className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 shrink-0 text-gold" />
+              <a
+                href={`https://wa.me/${QALLING_CONTACT.whatsapp}`}
+                className="min-w-0 break-words hover:text-foreground"
+              >
+                {QALLING_CONTACT.whatsapp}
+              </a>
+            </span>
+            {QALLING_CONTACT.phone && (
+              <span className="flex items-center gap-2">
+                <Phone className="h-4 w-4 shrink-0 text-gold" />
+                <a
+                  href={`tel:${QALLING_CONTACT.phone.replace(/[^\d+]/g, "")}`}
+                  className="hover:text-foreground"
+                >
+                  {QALLING_CONTACT.phone}
+                </a>
+              </span>
+            )}
+            {QALLING_CONTACT.address && (
+              <span className="flex items-start gap-2">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+                {QALLING_CONTACT.address}
+              </span>
+            )}
+            {QALLING_CONTACT.hours && (
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4 shrink-0 text-gold" />
+                {QALLING_CONTACT.hours}
+              </span>
+            )}
+            {QALLING_CONTACT.website && (
+              <span className="flex items-center gap-2">
+                <Globe className="h-4 w-4 shrink-0 text-gold" />
+                <a
+                  href={QALLING_CONTACT.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-foreground"
+                >
+                  {QALLING_CONTACT.website}
+                </a>
+              </span>
+            )}
             <span>© {new Date().getFullYear()} Qalling — by XPERD</span>
           </div>
         </div>
@@ -473,25 +530,22 @@ export function PricingGrid() {
 export function ContactCards() {
   const QALLING_CONTACT = useQallingContact();
   return (
-    <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
-      <a
-        href={`https://wa.me/${QALLING_CONTACT.whatsapp}`}
-        target="_blank"
-        rel="noreferrer"
-        className="rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-gold"
-      >
-        <MessageCircle className="h-6 w-6 text-gold" />
-        <h3 className="mt-3 font-semibold">WhatsApp Sales</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Konsultasi paket & demo langsung.</p>
-      </a>
-      <a
-        href={`mailto:${QALLING_CONTACT.email}`}
-        className="rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-gold"
-      >
-        <Mail className="h-6 w-6 text-gold" />
-        <h3 className="mt-3 font-semibold">Email</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{QALLING_CONTACT.email}</p>
-      </a>
+    <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-x-64 gap-y-4 text-base text-foreground">
+      <span className="flex items-center gap-3">
+        <Mail className="h-5 w-5 shrink-0 text-gold" />
+        <a href={`mailto:${QALLING_CONTACT.email}`} className="min-w-0 break-words hover:underline">
+          {QALLING_CONTACT.email}
+        </a>
+      </span>
+      <span className="flex items-center gap-3">
+        <MessageCircle className="h-5 w-5 shrink-0 text-gold" />
+        <a
+          href={`https://wa.me/${QALLING_CONTACT.whatsapp}`}
+          className="min-w-0 break-words hover:underline"
+        >
+          {QALLING_CONTACT.whatsapp}
+        </a>
+      </span>
     </div>
   );
 }

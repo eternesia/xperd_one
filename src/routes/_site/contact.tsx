@@ -1,6 +1,7 @@
+import { ContactItems } from "@/components/site/ContactItems";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CheckCircle2, Loader2, Mail, MapPin, Phone } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -66,7 +67,8 @@ const COPY = {
     industry: "Industry",
     selectIndustry: "Select an industry",
     yourNeeds: "Your needs",
-    messagePlaceholder: "Tell us about your entity structure, current systems, and implementation timeline.",
+    messagePlaceholder:
+      "Tell us about your entity structure, current systems, and implementation timeline.",
     submitButton: "Send request",
     thankYouTitle: "Thank you",
     thankYouDescription:
@@ -106,7 +108,8 @@ const COPY = {
     industry: "Industri",
     selectIndustry: "Pilih industri",
     yourNeeds: "Kebutuhan Anda",
-    messagePlaceholder: "Ceritakan struktur entitas, sistem yang dipakai saat ini, dan target implementasi.",
+    messagePlaceholder:
+      "Ceritakan struktur entitas, sistem yang dipakai saat ini, dan target implementasi.",
     submitButton: "Kirim permintaan",
     thankYouTitle: "Terima kasih",
     thankYouDescription:
@@ -206,20 +209,7 @@ function ContactPage() {
               <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                 {c.headOffice}
               </h2>
-              <ul className="mt-5 space-y-4 text-sm text-muted-foreground">
-                <li className="flex gap-3">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                  {BRAND.address}
-                </li>
-                <li className="flex gap-3">
-                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                  {BRAND.email}
-                </li>
-                <li className="flex gap-3">
-                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                  {BRAND.phone}
-                </li>
-              </ul>
+              <ContactItems className="mt-5 space-y-4 text-sm text-muted-foreground" />
             </div>
             <div className="surface-navy relative overflow-hidden rounded-2xl p-7">
               <div className="grid-lines pointer-events-none absolute inset-0" aria-hidden="true" />
@@ -238,10 +228,15 @@ function ContactPage() {
             <div className="rounded-2xl border border-border bg-card p-10 text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-gold" />
               <h2 className="mt-6 text-2xl text-navy">{c.thankYouTitle}</h2>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.thankYouDescription}</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                {c.thankYouDescription}
+              </p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-8 md:p-10">
+            <form
+              onSubmit={handleSubmit}
+              className="rounded-2xl border border-border bg-card p-8 md:p-10"
+            >
               <Label>{c.interestedProduct}</Label>
               <div className="mt-2 flex flex-wrap gap-3">
                 {(["business", "enterprise"] as const).map((p) => (
@@ -261,10 +256,26 @@ function ContactPage() {
               </div>
 
               <div className="mt-8 grid gap-5 sm:grid-cols-2">
-                <Field label={c.companyName} name="company_name" error={errors.company_name} required />
-                <Field label={c.fullName} name="contact_name" error={errors.contact_name} required />
+                <Field
+                  label={c.companyName}
+                  name="company_name"
+                  error={errors.company_name}
+                  required
+                />
+                <Field
+                  label={c.fullName}
+                  name="contact_name"
+                  error={errors.contact_name}
+                  required
+                />
                 <Field label={c.jobTitle} name="job_title" error={errors.job_title} />
-                <Field label={c.workEmail} name="email" type="email" error={errors.email} required />
+                <Field
+                  label={c.workEmail}
+                  name="email"
+                  type="email"
+                  error={errors.email}
+                  required
+                />
                 <Field label={c.phoneNumber} name="phone" error={errors.phone} />
                 <div>
                   <Label htmlFor="employee_range">{c.numberOfEmployees}</Label>

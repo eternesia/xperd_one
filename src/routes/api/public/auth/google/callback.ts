@@ -11,10 +11,13 @@ export const Route = createFileRoute("/api/public/auth/google/callback")({
       GET: async ({ request }) => {
         const g = await import("@/lib/google-oauth.server");
         const url = new URL(request.url);
+        const { qallingPagePath } = await import("@/lib/qalling-urls");
+        const host = new URL(g.requestOrigin(request)).hostname;
+        const loginPath = (q = "") => qallingPagePath(host, `/qalling/login${q}`);
         const headers = new Headers();
         headers.append("Set-Cookie", `${g.GOOGLE_STATE_COOKIE}=; ${g.cookieAttrs(0)}`);
         const fail = (code: string) => {
-          headers.set("Location", `/qalling/login?google_error=${code}`);
+          headers.set("Location", loginPath(`?google_error=${code}`));
           return new Response(null, { status: 302, headers });
         };
         const state = url.searchParams.get("state");
@@ -109,7 +112,7 @@ export const Route = createFileRoute("/api/public/auth/google/callback")({
         await execute("UPDATE app_users SET last_login_at = CURRENT_TIMESTAMP(6) WHERE id = ?", [
           user.id,
         ]);
-        headers.set("Location", "/qalling/login");
+        headers.set("Location", loginPath());
         return new Response(null, { status: 302, headers });
       },
     },

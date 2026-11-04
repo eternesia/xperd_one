@@ -60,17 +60,31 @@ export const createOrganisation = createServerFn({ method: "POST" })
     const user = await requireUser();
 
     const slug = data.subdomain.trim().toLowerCase();
-    const dupe = await executeOne<{ id: string }>("SELECT id FROM tenants WHERE subdomain = ? LIMIT 1", [slug]);
+    const dupe = await executeOne<{ id: string }>(
+      "SELECT id FROM tenants WHERE subdomain = ? LIMIT 1",
+      [slug],
+    );
     if (dupe) throw new Error("That subdomain is already taken. Please choose another one.");
 
-    const pkg = await executeOne<{ id: string }>("SELECT id FROM packages WHERE code = ? LIMIT 1", [data.packageCode]);
+    const pkg = await executeOne<{ id: string }>("SELECT id FROM packages WHERE code = ? LIMIT 1", [
+      data.packageCode,
+    ]);
     const trialEnds = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
 
     await execute(
       `INSERT INTO tenants
-         (id, name, subdomain, owner_id, package_id, status, industry, city, user_count, workspace_count, trial_ends_at)
-       VALUES (?, ?, ?, ?, ?, 'trial', ?, ?, 1, 0, ?)`,
-      [uuid(), data.name, slug, user.id, pkg?.id ?? null, data.industry ?? null, data.city ?? null, trialEnds],
+         (id, name, subdomain, owner_id, package_id, status, industry, city, user_count, workspace_count, trial_ends_at, signup_source)
+       VALUES (?, ?, ?, ?, ?, 'trial', ?, ?, 1, 0, ?, 'admin')`,
+      [
+        uuid(),
+        data.name,
+        slug,
+        user.id,
+        pkg?.id ?? null,
+        data.industry ?? null,
+        data.city ?? null,
+        trialEnds,
+      ],
     );
 
     return { ok: true as const };
@@ -98,9 +112,10 @@ export const createWorkspace = createServerFn({ method: "POST" })
         )
       : null;
     if (pkg?.max_workspace != null) {
-      const used = await executeOne<{ c: number }>("SELECT COUNT(*) AS c FROM workspaces WHERE tenant_id = ?", [
-        tenant.id,
-      ]);
+      const used = await executeOne<{ c: number }>(
+        "SELECT COUNT(*) AS c FROM workspaces WHERE tenant_id = ?",
+        [tenant.id],
+      );
       if (Number(used?.c ?? 0) >= pkg.max_workspace) {
         throw new Error(`Workspace quota reached for this package (max ${pkg.max_workspace}).`);
       }
@@ -129,7 +144,9 @@ export const createWorkspace = createServerFn({ method: "POST" })
         "INSERT INTO workspace_members (id, workspace_id, user_id, role) VALUES (?, ?, ?, 'owner')",
         [uuid(), wsId, user.id],
       );
-      await conn.execute("UPDATE tenants SET workspace_count = workspace_count + 1 WHERE id = ?", [tenant.id]);
+      await conn.execute("UPDATE tenants SET workspace_count = workspace_count + 1 WHERE id = ?", [
+        tenant.id,
+      ]);
     });
 
     await seedWorkspaceDefaults(wsId);
@@ -178,18 +195,19 @@ export const getPublicPackages = createServerFn({ method: "GET" }).handler(async
 });
 
 export const submitLead = createServerFn({ method: "POST" })
-  .validator((input: unknown) =>
-    input as {
-      company_name: string;
-      contact_name: string;
-      job_title?: string;
-      email: string;
-      phone?: string;
-      industry?: string;
-      employee_range?: string;
-      message?: string;
-      interested_product?: string;
-    },
+  .validator(
+    (input: unknown) =>
+      input as {
+        company_name: string;
+        contact_name: string;
+        job_title?: string;
+        email: string;
+        phone?: string;
+        industry?: string;
+        employee_range?: string;
+        message?: string;
+        interested_product?: string;
+      },
   )
   .handler(async ({ data }) => {
     const { execute, uuid } = await import("@/integrations/mysql/pool");

@@ -92,7 +92,7 @@ test("TEAM: tab Workspace Access = matriks user × workspace dan perubahannya te
 
   /* ---------- urutan tab harus sama dengan live ---------- */
   const tabs = page.getByRole("tab");
-  await expect(tabs).toHaveCount(3, { timeout: 30_000 });
+  await expect(tabs).toHaveCount(4, { timeout: 30_000 });
   await expect(tabs.nth(0)).toHaveText(/Users|Pengguna/i);
   await expect(tabs.nth(1)).toHaveText(/Workspace Access/);
   await expect(tabs.nth(2)).toHaveText(/Role Access/);

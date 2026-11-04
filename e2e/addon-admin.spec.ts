@@ -147,7 +147,7 @@ test("ADMIN add-on: katalog tier, aturan harga, opsi, tier tenant", async ({ pag
     .fill("");
   await dlg2.getByLabel("Integrasi AI (MCP/API)").click();
   await dlg2.getByRole("button", { name: "Save tier" }).click();
-  await expect(page.getByText("Tier saved").first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 15_000 });
   const [mid2] = await q("SELECT limits, features FROM addon_tiers WHERE code = 'e2e_tier_mid'");
   expect(mid2.limits.max_accounts).toBeNull();
   expect(mid2.limits.max_users).toBe(4);

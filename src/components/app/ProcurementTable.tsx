@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import {
   Printer,
   Search,
   Trash2,
+  Ban,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,17 +45,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
-import {
-  applyAdvanceToInvoice,
-  assertFundsMapping,
-  postApInvoiceJournal,
-  postGoodsReceiptJournal,
-  postPaymentJournal,
-  postPurchaseReturnJournal,
-} from "@/lib/journal";
-import { postProcurementMovements } from "@/lib/inventory";
-// BS New 3: cermin-kan pembayaran ke buku kas & bank.
-import { recordSettlementCashTransaction } from "@/lib/cashbank";
+import { erpSaveDocument } from "@/lib/erp-document.functions";
+import { CancelDocumentDialog } from "@/components/app/CancelDocumentDialog";
 import { cn } from "@/lib/utils";
 import { isWithholdingTax, useLineTaxOptions } from "@/lib/tax";
 import {
@@ -114,6 +106,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
   const [open, setOpen] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [cancelDoc, setCancelDoc] = useState<PrcDoc | null>(null);
   const [sourceId, setSourceId] = useState<string>("");
   const [sourceLines, setSourceLines] = useState<PrcLine[]>([]);
   const [sourceOpenTotal, setSourceOpenTotal] = useState(0);
@@ -294,253 +287,65 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
     });
   };
 
+  // Kunci posting: dipertahankan selama satu percobaan simpan agar kirim ulang (klik ganda / jaringan putus) tidak memposting dua kali.
+  const postingKey = useRef<string | null>(null);
+  useEffect(() => {
+    postingKey.current = null;
+  }, [open, editingId, sourceId]);
   const create = useMutation({
     mutationFn: async () => {
-      const docStatus: PrcStatus = isDraft ? "draft" : entity.openStatus;
       const sourceDoc = sourceDocs.find((d) => d.id === sourceId) ?? null;
       const doc_number = header.doc_number.trim() || nextDocNumber(entity.prefix, total + 1);
-
-      // validate the settlement account mapping before anything is written
-      let funds: { account_code: string; account_name: string } | null = null;
-      if (!isDraft && entity.docType === "purchase_payment") {
-        funds = await assertFundsMapping(
-          workspaceId,
-          { account_code: header.bank_gl_code || null, account_name: header.bank_account_name || null },
-          totals.total,
-        );
-      }
-
-      const created = await saveWorkspaceRow({
+      postingKey.current ??= crypto.randomUUID();
+      const usable = lines.filter((l) => l.item_code || l.description);
+      // Satu transaksi di server: dokumen, baris, saldo sumber, stok, jurnal, kas/bank, uang muka (BS New 16).
+      const res = await erpSaveDocument({
         data: {
-          table: "prc_documents",
           workspaceId,
-          id: editingId ?? undefined,
-          data: {
+          side: "purchase",
+          key: postingKey.current,
+          id: editingId,
+          draft: isDraft,
+          document: {
             doc_type: entity.docType,
             doc_number,
             doc_date: header.doc_date,
             due_date: entity.showDueDate && header.due_date ? header.due_date : null,
-            supplier_code: header.supplier_code || null,
-            supplier_name: header.supplier_name || null,
+            partner_code: header.supplier_code || null,
+            partner_name: header.supplier_name || null,
             warehouse_code: entity.showWarehouse ? header.warehouse_code || null : null,
             bank_account_code: entity.showBank ? header.bank_account_code || null : null,
             bank_account_name: entity.showBank ? header.bank_account_name || null : null,
             reference: header.reference || null,
-            status: docStatus,
-            // Ronde 29 (BS New 8): total dokumen tetap dalam mata uang dokumen.
+            notes: header.notes || null,
             currency: header.currency || "IDR",
             exchange_rate: Number(header.exchange_rate) || 1,
-            subtotal: totals.subtotal,
-            discount_amount: totals.discount,
-            tax_amount: totals.tax,
-            withholding_amount: totals.withholding,
-            total: totals.total,
-            notes: header.notes || null,
             source_document_id: sourceDoc?.id ?? null,
-            source_doc_number: sourceDoc?.doc_number ?? null,
           },
-        },
-      });
-      const docId = created.id;
-
-      const usable = lines.filter((l) => l.item_code || l.description);
-      const payload = usable.map((l, i) => {
-        const c = computeLine({
-          qty: Number(l.qty) || 0,
-          unit_price: Number(l.unit_price) || 0,
-          discount: Number(l.discount) || 0,
-          tax_rate: Number(l.tax_rate) || 0,
-        });
-        return {
-          document_id: docId,
-          workspace_id: workspaceId,
-          line_no: i + 1,
-          item_code: l.item_code || null,
-          description: l.description || null,
-          qty: Number(l.qty) || 0,
-          uom_code: l.uom_code || null,
-          unit_price: Number(l.unit_price) || 0,
-          discount: Number(l.discount) || 0,
-          tax_rate: Number(l.tax_rate) || 0,
-          tax_code: l.tax_code || null,
-          line_total: c.net + c.tax,
-          source_line_id: l.source_line_id ?? null,
-        };
-      });
-      if (editingId) {
-        // #9: ganti seluruh baris draft dalam satu transaksi di server.
-        await replaceChildRows({
-          data: {
-            table: "prc_document_lines",
-            workspaceId,
-            parentColumn: "document_id",
-            parentId: docId,
-            rows: payload,
-          },
-        });
-      } else if (payload.length) {
-        await upsertWorkspaceRows({ data: { table: "prc_document_lines", workspaceId, rows: payload } });
-      }
-
-      // #7: Goods Receipt/Retur mengonsumsi QTY; AP Invoice & Purchase Payment
-      // mengonsumsi NILAI saja (qty item tidak diubah).
-      if (sourceDoc && !isDraft) {
-        let stillOpen: boolean;
-        if (isAmountSettlement(entity.docType)) {
-          stillOpen = totals.total + 0.01 < sourceOpenTotal;
-        } else {
-          const consumed = new Map<string, number>();
-          usable.forEach((l) => {
-            if (!l.source_line_id) return;
-            consumed.set(l.source_line_id, (consumed.get(l.source_line_id) ?? 0) + (Number(l.qty) || 0));
-          });
-          const nextLines = sourceLines.map((sl) => ({
-            ...sl,
-            qty_fulfilled: Number(sl.qty_fulfilled ?? 0) + (consumed.get(sl.id) ?? 0),
-          }));
-          for (const sl of nextLines) {
-            if (!consumed.has(sl.id)) continue;
-            await saveWorkspaceRow({
-              data: {
-                table: "prc_document_lines",
-                workspaceId,
-                id: sl.id,
-                data: { qty_fulfilled: Math.min(Number(sl.qty), sl.qty_fulfilled ?? 0) },
-              },
-            });
-          }
-          stillOpen = nextLines.some((l) => Number(l.qty) - Number(l.qty_fulfilled ?? 0) > 0.0001);
-        }
-        await saveWorkspaceRow({
-          data: {
-            table: "prc_documents",
-            workspaceId,
-            id: sourceDoc.id,
-            data: { status: (stillOpen ? "partial" : "closed") as PrcStatus },
-          },
-        });
-      }
-
-      // automatic journal entry
-      if (entity.autoJournal && !isDraft) {
-        const journalDoc = {
-          id: docId,
-          doc_number,
-          doc_date: header.doc_date,
-          doc_type: entity.docType,
-          supplier_name: header.supplier_name || null,
-          subtotal: totals.subtotal,
-          discount_amount: totals.discount,
-          tax_amount: totals.tax,
-          withholding_amount: totals.withholding,
-          total: totals.total,
-          exchange_rate: Number(header.exchange_rate) || 1,
-        };
-        if (entity.docType === "goods_receipt") await postGoodsReceiptJournal(workspaceId, journalDoc);
-        if (entity.docType === "ap_invoice") {
-          // #38: barang dari GR dibebankan ke GR/IR, jasa ke akun beban, plus
-          // PPN Masukan dan potongan PPh (Hutang Pajak).
-          await postApInvoiceJournal(
-            workspaceId,
-            journalDoc,
-            usable.map((l) => {
-              const c = computeLine({
-                qty: Number(l.qty) || 0,
-                unit_price: Number(l.unit_price) || 0,
-                discount: Number(l.discount) || 0,
-                tax_rate: Number(l.tax_rate) || 0,
-              });
-              const wht = isWithholdingTax(taxByCode.get(l.tax_code));
-              return {
-                item_code: l.item_code || null,
-                description: l.description || null,
-                net: c.net,
-                vat: wht ? 0 : c.tax,
-                wht: wht ? c.tax : 0,
-              };
-            }),
-            {
-              hasGoodsReceiptSource: sourceDoc?.doc_type === "goods_receipt",
-              goodsReceiptId: sourceDoc?.doc_type === "goods_receipt" ? sourceDoc.id : null,
-            },
-          );
-          // #37: potongkan uang muka pembelian yang masih terbuka ke invoice ini
-          const applied = await applyAdvanceToInvoice("ap", workspaceId, {
-            id: docId,
-            doc_number,
-            doc_date: header.doc_date,
-            partner: header.supplier_name || "",
-            total: totals.total,
-          });
-          if (applied > 0) {
-            toast.success(
-              t(
-                `${formatMoney(applied, lang)} down payment applied to ${doc_number}`,
-                `Uang muka ${formatMoney(applied, lang)} dipotongkan ke ${doc_number}`,
-              ),
-            );
-          }
-        }
-        if (entity.docType === "purchase_payment") {
-          // #37: payment tanpa dokumen sumber = uang muka pembelian
-          const isAdvance = !sourceDoc;
-          // Ronde 29 (BS New 8): pelunasan valas memakai kurs invoice untuk
-          // membersihkan hutang; selisihnya ke akun selisih kurs realisasi.
-          await postPaymentJournal(workspaceId, journalDoc, funds ?? undefined, {
-            advance: isAdvance,
-            invoiceRate: sourceDoc ? Number(sourceDoc.exchange_rate ?? 1) || 1 : null,
-          });
-          if (isAdvance) {
-            await saveWorkspaceRow({
-              data: { table: "prc_documents", workspaceId, id: docId, data: { advance_kind: "advance" } },
-            });
-          }
-          // saldo akun kas/bank yang dipilih ikut bergerak bersama buku besar
-          await recordSettlementCashTransaction(workspaceId, {
-            accountCode: header.bank_account_code || "",
-            direction: "out",
-            docNumber: doc_number,
-            docDate: header.doc_date,
-            amount: totals.total,
-            // Ronde 29 (BS New 8): rekening valas mencatat nilai valasnya sendiri.
-            foreignAmount: totals.total,
-            currency: header.currency || "IDR",
-            contactName: header.supplier_name || null,
-            reference: sourceDoc?.doc_number ?? header.reference ?? null,
-            controlAccountCode: isAdvance ? "1500" : "2000",
-            controlAccountName: isAdvance ? "Uang Muka Pembelian" : "Hutang Usaha",
-            memo: `Payment ${doc_number}${header.supplier_name ? ` · ${header.supplier_name}` : ""}`,
-          });
-        }
-        if (entity.docType === "purchase_return")
-          await postPurchaseReturnJournal(workspaceId, journalDoc, {
-            goodsReceiptId: sourceDoc?.doc_type === "goods_receipt" ? sourceDoc.id : null,
-          });
-      }
-
-      // stock movements (goods receipt adds stock, purchase return removes it)
-      if (!isDraft && (entity.docType === "goods_receipt" || entity.docType === "purchase_return")) {
-        await postProcurementMovements(
-          workspaceId,
-          {
-            id: docId,
-            doc_number,
-            doc_date: header.doc_date,
-            doc_type: entity.docType,
-            warehouse_code: header.warehouse_code || null,
-            supplier_name: header.supplier_name || null,
-          },
-          usable.map((l) => ({
+          lines: usable.map((l) => ({
             item_code: l.item_code || null,
             description: l.description || null,
-            uom_code: l.uom_code || null,
             qty: Number(l.qty) || 0,
+            uom_code: l.uom_code || null,
             unit_price: Number(l.unit_price) || 0,
+            discount: Number(l.discount) || 0,
+            tax_rate: Number(l.tax_rate) || 0,
+            tax_code: l.tax_code || null,
+            source_line_id: l.source_line_id ?? null,
           })),
+        },
+      });
+      if (res.advanceApplied > 0) {
+        toast.success(
+          t(
+            `${formatMoney(res.advanceApplied, lang)} down payment applied to ${doc_number}`,
+            `Uang muka ${formatMoney(res.advanceApplied, lang)} dipotongkan ke ${doc_number}`,
+          ),
         );
       }
     },
     onSuccess: () => {
+      postingKey.current = null;
       toast.success(
         isDraft
           ? t(editingId ? "Draft updated" : "Saved as draft", editingId ? "Draf diperbarui" : "Disimpan sebagai draf")
@@ -865,6 +670,16 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                       <Printer className="h-4 w-4" />
                     </Link>
                   </Button>
+                  {row.status !== "draft" && row.status !== "cancelled" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Cancel document", "Batalkan dokumen")}
+                      onClick={() => setCancelDoc(row)}
+                    >
+                      <Ban className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                   {row.status === "draft" && (
                     <Button
                       variant="ghost"
@@ -1309,6 +1124,17 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
           </form>
         </DialogContent>
       </Dialog>
+      <CancelDocumentDialog
+        workspaceId={workspaceId}
+        side="purchase"
+        document={cancelDoc}
+        onClose={() => setCancelDoc(null)}
+        onCancelled={() => {
+          void qc.invalidateQueries({ queryKey: ["prc"] });
+          void qc.invalidateQueries({ queryKey: ["inv-movements"] });
+          void qc.invalidateQueries({ queryKey: ["cb-trx"] });
+        }}
+      />
     </div>
   );
 }

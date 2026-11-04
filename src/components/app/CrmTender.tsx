@@ -492,7 +492,7 @@ function TenderDetail({
   async function downloadZip() {
     const withFile = merged.filter((d) => d.file_path);
     if (!withFile.length && !fillTemplates.length) {
-      toast.error(t("No files or templates attached", "Belum ada berkas atau template terlampir"));
+      toast.error(t("No files or templates attached", "Belum ada file atau template terlampir"));
       return;
     }
     setZipping(true);
@@ -814,7 +814,7 @@ function TenderDetail({
                               </AdminSelect>
                               <label
                                 className="cursor-pointer rounded p-1 hover:bg-muted"
-                                title={t("Upload tender-specific file", "Unggah berkas khusus tender ini")}
+                                title={t("Upload tender-specific file", "Upload file khusus tender ini")}
                               >
                                 {uploading === d.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -850,7 +850,7 @@ function TenderDetail({
                                 )}
                               </div>
                             ) : (
-                              <p className="text-xs text-muted-foreground">{t("No file yet", "Belum ada berkas")}</p>
+                              <p className="text-xs text-muted-foreground">{t("No file yet", "Belum ada file")}</p>
                             )}
                             <Input
                               className="h-8 text-xs"

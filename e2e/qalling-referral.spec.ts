@@ -168,10 +168,10 @@ test("REFERRAL: kode, klaim lewat tautan, komisi top-up pertama (min/maks), idem
   await expect.poll(async () => (await q("SELECT code FROM referral_codes WHERE tenant_id = ?", [tA.id])).length, { timeout: 30_000 }).toBe(1);
   const [{ code }] = await q("SELECT code FROM referral_codes WHERE tenant_id = ?", [tA.id]);
   expect(code).toMatch(/^[0-9A-F]{8}$/);
-  await expect(a.page.getByText(`/qalling/daftar?ref=${code}`)).toBeVisible();
+  await expect(a.page.locator("code", { hasText: `/qalling/daftar?ref=${code}` })).toBeVisible();
   // kode tetap sama saat dibuka ulang
   await a.page.reload();
-  await expect(a.page.getByText(`/qalling/daftar?ref=${code}`)).toBeVisible({ timeout: 30_000 });
+  await expect(a.page.locator("code", { hasText: `/qalling/daftar?ref=${code}` })).toBeVisible({ timeout: 30_000 });
   expect(await q("SELECT 1 FROM referral_codes WHERE tenant_id = ?", [tA.id])).toHaveLength(1);
 
   /* ---------- referee B mendaftar lewat tautan ---------- */

@@ -14,7 +14,11 @@ const addDays = (days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+import { registrationSource, type TenantSource } from "./tenant-source";
+
 export interface ProvisionOptions {
+  /** Situs pendaftaran asal (qalling|xperd|admin); bila kosong diturunkan dari catatan pendaftaran. */
+  signupSource?: TenantSource;
   /** Pengguna yang sudah ada (mis. login Google) — tidak membuat akun baru. */
   ownerId?: string;
   /** Pendaftaran khusus Qalling: beri tier ini sebagai add-on trial dan lewati invoice ERP. */
@@ -109,8 +113,8 @@ export async function provisionRegistrationCore(
     );
     await conn.execute(
       `INSERT INTO tenants
-         (id, name, subdomain, owner_id, package_id, status, industry, city, pic_name, pic_email, pic_phone, user_count, workspace_count, started_at, trial_ends_at, notes)
-       VALUES (?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)`,
+         (id, name, subdomain, owner_id, package_id, status, industry, city, pic_name, pic_email, pic_phone, user_count, workspace_count, started_at, trial_ends_at, notes, signup_source)
+       VALUES (?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
       [
         tenantId,
         reg.company_name,
@@ -125,6 +129,7 @@ export async function provisionRegistrationCore(
         today,
         trialEnds,
         reg.notes,
+        registrationSource(opts.signupSource, reg.notes),
       ],
     );
     await conn.execute(

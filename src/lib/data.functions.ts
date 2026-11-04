@@ -625,7 +625,15 @@ const COLS: Record<string, string[]> = {
     "created_at",
     "updated_at",
   ],
-  workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
+  workspace_members: [
+    "id",
+    "workspace_id",
+    "user_id",
+    "role",
+    "custom_role_id",
+    "created_at",
+    "updated_at",
+  ],
   crm_leads: [
     "id",
     "workspace_id",
@@ -961,6 +969,8 @@ const COLS: Record<string, string[]> = {
     "external_id",
     "source",
     "permalinks",
+    "first_comment",
+    "cover_path",
     "created_at",
     "updated_at",
   ],
@@ -1332,6 +1342,22 @@ async function logAudit(
   );
 }
 
+/** Komentar pertama ≤ 8000 karakter; cover harus gambar JPG/PNG milik workspace ini (pengganti trigger validate_post_cover). */
+async function assertPostEnhancementFields(workspaceId: string, d: Record<string, unknown>) {
+  const comment = d.first_comment;
+  if (typeof comment === "string" && comment.length > 8000)
+    throw new Error("Komentar pertama terlalu panjang");
+  const cover = d.cover_path;
+  if (typeof cover === "string" && cover) {
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const ok = await executeOne(
+      "SELECT 1 AS ok FROM crm_media WHERE workspace_id = ? AND file_path = ? AND mime_type IN ('image/jpeg','image/png') LIMIT 1",
+      [workspaceId, cover],
+    );
+    if (!ok) throw new Error("Cover harus berupa gambar JPG/PNG milik workspace ini");
+  }
+}
+
 export const saveWorkspaceRow = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((input: unknown) => input as SaveRowInput)
@@ -1340,6 +1366,13 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     const table = assertTable(data.table);
     if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
+    if (table === "crm_scheduled_posts")
+      await assertPostEnhancementFields(data.workspaceId, data.data ?? {});
+
+    if (data.id && table === "inv_movements") {
+      const { assertNotLotMovement } = await import("./production-lots.server");
+      await assertNotLotMovement(data.workspaceId, data.id);
+    }
 
     if (data.id) {
       const cols = cleanColumns(
@@ -1421,6 +1454,10 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
     const { execute, executeOne, result } = await import("@/integrations/mysql/pool");
     const table = assertTable(data.table);
     if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
+    if (table === "inv_movements") {
+      const { assertNotLotMovement } = await import("./production-lots.server");
+      await assertNotLotMovement(data.workspaceId, data.id);
+    }
     const before = AUDITED_TABLE_SET.has(table)
       ? ((await executeOne<Record<string, unknown>>(
           `SELECT * FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`,

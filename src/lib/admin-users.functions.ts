@@ -18,7 +18,13 @@ export interface AdminUserRow {
   companyName: string | null;
   createdAt: string | null;
   platformRoles: string[];
-  memberships: { workspaceId: string; workspaceName: string; tenantName: string; role: string }[];
+  memberships: {
+    workspaceId: string;
+    workspaceName: string;
+    tenantId: string | null;
+    tenantName: string;
+    role: string;
+  }[];
 }
 
 /** Every account on the platform, with roles + workspace memberships. */
@@ -43,7 +49,11 @@ export const adminListUsers = createServerFn({ method: "POST" })
     const wsInfo = new Map(
       (workspaces ?? []).map((w) => [
         w.id,
-        { name: w.name, tenant: w.tenant_id ? (tenantName.get(w.tenant_id) ?? "-") : "-" },
+        {
+          name: w.name,
+          tenantId: (w.tenant_id as string | null) ?? null,
+          tenant: w.tenant_id ? (tenantName.get(w.tenant_id) ?? "-") : "-",
+        },
       ]),
     );
 
@@ -60,6 +70,7 @@ export const adminListUsers = createServerFn({ method: "POST" })
         .map((m) => ({
           workspaceId: m.workspace_id,
           workspaceName: wsInfo.get(m.workspace_id)?.name ?? m.workspace_id,
+          tenantId: wsInfo.get(m.workspace_id)?.tenantId ?? null,
           tenantName: wsInfo.get(m.workspace_id)?.tenant ?? "-",
           role: m.role,
         })),

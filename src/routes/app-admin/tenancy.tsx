@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { tenantSourceLabel } from "@/lib/tenant-source";
+import { seo } from "@/components/qalling/QallingSite";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -23,14 +25,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { adminDelete, adminList, adminListTenantsWithPackages, adminSave } from "@/lib/platform.functions";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  adminDelete,
+  adminList,
+  adminListTenantsWithPackages,
+  adminSave,
+} from "@/lib/platform.functions";
 import { adminResetTenantTransactions } from "@/lib/admin-users.functions";
 import { formatDate } from "@/lib/xperd";
 
 import { TablePager, usePaged } from "@/components/app/admin-table";
 
 export const Route = createFileRoute("/app-admin/tenancy")({
+  head: () =>
+    seo(
+      "Tenancy — XPERD Super Admin",
+      "Kelola tenant, sumber pendaftaran Qalling dan XPERD, paket serta status pelanggan.",
+    ),
   component: TenancyPage,
 });
 
@@ -94,7 +113,9 @@ function TenancyPage() {
   const { data: packages = [] } = useQuery({
     queryKey: ["admin-packages"],
     queryFn: async () => {
-      const data = await adminList({ data: { table: "packages", orderBy: "sort_order", orderDir: "asc" } });
+      const data = await adminList({
+        data: { table: "packages", orderBy: "sort_order", orderDir: "asc" },
+      });
       return data?.rows ?? [];
     },
   });
@@ -201,7 +222,10 @@ function TenancyPage() {
     );
   });
 
-  const counts = STATUSES.map((s) => ({ status: s, count: tenants.filter((t) => t.status === s).length }));
+  const counts = STATUSES.map((s) => ({
+    status: s,
+    count: tenants.filter((t) => t.status === s).length,
+  }));
 
   const pg = usePaged(filtered);
 
@@ -243,16 +267,26 @@ function TenancyPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | TenantStatus)}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as "all" | TenantStatus)}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             {STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{s}</SelectItem>
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={productFilter} onValueChange={(v) => setProductFilter(v as "all" | "xperd" | "qalling")}>
+        <Select
+          value={productFilter}
+          onValueChange={(v) => setProductFilter(v as "all" | "xperd" | "qalling")}
+        >
           <SelectTrigger className="w-44" aria-label="Filter produk">
             <SelectValue />
           </SelectTrigger>
@@ -270,6 +304,7 @@ function TenancyPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Tenant</TableHead>
+                <TableHead>Sumber daftar</TableHead>
                 <TableHead>Package</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Workspaces</TableHead>
@@ -282,12 +317,16 @@ function TenancyPage() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-sm text-muted-foreground">Loading…</TableCell>
+                  <TableCell colSpan={9} className="text-sm text-muted-foreground">
+                    Loading…
+                  </TableCell>
                 </TableRow>
               )}
               {!isLoading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-sm text-muted-foreground">No tenants found.</TableCell>
+                  <TableCell colSpan={9} className="text-sm text-muted-foreground">
+                    No tenants found.
+                  </TableCell>
                 </TableRow>
               )}
               {pg.rows.map((t) => (
@@ -307,12 +346,17 @@ function TenancyPage() {
                           })
                         }
                       >
-                        <Badge variant={(t.product ?? "xperd") === "qalling" ? "default" : "outline"}>
+                        <Badge
+                          variant={(t.product ?? "xperd") === "qalling" ? "default" : "outline"}
+                        >
                           {(t.product ?? "xperd") === "qalling" ? "Qalling" : "XPERD"}
                         </Badge>
                       </button>
                     </div>
                     <p className="text-xs text-muted-foreground">{t.subdomain}.xperd.id</p>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    <Badge variant="outline">{tenantSourceLabel(t.signup_source ?? null)}</Badge>
                   </TableCell>
                   <TableCell className="text-sm">{t.packages?.name ?? "—"}</TableCell>
                   <TableCell>
@@ -320,14 +364,21 @@ function TenancyPage() {
                       <Badge variant={STATUS_VARIANT[t.status as TenantStatus]}>{t.status}</Badge>
                       <Select
                         value={t.status}
-                        onValueChange={(v) => changeStatus.mutate({ id: t.id, status: v as TenantStatus })}
+                        onValueChange={(v) =>
+                          changeStatus.mutate({ id: t.id, status: v as TenantStatus })
+                        }
                       >
-                        <SelectTrigger className="h-8 w-32" aria-label={`Change status for ${t.name}`}>
+                        <SelectTrigger
+                          className="h-8 w-32"
+                          aria-label={`Change status for ${t.name}`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {STATUSES.map((s) => (
-                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -336,7 +387,9 @@ function TenancyPage() {
                   <TableCell className="text-sm">{t.workspace_count}</TableCell>
                   <TableCell className="text-sm">{t.user_count}</TableCell>
                   <TableCell className="text-sm">{formatDate(t.started_at)}</TableCell>
-                  <TableCell className="text-sm">{t.ends_at ? formatDate(t.ends_at) : "—"}</TableCell>
+                  <TableCell className="text-sm">
+                    {t.ends_at ? formatDate(t.ends_at) : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
@@ -379,7 +432,9 @@ function TenancyPage() {
                         );
                         if (typed !== "RESET") return;
                         try {
-                          const r = await adminResetTenantTransactions({ data: { tenantId: t.id } });
+                          const r = await adminResetTenantTransactions({
+                            data: { tenantId: t.id },
+                          });
                           toast.success(`Transaksi dibersihkan di ${r.workspaces} workspace.`);
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Gagal mereset transaksi");
@@ -393,7 +448,8 @@ function TenancyPage() {
                       size="icon"
                       aria-label="Delete tenant"
                       onClick={() => {
-                        if (confirm(`Delete tenant "${t.name}"? This cannot be undone.`)) remove.mutate(t.id);
+                        if (confirm(`Delete tenant "${t.name}"? This cannot be undone.`))
+                          remove.mutate(t.id);
                       }}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -421,7 +477,11 @@ function TenancyPage() {
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Company name">
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
               </Field>
               <Field label="Subdomain">
                 <Input
@@ -432,11 +492,18 @@ function TenancyPage() {
                 />
               </Field>
               <Field label="Package">
-                <Select value={form.package_id} onValueChange={(v) => setForm({ ...form, package_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select package" /></SelectTrigger>
+                <Select
+                  value={form.package_id}
+                  onValueChange={(v) => setForm({ ...form, package_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select package" />
+                  </SelectTrigger>
                   <SelectContent>
                     {packages.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -447,29 +514,52 @@ function TenancyPage() {
                 )}
               </Field>
               <Field label="Status">
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as TenantStatus })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm({ ...form, status: v as TenantStatus })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {(["trial", "active", "suspended", "cancelled"] as TenantStatus[]).map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
               <Field label="Industry">
-                <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
+                <Input
+                  value={form.industry}
+                  onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                />
               </Field>
               <Field label="City">
-                <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                <Input
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                />
               </Field>
               <Field label="PIC name">
-                <Input value={form.pic_name} onChange={(e) => setForm({ ...form, pic_name: e.target.value })} />
+                <Input
+                  value={form.pic_name}
+                  onChange={(e) => setForm({ ...form, pic_name: e.target.value })}
+                />
               </Field>
               <Field label="PIC email">
-                <Input type="email" value={form.pic_email} onChange={(e) => setForm({ ...form, pic_email: e.target.value })} />
+                <Input
+                  type="email"
+                  value={form.pic_email}
+                  onChange={(e) => setForm({ ...form, pic_email: e.target.value })}
+                />
               </Field>
               <Field label="PIC phone">
-                <Input value={form.pic_phone} onChange={(e) => setForm({ ...form, pic_phone: e.target.value })} />
+                <Input
+                  value={form.pic_phone}
+                  onChange={(e) => setForm({ ...form, pic_phone: e.target.value })}
+                />
               </Field>
               <Field label="Workspaces">
                 <Input
@@ -492,20 +582,37 @@ function TenancyPage() {
                 {userError && <p className="text-xs text-destructive">{userError}</p>}
               </Field>
               <Field label="Started at">
-                <Input type="date" value={form.started_at} onChange={(e) => setForm({ ...form, started_at: e.target.value })} />
+                <Input
+                  type="date"
+                  value={form.started_at}
+                  onChange={(e) => setForm({ ...form, started_at: e.target.value })}
+                />
               </Field>
               <Field label="Trial ends at">
-                <Input type="date" value={form.trial_ends_at} onChange={(e) => setForm({ ...form, trial_ends_at: e.target.value })} />
+                <Input
+                  type="date"
+                  value={form.trial_ends_at}
+                  onChange={(e) => setForm({ ...form, trial_ends_at: e.target.value })}
+                />
               </Field>
               <Field label="Ends at">
-                <Input type="date" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} />
+                <Input
+                  type="date"
+                  value={form.ends_at}
+                  onChange={(e) => setForm({ ...form, ends_at: e.target.value })}
+                />
               </Field>
             </div>
             <Field label="Notes">
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </Field>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
               <Button type="submit" variant="gold" disabled={save.isPending || quotaBlocked}>
                 {save.isPending ? "Saving…" : "Save tenant"}
               </Button>

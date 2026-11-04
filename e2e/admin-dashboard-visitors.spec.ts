@@ -290,7 +290,10 @@ test("Dashboard eksekutif & Pengunjung Website: angka = SQL", async ({ page }) =
     await expect(kpi("Kunjungan mobile")).toHaveText(Number(w.mobile).toLocaleString("id-ID"));
   };
   await check(null);
+  // tabel halaman berpaginasi & peringkat; cari agar tidak bergantung pada data kunjungan spec lain
+  await page.getByPlaceholder("Cari halaman…").fill("/e2e-a");
   await expect(page.getByRole("row").filter({ hasText: "/e2e-a" })).toContainText("2");
+  await page.getByPlaceholder("Cari halaman…").fill("");
   await expect(page.getByText("Langsung").first()).toBeVisible(); // sumber tanpa referrer
   await page.getByRole("button", { name: "QALLING", exact: true }).click();
   await check("qalling");

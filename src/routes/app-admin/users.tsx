@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Package, Plus, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Eye, KeyRound, Package, Plus, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,6 @@ import {
 
 import { TablePager, usePaged } from "@/components/app/admin-table";
 import { QALLING_FEATURE_LABELS } from "@/lib/qalling-catalog";
-import { newestWorkspaceGroups } from "@/lib/admin-user-groups";
 
 export const Route = createFileRoute("/app-admin/users")({
   component: AdminUsersPage,
@@ -191,32 +190,54 @@ function AdminUsersPage() {
     );
   }, [usersQ.data, search]);
 
-  const groups = useMemo(() => {
-    type Group = { key: string; title: string; users: { u: AdminUserRow; role: string | null }[] };
-    const map = new Map<string, Group>();
+  // BS New 16: daftar per TENANT (jumlah workspace/user); "Detail" membuka user + workspace tenant itu.
+  const tenantsList = useMemo(() => {
+    type TUser = { u: AdminUserRow; role: string | null; workspaceId: string; workspaceName: string };
+    const map = new Map<
+      string,
+      { key: string; title: string; workspaces: Map<string, string>; users: TUser[]; latest: string }
+    >();
     for (const u of rows) {
-      if (!u.memberships.length) {
-        const g: Group = map.get("__none") ?? {
-          key: "__none",
-          title: "Tanpa workspace",
-          users: [],
+      const list = u.memberships.length ? u.memberships : [null];
+      for (const m of list) {
+        const key = m?.tenantId ?? "__none";
+        const t = map.get(key) ?? {
+          key,
+          title: m ? m.tenantName : "Tanpa tenant",
+          workspaces: new Map<string, string>(),
+          users: [] as TUser[],
+          latest: "",
         };
-        g.users.push({ u, role: null });
-        map.set("__none", g);
-      }
-      for (const m of u.memberships) {
-        const g: Group = map.get(m.workspaceId) ?? {
-          key: m.workspaceId,
-          title: `${m.tenantName} / ${m.workspaceName}`,
-          users: [],
-        };
-        g.users.push({ u, role: m.role });
-        map.set(m.workspaceId, g);
+        if (m) t.workspaces.set(m.workspaceId, m.workspaceName);
+        t.users.push({
+          u,
+          role: m?.role ?? null,
+          workspaceId: m?.workspaceId ?? "__none",
+          workspaceName: m?.workspaceName ?? "—",
+        });
+        if ((u.createdAt ?? "") > t.latest) t.latest = u.createdAt ?? "";
+        map.set(key, t);
       }
     }
-    return newestWorkspaceGroups([...map.values()]);
+    return [...map.values()].sort((x, y) => y.latest.localeCompare(x.latest));
   }, [rows]);
-  const pg = usePaged(groups, (g) => g.title, 5);
+  const [openTenant, setOpenTenant] = useState<string | null>(null);
+  const detail = tenantsList.find((t) => t.key === openTenant) ?? null;
+  const groups = tenantsList;
+  const detailGroups = useMemo(() => {
+    const map = new Map<string, { key: string; title: string; users: { u: AdminUserRow; role: string | null }[] }>();
+    for (const x of detail?.users ?? []) {
+      const g = map.get(x.workspaceId) ?? {
+        key: x.workspaceId,
+        title: x.workspaceId === "__none" ? "Tanpa workspace" : `${detail?.title} / ${x.workspaceName}`,
+        users: [],
+      };
+      g.users.push({ u: x.u, role: x.role });
+      map.set(x.workspaceId, g);
+    }
+    return [...map.values()];
+  }, [detail]);
+  const pg = usePaged(groups, (g) => g.title, 10);
 
   const deleteM = useMutation({
     mutationFn: (targetUserId: string) => adminDeleteUser({ data: { targetUserId } }),
@@ -234,11 +255,11 @@ function AdminUsersPage() {
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-navy dark:text-primary-foreground">
             <Users className="h-5 w-5 text-gold" /> Users
           </h1>
-          <p className="text-sm text-muted-foreground">Akun dikelompokkan per workspace.</p>
+          <p className="text-sm text-muted-foreground">Daftar tenant. Klik tenant untuk melihat user dan workspace.</p>
         </div>
         <div className="flex gap-2">
           <Input
-            placeholder="Cari nama, email, workspace…"
+            placeholder="Cari tenant, email, workspace…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-56"
@@ -258,6 +279,51 @@ function AdminUsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-14 text-center">#</TableHead>
+                <TableHead>Tenant</TableHead>
+                <TableHead>Jumlah workspace</TableHead>
+                <TableHead>Jumlah user</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pg.rows.map((t, i) => (
+                <TableRow key={t.key} className="cursor-pointer" onClick={() => setOpenTenant(t.key)}>
+                  <TableCell className="text-center text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="font-medium">{t.title}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{t.workspaces.size} workspace</Badge>
+                  </TableCell>
+                  <TableCell>{new Set(t.users.map((x) => x.u.userId)).size} user</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenTenant(t.key);
+                      }}
+                    >
+                      <Eye /> Detail
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      <TablePager {...pg} />
+      <Dialog open={!!detail} onOpenChange={(o) => !o && setOpenTenant(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{detail?.title} — user &amp; workspace</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[65vh] overflow-auto">
+        <div className="overflow-x-auto rounded-md border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Platform role</TableHead>
@@ -266,7 +332,7 @@ function AdminUsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pg.rows.map((g) => (
+              {detailGroups.map((g) => (
                 <Fragment key={g.key}>
                   <TableRow className="bg-muted/50">
                     <TableCell colSpan={5}>
@@ -377,8 +443,9 @@ function AdminUsersPage() {
             </TableBody>
           </Table>
         </div>
-      )}
-      <TablePager {...pg} />
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!planUser}
         onOpenChange={(open) => {

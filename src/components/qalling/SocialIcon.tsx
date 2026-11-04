@@ -7,6 +7,9 @@ import {
   SiThreads,
   SiTelegram,
   SiDiscord,
+  SiPinterest,
+  SiBluesky,
+  SiGoogle,
 } from "@icons-pack/react-simple-icons";
 import { Share2 } from "lucide-react";
 function LinkedInIcon({ className }: { className?: string }) {
@@ -27,6 +30,9 @@ const icons = {
   threads: SiThreads,
   telegram: SiTelegram,
   discord: SiDiscord,
+  pinterest: SiPinterest,
+  bluesky: SiBluesky,
+  google_business: SiGoogle,
 };
 export function SocialIcon({
   platform,

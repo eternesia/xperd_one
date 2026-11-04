@@ -14,37 +14,299 @@ import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 
 // Platform tables (no workspace_id) reachable by admin functions.
 const ADMIN_TABLES = new Set([
-  "tenants", "packages", "subscriptions", "invoices", "reminders", "registrations",
-  "leads", "site_content", "announcements", "support_tickets", "support_ticket_messages",
-  "payment_gateways", "upgrade_requests", "profiles", "user_roles", "app_users",
-  "workspaces", "workspace_members",
+  "tenants",
+  "packages",
+  "subscriptions",
+  "invoices",
+  "reminders",
+  "registrations",
+  "leads",
+  "site_content",
+  "announcements",
+  "support_tickets",
+  "support_ticket_messages",
+  "payment_gateways",
+  "upgrade_requests",
+  "profiles",
+  "user_roles",
+  "app_users",
+  "workspaces",
+  "workspace_members",
   // Add-on catalog + tenant assignments (003_addons.sql)
-  "addons", "tenant_addons",
+  "addons",
+  "tenant_addons",
 ]);
 
 // Per-table column whitelist (mirrors 001-schema.sql).
 const PCOLS: Record<string, string[]> = {
   // `product` (#65, migration 010): pemisah tenant/invoice XPERD vs Qalling.
-  tenants: ["id", "name", "subdomain", "package_id", "owner_id", "status", "product", "industry", "pic_name", "pic_email", "pic_phone", "city", "user_count", "trial_ends_at", "started_at", "ends_at", "workspace_count", "notes", "created_at", "updated_at"],
-  packages: ["id", "code", "name", "product_line", "tagline", "description", "monthly_price", "is_public_signup", "max_workspace", "max_company", "max_users", "features", "sort_order", "is_active", "created_at", "updated_at"],
-  subscriptions: ["id", "tenant_id", "package_id", "status", "billing_cycle", "seats", "unit_price", "current_period_start", "current_period_end", "auto_renew", "cancelled_at", "created_at", "updated_at"],
-  invoices: ["id", "invoice_number", "tenant_id", "subscription_id", "status", "product", "issue_date", "due_date", "subtotal", "tax_amount", "total", "paid_at", "payment_method", "payment_url", "gateway_reference", "auto_reminder", "notes", "created_at", "updated_at"],
-  reminders: ["id", "tenant_id", "invoice_id", "type", "status", "channel", "scheduled_at", "sent_at", "message", "created_at", "updated_at"],
-  registrations: ["id", "company_name", "subdomain", "contact_name", "email", "phone", "city", "industry", "package_code", "billing_cycle", "status", "tenant_id", "notes", "created_at", "updated_at"],
-  leads: ["id", "company_name", "contact_name", "email", "phone", "job_title", "industry", "employee_range", "interested_product", "message", "status", "source", "created_at", "updated_at"],
-  site_content: ["id", "section", "key", "title_en", "title_id", "body_en", "body_id", "image_url", "link_url", "sort_order", "is_published", "created_at", "updated_at"],
-  announcements: ["id", "title_en", "title_id", "body_en", "body_id", "severity", "audience", "starts_at", "ends_at", "is_published", "created_at", "updated_at"],
-  support_tickets: ["id", "ticket_no", "tenant_id", "workspace_id", "subject", "category", "priority", "status", "description", "created_by", "assigned_to", "resolved_at", "created_at", "updated_at"],
-  support_ticket_messages: ["id", "ticket_id", "author_id", "body", "is_internal", "created_at", "updated_at"],
-  payment_gateways: ["id", "provider", "display_name", "mode", "is_active", "merchant_id", "client_key", "server_key_secret_name", "callback_url", "instructions", "sort_order", "created_at", "updated_at"],
-  upgrade_requests: ["id", "tenant_id", "workspace_id", "requested_package_id", "requested_by", "notes", "status", "created_at", "updated_at"],
+  tenants: [
+    "id",
+    "name",
+    "subdomain",
+    "package_id",
+    "owner_id",
+    "status",
+    "product",
+    "industry",
+    "pic_name",
+    "pic_email",
+    "pic_phone",
+    "city",
+    "user_count",
+    "trial_ends_at",
+    "started_at",
+    "ends_at",
+    "workspace_count",
+    "notes",
+    "signup_source",
+    "created_at",
+    "updated_at",
+  ],
+  packages: [
+    "id",
+    "code",
+    "name",
+    "product_line",
+    "tagline",
+    "description",
+    "monthly_price",
+    "is_public_signup",
+    "max_workspace",
+    "max_company",
+    "max_users",
+    "features",
+    "sort_order",
+    "is_active",
+    "created_at",
+    "updated_at",
+  ],
+  subscriptions: [
+    "id",
+    "tenant_id",
+    "package_id",
+    "status",
+    "billing_cycle",
+    "seats",
+    "unit_price",
+    "current_period_start",
+    "current_period_end",
+    "auto_renew",
+    "cancelled_at",
+    "created_at",
+    "updated_at",
+  ],
+  invoices: [
+    "id",
+    "invoice_number",
+    "tenant_id",
+    "subscription_id",
+    "status",
+    "product",
+    "issue_date",
+    "due_date",
+    "subtotal",
+    "tax_amount",
+    "total",
+    "paid_at",
+    "payment_method",
+    "payment_url",
+    "gateway_reference",
+    "auto_reminder",
+    "notes",
+    "created_at",
+    "updated_at",
+  ],
+  reminders: [
+    "id",
+    "tenant_id",
+    "invoice_id",
+    "type",
+    "status",
+    "channel",
+    "scheduled_at",
+    "sent_at",
+    "message",
+    "created_at",
+    "updated_at",
+  ],
+  registrations: [
+    "id",
+    "company_name",
+    "subdomain",
+    "contact_name",
+    "email",
+    "phone",
+    "city",
+    "industry",
+    "package_code",
+    "billing_cycle",
+    "status",
+    "tenant_id",
+    "notes",
+    "created_at",
+    "updated_at",
+  ],
+  leads: [
+    "id",
+    "company_name",
+    "contact_name",
+    "email",
+    "phone",
+    "job_title",
+    "industry",
+    "employee_range",
+    "interested_product",
+    "message",
+    "status",
+    "source",
+    "created_at",
+    "updated_at",
+  ],
+  site_content: [
+    "id",
+    "section",
+    "key",
+    "title_en",
+    "title_id",
+    "body_en",
+    "body_id",
+    "image_url",
+    "link_url",
+    "sort_order",
+    "is_published",
+    "created_at",
+    "updated_at",
+  ],
+  announcements: [
+    "id",
+    "title_en",
+    "title_id",
+    "body_en",
+    "body_id",
+    "severity",
+    "audience",
+    "starts_at",
+    "ends_at",
+    "is_published",
+    "created_at",
+    "updated_at",
+  ],
+  support_tickets: [
+    "id",
+    "ticket_no",
+    "tenant_id",
+    "workspace_id",
+    "subject",
+    "category",
+    "priority",
+    "status",
+    "description",
+    "created_by",
+    "assigned_to",
+    "resolved_at",
+    "created_at",
+    "updated_at",
+  ],
+  support_ticket_messages: [
+    "id",
+    "ticket_id",
+    "author_id",
+    "body",
+    "is_internal",
+    "created_at",
+    "updated_at",
+  ],
+  payment_gateways: [
+    "id",
+    "provider",
+    "display_name",
+    "mode",
+    "is_active",
+    "merchant_id",
+    "client_key",
+    "server_key_secret_name",
+    "callback_url",
+    "instructions",
+    "sort_order",
+    "created_at",
+    "updated_at",
+  ],
+  upgrade_requests: [
+    "id",
+    "tenant_id",
+    "workspace_id",
+    "requested_package_id",
+    "requested_by",
+    "notes",
+    "status",
+    "created_at",
+    "updated_at",
+  ],
   profiles: ["id", "full_name", "email", "company_name", "phone", "created_at", "updated_at"],
   user_roles: ["id", "user_id", "role", "created_at"],
-  app_users: ["id", "email", "full_name", "password_hash", "is_active", "auth_user_id", "last_login_at", "created_at", "updated_at"],
-  workspaces: ["id", "tenant_id", "name", "legal_name", "slug", "currency", "timezone", "fiscal_year_start_month", "default_costing_method", "address", "tax_id", "phone", "email", "doc_template", "bank_info", "doc_footer_note", "logo_url", "letterhead_config", "status", "created_by", "created_at", "updated_at"],
+  app_users: [
+    "id",
+    "email",
+    "full_name",
+    "password_hash",
+    "is_active",
+    "auth_user_id",
+    "last_login_at",
+    "created_at",
+    "updated_at",
+  ],
+  workspaces: [
+    "id",
+    "tenant_id",
+    "name",
+    "legal_name",
+    "slug",
+    "currency",
+    "timezone",
+    "fiscal_year_start_month",
+    "default_costing_method",
+    "address",
+    "tax_id",
+    "phone",
+    "email",
+    "doc_template",
+    "bank_info",
+    "doc_footer_note",
+    "logo_url",
+    "letterhead_config",
+    "status",
+    "created_by",
+    "created_at",
+    "updated_at",
+  ],
   workspace_members: ["id", "workspace_id", "user_id", "role", "created_at", "updated_at"],
-  addons: ["id", "code", "name", "tagline", "description", "monthly_price", "pricing_unit", "module_id", "is_active", "sort_order", "created_at", "updated_at"],
-  tenant_addons: ["id", "tenant_id", "addon_id", "status", "starts_at", "ends_at", "monthly_price", "notes", "created_at", "updated_at"],
+  addons: [
+    "id",
+    "code",
+    "name",
+    "tagline",
+    "description",
+    "monthly_price",
+    "pricing_unit",
+    "module_id",
+    "is_active",
+    "sort_order",
+    "created_at",
+    "updated_at",
+  ],
+  tenant_addons: [
+    "id",
+    "tenant_id",
+    "addon_id",
+    "status",
+    "starts_at",
+    "ends_at",
+    "monthly_price",
+    "notes",
+    "created_at",
+    "updated_at",
+  ],
 };
 
 function assertAdminTable(table: string): string {
@@ -92,12 +354,16 @@ export const adminList = createServerFn({ method: "POST" })
       }
     }
     const wsql = where.length ? ` WHERE ${where.join(" AND ")}` : "";
-    const orderBy = data.orderBy && PCOLS[table].includes(data.orderBy) ? `\`${data.orderBy}\`` : "`created_at`";
+    const orderBy =
+      data.orderBy && PCOLS[table].includes(data.orderBy) ? `\`${data.orderBy}\`` : "`created_at`";
     const orderDir = data.orderDir === "asc" ? "ASC" : "DESC";
     const limit = Math.min(Math.max(Number(data.limit) || 200, 1), 5000);
     const offset = Math.max(Number(data.offset) || 0, 0);
 
-    const row = await executeOne<{ c: number }>(`SELECT COUNT(*) AS c FROM \`${table}\`${wsql}`, params);
+    const row = await executeOne<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM \`${table}\`${wsql}`,
+      params,
+    );
     // Kunci rahasia gateway tidak boleh keluar: kolom dipilih eksplisit, klien hanya tahu ada/tidaknya.
     const sel =
       table === "payment_gateways"
@@ -124,7 +390,12 @@ export const adminSave = createServerFn({ method: "POST" })
     const { execute, uuid } = await import("@/integrations/mysql/pool");
     await requireAdmin(context.userId);
     const table = assertAdminTable(data.table);
-    const omit = new Set(["id", "created_at", "updated_at"]);
+    const omit = new Set([
+      "id",
+      "created_at",
+      "updated_at",
+      ...(table === "tenants" ? ["signup_source"] : []),
+    ]);
 
     // Server key gateway: tulis-saja; kosong = pertahankan nilai tersimpan.
     const gwKey =
@@ -132,7 +403,8 @@ export const adminSave = createServerFn({ method: "POST" })
         ? data.data.server_key.trim()
         : "";
     const saveGwKey = async (id: string) => {
-      if (gwKey) await execute("UPDATE `payment_gateways` SET `server_key` = ? WHERE `id` = ?", [gwKey, id]);
+      if (gwKey)
+        await execute("UPDATE `payment_gateways` SET `server_key` = ? WHERE `id` = ?", [gwKey, id]);
     };
 
     if (data.id) {
@@ -148,6 +420,8 @@ export const adminSave = createServerFn({ method: "POST" })
 
     const payload: Record<string, unknown> = { id: uuid() };
     for (const c of clean(table, Object.keys(data.data ?? {}), omit)) payload[c] = data.data[c];
+    // Tenant yang dibuat manual oleh Super Admin ditandai sumbernya (tidak bisa diubah dari form).
+    if (table === "tenants") payload.signup_source = "admin";
     const cols = Object.keys(payload);
     await execute(
       `INSERT INTO \`${table}\` (\`${cols.join("`,`")}\`) VALUES (${cols.map(() => "?").join(", ")})`,
@@ -190,7 +464,9 @@ export const getAdminDashboardStats = createServerFn({ method: "POST" })
       executeOne<{ c: number }>("SELECT COUNT(*) AS c FROM subscriptions"),
       execute("SELECT total, status FROM invoices"),
       executeOne<{ c: number }>("SELECT COUNT(*) AS c FROM leads"),
-      execute("SELECT id, name, subdomain, status, created_at FROM tenants ORDER BY created_at DESC LIMIT 6"),
+      execute(
+        "SELECT id, name, subdomain, status, created_at FROM tenants ORDER BY created_at DESC LIMIT 6",
+      ),
     ]);
     const inv = (invoices ?? []) as { total?: unknown; status?: string }[];
     return {
@@ -198,7 +474,9 @@ export const getAdminDashboardStats = createServerFn({ method: "POST" })
       activeTenants: (tenants ?? []).filter((t) => t.status === "active").length,
       subCount: Number(subs?.c ?? 0),
       leadCount: Number(leads?.c ?? 0),
-      outstanding: inv.filter((i) => i.status !== "paid").reduce((sum, i) => sum + Number(i.total ?? 0), 0),
+      outstanding: inv
+        .filter((i) => i.status !== "paid")
+        .reduce((sum, i) => sum + Number(i.total ?? 0), 0),
       recent: recent ?? [],
     };
   });
@@ -249,7 +527,10 @@ export const listTenantInvoices = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
-    return execute("SELECT * FROM invoices WHERE tenant_id = ? AND product <> 'wallet' ORDER BY issue_date DESC", [data.tenantId]);
+    return execute(
+      "SELECT * FROM invoices WHERE tenant_id = ? AND product <> 'wallet' ORDER BY issue_date DESC",
+      [data.tenantId],
+    );
   });
 
 export const listTenantUpgradeRequests = createServerFn({ method: "POST" })
@@ -258,7 +539,9 @@ export const listTenantUpgradeRequests = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await tenantGate(data.tenantId, context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
-    return execute("SELECT * FROM upgrade_requests WHERE tenant_id = ? ORDER BY created_at DESC", [data.tenantId]);
+    return execute("SELECT * FROM upgrade_requests WHERE tenant_id = ? ORDER BY created_at DESC", [
+      data.tenantId,
+    ]);
   });
 
 export interface CreateUpgradeRequestInput {
@@ -277,7 +560,14 @@ export const createUpgradeRequest = createServerFn({ method: "POST" })
     await execute(
       `INSERT INTO upgrade_requests (id, tenant_id, workspace_id, requested_package_id, requested_by, notes, status)
        VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-      [uuid(), data.tenantId, data.workspaceId, data.requestedPackageId, context.userId, data.notes ?? null],
+      [
+        uuid(),
+        data.tenantId,
+        data.workspaceId,
+        data.requestedPackageId,
+        context.userId,
+        data.notes ?? null,
+      ],
     );
     return { ok: true };
   });

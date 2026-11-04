@@ -13,6 +13,7 @@ Semua nama variabel di bawah **diambil langsung dari kode**, bukan asumsi.
 | `MYSQL_USER` / `MYSQL_PASSWORD` | ya | idem | Dev: `xperd` / `xperd` |
 | `MYSQL_DATABASE` | ya | idem | Default `xperd` |
 | `MYSQL_POOL_SIZE` | tidak | `pool.ts` | Batas koneksi per proses (default `10`) |
+| `MYSQL_MAX_PREPARED` | tidak | `pool.ts` | Cache prepared statement per koneksi (default `200`; bawaan mysql2 16000 dapat menghabiskan `max_prepared_stmt_count` MySQL) |
 | `PORT` | tidak | server Nitro | Port aplikasi (dev `3999` dipakai e2e, compose `3000`) |
 | `NODE_ENV` / `APP_ENV` | tidak | `files.server.ts`, `scripts/wipe.mjs` | `production` mengaktifkan cookie `secure` + root storage `/app/storage`; juga memblokir `db:wipe` |
 | `STORAGE_DIR` | tidak | `src/lib/files.server.ts` | Menimpa lokasi berkas unggahan (default `./storage` dev, `/app/storage` produksi) |
@@ -97,3 +98,28 @@ tidak berubah menjadi spec yang ter-skip tanpa disadari. Workflow lain
   menolak string ISO.
 - Jalankan `npx tsc --noEmit`, `npm run build`, dan `npm run test:e2e` sebelum
   commit.
+
+## Domain Qalling (qalling.id) tanpa prefiks `/qalling`
+
+Aplikasi menangani qalling.id sendiri: router menerjemahkan alamat publik bersih (`/`, `/harga`, `/login`, `/register`, `/app/...`) ke rute internal `/qalling/*` dan sebaliknya
+(`src/lib/qalling-urls.ts`, `rewrite` di `src/router.tsx`), baik di server (SSR) maupun klien (hydration). Domain XPERD tidak berubah.
+
+**Proxy cukup meneruskan permintaan apa adanya** (jangan menulis ulang path), dengan `Host`/`X-Forwarded-Host` = domain publik dan `X-Forwarded-Proto: https`:
+
+```nginx
+server {
+  server_name qalling.id www.qalling.id;
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+> **Hapus** aturan lama `rewrite ^/(.*)$ /qalling/$1` / redirect `/qalling` di proxy. Penulisan ulang di proxy membuat SSR memuat halaman Qalling sementara browser berada di `/harga` → hydration crash
+> (React #418 / "Invariant failed" / layar kosong); dengan perbaikan ini aturan itu justru menyebabkan redirect berulang.
+> Opsional setelah rewrite proxy dihapus: `QALLING_LEGACY_REDIRECT=1` mengalihkan permanen `qalling.id/qalling/*` → alamat bersih. Host tambahan: `VITE_QALLING_HOSTS` (saat build).
+> Daftarkan Redirect URI Google dan tujuan kembali DOKU dengan alamat bersih domain (mis. `https://qalling.id/api/public/auth/google/callback`) — tidak berubah.
+

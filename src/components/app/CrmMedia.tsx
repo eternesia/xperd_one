@@ -34,6 +34,9 @@ import { deleteWorkspaceFile, uploadWorkspaceFile } from "@/lib/files.functions"
 import { useI18n } from "@/lib/i18n";
 import { fmtBytes, storageQuota } from "@/lib/qalling-quota";
 import { cn } from "@/lib/utils";
+import { DEFAULT_MEDIA_POLICY, validateMediaFile } from "@/lib/media-upload-policy";
+import { compressCrmMedia } from "@/lib/crm-media-compression";
+import { getMediaPolicy } from "@/lib/media-policy.functions";
 
 /**
  * Qalling **Media Library** — diporting dari BS New 11 `CrmMedia.tsx`. Berkas disimpan di
@@ -52,7 +55,6 @@ const fileToDataUrl = (file: File) =>
     r.onerror = () => reject(r.error ?? new Error("read"));
     r.readAsDataURL(file);
   });
-const MAX_BYTES = 50 * 1024 * 1024;
 
 export type MediaItem = {
   id: string;
@@ -107,14 +109,18 @@ function useUpload(workspaceId: string) {
     mutationFn: async (input: File[] | { files: File[]; folder: string | null }) => {
       const files = Array.isArray(input) ? input : input.files;
       const folder = Array.isArray(input) ? null : input.folder;
+      const policy = await getMediaPolicy();
+      for (const file of files) {
+        try {
+          validateMediaFile(file, policy, lang);
+        } catch (e) {
+          throw new Error(`${file.name}: ${(e as Error).message}`);
+        }
+      }
       const out: string[] = [];
-      for (const f of files) {
-        if (!/^(image|video)\//.test(f.type))
-          throw new Error(
-            id ? `${f.name}: hanya gambar atau video` : `${f.name}: images or videos only`,
-          );
-        if (f.size > MAX_BYTES)
-          throw new Error(id ? `${f.name}: maksimal 50 MB` : `${f.name}: max 50 MB`);
+      for (const original of files) {
+        // Kompresi hanya setelah unggah dikirim dan tidak pernah menggantikan berkas dengan hasil yang lebih besar.
+        const f = await compressCrmMedia(original, policy);
         const { path } = await uploadWorkspaceFile({
           data: {
             workspaceId,
@@ -129,7 +135,7 @@ function useUpload(workspaceId: string) {
               table: "crm_media",
               workspaceId,
               data: {
-                name: f.name,
+                name: original.name,
                 file_path: path,
                 mime_type: f.type,
                 size_bytes: f.size,
@@ -155,6 +161,11 @@ function useUpload(workspaceId: string) {
 }
 
 function DropZone({ onFiles, busy }: { onFiles: (f: File[]) => void; busy: boolean }) {
+  const { data: policy = DEFAULT_MEDIA_POLICY } = useQuery({
+    queryKey: ["media-upload-policy"],
+    queryFn: () => getMediaPolicy(),
+    staleTime: 60_000,
+  });
   const { lang } = useI18n();
   const id = lang === "id";
   const ref = useRef<HTMLInputElement>(null);
@@ -169,7 +180,7 @@ function DropZone({ onFiles, busy }: { onFiles: (f: File[]) => void; busy: boole
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
-        if (e.dataTransfer.files.length) onFiles(Array.from(e.dataTransfer.files));
+        if (!busy && e.dataTransfer.files.length) onFiles(Array.from(e.dataTransfer.files));
       }}
       onClick={() => !busy && ref.current?.click()}
       className={cn(
@@ -186,12 +197,20 @@ function DropZone({ onFiles, busy }: { onFiles: (f: File[]) => void; busy: boole
         {id ? "Seret file ke sini atau klik untuk memilih" : "Drop files here or click to browse"}
       </p>
       <p className="text-xs text-muted-foreground">
-        {id ? "Gambar atau video, maksimal 50 MB per file" : "Images or videos, up to 50 MB each"}
+        {id
+          ? `Foto hingga ${policy.photo_mb} MB · Video hingga ${policy.video_mb} MB`
+          : `Photos up to ${policy.photo_mb} MB · Videos up to ${policy.video_mb} MB`}
       </p>
+      {busy && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {id ? "Memproses & mengunggah media…" : "Processing & uploading media…"}
+        </p>
+      )}
       <input
         ref={ref}
         type="file"
         multiple
+        disabled={busy}
         accept="image/*,video/*"
         className="hidden"
         onChange={(e) => {
@@ -630,12 +649,16 @@ export function MediaPickerDialog({
   onOpenChange,
   selected,
   onConfirm,
+  imagesOnly = false,
+  maxSelection = 10,
 }: {
   workspaceId: string;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   selected: string[];
   onConfirm: (paths: string[]) => void;
+  imagesOnly?: boolean;
+  maxSelection?: number;
 }) {
   const { lang } = useI18n();
   const id = lang === "id";
@@ -648,7 +671,11 @@ export function MediaPickerDialog({
   }, [open]);
   const toggle = (path: string) =>
     setPick((cur) =>
-      cur.includes(path) ? cur.filter((x) => x !== path) : [...cur, path].slice(0, 10),
+      cur.includes(path)
+        ? cur.filter((x) => x !== path)
+        : maxSelection === 1
+          ? [path]
+          : [...cur, path].slice(0, maxSelection),
     );
 
   return (
@@ -659,11 +686,20 @@ export function MediaPickerDialog({
         </DialogHeader>
         <DropZone
           busy={upload.isPending}
-          onFiles={(f) =>
-            upload.mutate(f, {
-              onSuccess: (paths) => setPick((cur) => [...cur, ...paths].slice(0, 10)),
-            })
-          }
+          onFiles={(f) => {
+            if (imagesOnly && f.some((file) => !file.type.startsWith("image/"))) {
+              toast.error(id ? "Cover harus berupa gambar" : "Cover must be an image");
+              return;
+            }
+            upload.mutate(f.slice(0, maxSelection), {
+              onSuccess: (paths) =>
+                setPick((cur) =>
+                  maxSelection === 1
+                    ? paths.slice(0, 1)
+                    : [...cur, ...paths].slice(0, maxSelection),
+                ),
+            });
+          }}
         />
         {isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
@@ -675,34 +711,36 @@ export function MediaPickerDialog({
           </p>
         ) : (
           <div className="grid max-h-[45vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
-            {items.map((m) => {
-              const idx = pick.indexOf(m.file_path);
-              return (
-                <button
-                  key={m.id}
-                  onClick={() => toggle(m.file_path)}
-                  className={cn(
-                    "relative overflow-hidden rounded-lg border-2",
-                    idx >= 0 ? "border-gold" : "border-transparent",
-                  )}
-                >
-                  <Thumb m={m} className="aspect-square w-full" />
-                  {idx >= 0 && (
-                    <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-semibold text-navy">
-                      {idx + 1}
-                    </span>
-                  )}
-                  {isVideo(m) && (
-                    <Film className="absolute bottom-1 left-1 h-4 w-4 text-primary-foreground drop-shadow" />
-                  )}
-                </button>
-              );
-            })}
+            {items
+              .filter((m) => !imagesOnly || m.mime_type?.startsWith("image/"))
+              .map((m) => {
+                const idx = pick.indexOf(m.file_path);
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => toggle(m.file_path)}
+                    className={cn(
+                      "relative overflow-hidden rounded-lg border-2",
+                      idx >= 0 ? "border-gold" : "border-transparent",
+                    )}
+                  >
+                    <Thumb m={m} className="aspect-square w-full" />
+                    {idx >= 0 && (
+                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-semibold text-navy">
+                        {idx + 1}
+                      </span>
+                    )}
+                    {isVideo(m) && (
+                      <Film className="absolute bottom-1 left-1 h-4 w-4 text-primary-foreground drop-shadow" />
+                    )}
+                  </button>
+                );
+              })}
           </div>
         )}
         <DialogFooter className="items-center gap-2">
           <span className="mr-auto text-xs text-muted-foreground">
-            {pick.length}/10 {id ? "dipilih" : "selected"}
+            {pick.length}/{maxSelection} {id ? "dipilih" : "selected"}
           </span>
           <Button
             onClick={() => {

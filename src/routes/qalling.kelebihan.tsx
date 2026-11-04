@@ -6,6 +6,7 @@ import {
   ItemGrid,
   ADVANTAGES,
 } from "@/components/qalling/QallingSite";
+import { BenefitCards, Integrations } from "@/components/qalling/QallingLanding";
 
 export const Route = createFileRoute("/qalling/kelebihan")({
   head: () =>
@@ -17,9 +18,13 @@ export const Route = createFileRoute("/qalling/kelebihan")({
         title="Kenapa memilih Qalling"
         desc="Harga lokal, bayar dari saldo, dan dibuat untuk tim Indonesia."
       />
-      <section className="container-x pb-16">
+      <BenefitCards />
+      <section className="container-x pb-8">
         <ItemGrid items={ADVANTAGES} cols={2} />
       </section>
+      <div className="pb-8">
+        <Integrations />
+      </div>
     </QallingShell>
   ),
 });

@@ -142,9 +142,10 @@ export const savePlatformAuthSettings = createServerFn({ method: "POST" })
         data.google_client_id.trim().slice(0, 255),
       ]);
     if (data.google_client_secret?.trim())
-      await execute("UPDATE platform_auth_settings SET google_client_secret = ? WHERE singleton = 1", [
-        data.google_client_secret.trim().slice(0, 255),
-      ]);
+      await execute(
+        "UPDATE platform_auth_settings SET google_client_secret = ? WHERE singleton = 1",
+        [data.google_client_secret.trim().slice(0, 255)],
+      );
     return { ok: true };
   });
 
@@ -155,7 +156,8 @@ export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
     const { hasRole } = await import("@/lib/auth-context.server");
     if (!(await hasRole(context.userId, "admin"))) throw new Error("Forbidden");
     const { getRequest } = await import("@tanstack/react-start/server");
-    const { loadGoogleConfig, googleRedirectUri, requestOrigin } = await import("@/lib/google-oauth.server");
+    const { loadGoogleConfig, googleRedirectUri, requestOrigin } =
+      await import("@/lib/google-oauth.server");
     const cfg = await loadGoogleConfig();
     return {
       client_id: cfg.clientId,
@@ -281,6 +283,7 @@ export const verifyQallingSignup = createServerFn({ method: "POST" })
     const { provisionRegistrationCore } = await import("@/lib/provisioning-core.server");
     const result = await provisionRegistrationCore(reg.id, undefined, {
       qallingTierCode: reg.package_code,
+      signupSource: "qalling",
     });
     await startSession(result.email);
     return { trialEndsAt: result.trialEndsAt };
@@ -395,6 +398,7 @@ export const provisionGoogleSignup = createServerFn({ method: "POST" })
     const result = await provisionRegistrationCore(regId, undefined, {
       ownerId: context.userId,
       qallingTierCode: data.tier,
+      signupSource: "qalling",
     });
     return { created: true, trialEndsAt: result.trialEndsAt };
   });

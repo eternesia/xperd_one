@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { CreditMemoView } from "@/components/app/CreditMemoView";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,8 +17,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 // #45 (BS New 3): Kartu AR/AP & Aging (subledger) — komponen terpisah.
 import { AgingView, SubledgerCardView } from "@/components/app/SubledgerViews";
 // Ronde 29 (BS New 8): revaluasi kurs akhir periode.
@@ -86,7 +100,15 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function Header({ title, kicker, action }: { title: string; kicker: string; action?: React.ReactNode }) {
+function Header({
+  title,
+  kicker,
+  action,
+}: {
+  title: string;
+  kicker: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -102,7 +124,9 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 text-xl font-semibold text-navy dark:text-primary-foreground", tone)}>{value}</p>
+      <p className={cn("mt-1 text-xl font-semibold text-navy dark:text-primary-foreground", tone)}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -124,11 +148,21 @@ function DateRange({
     <>
       <div>
         <Label className="text-xs text-muted-foreground">{t("From", "Dari")}</Label>
-        <Input type="date" className="mt-1 h-9 w-40" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <Input
+          type="date"
+          className="mt-1 h-9 w-40"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
       </div>
       <div>
         <Label className="text-xs text-muted-foreground">{t("To", "Sampai")}</Label>
-        <Input type="date" className="mt-1 h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} />
+        <Input
+          type="date"
+          className="mt-1 h-9 w-40"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+        />
       </div>
     </>
   );
@@ -157,7 +191,10 @@ function useLedger(workspaceId: string, from: string, to: string) {
     queryKey: ["acc-ledger", workspaceId, from, to],
     queryFn: async () => {
       const entries = await fetchEntries(workspaceId, from, to);
-      const lines = await fetchLines(workspaceId, entries.map((e) => e.id));
+      const lines = await fetchLines(
+        workspaceId,
+        entries.map((e) => e.id),
+      );
       return { entries, lines };
     },
   });
@@ -198,8 +235,18 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
   const totalDebit = filtered.reduce((s, e) => s + Number(e.total_debit || 0), 0);
 
   /* manual entry form */
-  const emptyLine = (): ManualLineInput => ({ account_code: "", account_name: "", description: "", debit: 0, credit: 0 });
-  const [form, setForm] = useState({ entry_date: today(), memo: "", lines: [emptyLine(), emptyLine()] });
+  const emptyLine = (): ManualLineInput => ({
+    account_code: "",
+    account_name: "",
+    description: "",
+    debit: 0,
+    credit: 0,
+  });
+  const [form, setForm] = useState({
+    entry_date: today(),
+    memo: "",
+    lines: [emptyLine(), emptyLine()],
+  });
 
   const formDebit = form.lines.reduce((s, l) => s + Number(l.debit || 0), 0);
   const formCredit = form.lines.reduce((s, l) => s + Number(l.credit || 0), 0);
@@ -225,7 +272,10 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
   });
 
   const setLine = (i: number, patch: Partial<ManualLineInput>) =>
-    setForm((f) => ({ ...f, lines: f.lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)) }));
+    setForm((f) => ({
+      ...f,
+      lines: f.lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)),
+    }));
 
   return (
     <div className="space-y-5">
@@ -244,7 +294,10 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label={t("Entries", "Jurnal")} value={String(filtered.length)} />
-        <StatCard label={t("Total posted", "Total dicatat")} value={formatMoney(totalDebit, lang)} />
+        <StatCard
+          label={t("Total posted", "Total dicatat")}
+          value={formatMoney(totalDebit, lang)}
+        />
         <StatCard
           label={t("Automatic entries", "Jurnal otomatis")}
           value={String(filtered.filter((e) => e.is_auto).length)}
@@ -257,7 +310,10 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
           <Input
             className="w-56 pl-9"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder={t("Search entry…", "Cari jurnal…")}
           />
         </div>
@@ -279,10 +335,18 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
           </TableHeader>
           <TableBody>
             {isLoading && (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                </TableCell>
+              </TableRow>
             )}
             {!isLoading && !paged.length && (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{t("No journal entries in this period.", "Belum ada jurnal pada periode ini.")}</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  {t("No journal entries in this period.", "Belum ada jurnal pada periode ini.")}
+                </TableCell>
+              </TableRow>
             )}
             {paged.map((e, i) => (
               <Fragment key={e.id}>
@@ -290,17 +354,28 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                   className="cursor-pointer"
                   onClick={() => setExpanded(expanded === e.id ? null : e.id)}
                 >
-                  <TableCell className="text-muted-foreground">{(page - 1) * pageSize + i + 1}</TableCell>
-                  <TableCell className="font-medium text-navy dark:text-primary-foreground">{e.entry_no}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {(page - 1) * pageSize + i + 1}
+                  </TableCell>
+                  <TableCell className="font-medium text-navy dark:text-primary-foreground">
+                    {e.entry_no}
+                  </TableCell>
                   <TableCell>{e.entry_date}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{e.memo}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={e.is_auto ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : ""}>
+                    <Badge
+                      variant="secondary"
+                      className={e.is_auto ? "bg-sky-500/15 text-sky-700 dark:text-sky-300" : ""}
+                    >
                       {e.is_auto ? t("Auto", "Otomatis") : t("Manual", "Manual")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatMoney(Number(e.total_debit), lang)}</TableCell>
-                  <TableCell className="text-right">{formatMoney(Number(e.total_credit), lang)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatMoney(Number(e.total_debit), lang)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatMoney(Number(e.total_credit), lang)}
+                  </TableCell>
                 </TableRow>
                 {expanded === e.id && (
                   <TableRow className="bg-muted/40">
@@ -316,14 +391,24 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {lines.filter((l) => l.entry_id === e.id).map((l) => (
-                              <TableRow key={l.id}>
-                                <TableCell>{l.account_code} · {l.account_name}</TableCell>
-                                <TableCell className="text-muted-foreground">{l.description}</TableCell>
-                                <TableCell className="text-right">{Number(l.debit) ? formatMoney(Number(l.debit), lang) : "—"}</TableCell>
-                                <TableCell className="text-right">{Number(l.credit) ? formatMoney(Number(l.credit), lang) : "—"}</TableCell>
-                              </TableRow>
-                            ))}
+                            {lines
+                              .filter((l) => l.entry_id === e.id)
+                              .map((l) => (
+                                <TableRow key={l.id}>
+                                  <TableCell>
+                                    {l.account_code} · {l.account_name}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {l.description}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {Number(l.debit) ? formatMoney(Number(l.debit), lang) : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {Number(l.credit) ? formatMoney(Number(l.credit), lang) : "—"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
                           </TableBody>
                         </Table>
                       </div>
@@ -334,7 +419,13 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
             ))}
           </TableBody>
         </Table>
-        <Pager page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} total={filtered.length} />
+        <Pager
+          page={page}
+          setPage={setPage}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          total={filtered.length}
+        />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -342,18 +433,30 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
           <DialogHeader>
             <DialogTitle>{t("New journal entry", "Jurnal baru")}</DialogTitle>
             <DialogDescription>
-              {t("Debit and credit totals must balance before posting.", "Total debit dan kredit harus seimbang sebelum dicatat.")}
+              {t(
+                "Debit and credit totals must balance before posting.",
+                "Total debit dan kredit harus seimbang sebelum dicatat.",
+              )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>{t("Date", "Tanggal")}</Label>
-              <Input type="date" className="mt-1" value={form.entry_date} onChange={(e) => setForm({ ...form, entry_date: e.target.value })} />
+              <Input
+                type="date"
+                className="mt-1"
+                value={form.entry_date}
+                onChange={(e) => setForm({ ...form, entry_date: e.target.value })}
+              />
             </div>
             <div>
               <Label>{t("Memo", "Keterangan")}</Label>
-              <Textarea className="mt-1 min-h-[38px]" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
+              <Textarea
+                className="mt-1 min-h-[38px]"
+                value={form.memo}
+                onChange={(e) => setForm({ ...form, memo: e.target.value })}
+              />
             </div>
           </div>
 
@@ -361,7 +464,9 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
             {form.lines.map((l, i) => (
               <div key={i} className="grid grid-cols-12 items-end gap-2">
                 <div className="col-span-4">
-                  {i === 0 && <Label className="text-xs text-muted-foreground">{t("Account", "Akun")}</Label>}
+                  {i === 0 && (
+                    <Label className="text-xs text-muted-foreground">{t("Account", "Akun")}</Label>
+                  )}
                   <Select
                     value={l.account_code}
                     onValueChange={(v) => {
@@ -369,25 +474,51 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                       setLine(i, { account_code: v, account_name: a?.name ?? "" });
                     }}
                   >
-                    <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t("Select account", "Pilih akun")} /></SelectTrigger>
+                    <SelectTrigger className="mt-1 h-9">
+                      <SelectValue placeholder={t("Select account", "Pilih akun")} />
+                    </SelectTrigger>
                     <SelectContent>
                       {accounts.map((a) => (
-                        <SelectItem key={a.code} value={a.code}>{a.code} · {a.name}</SelectItem>
+                        <SelectItem key={a.code} value={a.code}>
+                          {a.code} · {a.name}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="col-span-3">
-                  {i === 0 && <Label className="text-xs text-muted-foreground">{t("Description", "Keterangan")}</Label>}
-                  <Input className="mt-1 h-9" value={l.description} onChange={(e) => setLine(i, { description: e.target.value })} />
+                  {i === 0 && (
+                    <Label className="text-xs text-muted-foreground">
+                      {t("Description", "Keterangan")}
+                    </Label>
+                  )}
+                  <Input
+                    className="mt-1 h-9"
+                    value={l.description}
+                    onChange={(e) => setLine(i, { description: e.target.value })}
+                  />
                 </div>
                 <div className="col-span-2">
-                  {i === 0 && <Label className="text-xs text-muted-foreground">{t("Debit", "Debit")}</Label>}
-                  <Input type="number" className="mt-1 h-9 text-right" value={l.debit || ""} onChange={(e) => setLine(i, { debit: Number(e.target.value), credit: 0 })} />
+                  {i === 0 && (
+                    <Label className="text-xs text-muted-foreground">{t("Debit", "Debit")}</Label>
+                  )}
+                  <Input
+                    type="number"
+                    className="mt-1 h-9 text-right"
+                    value={l.debit || ""}
+                    onChange={(e) => setLine(i, { debit: Number(e.target.value), credit: 0 })}
+                  />
                 </div>
                 <div className="col-span-2">
-                  {i === 0 && <Label className="text-xs text-muted-foreground">{t("Credit", "Kredit")}</Label>}
-                  <Input type="number" className="mt-1 h-9 text-right" value={l.credit || ""} onChange={(e) => setLine(i, { credit: Number(e.target.value), debit: 0 })} />
+                  {i === 0 && (
+                    <Label className="text-xs text-muted-foreground">{t("Credit", "Kredit")}</Label>
+                  )}
+                  <Input
+                    type="number"
+                    className="mt-1 h-9 text-right"
+                    value={l.credit || ""}
+                    onChange={(e) => setLine(i, { credit: Number(e.target.value), debit: 0 })}
+                  />
                 </div>
                 <div className="col-span-1">
                   <Button
@@ -395,30 +526,47 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                     size="icon"
                     className="h-9 w-9"
                     disabled={form.lines.length <= 2}
-                    onClick={() => setForm((f) => ({ ...f, lines: f.lines.filter((_, idx) => idx !== i) }))}
+                    onClick={() =>
+                      setForm((f) => ({ ...f, lines: f.lines.filter((_, idx) => idx !== i) }))
+                    }
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             ))}
-            <Button variant="outline" size="sm" onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, emptyLine()] }))}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setForm((f) => ({ ...f, lines: [...f.lines, emptyLine()] }))}
+            >
               <Plus /> {t("Add line", "Tambah baris")}
             </Button>
           </div>
 
           <div className="flex justify-end gap-6 rounded-xl bg-muted/50 px-4 py-3 text-sm">
-            <span>{t("Debit", "Debit")}: <strong>{formatMoney(formDebit, lang)}</strong></span>
-            <span>{t("Credit", "Kredit")}: <strong>{formatMoney(formCredit, lang)}</strong></span>
+            <span>
+              {t("Debit", "Debit")}: <strong>{formatMoney(formDebit, lang)}</strong>
+            </span>
+            <span>
+              {t("Credit", "Kredit")}: <strong>{formatMoney(formCredit, lang)}</strong>
+            </span>
             <span className={balanced ? "text-emerald-600" : "text-destructive"}>
               {balanced ? t("Balanced", "Seimbang") : t("Out of balance", "Tidak seimbang")}
             </span>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>{t("Cancel", "Batal")}</Button>
-            <Button variant="navy" disabled={!balanced || save.isPending} onClick={() => save.mutate()}>
-              {save.isPending && <Loader2 className="animate-spin" />} {t("Post entry", "Catat jurnal")}
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {t("Cancel", "Batal")}
+            </Button>
+            <Button
+              variant="navy"
+              disabled={!balanced || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending && <Loader2 className="animate-spin" />}{" "}
+              {t("Post entry", "Catat jurnal")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -428,8 +576,18 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
 }
 
 function Pager({
-  page, setPage, pageSize, setPageSize, total,
-}: { page: number; setPage: (n: number) => void; pageSize: number; setPageSize: (n: number) => void; total: number }) {
+  page,
+  setPage,
+  pageSize,
+  setPageSize,
+  total,
+}: {
+  page: number;
+  setPage: (n: number) => void;
+  pageSize: number;
+  setPageSize: (n: number) => void;
+  total: number;
+}) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -437,20 +595,46 @@ function Pager({
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm no-print">
       <div className="flex items-center gap-2 text-muted-foreground">
         <span>{t("Rows", "Baris")}</span>
-        <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-          <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+        <Select
+          value={String(pageSize)}
+          onValueChange={(v) => {
+            setPageSize(Number(v));
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="h-8 w-20">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
-            {PAGE_SIZES.map((s) => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
+            {PAGE_SIZES.map((s) => (
+              <SelectItem key={s} value={String(s)}>
+                {s}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <span>{t(`${total} records`, `${total} data`)}</span>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          disabled={page <= 1}
+          onClick={() => setPage(page - 1)}
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-muted-foreground">{page} / {pages}</span>
-        <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+        <span className="text-muted-foreground">
+          {page} / {pages}
+        </span>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          disabled={page >= pages}
+          onClick={() => setPage(page + 1)}
+        >
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -504,7 +688,8 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
               filename: `buku-besar-${activeAccount}-${from}-${to}`,
               lang,
               entity,
-              title: `${t("GENERAL LEDGER", "BUKU BESAR")} — ${activeAccount} ${meta?.name ?? ""}`.trim(),
+              title:
+                `${t("GENERAL LEDGER", "BUKU BESAR")} — ${activeAccount} ${meta?.name ?? ""}`.trim(),
               periodLabel: periodRangeLabel(from, to, lang),
               layout: "stafel",
               orientation: "landscape",
@@ -539,9 +724,15 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
         <div>
           <Label className="text-xs text-muted-foreground">{t("Account", "Akun")}</Label>
           <Select value={activeAccount} onValueChange={setAccount}>
-            <SelectTrigger className="mt-1 h-9 w-72"><SelectValue placeholder={t("Select account", "Pilih akun")} /></SelectTrigger>
+            <SelectTrigger className="mt-1 h-9 w-72">
+              <SelectValue placeholder={t("Select account", "Pilih akun")} />
+            </SelectTrigger>
             <SelectContent>
-              {accounts.map((a) => <SelectItem key={a.code} value={a.code}>{a.code} · {a.name}</SelectItem>)}
+              {accounts.map((a) => (
+                <SelectItem key={a.code} value={a.code}>
+                  {a.code} · {a.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -549,9 +740,24 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label={t("Total debit", "Total debit")} value={formatMoney(rows.reduce((s, r) => s + r.debit, 0), lang)} />
-        <StatCard label={t("Total credit", "Total kredit")} value={formatMoney(rows.reduce((s, r) => s + r.credit, 0), lang)} />
-        <StatCard label={t("Closing balance", "Saldo akhir")} value={formatMoney(rows.at(-1)?.running ?? 0, lang)} />
+        <StatCard
+          label={t("Total debit", "Total debit")}
+          value={formatMoney(
+            rows.reduce((s, r) => s + r.debit, 0),
+            lang,
+          )}
+        />
+        <StatCard
+          label={t("Total credit", "Total kredit")}
+          value={formatMoney(
+            rows.reduce((s, r) => s + r.credit, 0),
+            lang,
+          )}
+        />
+        <StatCard
+          label={t("Closing balance", "Saldo akhir")}
+          value={formatMoney(rows.at(-1)?.running ?? 0, lang)}
+        />
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -568,19 +774,39 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow><TableCell colSpan={7} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></TableCell></TableRow>}
+            {isLoading && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                </TableCell>
+              </TableRow>
+            )}
             {!isLoading && !rows.length && (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{t("No movements for this account.", "Belum ada mutasi untuk akun ini.")}</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  {t("No movements for this account.", "Belum ada mutasi untuk akun ini.")}
+                </TableCell>
+              </TableRow>
             )}
             {rows.map((r, i) => (
               <TableRow key={r.line.id}>
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                 <TableCell>{r.entry!.entry_date}</TableCell>
-                <TableCell className="font-medium text-navy dark:text-primary-foreground">{r.entry!.entry_no}</TableCell>
-                <TableCell className="max-w-[320px] truncate">{r.line.description ?? r.entry!.memo}</TableCell>
-                <TableCell className="text-right">{r.debit ? formatMoney(r.debit, lang) : "—"}</TableCell>
-                <TableCell className="text-right">{r.credit ? formatMoney(r.credit, lang) : "—"}</TableCell>
-                <TableCell className="text-right font-medium">{formatMoney(r.running, lang)}</TableCell>
+                <TableCell className="font-medium text-navy dark:text-primary-foreground">
+                  {r.entry!.entry_no}
+                </TableCell>
+                <TableCell className="max-w-[320px] truncate">
+                  {r.line.description ?? r.entry!.memo}
+                </TableCell>
+                <TableCell className="text-right">
+                  {r.debit ? formatMoney(r.debit, lang) : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {r.credit ? formatMoney(r.credit, lang) : "—"}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatMoney(r.running, lang)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -632,7 +858,11 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
             values: [r.debit, r.credit, r.balance] as (number | string | null)[],
             kind: "item" as const,
           })),
-          { label: t("TOTAL", "JUMLAH"), values: [totalDebit, totalCredit, null], kind: "total" as const },
+          {
+            label: t("TOTAL", "JUMLAH"),
+            values: [totalDebit, totalCredit, null],
+            kind: "total" as const,
+          },
         ],
       },
     ],
@@ -651,7 +881,10 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label={t("Total debit", "Total debit")} value={formatMoney(totalDebit, lang)} />
-        <StatCard label={t("Total credit", "Total kredit")} value={formatMoney(totalCredit, lang)} />
+        <StatCard
+          label={t("Total credit", "Total kredit")}
+          value={formatMoney(totalCredit, lang)}
+        />
         <StatCard
           label={t("Difference", "Selisih")}
           value={formatMoney(totalDebit - totalCredit, lang)}
@@ -673,19 +906,39 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow><TableCell colSpan={7} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></TableCell></TableRow>}
+            {isLoading && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                </TableCell>
+              </TableRow>
+            )}
             {!isLoading && !balances.length && (
-              <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{t("No postings in this period.", "Belum ada pencatatan pada periode ini.")}</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  {t("No postings in this period.", "Belum ada pencatatan pada periode ini.")}
+                </TableCell>
+              </TableRow>
             )}
             {balances.map((r, i) => (
               <TableRow key={r.code}>
                 <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                <TableCell className="font-medium text-navy dark:text-primary-foreground">{r.code}</TableCell>
+                <TableCell className="font-medium text-navy dark:text-primary-foreground">
+                  {r.code}
+                </TableCell>
                 <TableCell>{r.name}</TableCell>
-                <TableCell className="text-muted-foreground">{lang === "id" ? ACCOUNT_TYPE_LABEL[r.type].id_ : ACCOUNT_TYPE_LABEL[r.type].en}</TableCell>
-                <TableCell className="text-right">{r.debit ? formatMoney(r.debit, lang) : "—"}</TableCell>
-                <TableCell className="text-right">{r.credit ? formatMoney(r.credit, lang) : "—"}</TableCell>
-                <TableCell className="text-right font-medium">{formatMoney(r.balance, lang)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {lang === "id" ? ACCOUNT_TYPE_LABEL[r.type].id_ : ACCOUNT_TYPE_LABEL[r.type].en}
+                </TableCell>
+                <TableCell className="text-right">
+                  {r.debit ? formatMoney(r.debit, lang) : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {r.credit ? formatMoney(r.credit, lang) : "—"}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatMoney(r.balance, lang)}
+                </TableCell>
               </TableRow>
             ))}
             {!!balances.length && (
@@ -750,7 +1003,11 @@ function StatementActions({ build }: { build: () => StatementDoc }) {
 }
 
 function codeNum(code: string) {
-  const n = Number(String(code ?? "").replace(/\D/g, "").slice(0, 4));
+  const n = Number(
+    String(code ?? "")
+      .replace(/\D/g, "")
+      .slice(0, 4),
+  );
   return Number.isFinite(n) ? n : 0;
 }
 /** 1000-1599 aset lancar, 1600+ aset tidak lancar. */
@@ -802,7 +1059,9 @@ function StatementSection({
       <Table>
         <TableBody>
           {!rows.length && (
-            <TableRow><TableCell className="py-6 text-center text-muted-foreground">—</TableCell></TableRow>
+            <TableRow>
+              <TableCell className="py-6 text-center text-muted-foreground">—</TableCell>
+            </TableRow>
           )}
           {rows.map((r) => (
             <TableRow key={r.code}>
@@ -859,7 +1118,9 @@ function ProfitLossView({ workspaceId }: { workspaceId: string }) {
     opex.forEach((r) => rows.push({ ...item(r.code, r.name, r.balance), indent: 1 }));
     rows.push(subtotal(t("Total operating expenses", "Jumlah beban usaha"), totalOpex));
     rows.push({ label: "", kind: "blank" });
-    rows.push(grandTotal(t("NET PROFIT (LOSS) FOR THE PERIOD", "LABA (RUGI) BERSIH PERIODE BERJALAN"), net));
+    rows.push(
+      grandTotal(t("NET PROFIT (LOSS) FOR THE PERIOD", "LABA (RUGI) BERSIH PERIODE BERJALAN"), net),
+    );
     return {
       filename: `laporan-laba-rugi-${from}-${to}`,
       lang,
@@ -932,17 +1193,23 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
     leftRows.push(subtotal(t("Total current assets", "Jumlah aset lancar"), sum(currentAssets)));
     leftRows.push(group(t("NON-CURRENT ASSETS", "ASET TIDAK LANCAR")));
     fixedAssets.forEach((a) => leftRows.push({ ...item(a.code, a.name, a.balance), indent: 1 }));
-    leftRows.push(subtotal(t("Total non-current assets", "Jumlah aset tidak lancar"), sum(fixedAssets)));
+    leftRows.push(
+      subtotal(t("Total non-current assets", "Jumlah aset tidak lancar"), sum(fixedAssets)),
+    );
     leftRows.push({ label: "", kind: "blank" });
     leftRows.push(grandTotal(t("TOTAL ASSETS", "JUMLAH ASET"), totalAssets));
 
     const rightRows: StmtRow[] = [];
     rightRows.push(group(t("CURRENT LIABILITIES", "LIABILITAS JANGKA PENDEK")));
     currentLiab.forEach((l) => rightRows.push({ ...item(l.code, l.name, l.balance), indent: 1 }));
-    rightRows.push(subtotal(t("Total current liabilities", "Jumlah liabilitas jangka pendek"), sum(currentLiab)));
+    rightRows.push(
+      subtotal(t("Total current liabilities", "Jumlah liabilitas jangka pendek"), sum(currentLiab)),
+    );
     rightRows.push(group(t("LONG-TERM LIABILITIES", "LIABILITAS JANGKA PANJANG")));
     longLiab.forEach((l) => rightRows.push({ ...item(l.code, l.name, l.balance), indent: 1 }));
-    rightRows.push(subtotal(t("Total long-term liabilities", "Jumlah liabilitas jangka panjang"), sum(longLiab)));
+    rightRows.push(
+      subtotal(t("Total long-term liabilities", "Jumlah liabilitas jangka panjang"), sum(longLiab)),
+    );
     rightRows.push(subtotal(t("Total liabilities", "Jumlah liabilitas"), totalLiabilities));
     rightRows.push(group(t("EQUITY", "EKUITAS")));
     equity.forEach((e) => rightRows.push({ ...item(e.code, e.name, e.balance), indent: 1 }));
@@ -962,14 +1229,19 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
     );
 
     // Samakan tinggi kedua kolom supaya jumlah besar berada di baris yang sama.
-    while (leftRows.length < rightRows.length) leftRows.splice(leftRows.length - 2, 0, { label: "", kind: "blank" });
-    while (rightRows.length < leftRows.length) rightRows.splice(rightRows.length - 2, 0, { label: "", kind: "blank" });
+    while (leftRows.length < rightRows.length)
+      leftRows.splice(leftRows.length - 2, 0, { label: "", kind: "blank" });
+    while (rightRows.length < leftRows.length)
+      rightRows.splice(rightRows.length - 2, 0, { label: "", kind: "blank" });
 
     return {
       filename: `laporan-posisi-keuangan-${to}`,
       lang,
       entity,
-      title: t("STATEMENT OF FINANCIAL POSITION (BALANCE SHEET)", "LAPORAN POSISI KEUANGAN (NERACA)"),
+      title: t(
+        "STATEMENT OF FINANCIAL POSITION (BALANCE SHEET)",
+        "LAPORAN POSISI KEUANGAN (NERACA)",
+      ),
       periodLabel: asOfLabel(to, lang),
       layout: "skontro",
       orientation: "landscape",
@@ -992,13 +1264,21 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-end gap-2 no-print">
         <div>
           <Label className="text-xs text-muted-foreground">{t("As of", "Per tanggal")}</Label>
-          <Input type="date" className="mt-1 h-9 w-40" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input
+            type="date"
+            className="mt-1 h-9 w-40"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label={t("Total assets", "Total aset")} value={formatMoney(totalAssets, lang)} />
-        <StatCard label={t("Liabilities + equity", "Kewajiban + ekuitas")} value={formatMoney(totalLiabilities + totalEquity, lang)} />
+        <StatCard
+          label={t("Liabilities + equity", "Kewajiban + ekuitas")}
+          value={formatMoney(totalLiabilities + totalEquity, lang)}
+        />
         <StatCard
           label={t("Difference", "Selisih")}
           value={formatMoney(diff, lang)}
@@ -1009,10 +1289,21 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <StatementSection title={t("Assets", "Aset")} rows={assets} total={totalAssets} />
         <div className="space-y-4">
-          <StatementSection title={t("Liabilities", "Kewajiban")} rows={liabilities} total={totalLiabilities} />
+          <StatementSection
+            title={t("Liabilities", "Kewajiban")}
+            rows={liabilities}
+            total={totalLiabilities}
+          />
           <StatementSection
             title={t("Equity", "Ekuitas")}
-            rows={[...equity, { code: "—", name: t("Current period result", "Laba periode berjalan"), balance: netIncome }]}
+            rows={[
+              ...equity,
+              {
+                code: "—",
+                name: t("Current period result", "Laba periode berjalan"),
+                balance: netIncome,
+              },
+            ]}
             total={totalEquity}
           />
         </div>
@@ -1077,7 +1368,8 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
                 {
                   rows: [
                     ...groups.flatMap((g) => {
-                      const label = lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en;
+                      const label =
+                        lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en;
                       const groupRows = result.rows.filter((r) => r.group === g);
                       return [
                         group(label),
@@ -1097,7 +1389,10 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
                     }),
                     { label: "", kind: "blank" as const },
                     {
-                      label: t("Net increase (decrease) in cash", "Kenaikan (penurunan) bersih kas"),
+                      label: t(
+                        "Net increase (decrease) in cash",
+                        "Kenaikan (penurunan) bersih kas",
+                      ),
                       values: [null, null, result.netChange] as (number | string | null)[],
                       kind: "subtotal" as const,
                     },
@@ -1129,7 +1424,10 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
           value={formatMoney(result.netChange, lang)}
           tone={result.netChange >= 0 ? "text-emerald-600" : "text-destructive"}
         />
-        <StatCard label={t("Closing cash", "Kas akhir")} value={formatMoney(result.closing, lang)} />
+        <StatCard
+          label={t("Closing cash", "Kas akhir")}
+          value={formatMoney(result.closing, lang)}
+        />
       </div>
 
       {isLoading && (
@@ -1144,8 +1442,12 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
           return (
             <div key={g} className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3 text-sm font-semibold text-navy dark:text-primary-foreground">
-                <span>{lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en}</span>
-                <span className={cn(result.totals[g] >= 0 ? "text-emerald-600" : "text-destructive")}>
+                <span>
+                  {lang === "id" ? CASH_FLOW_GROUP_LABEL[g].id_ : CASH_FLOW_GROUP_LABEL[g].en}
+                </span>
+                <span
+                  className={cn(result.totals[g] >= 0 ? "text-emerald-600" : "text-destructive")}
+                >
                   {formatMoney(result.totals[g], lang)}
                 </span>
               </div>
@@ -1171,9 +1473,15 @@ function CashFlowView({ workspaceId }: { workspaceId: string }) {
                     <TableRow key={`${r.group}-${r.code}`}>
                       <TableCell className="text-muted-foreground">{r.code}</TableCell>
                       <TableCell>{r.name}</TableCell>
-                      <TableCell className="text-right">{r.inflow ? formatMoney(r.inflow, lang) : "—"}</TableCell>
-                      <TableCell className="text-right">{r.outflow ? formatMoney(r.outflow, lang) : "—"}</TableCell>
-                      <TableCell className="text-right font-medium">{formatMoney(r.net, lang)}</TableCell>
+                      <TableCell className="text-right">
+                        {r.inflow ? formatMoney(r.inflow, lang) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {r.outflow ? formatMoney(r.outflow, lang) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatMoney(r.net, lang)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1231,7 +1539,9 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
                     })),
                     {
                       label: t("Result for the period", "Laba (rugi) periode berjalan"),
-                      values: [0, statement.netIncome, statement.netIncome] as (number | string | null)[],
+                      values: [0, statement.netIncome, statement.netIncome] as (
+                        number | string | null
+                      )[],
                       kind: "item" as const,
                     },
                     {
@@ -1255,13 +1565,19 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label={t("Opening equity", "Ekuitas awal")} value={formatMoney(statement.openingTotal, lang)} />
+        <StatCard
+          label={t("Opening equity", "Ekuitas awal")}
+          value={formatMoney(statement.openingTotal, lang)}
+        />
         <StatCard
           label={t("Result for the period", "Laba periode berjalan")}
           value={formatMoney(statement.netIncome, lang)}
           tone={statement.netIncome >= 0 ? "text-emerald-600" : "text-destructive"}
         />
-        <StatCard label={t("Closing equity", "Ekuitas akhir")} value={formatMoney(statement.closingTotal, lang)} />
+        <StatCard
+          label={t("Closing equity", "Ekuitas akhir")}
+          value={formatMoney(statement.closingTotal, lang)}
+        />
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -1296,20 +1612,32 @@ function EquityChangesView({ workspaceId }: { workspaceId: string }) {
                 <TableCell>{r.name}</TableCell>
                 <TableCell className="text-right">{formatMoney(r.opening, lang)}</TableCell>
                 <TableCell className="text-right">{formatMoney(r.movement, lang)}</TableCell>
-                <TableCell className="text-right font-medium">{formatMoney(r.closing, lang)}</TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatMoney(r.closing, lang)}
+                </TableCell>
               </TableRow>
             ))}
             <TableRow>
-              <TableCell colSpan={2}>{t("Result for the period", "Laba periode berjalan")}</TableCell>
+              <TableCell colSpan={2}>
+                {t("Result for the period", "Laba periode berjalan")}
+              </TableCell>
               <TableCell className="text-right">—</TableCell>
               <TableCell className="text-right">{formatMoney(statement.netIncome, lang)}</TableCell>
-              <TableCell className="text-right font-medium">{formatMoney(statement.netIncome, lang)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {formatMoney(statement.netIncome, lang)}
+              </TableCell>
             </TableRow>
             <TableRow className="bg-muted/50 font-semibold">
               <TableCell colSpan={2}>{t("Total equity", "Total ekuitas")}</TableCell>
-              <TableCell className="text-right">{formatMoney(statement.openingTotal, lang)}</TableCell>
-              <TableCell className="text-right">{formatMoney(statement.movementTotal + statement.netIncome, lang)}</TableCell>
-              <TableCell className="text-right">{formatMoney(statement.closingTotal, lang)}</TableCell>
+              <TableCell className="text-right">
+                {formatMoney(statement.openingTotal, lang)}
+              </TableCell>
+              <TableCell className="text-right">
+                {formatMoney(statement.movementTotal + statement.netIncome, lang)}
+              </TableCell>
+              <TableCell className="text-right">
+                {formatMoney(statement.closingTotal, lang)}
+              </TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -1376,7 +1704,9 @@ function VatClosingPanel({ workspaceId }: { workspaceId: string }) {
           data-testid="vat-closing-post"
         >
           {post.isPending && <Loader2 className="animate-spin" />}{" "}
-          {p?.alreadyClosed ? t("Already closed", "Sudah ditutup") : t("Post VAT closing", "Posting tutup PPN")}
+          {p?.alreadyClosed
+            ? t("Already closed", "Sudah ditutup")
+            : t("Post VAT closing", "Posting tutup PPN")}
         </Button>
       </div>
       {isLoading ? (
@@ -1387,15 +1717,25 @@ function VatClosingPanel({ workspaceId }: { workspaceId: string }) {
             [
               ["vatOut", t("Output VAT (2100)", "PPN Keluaran (2100)"), p.vatOut],
               ["vatIn", t("Input VAT (1400)", "PPN Masukan (1400)"), p.vatIn],
-              ["carriedOverpaid", t("Overpaid carried (1410)", "Lebih bayar lalu (1410)"), p.carriedOverpaid],
+              [
+                "carriedOverpaid",
+                t("Overpaid carried (1410)", "Lebih bayar lalu (1410)"),
+                p.carriedOverpaid,
+              ],
               [
                 "net",
-                p.net >= 0 ? t("VAT payable (2110)", "Hutang PPN (2110)") : t("Overpaid (1410)", "Lebih bayar (1410)"),
+                p.net >= 0
+                  ? t("VAT payable (2110)", "Hutang PPN (2110)")
+                  : t("Overpaid (1410)", "Lebih bayar (1410)"),
                 Math.abs(p.net),
               ],
             ] as [string, string, number][]
           ).map(([key, label, v]) => (
-            <div key={key} className="rounded-lg border border-border p-3" data-testid={`vat-closing-${key}`}>
+            <div
+              key={key}
+              className="rounded-lg border border-border p-3"
+              data-testid={`vat-closing-${key}`}
+            >
               <div className="text-xs text-muted-foreground">{label}</div>
               <div className="mt-1 font-semibold tabular-nums">{fm(Number(v))}</div>
             </div>
@@ -1404,10 +1744,7 @@ function VatClosingPanel({ workspaceId }: { workspaceId: string }) {
       ) : null}
       {p?.alreadyClosed && (
         <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          {t(
-            `VAT for ${p.period} is already closed.`,
-            `PPN periode ${p.period} sudah ditutup.`,
-          )}
+          {t(`VAT for ${p.period} is already closed.`, `PPN periode ${p.period} sudah ditutup.`)}
         </p>
       )}
     </div>
@@ -1462,8 +1799,20 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
   const close = useMutation({
     mutationFn: async () => {
       const lines: ManualLineInput[] = [
-        ...revenue.map((r) => ({ account_code: r.code, account_name: r.name, description: t("Closing revenue", "Tutup pendapatan"), debit: r.balance, credit: 0 })),
-        ...expense.map((r) => ({ account_code: r.code, account_name: r.name, description: t("Closing expense", "Tutup beban"), debit: 0, credit: r.balance })),
+        ...revenue.map((r) => ({
+          account_code: r.code,
+          account_name: r.name,
+          description: t("Closing revenue", "Tutup pendapatan"),
+          debit: r.balance,
+          credit: 0,
+        })),
+        ...expense.map((r) => ({
+          account_code: r.code,
+          account_name: r.name,
+          description: t("Closing expense", "Tutup beban"),
+          debit: 0,
+          credit: r.balance,
+        })),
         {
           account_code: RETAINED_EARNINGS.code,
           account_name: RETAINED_EARNINGS.name,
@@ -1480,7 +1829,12 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
       });
     },
     onSuccess: () => {
-      toast.success(t("Period closed and posted to retained earnings", "Periode ditutup dan dipindahkan ke laba ditahan"));
+      toast.success(
+        t(
+          "Period closed and posted to retained earnings",
+          "Periode ditutup dan dipindahkan ke laba ditahan",
+        ),
+      );
       qc.invalidateQueries({ queryKey: ["acc-ledger", workspaceId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1497,13 +1851,17 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
           disabled={close.isPending || (!revenue.length && !expense.length)}
           onClick={() => close.mutate()}
         >
-          {close.isPending && <Loader2 className="animate-spin" />} {t("Post closing entry", "Catat jurnal penutup")}
+          {close.isPending && <Loader2 className="animate-spin" />}{" "}
+          {t("Post closing entry", "Catat jurnal penutup")}
         </Button>
       </div>
 
       {alreadyClosed && (
         <p className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-          {t("A closing entry already exists in this range.", "Sudah ada jurnal penutup pada rentang ini.")}
+          {t(
+            "A closing entry already exists in this range.",
+            "Sudah ada jurnal penutup pada rentang ini.",
+          )}
         </p>
       )}
 
@@ -1518,8 +1876,16 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <StatementSection title={t("Revenue accounts to close", "Akun pendapatan yang ditutup")} rows={revenue} total={totalRevenue} />
-        <StatementSection title={t("Expense accounts to close", "Akun beban yang ditutup")} rows={expense} total={totalExpense} />
+        <StatementSection
+          title={t("Revenue accounts to close", "Akun pendapatan yang ditutup")}
+          rows={revenue}
+          total={totalRevenue}
+        />
+        <StatementSection
+          title={t("Expense accounts to close", "Akun beban yang ditutup")}
+          rows={expense}
+          total={totalExpense}
+        />
       </div>
 
       {/* Ronde 28 (BS New 8): tutup PPN satu masa pajak. */}
@@ -1561,14 +1927,23 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="soft">{t("Soft close (review)", "Tutup sementara (review)")}</SelectItem>
-                <SelectItem value="hard">{t("Hard lock (final)", "Kunci penuh (final)")}</SelectItem>
+                <SelectItem value="soft">
+                  {t("Soft close (review)", "Tutup sementara (review)")}
+                </SelectItem>
+                <SelectItem value="hard">
+                  {t("Hard lock (final)", "Kunci penuh (final)")}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid min-w-[180px] flex-1 gap-1">
             <Label className="text-xs">{t("Note", "Catatan")}</Label>
-            <Input value={lockNote} onChange={(e) => setLockNote(e.target.value)} className="h-9" data-testid="period-lock-note" />
+            <Input
+              value={lockNote}
+              onChange={(e) => setLockNote(e.target.value)}
+              className="h-9"
+              data-testid="period-lock-note"
+            />
           </div>
           <Button
             variant="navy"
@@ -1577,7 +1952,8 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
             onClick={() => addLock.mutate()}
             data-testid="period-lock-submit"
           >
-            {addLock.isPending && <Loader2 className="animate-spin" />} {t("Lock period", "Kunci periode")}
+            {addLock.isPending && <Loader2 className="animate-spin" />}{" "}
+            {t("Lock period", "Kunci periode")}
           </Button>
         </div>
         {/* Parity live/BS New 8-10: tabel riwayat selalu tampil, termasuk saat kosong. */}
@@ -1603,7 +1979,9 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
                 <TableCell className="font-medium">{l.period}</TableCell>
                 <TableCell>
                   <Badge variant={l.lock_type === "hard" ? "destructive" : "secondary"}>
-                    {l.lock_type === "hard" ? t("Hard lock", "Kunci penuh") : t("Soft close", "Tutup sementara")}
+                    {l.lock_type === "hard"
+                      ? t("Hard lock", "Kunci penuh")
+                      : t("Soft close", "Tutup sementara")}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{l.note || "—"}</TableCell>
@@ -1662,7 +2040,10 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
   }, [values]);
 
   const patch = (code: string, p: Partial<{ debit: string; credit: string }>) =>
-    setValues((prev) => ({ ...prev, [code]: { ...{ debit: "", credit: "" }, ...prev[code], ...p } }));
+    setValues((prev) => ({
+      ...prev,
+      [code]: { ...{ debit: "", credit: "" }, ...prev[code], ...p },
+    }));
 
   const post = useMutation({
     mutationFn: async () => {
@@ -1681,12 +2062,15 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
         })
         .filter((l) => l.debit > 0.0001 || l.credit > 0.0001);
 
-      if (!lines.length) throw new Error(t("Enter at least one balance.", "Isi minimal satu saldo."));
-      if (!date) throw new Error(t("Choose the opening balance date.", "Pilih tanggal saldo awal."));
+      if (!lines.length)
+        throw new Error(t("Enter at least one balance.", "Isi minimal satu saldo."));
+      if (!date)
+        throw new Error(t("Choose the opening balance date.", "Pilih tanggal saldo awal."));
 
       const diff = lines.reduce((s, l) => s + l.debit - l.credit, 0);
       if (Math.abs(diff) > 0.5) {
-        if (!autoBalance) throw new Error(t("Debit and credit must balance.", "Debit dan kredit harus seimbang."));
+        if (!autoBalance)
+          throw new Error(t("Debit and credit must balance.", "Debit dan kredit harus seimbang."));
         lines.push({
           account_code: RETAINED_EARNINGS.code,
           account_name: RETAINED_EARNINGS.name,
@@ -1711,11 +2095,17 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
       setCheck(result);
       if (result.ok) {
         toast.success(
-          t("Opening balance posted and verified in the ledger", "Saldo awal tercatat dan terverifikasi di buku besar"),
+          t(
+            "Opening balance posted and verified in the ledger",
+            "Saldo awal tercatat dan terverifikasi di buku besar",
+          ),
         );
       } else {
         toast.error(
-          t("Opening balance posted but verification failed", "Saldo awal tercatat tetapi verifikasi gagal"),
+          t(
+            "Opening balance posted but verification failed",
+            "Saldo awal tercatat tetapi verifikasi gagal",
+          ),
         );
       }
       setValues({});
@@ -1732,7 +2122,8 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
     mutationFn: (entryId: string) => verifyOpeningBalance(workspaceId, entryId),
     onSuccess: (result) => {
       setCheck(result);
-      if (result.ok) toast.success(t("Ledger matches the opening balance", "Buku besar sesuai saldo awal"));
+      if (result.ok)
+        toast.success(t("Ledger matches the opening balance", "Buku besar sesuai saldo awal"));
       else toast.error(t("Verification found differences", "Verifikasi menemukan selisih"));
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1755,7 +2146,8 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
         title={t("Opening Balance", "Saldo Awal")}
         action={
           <Button variant="navy" disabled={post.isPending} onClick={() => post.mutate()}>
-            {post.isPending && <Loader2 className="animate-spin" />} {t("Post opening balance", "Catat saldo awal")}
+            {post.isPending && <Loader2 className="animate-spin" />}{" "}
+            {t("Post opening balance", "Catat saldo awal")}
           </Button>
         }
       />
@@ -1769,7 +2161,12 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-3">
         <div>
           <Label className="text-xs text-muted-foreground">{t("As of date", "Per tanggal")}</Label>
-          <Input type="date" className="mt-1 h-9 w-44" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input
+            type="date"
+            className="mt-1 h-9 w-44"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
         </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1793,7 +2190,10 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label={t("Total debit", "Total debit")} value={formatMoney(totals.debit, lang)} />
-        <StatCard label={t("Total credit", "Total kredit")} value={formatMoney(totals.credit, lang)} />
+        <StatCard
+          label={t("Total credit", "Total kredit")}
+          value={formatMoney(totals.credit, lang)}
+        />
         <StatCard
           label={t("Difference", "Selisih")}
           value={formatMoney(totals.diff, lang)}
@@ -1807,7 +2207,10 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
             {t("Posted opening balances", "Saldo awal tercatat")}
           </p>
           {existing.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2">
+            <div
+              key={e.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2"
+            >
               <span className="text-sm">
                 <span className="font-mono text-xs">{e.entry_no}</span> · {e.entry_date} ·{" "}
                 {formatMoney(Number(e.total_debit), lang)}
@@ -1849,7 +2252,9 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
         <div
           className={cn(
             "space-y-3 rounded-2xl border p-4",
-            check.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/50 bg-amber-500/10",
+            check.ok
+              ? "border-emerald-500/40 bg-emerald-500/5"
+              : "border-amber-500/50 bg-amber-500/10",
           )}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1871,7 +2276,8 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
                 disabled={rollback.isPending}
                 onClick={() => rollback.mutate(check.entryId)}
               >
-                {rollback.isPending && <Loader2 className="animate-spin" />} {t("Roll back", "Batalkan")}
+                {rollback.isPending && <Loader2 className="animate-spin" />}{" "}
+                {t("Roll back", "Batalkan")}
               </Button>
             )}
           </div>
@@ -1890,7 +2296,9 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
                   <TableHead>{t("Account", "Akun")}</TableHead>
                   <TableHead className="text-right">{t("Entered", "Diinput")}</TableHead>
                   <TableHead className="text-right">{t("Posted", "Tercatat")}</TableHead>
-                  <TableHead className="text-right">{t("Ledger impact", "Dampak buku besar")}</TableHead>
+                  <TableHead className="text-right">
+                    {t("Ledger impact", "Dampak buku besar")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1971,7 +2379,13 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-export function AccountingView({ entity, workspaceId }: { entity: AccEntity; workspaceId: string }) {
+export function AccountingView({
+  entity,
+  workspaceId,
+}: {
+  entity: AccEntity;
+  workspaceId: string;
+}) {
   switch (entity.submoduleId) {
     case "opening-balance":
       return <OpeningBalanceView workspaceId={workspaceId} />;
@@ -1998,6 +2412,10 @@ export function AccountingView({ entity, workspaceId }: { entity: AccEntity; wor
       return <AgingView side="ar" workspaceId={workspaceId} />;
     case "ap-aging":
       return <AgingView side="ap" workspaceId={workspaceId} />;
+    case "ar-credit-memo":
+      return <CreditMemoView side="ar" workspaceId={workspaceId} />;
+    case "ap-credit-memo":
+      return <CreditMemoView side="ap" workspaceId={workspaceId} />;
     case "period-closing":
       return <PeriodClosingView workspaceId={workspaceId} />;
     // Ronde 29 (BS New 8): revaluasi kurs pos moneter valas.

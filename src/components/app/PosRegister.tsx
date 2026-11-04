@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,13 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { countWorkspaceRows, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import { listWorkspaceRows } from "@/lib/data.functions";
+import { erpPosCheckout } from "@/lib/erp-document.functions";
 import { useI18n } from "@/lib/i18n";
-import { postSalesMovements } from "@/lib/inventory";
-import { postArInvoiceJournal, postDeliveryJournal, postReceiptJournal } from "@/lib/journal";
-import { formatMoney as fmtMoney, nextDocNumber } from "@/lib/procurement";
-import type { PrcStatus } from "@/lib/procurement";
-import type { SlsDocType } from "@/lib/sales";
+import { formatMoney as fmtMoney } from "@/lib/procurement";
 import { cn } from "@/lib/utils";
 
 interface PosItem {
@@ -49,6 +46,7 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
   const [warehouse, setWarehouse] = useState("");
   const [paid, setPaid] = useState("");
   const [method, setMethod] = useState("cash");
+  const [bank, setBank] = useState("");
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["pos-items", workspaceId, term],
@@ -72,7 +70,14 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
     queryKey: ["pos-customers", workspaceId],
     queryFn: async () => {
       const data = await listWorkspaceRows({
-        data: { table: "md_customers", workspaceId, filters: { is_active: 1 }, orderBy: "name", orderDir: "asc", limit: 100 },
+        data: {
+          table: "md_customers",
+          workspaceId,
+          filters: { is_active: 1 },
+          orderBy: "name",
+          orderDir: "asc",
+          limit: 100,
+        },
       });
       return (data?.rows ?? []) as unknown as { code: string; name: string }[];
     },
@@ -82,7 +87,31 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
     queryKey: ["pos-warehouses", workspaceId],
     queryFn: async () => {
       const data = await listWorkspaceRows({
-        data: { table: "md_warehouses", workspaceId, filters: { is_active: 1 }, orderBy: "code", orderDir: "asc", limit: 100 },
+        data: {
+          table: "md_warehouses",
+          workspaceId,
+          filters: { is_active: 1 },
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 100,
+        },
+      });
+      return (data?.rows ?? []) as unknown as { code: string; name: string }[];
+    },
+  });
+
+  const { data: banks = [] } = useQuery({
+    queryKey: ["pos-banks", workspaceId],
+    queryFn: async () => {
+      const data = await listWorkspaceRows({
+        data: {
+          table: "cb_accounts",
+          workspaceId,
+          filters: { is_active: 1 },
+          orderBy: "code",
+          orderDir: "asc",
+          limit: 100,
+        },
       });
       return (data?.rows ?? []) as unknown as { code: string; name: string }[];
     },
@@ -118,128 +147,50 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
       ? t("Walk-in customer", "Pelanggan umum")
       : (customers.find((c) => c.code === customerCode)?.name ?? customerCode);
 
+  // Kunci checkout: tetap sama selama satu transaksi kasir (klik ganda / kirim ulang tidak membuat penjualan kedua).
+  const checkoutKey = useRef<string | null>(null);
   const checkout = useMutation({
     mutationFn: async () => {
       if (!cart.length) throw new Error(t("Cart is empty.", "Keranjang masih kosong."));
       if ((Number(paid) || 0) + 0.0001 < totals.total)
         throw new Error(t("Payment is less than the total.", "Pembayaran kurang dari total."));
-
-      const rate = Number(taxRate) || 0;
-      const today = new Date().toISOString().slice(0, 10);
-      const code = customerCode === "walk-in" ? null : customerCode;
-
-      const seqFor = async (docType: SlsDocType) => {
-        const data = await countWorkspaceRows({
-          data: { table: "sls_documents", workspaceId, filters: { doc_type: docType } },
-        });
-        return (data?.count ?? 0) + 1;
-      };
-
-      const createDoc = async (
-        docType: SlsDocType,
-        prefix: string,
-        status: PrcStatus,
-        source?: { id: string; doc_number: string },
-      ) => {
-        const doc_number = nextDocNumber(prefix, await seqFor(docType));
-        const created = await saveWorkspaceRow({
-          data: {
-            table: "sls_documents",
-            workspaceId,
-            data: {
-              doc_type: docType,
-              doc_number,
-              doc_date: today,
-              due_date: docType === "ar_invoice" ? today : null,
-              customer_code: code,
-              customer_name: customerName,
-              warehouse_code: docType === "delivery_order" ? warehouse || null : null,
-              reference: source?.doc_number ?? `POS ${method}`,
-              status,
-              subtotal: totals.gross,
-              discount_amount: totals.discount,
-              tax_amount: totals.tax,
-              total: totals.total,
-              notes: `POS · ${method}`,
-              source_document_id: source?.id ?? null,
-              source_doc_number: source?.doc_number ?? null,
-            },
-          },
-        });
-        const id = created.id;
-
-        const payload = cart.map((l, i) => {
-          const grossLine = l.qty * Number(l.sell_price || 0);
-          const netLine = grossLine - Number(l.discount || 0);
-          return {
-            document_id: id,
-            workspace_id: workspaceId,
-            line_no: i + 1,
+      checkoutKey.current ??= crypto.randomUUID();
+      // BS New 16: faktur AR langsung (stok + HPP) dan penerimaan dalam SATU transaksi di server.
+      return erpPosCheckout({
+        data: {
+          workspaceId,
+          key: checkoutKey.current,
+          customer_code: customerCode === "walk-in" ? null : customerCode,
+          customer_name: customerName,
+          warehouse_code: warehouse || null,
+          bank_account_code: bank || null,
+          method,
+          tax_rate: Number(taxRate) || 0,
+          doc_date: new Date().toISOString().slice(0, 10),
+          lines: cart.map((l) => ({
             item_code: l.code,
             description: l.name,
-            qty: l.qty,
             uom_code: l.uom_code,
+            qty: l.qty,
             unit_price: Number(l.sell_price || 0),
             discount: Number(l.discount || 0),
-            tax_rate: rate,
-            line_total: netLine + (netLine * rate) / 100,
-            qty_fulfilled: l.qty,
-          };
-        });
-        await upsertWorkspaceRows({ data: { table: "sls_document_lines", workspaceId, rows: payload } });
-
-        return { id, doc_number, doc_date: today, doc_type: docType };
-      };
-
-      const movementLines = cart.map((l) => ({
-        item_code: l.code,
-        description: l.name,
-        uom_code: l.uom_code,
-        qty: l.qty,
-        unit_price: Number(l.cost_price || 0),
-      }));
-
-      // 1. Delivery order — stock out + COGS journal
-      const doDoc = await createDoc("delivery_order", "DO", "closed");
-      await postSalesMovements(
-        workspaceId,
-        { ...doDoc, doc_type: "delivery_order", warehouse_code: warehouse || null, customer_name: customerName },
-        movementLines,
-      );
-      await postDeliveryJournal(
-        workspaceId,
-        { ...doDoc, customer_name: customerName },
-        cart.map((l) => ({ item_code: l.code, qty: l.qty })),
-      );
-
-      // 2. AR invoice from the delivery order
-      const arDoc = await createDoc("ar_invoice", "ARI", "paid", doDoc);
-      await postArInvoiceJournal(workspaceId, {
-        ...arDoc,
-        customer_name: customerName,
-        subtotal: totals.gross,
-        discount_amount: totals.discount,
-        tax_amount: totals.tax,
-        total: totals.total,
+          })),
+        },
       });
-
-      // 3. Receipt from the invoice
-      const rcpDoc = await createDoc("sales_receipt", "RCP", "paid", arDoc);
-      await postReceiptJournal(workspaceId, { ...rcpDoc, customer_name: customerName, total: totals.total });
-
-      return { doDoc, arDoc, rcpDoc };
     },
     onSuccess: (res) => {
+      checkoutKey.current = null;
       toast.success(
         t(
-          `Checkout complete · ${res.doDoc.doc_number} · ${res.arDoc.doc_number} · ${res.rcpDoc.doc_number}`,
-          `Transaksi selesai · ${res.doDoc.doc_number} · ${res.arDoc.doc_number} · ${res.rcpDoc.doc_number}`,
+          `Checkout complete · ${res.arNumber} · ${res.receiptNumber}`,
+          `Transaksi selesai · ${res.arNumber} · ${res.receiptNumber}`,
         ),
       );
       setCart([]);
       setPaid("");
       qc.invalidateQueries({ queryKey: ["sls"] });
       qc.invalidateQueries({ queryKey: ["inv"] });
+      qc.invalidateQueries({ queryKey: ["cb-trx"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -247,7 +198,9 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.28em] text-gold">{t("SALES & POS", "PENJUALAN & POS")}</p>
+        <p className="text-xs font-semibold tracking-[0.28em] text-gold">
+          {t("SALES & POS", "PENJUALAN & POS")}
+        </p>
         <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
           {t("POS Register", "Kasir POS")}
         </h1>
@@ -289,11 +242,15 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
                   onClick={() => addItem(it)}
                   className="group rounded-xl border border-border bg-background p-3 text-left transition hover:border-gold hover:shadow-md"
                 >
-                  <p className="line-clamp-2 text-sm font-medium text-navy dark:text-primary-foreground">{it.name}</p>
+                  <p className="line-clamp-2 text-sm font-medium text-navy dark:text-primary-foreground">
+                    {it.name}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {it.code} · {it.uom_code ?? "—"}
                   </p>
-                  <p className="mt-2 text-sm font-semibold text-gold">{formatMoney(Number(it.sell_price))}</p>
+                  <p className="mt-2 text-sm font-semibold text-gold">
+                    {formatMoney(Number(it.sell_price))}
+                  </p>
                 </button>
               ))}
             </div>
@@ -341,6 +298,24 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-xs">{t("Receiving account", "Rekening penerimaan")}</Label>
+              <Select value={bank} onValueChange={setBank}>
+                <SelectTrigger
+                  className="h-9"
+                  aria-label={t("Receiving account", "Rekening penerimaan")}
+                >
+                  <SelectValue placeholder={t("Select cash / bank", "Pilih kas / bank")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {banks.map((b) => (
+                    <SelectItem key={b.code} value={b.code}>
+                      {b.code} — {b.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className={cn("space-y-2", cart.length > 5 && "max-h-72 overflow-y-auto pr-1")}>
@@ -354,14 +329,26 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{l.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatMoney(Number(l.sell_price))}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatMoney(Number(l.sell_price))}
+                      </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQty(l.code, 0)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setQty(l.code, 0)}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setQty(l.code, l.qty - 1)}>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setQty(l.code, l.qty - 1)}
+                    >
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
                     <Input
@@ -369,14 +356,21 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
                       onChange={(e) => setQty(l.code, Number(e.target.value) || 0)}
                       className="h-7 w-16 text-center"
                     />
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setQty(l.code, l.qty + 1)}>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setQty(l.code, l.qty + 1)}
+                    >
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
                     <Input
                       value={l.discount}
                       onChange={(e) =>
                         setCart((c) =>
-                          c.map((x) => (x.code === l.code ? { ...x, discount: Number(e.target.value) || 0 } : x)),
+                          c.map((x) =>
+                            x.code === l.code ? { ...x, discount: Number(e.target.value) || 0 } : x,
+                          ),
                         )
                       }
                       className="h-7 w-24"
@@ -430,14 +424,24 @@ export function PosRegister({ workspaceId }: { workspaceId: string }) {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("Amount paid", "Uang diterima")}</Label>
-              <Input value={paid} onChange={(e) => setPaid(e.target.value)} inputMode="decimal" className="h-9" />
+              <Input
+                value={paid}
+                onChange={(e) => setPaid(e.target.value)}
+                inputMode="decimal"
+                className="h-9"
+              />
             </div>
           </div>
 
           <Row label={t("Change", "Kembalian")} value={formatMoney(change)} />
 
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setCart([])} disabled={!cart.length}>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setCart([])}
+              disabled={!cart.length}
+            >
               {t("Clear", "Kosongkan")}
             </Button>
             <Button

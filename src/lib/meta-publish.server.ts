@@ -10,6 +10,7 @@ import { sqlDateTime } from "./datetime";
 import { signMediaUrl } from "./crm-media.server";
 import { workspaceHasQalling } from "./social-interactions.server";
 import { deliveryStatus } from "./post-delivery-rules";
+import { validateEnhancements, type FirstCommentOutcome } from "./post-enhancements";
 
 /** Basis Graph API; bisa ditimpa (`META_GRAPH_BASE`) untuk server tiruan saat uji. */
 export const GRAPH = (process.env.META_GRAPH_BASE ?? "https://graph.facebook.com/v21.0").replace(
@@ -43,6 +44,7 @@ export interface PublishResultRow {
   account_id: string;
   ok: boolean;
   pending?: boolean;
+  first_comment?: FirstCommentOutcome;
   id?: string;
   permalink?: string;
   error?: string | null;
@@ -79,8 +81,10 @@ export async function publishPost(
     media_url: string | null;
     media_paths: unknown;
     account_ids: unknown;
+    first_comment: string | null;
+    cover_path: string | null;
   }>(
-    "SELECT id, title, caption, media_url, media_paths, account_ids FROM crm_scheduled_posts WHERE id = ? AND workspace_id = ? LIMIT 1",
+    "SELECT id, title, caption, media_url, media_paths, account_ids, first_comment, cover_path FROM crm_scheduled_posts WHERE id = ? AND workspace_id = ? LIMIT 1",
     [postId, workspaceId],
   );
   if (!post) throw new Error("Post not found");
@@ -103,6 +107,24 @@ export async function publishPost(
   const tokenOf = new Map(tokens.map((t) => [t.account_id, t.access_token]));
 
   const caption = post.caption || post.title;
+  // Komentar pertama & cover: media harus milik workspace ini; cover hanya untuk satu video (Tebar).
+  const paths = parseArr(post.media_paths) as string[];
+  const referenced = [...new Set([...paths, ...(post.cover_path ? [post.cover_path] : [])])];
+  const library = referenced.length
+    ? await query<{ file_path: string; mime_type: string | null }>(
+        "SELECT file_path, mime_type FROM crm_media WHERE workspace_id = ? AND file_path IN (?)",
+        [workspaceId, referenced],
+      )
+    : [];
+  if (referenced.some((path) => !library.some((m) => m.file_path === path)))
+    throw new Error("Media tidak tersedia atau bukan milik workspace ini");
+  const singleVideo =
+    (paths.length === 1 &&
+      !post.media_url &&
+      !!library.find((m) => m.file_path === paths[0])?.mime_type?.startsWith("video/")) ||
+    (!paths.length && !!post.media_url && /\.(mp4|mov|webm)(?:[?#]|$)/i.test(post.media_url));
+  validateEnhancements(accounts, post.first_comment ?? "", post.cover_path, singleVideo);
+  const coverUrl = post.cover_path ? signMediaUrl(origin, post.cover_path) : undefined;
   const signed = parseArr(post.media_paths).map((p) => signMediaUrl(origin, p));
   const mediaUrls = [...(post.media_url ? [post.media_url] : []), ...signed];
   const firstMedia = mediaUrls[0] ?? null;
@@ -121,6 +143,14 @@ export async function publishPost(
         tebarAccs.map((a) => a.external_id as string),
         caption,
         mediaUrls,
+        {
+          firstComment: post.first_comment ?? "",
+          coverUrl,
+          title: post.title,
+          platforms: Object.fromEntries(
+            tebarAccs.map((a) => [a.external_id as string, a.platform]),
+          ),
+        },
       );
       externalId = r.postIds[0] ?? null;
       const byExt = new Map(r.targets.map((t) => [t.account_id, t]));
@@ -131,6 +161,7 @@ export async function publishPost(
           ok: !!t?.ok,
           pending: t?.pending,
           id: t?.post_id,
+          ...(t?.first_comment ? { first_comment: t.first_comment } : {}),
           ...(t?.permalink ? { permalink: t.permalink } : {}),
           ...(t && !t.ok ? { error: t.error } : !t ? { error: "Tidak ada respons Tebar" } : {}),
         });

@@ -106,13 +106,17 @@ test("ADMIN: Users per workspace + hapus akun; Content Qalling punya tombol tamb
   const email = `${TAG}@example.com`;
 
   await page.goto("/app-admin/users");
-  await expect(page.getByText("Akun dikelompokkan per workspace.")).toBeVisible({
+  await expect(page.getByText("Daftar tenant. Klik tenant untuk melihat user dan workspace.")).toBeVisible({
     timeout: 60_000,
   });
-  // satu tabel; baris pembatas per workspace + kolom User / Role / Platform role / Terdaftar / Actions
-  await expect(page.getByRole("columnheader", { name: "Terdaftar" })).toBeVisible();
-  await expect(page.locator("tbody tr").first()).toContainText("/");
-  await expect(page.getByRole("columnheader", { name: "Platform role" }).first()).toBeVisible();
+  // BS New 16: tabel Tenant (jumlah workspace/user) + Detail → user & workspace
+  for (const h of ["Tenant", "Jumlah workspace", "Jumlah user"])
+    await expect(page.getByRole("columnheader", { name: h })).toBeVisible();
+  await page.getByRole("button", { name: "Detail" }).first().click();
+  await expect(page.getByRole("dialog").getByRole("columnheader", { name: "Terdaftar" })).toBeVisible();
+  await expect(page.getByRole("dialog").locator("tbody tr").filter({ hasText: "/" }).first()).toBeVisible();
+  await expect(page.getByRole("dialog").getByRole("columnheader", { name: "Platform role" }).first()).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // akun baru tanpa workspace → kelompok "Tanpa workspace"
   await page.getByRole("button", { name: "New user" }).click();
@@ -138,14 +142,13 @@ test("ADMIN: Users per workspace + hapus akun; Content Qalling punya tombol tamb
       timeout: 30_000,
     })
     .toBe(1);
-  await page.getByPlaceholder("Cari nama, email, workspace…").fill(TAG);
-  const group = page.locator("tbody");
-  await expect(group.getByRole("row").filter({ hasText: "Tanpa workspace" })).toContainText(
-    "1 user",
-    {
-      timeout: 30_000,
-    },
-  );
+  await page.getByPlaceholder("Cari tenant, email, workspace…").fill(TAG);
+  await expect(page.getByRole("row").filter({ hasText: "Tanpa tenant" })).toContainText("1 user", {
+    timeout: 30_000,
+  });
+  await page.getByRole("row").filter({ hasText: "Tanpa tenant" }).getByRole("button", { name: "Detail" }).click();
+  const group = page.getByRole("dialog").locator("tbody");
+  await expect(group.getByRole("row").filter({ hasText: "Tanpa workspace" })).toContainText("1 user");
   await expect(group.getByText(email)).toBeVisible();
 
   // hapus (konfirmasi) → baris profil/app_users hilang
@@ -159,8 +162,10 @@ test("ADMIN: Users per workspace + hapus akun; Content Qalling punya tombol tamb
   expect(await q("SELECT 1 FROM app_users WHERE email = ?", [email])).toHaveLength(0);
 
   // tidak bisa menghapus akun sendiri
-  await page.getByPlaceholder("Cari nama, email, workspace…").fill("dnicorp.id@gmail.com");
-  const self = page.getByRole("row").filter({ hasText: "dnicorp.id@gmail.com" }).first();
+  await page.keyboard.press("Escape");
+  await page.getByPlaceholder("Cari tenant, email, workspace…").fill("dnicorp.id@gmail.com");
+  await page.getByRole("button", { name: "Detail" }).first().click();
+  const self = page.getByRole("dialog").getByRole("row").filter({ hasText: "dnicorp.id@gmail.com" }).first();
   await expect(self).toBeVisible({ timeout: 30_000 });
   page.once("dialog", (d) => void d.accept());
   await self.getByRole("button", { name: "Hapus" }).click();

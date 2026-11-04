@@ -66,6 +66,12 @@ import {
   upsertWorkspaceRows,
 } from "@/lib/data.functions";
 import { APP_MODULES } from "@/lib/modules";
+import {
+  CustomRolesPanel,
+  fetchCustomRoles,
+  type CustomRole,
+} from "@/components/app/CustomRolesPanel";
+import { setMemberRole } from "@/lib/custom-roles.functions";
 import { listProfilesByIds } from "@/lib/platform.functions";
 import {
   addExistingUserToWorkspace,
@@ -78,6 +84,7 @@ interface MemberRow {
   id: string;
   user_id: string;
   role: string;
+  custom_role_id?: string | null;
   created_at: string;
   profile?: { full_name: string | null; email: string | null } | null;
 }
@@ -118,6 +125,7 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   // #58 (BS New 3): dialog "Give access" — beri akses ke user tenant yang sudah ada.
   const [grantOpen, setGrantOpen] = useState(false);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [grantUserId, setGrantUserId] = useState("");
   const [grantRole, setGrantRole] = useState<AccessRole>("staff");
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
@@ -139,6 +147,9 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
   async function load() {
     if (!activeWorkspace) return;
     setLoading(true);
+    void fetchCustomRoles(activeWorkspace.id)
+      .then(setCustomRoles)
+      .catch(() => undefined);
     const data = await listWorkspaceRows({
       data: {
         table: "workspace_members",
@@ -254,12 +265,11 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
   async function changeRole(id: string, next: string) {
     if (!activeWorkspace) return;
     try {
-      await saveWorkspaceRow({
+      await setMemberRole({
         data: {
-          table: "workspace_members",
           workspaceId: activeWorkspace.id,
-          id,
-          data: { role: next as "owner" | "admin" | "staff" | "viewer" },
+          memberId: id,
+          ...(next.startsWith("custom:") ? { customRoleId: next.slice(7) } : { role: next }),
         },
       });
     } catch (err) {
@@ -332,7 +342,7 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <Tabs defaultValue="users" className="mt-6">
-        <TabsList className="grid w-full grid-cols-3 sm:w-fit" data-testid="team-tabs">
+        <TabsList className="grid w-full grid-cols-4 sm:w-fit" data-testid="team-tabs">
           <TabsTrigger value="users" data-testid="team-tab-users">
             Users
           </TabsTrigger>
@@ -341,6 +351,7 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
             Workspace Access
           </TabsTrigger>
           <TabsTrigger value="access">Role Access</TabsTrigger>
+          <TabsTrigger value="custom">Custom Roles</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="pt-4">
@@ -412,9 +423,12 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
                             {m.role === "owner" ? (
                               <Badge variant="secondary">Owner</Badge>
                             ) : (
-                              <Select value={m.role} onValueChange={(v) => changeRole(m.id, v)}>
+                              <Select
+                                value={m.custom_role_id ? `custom:${m.custom_role_id}` : m.role}
+                                onValueChange={(v) => changeRole(m.id, v)}
+                              >
                                 <SelectTrigger
-                                  className="h-9 w-32"
+                                  className="h-9 w-40"
                                   aria-label={`Role for ${m.profile?.email ?? m.user_id}`}
                                 >
                                   <SelectValue />
@@ -423,6 +437,11 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
                                   <SelectItem value="admin">Admin</SelectItem>
                                   <SelectItem value="staff">Staff</SelectItem>
                                   <SelectItem value="viewer">Viewer</SelectItem>
+                                  {customRoles.map((r) => (
+                                    <SelectItem key={r.id} value={`custom:${r.id}`}>
+                                      {r.name}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             )}
@@ -528,9 +547,11 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
+                      {["admin", "staff", "viewer"].map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -658,6 +679,14 @@ export function TeamPage({ embedded = false }: { embedded?: boolean }) {
           <RoleAccessPanel
             workspaceId={activeWorkspace?.id}
             onlyModule={embedded ? "crm" : undefined}
+          />
+        </TabsContent>
+
+        <TabsContent value="custom" className="pt-4">
+          <CustomRolesPanel
+            workspaceId={activeWorkspace?.id}
+            onlyModule={embedded ? "crm" : undefined}
+            onChanged={() => void load()}
           />
         </TabsContent>
       </Tabs>

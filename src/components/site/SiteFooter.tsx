@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Mail, Phone, MapPin } from "lucide-react";
 
 import { Logo } from "./Logo";
+import { ContactItems } from "./ContactItems";
 import { BRAND, INDUSTRIES, PRODUCTS } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -18,20 +18,10 @@ export function SiteFooter() {
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-primary-foreground/65">
               {t("brand.promise")}
             </p>
-            <ul className="mt-6 space-y-3 text-sm text-primary-foreground/65">
-              <li className="flex gap-3">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                <span>{BRAND.address}</span>
-              </li>
-              <li className="flex gap-3">
-                <Phone className="h-4 w-4 shrink-0 text-gold" />
-                <span>{BRAND.phone}</span>
-              </li>
-              <li className="flex gap-3">
-                <Mail className="h-4 w-4 shrink-0 text-gold" />
-                <span>{BRAND.email}</span>
-              </li>
-            </ul>
+            <ContactItems
+              className="mt-6 space-y-3 text-sm text-primary-foreground/65"
+              iconClassName="mt-0.5 h-4 w-4 shrink-0 text-gold"
+            />
           </div>
 
           <FooterColumn title={t("footer.products")}>

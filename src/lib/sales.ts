@@ -136,7 +136,7 @@ export const SLS_ENTITIES: SlsEntity[] = [
     en: "AR Invoices",
     id_: "Faktur Piutang",
     prefix: "ARI",
-    showWarehouse: false,
+    showWarehouse: true,
     showDueDate: true,
     showBank: true,
     statuses: ["draft", "invoiced", "partial", "paid", "closed", "cancelled"],

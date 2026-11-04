@@ -1,0 +1,138 @@
+-- BS New 16 · Production M5 (mutu): spesifikasi QC, parameter, inspeksi, hasil (lulus/gagal dihitung server), deviasi/CAPA,
+-- tantangan tanda tangan elektronik. Tanpa trigger: hasil/jejak hanya di-INSERT; guard di src/lib/production-quality.server.ts.
+-- Catatan: bom_version_id/order_id adalah kolom polos (tabel M3/M6 milik tahap lain, tanpa FK lintas-tahap). Idempoten.
+
+CREATE TABLE IF NOT EXISTS mfg_qc_specs (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  item_id CHAR(36) NOT NULL,
+  bom_version_id CHAR(36) NULL,
+  stage VARCHAR(12) NOT NULL,
+  code VARCHAR(60) NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by CHAR(36) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mfg_qc_specs_code (workspace_id, code),
+  KEY idx_mfg_qc_specs_item (workspace_id, item_id),
+  CONSTRAINT ck_mfg_qc_specs_stage CHECK (stage IN ('incoming','in_process','final')),
+  CONSTRAINT fk_mfg_qc_specs_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
+  CONSTRAINT fk_mfg_qc_specs_item FOREIGN KEY (item_id) REFERENCES md_items (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfg_qc_spec_params (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  spec_id CHAR(36) NOT NULL,
+  sequence INT NOT NULL DEFAULT 1,
+  param VARCHAR(120) NOT NULL,
+  method VARCHAR(200) NULL,
+  unit VARCHAR(40) NULL,
+  min_value DECIMAL(18,6) NULL,
+  max_value DECIMAL(18,6) NULL,
+  is_critical TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  KEY idx_mfg_qc_params_spec (workspace_id, spec_id, sequence),
+  CONSTRAINT ck_mfg_qc_params_bounds CHECK (min_value IS NOT NULL OR max_value IS NOT NULL),
+  CONSTRAINT ck_mfg_qc_params_order CHECK (min_value IS NULL OR max_value IS NULL OR max_value >= min_value),
+  CONSTRAINT fk_mfg_qc_params_spec FOREIGN KEY (spec_id) REFERENCES mfg_qc_specs (id),
+  CONSTRAINT fk_mfg_qc_params_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfg_qc_inspections (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  lot_id CHAR(36) NULL,
+  order_id CHAR(36) NULL,
+  spec_id CHAR(36) NOT NULL,
+  stage VARCHAR(12) NOT NULL,
+  sample_id VARCHAR(120) NOT NULL,
+  status VARCHAR(12) NOT NULL DEFAULT 'pending',
+  inspector_id CHAR(36) NULL,
+  signed_at DATETIME(6) NULL,
+  idempotency_key CHAR(36) NOT NULL,
+  created_by CHAR(36) NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mfg_qc_ins_key (workspace_id, idempotency_key),
+  KEY idx_mfg_qc_ins_lot (workspace_id, lot_id, created_at),
+  KEY idx_mfg_qc_ins_order (workspace_id, order_id, created_at),
+  CONSTRAINT ck_mfg_qc_ins_stage CHECK (stage IN ('incoming','in_process','final')),
+  CONSTRAINT ck_mfg_qc_ins_status CHECK (status IN ('pending','passed','failed','conditional')),
+  CONSTRAINT ck_mfg_qc_ins_subject CHECK (lot_id IS NOT NULL OR order_id IS NOT NULL),
+  CONSTRAINT fk_mfg_qc_ins_lot FOREIGN KEY (lot_id) REFERENCES mfg_lots (id),
+  CONSTRAINT fk_mfg_qc_ins_spec FOREIGN KEY (spec_id) REFERENCES mfg_qc_specs (id),
+  CONSTRAINT fk_mfg_qc_ins_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfg_qc_results (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  inspection_id CHAR(36) NOT NULL,
+  param_id CHAR(36) NOT NULL,
+  value DECIMAL(18,6) NOT NULL,
+  unit VARCHAR(40) NULL,
+  pass TINYINT(1) NOT NULL,
+  method_note VARCHAR(500) NULL,
+  instrument_id VARCHAR(120) NULL,
+  created_by CHAR(36) NOT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mfg_qc_results (workspace_id, inspection_id, param_id),
+  CONSTRAINT fk_mfg_qc_res_ins FOREIGN KEY (inspection_id) REFERENCES mfg_qc_inspections (id),
+  CONSTRAINT fk_mfg_qc_res_param FOREIGN KEY (param_id) REFERENCES mfg_qc_spec_params (id),
+  CONSTRAINT fk_mfg_qc_res_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfg_deviations (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  deviation_no VARCHAR(160) NOT NULL,
+  source VARCHAR(12) NOT NULL,
+  lot_id CHAR(36) NULL,
+  order_id CHAR(36) NULL,
+  inspection_id CHAR(36) NULL,
+  description TEXT NOT NULL,
+  impact TEXT NULL,
+  root_cause TEXT NULL,
+  capa TEXT NULL,
+  status VARCHAR(14) NOT NULL DEFAULT 'open',
+  closed_by CHAR(36) NULL,
+  closed_at DATETIME(6) NULL,
+  created_by CHAR(36) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_mfg_dev_no (workspace_id, deviation_no),
+  KEY idx_mfg_dev_status (workspace_id, status, created_at),
+  KEY idx_mfg_dev_order (workspace_id, order_id),
+  CONSTRAINT ck_mfg_dev_source CHECK (source IN ('qc_failure','yield','manual','override')),
+  CONSTRAINT ck_mfg_dev_status CHECK (status IN ('open','investigating','closed')),
+  CONSTRAINT ck_mfg_dev_closed CHECK (status <> 'closed' OR (closed_by IS NOT NULL AND closed_at IS NOT NULL AND CHAR_LENGTH(TRIM(COALESCE(root_cause,''))) > 0 AND CHAR_LENGTH(TRIM(COALESCE(capa,''))) > 0)),
+  CONSTRAINT fk_mfg_dev_lot FOREIGN KEY (lot_id) REFERENCES mfg_lots (id),
+  CONSTRAINT fk_mfg_dev_ins FOREIGN KEY (inspection_id) REFERENCES mfg_qc_inspections (id),
+  CONSTRAINT fk_mfg_dev_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS mfg_esign_challenges (
+  id CHAR(36) NOT NULL DEFAULT (UUID()),
+  workspace_id CHAR(36) NOT NULL,
+  entity_table VARCHAR(30) NOT NULL,
+  entity_id CHAR(36) NOT NULL,
+  action VARCHAR(60) NOT NULL,
+  actor CHAR(36) NOT NULL,
+  code_hash VARCHAR(64) NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  expires_at DATETIME(6) NOT NULL,
+  verified_at DATETIME(6) NULL,
+  consumed_at DATETIME(6) NULL,
+  PRIMARY KEY (id),
+  KEY idx_mfg_esign_actor (actor, created_at),
+  CONSTRAINT ck_mfg_esign_table CHECK (entity_table IN ('mfg_lots','mfg_orders','mfg_batch_steps','mfg_deviations')),
+  CONSTRAINT fk_mfg_esign_ws FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

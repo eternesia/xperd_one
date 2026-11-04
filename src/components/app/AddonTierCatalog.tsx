@@ -25,6 +25,7 @@ import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
 import { adminSaveAddonTier, listAddonTiers } from "@/lib/addon-catalog.functions";
 import { validateTierPrice } from "@/lib/entitlements";
 import { QALLING_FEATURE_LABELS } from "@/lib/qalling-catalog";
+import { PRODUCTION_FEATURE_LABELS } from "@/lib/production";
 import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
 
 const empty = {
@@ -39,7 +40,7 @@ const empty = {
   sort_order: 0,
 };
 
-export function AddonTierCatalog({ addons }: { addons: { id: string; name: string }[] }) {
+export function AddonTierCatalog({ addons }: { addons: { id: string; name: string; module_id?: string | null }[] }) {
   const qc = useQueryClient();
   const [form, setForm] = useState(empty);
   const [open, setOpen] = useState(false);
@@ -237,7 +238,11 @@ export function AddonTierCatalog({ addons }: { addons: { id: string; name: strin
               <div className="sm:col-span-2">
                 <h3 className="mb-3 text-sm font-medium">Menu & fitur paket</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {Object.entries(QALLING_FEATURE_LABELS).map(([key, label]) => (
+                  {Object.entries(
+                    addons.find((x) => x.id === form.addon_id)?.module_id === "manufacturing"
+                      ? PRODUCTION_FEATURE_LABELS
+                      : QALLING_FEATURE_LABELS,
+                  ).map(([key, label]) => (
                     <label key={key} className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={featureValues[key] === true}

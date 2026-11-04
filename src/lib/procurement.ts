@@ -150,7 +150,7 @@ export const PRC_ENTITIES: PrcEntity[] = [
     en: "AP Invoices",
     id_: "Faktur Hutang",
     prefix: "API",
-    showWarehouse: false,
+    showWarehouse: true,
     showDueDate: true,
     showBank: true,
     statuses: ["draft", "invoiced", "partial", "paid", "closed", "cancelled"],

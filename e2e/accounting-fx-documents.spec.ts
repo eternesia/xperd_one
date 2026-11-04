@@ -74,6 +74,7 @@ async function cleanup() {
   }
   await conn.execute("DELETE FROM sls_documents WHERE workspace_id = ? AND doc_number LIKE 'TMPFX%'", [ws]);
   await conn.execute("DELETE FROM md_exchange_rates WHERE workspace_id = ? AND code LIKE 'FXTST-%'", [ws]);
+  await conn.execute("DELETE FROM md_items WHERE workspace_id = ? AND code = 'FXTST-SVC'", [ws]);
 }
 
 /**
@@ -121,6 +122,11 @@ test("FX: dokumen valas → jurnal mata uang dasar + selisih kurs realisasi", as
   ws = await resolveWorkspaceId(page);
   await cleanup();
 
+  // Faktur AR langsung dengan barang persediaan kini memposting stok/HPP (BS New 16) → uji ini memakai item JASA agar tidak butuh gudang/stok.
+  await conn.execute(
+    "INSERT INTO md_items (id, workspace_id, code, name, item_type, is_stocked, sell_price, is_active) VALUES (UUID(), ?, 'FXTST-SVC', 'FX Test Service', 'service', 0, 100, 1)",
+    [ws],
+  );
   await conn.execute(
     `INSERT INTO md_exchange_rates (id, workspace_id, code, name, currency_code, rate_date, rate_type, rate, source, is_active)
      VALUES (UUID(), ?, 'FXTST-DOC', 'Kurs uji dokumen (e2e)', 'USD', '2000-09-01', 'transaction', ?, 'e2e', 1)`,
@@ -139,7 +145,7 @@ test("FX: dokumen valas → jurnal mata uang dasar + selisih kurs realisasi", as
   await dialog.getByTestId("doc-currency").selectOption("USD");
   // Kurs terisi otomatis dari Master Kurs (mata uang dasar per 1 USD).
   await expect(dialog.getByTestId("doc-exchange-rate")).toHaveValue(String(RATE_INVOICE), { timeout: 30_000 });
-  await pick(page, dialog, "Search item");
+  await pick(page, dialog, "Search item", /FX Test Service/);
 
   const lineInputs = dialog.locator("table tbody tr").first().locator('input[type="number"]');
   await lineInputs.nth(0).fill("1");

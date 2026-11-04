@@ -1,5 +1,6 @@
+import { ContactItems } from "@/components/site/ContactItems";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeading } from "@/components/site/Section";
@@ -47,10 +48,22 @@ const COPY = {
     journeyEyebrow: "Journey",
     journeyTitle: "How our product has grown",
     milestones: [
-      { year: "Foundation", text: "Built a stable accounting and operational core for the Indonesian market." },
-      { year: "XPERD One", text: "Launched a self-service cloud ERP for SMEs and growing businesses." },
-      { year: "XPERD Business", text: "Expanded into multi-entity, workflow, and digital ecosystem integration." },
-      { year: "XPERD Enterprise", text: "Delivered consolidation, governance, and AI capabilities for corporations." },
+      {
+        year: "Foundation",
+        text: "Built a stable accounting and operational core for the Indonesian market.",
+      },
+      {
+        year: "XPERD One",
+        text: "Launched a self-service cloud ERP for SMEs and growing businesses.",
+      },
+      {
+        year: "XPERD Business",
+        text: "Expanded into multi-entity, workflow, and digital ecosystem integration.",
+      },
+      {
+        year: "XPERD Enterprise",
+        text: "Delivered consolidation, governance, and AI capabilities for corporations.",
+      },
     ],
     contactEyebrow: "Contact",
     contactTitle: "Let's talk",
@@ -71,17 +84,32 @@ const COPY = {
     valuesTitle: "Nilai yang kami pegang",
     values: [
       { title: "Clarity", desc: "Sistem yang rumit tidak boleh terasa rumit bagi penggunanya." },
-      { title: "Craft", desc: "Setiap detail produk dikerjakan dengan standar rekayasa yang tinggi." },
+      {
+        title: "Craft",
+        desc: "Setiap detail produk dikerjakan dengan standar rekayasa yang tinggi.",
+      },
       { title: "Trust", desc: "Data pelanggan adalah amanah; keamanan bukan fitur tambahan." },
       { title: "Partnership", desc: "Kami mengukur keberhasilan dari hasil bisnis pelanggan." },
     ],
     journeyEyebrow: "Perjalanan",
     journeyTitle: "Bagaimana produk kami tumbuh",
     milestones: [
-      { year: "Fondasi", text: "Membangun inti akuntansi dan operasional yang stabil untuk pasar Indonesia." },
-      { year: "XPERD One", text: "Meluncurkan cloud ERP self service untuk UMKM dan bisnis bertumbuh." },
-      { year: "XPERD Business", text: "Memperluas ke multi entitas, workflow, dan integrasi ekosistem digital." },
-      { year: "XPERD Enterprise", text: "Menghadirkan konsolidasi, tata kelola, dan kapabilitas AI untuk korporasi." },
+      {
+        year: "Fondasi",
+        text: "Membangun inti akuntansi dan operasional yang stabil untuk pasar Indonesia.",
+      },
+      {
+        year: "XPERD One",
+        text: "Meluncurkan cloud ERP self service untuk UMKM dan bisnis bertumbuh.",
+      },
+      {
+        year: "XPERD Business",
+        text: "Memperluas ke multi entitas, workflow, dan integrasi ekosistem digital.",
+      },
+      {
+        year: "XPERD Enterprise",
+        text: "Menghadirkan konsolidasi, tata kelola, dan kapabilitas AI untuk korporasi.",
+      },
     ],
     contactEyebrow: "Kontak",
     contactTitle: "Mari berbicara",
@@ -147,20 +175,7 @@ function AboutPage() {
         <div className="grid gap-10 md:grid-cols-[1.2fr_1fr] md:items-center">
           <div>
             <SectionHeading onDark eyebrow={c.contactEyebrow} title={c.contactTitle} />
-            <ul className="mt-8 space-y-4 text-sm text-primary-foreground/75">
-              <li className="flex gap-3">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                {BRAND.address}
-              </li>
-              <li className="flex gap-3">
-                <Mail className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                {BRAND.email}
-              </li>
-              <li className="flex gap-3">
-                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
-                {BRAND.phone}
-              </li>
-            </ul>
+            <ContactItems className="mt-8 space-y-4 text-sm text-primary-foreground/75" />
           </div>
           <div className="flex flex-wrap gap-3 md:justify-end">
             <Button asChild variant="gold" size="xl">

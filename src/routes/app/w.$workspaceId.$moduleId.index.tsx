@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CrmDashboardView } from "@/components/app/CrmInsights";
 import { HrDashboard } from "@/components/app/HrDashboard";
 import { ModuleDashboard } from "@/components/app/ModuleDashboard";
+import { ProductionDashboard } from "@/components/app/ProductionDashboard";
 import { OmnixDashboard } from "@/components/app/OmnixViews";
 import { XproDashboard } from "@/components/app/XproViews";
 import { findModule } from "@/lib/modules";
@@ -23,6 +24,7 @@ function ModuleOverview() {
   // submodul `crm/dashboard` (live menampilkan dasbor nyata, bukan placeholder).
   if (moduleId === "crm") return <CrmDashboardView workspaceId={workspaceId} />;
   // Ronde 34: dasbor Omni-channel (live: "Omni-channel Dashboard").
+  if (moduleId === "manufacturing") return <ProductionDashboard workspaceId={workspaceId} />;
   if (moduleId === "omnix") return <OmnixDashboard workspaceId={workspaceId} />;
   return <ModuleDashboard mod={mod} workspaceId={workspaceId} />;
 }

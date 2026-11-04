@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { validateScheduleTime } from "@/lib/post-delivery-rules";
+import {
+  COMMENT_LIMITS,
+  supportsFirstComment,
+  supportsVideoCover,
+  validateEnhancements,
+  type FirstCommentOutcome,
+} from "@/lib/post-enhancements";
 import { GOLDEN_HOURS, nextGoldenSlot, toLocalInputValue } from "@/lib/golden-hours";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -37,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminField, AdminSelect } from "@/components/app/admin-ui";
 import { MediaPickerDialog, MediaThumb, useCrmMedia } from "@/components/app/CrmMedia";
+import { SocialIcon } from "@/components/qalling/SocialIcon";
 import {
   PaginationBar,
   SearchInput,
@@ -96,6 +104,12 @@ const normPost = (r: any): Post & { media_paths: string[] } => ({
   last_error: (r.last_error as string | null) ?? null,
   source: String(r.source ?? "manual"),
   permalinks: jsonArr(r.permalinks),
+  first_comment: (r.first_comment as string | null) ?? null,
+  cover_path: (r.cover_path as string | null) ?? null,
+  results: jsonArr(r.results) as unknown as {
+    account_id: string;
+    first_comment?: FirstCommentOutcome;
+  }[],
 });
 
 type Account = {
@@ -108,6 +122,9 @@ type Account = {
   source?: string;
 };
 type Post = {
+  first_comment?: string | null;
+  cover_path?: string | null;
+  results?: { account_id: string; first_comment?: FirstCommentOutcome }[];
   id: string;
   title: string;
   caption: string;
@@ -158,14 +175,20 @@ export function useMetaSettings(workspaceId: string) {
 }
 
 const TEBAR_PLATFORMS = [
-  { id: "instagram", label: "Instagram" },
-  { id: "facebook", label: "Facebook" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "threads", label: "Threads" },
-  { id: "linkedin", label: "LinkedIn" },
-  { id: "x", label: "X" },
-  { id: "telegram", label: "Telegram" },
-  { id: "discord", label: "Discord" },
+  {
+    id: "instagram",
+    label: "Instagram",
+    hintId: "Business / Creator",
+    hintEn: "Business / Creator",
+  },
+  { id: "facebook", label: "Facebook", hintId: "Halaman", hintEn: "Page" },
+  { id: "tiktok", label: "TikTok", hintId: "Profil", hintEn: "Profile" },
+  { id: "youtube", label: "YouTube", hintId: "Channel", hintEn: "Channel" },
+  { id: "threads", label: "Threads", hintId: "Profil", hintEn: "Profile" },
+  { id: "linkedin", label: "LinkedIn", hintId: "Profil pribadi", hintEn: "Personal profile" },
+  { id: "x", label: "X", hintId: "Profil", hintEn: "Profile" },
+  { id: "telegram", label: "Telegram", hintId: "Channel & grup", hintEn: "Channel & group" },
+  { id: "discord", label: "Discord", hintId: "Channel server", hintEn: "Server channel" },
 ];
 
 function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: number }) {
@@ -504,15 +527,23 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {TEBAR_PLATFORMS.map((p) => (
-                <Button
+                <button
                   key={p.id}
-                  variant="outline"
-                  className="h-12"
+                  type="button"
                   disabled={connect.isPending}
                   onClick={() => connect.mutate(p.id)}
+                  className="group flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 disabled:opacity-50"
                 >
-                  {p.label}
-                </Button>
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-background">
+                    <SocialIcon platform={p.id} className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{p.label}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {id ? p.hintId : p.hintEn}
+                    </span>
+                  </span>
+                </button>
               ))}
             </div>
           )}
@@ -609,6 +640,9 @@ const STATUS_LABEL = (s: string, id: boolean) =>
 const NEEDS_MEDIA = ["instagram", "tiktok", "youtube", "pinterest"];
 
 type Draft = {
+  first_comment: string;
+  cover_path: string | null;
+  results?: { account_id: string; first_comment?: FirstCommentOutcome }[];
   id?: string;
   title: string;
   caption: string;
@@ -676,6 +710,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
   const [anchor, setAnchor] = useState(() => new Date());
   const [editing, setEditing] = useState<Draft | null>(null);
   const [picker, setPicker] = useState(false);
+  const [coverPicker, setCoverPicker] = useState(false);
   const [statusTab, setStatusTab] = useState("all");
   const [term, setTerm] = useState("");
 
@@ -770,6 +805,17 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
     if (!d.caption.trim() && !d.media_paths.length && !d.media_url.trim())
       throw new Error(id ? "Isi caption atau pilih media" : "Add a caption or media");
     if (status === "draft") return;
+    const singleVideo =
+      (d.media_paths.length === 1 &&
+        !d.media_url.trim() &&
+        !!mediaUrl.get(d.media_paths[0])?.mime_type?.startsWith("video/")) ||
+      (!d.media_paths.length && /\.(mp4|mov|webm)(?:[?#]|$)/i.test(d.media_url.trim()));
+    validateEnhancements(
+      accounts.filter((a) => d.account_ids.includes(a.id)),
+      d.first_comment,
+      d.cover_path,
+      !!singleVideo,
+    );
     if (!d.account_ids.length)
       throw new Error(id ? "Pilih minimal satu akun" : "Select at least one account");
     if (!d.when) throw new Error(id ? "Jadwal wajib diisi" : "Schedule is required");
@@ -795,6 +841,8 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       caption: d.caption,
       media_url: d.media_url.trim() || null,
       media_paths: JSON.stringify(d.media_paths),
+      first_comment: d.first_comment.trim() || null,
+      cover_path: d.cover_path,
       account_ids: JSON.stringify(d.account_ids),
       scheduled_at: sqlDateTime(
         status === "scheduled" && !immediate
@@ -890,6 +938,8 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       caption: "",
       media_url: "",
       media_paths: [],
+      first_comment: "",
+      cover_path: null,
       account_ids: accounts.map((a) => a.id),
       status: "scheduled",
       when: toLocalInput(base),
@@ -902,6 +952,9 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       caption: p.caption ?? "",
       media_url: p.media_url ?? "",
       media_paths: p.media_paths ?? [],
+      first_comment: p.first_comment ?? "",
+      cover_path: p.cover_path ?? null,
+      results: p.results,
       account_ids: p.account_ids ?? [],
       when: toLocalInput(new Date(p.scheduled_at)),
       status: p.status,
@@ -949,6 +1002,15 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
   const previewMedia = editing
     ? firstThumb({ media_paths: editing.media_paths, media_url: editing.media_url || null })
     : null;
+  const selectedAccounts = accounts.filter((a) => editing?.account_ids.includes(a.id));
+  const commentAccounts = selectedAccounts.filter(supportsFirstComment);
+  const coverAccounts = selectedAccounts.filter(supportsVideoCover);
+  const commentLimit = commentAccounts.length
+    ? Math.min(...commentAccounts.map((a) => COMMENT_LIMITS[a.platform]))
+    : 8000;
+  const coverMedia = editing?.cover_path ? mediaUrl.get(editing.cover_path) : undefined;
+  const platformNames = (list: Account[]) =>
+    [...new Set(list.map((a) => platformLabel(a.platform)))].join(" · ");
 
   return (
     <div className="space-y-6">
@@ -1335,6 +1397,63 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                     }
                   />
                 </AdminField>
+                {(commentAccounts.length > 0 || editing.first_comment) && (
+                  <AdminField label={id ? "Komentar pertama otomatis" : "Automatic first comment"}>
+                    <Textarea
+                      rows={3}
+                      value={editing.first_comment}
+                      maxLength={commentLimit}
+                      onChange={(e) => setEditing({ ...editing, first_comment: e.target.value })}
+                      placeholder={
+                        id
+                          ? "Hashtag, tautan, atau pesan tambahan…"
+                          : "Hashtags, links or an extra message…"
+                      }
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {platformNames(commentAccounts)} · {editing.first_comment.length}/
+                      {commentLimit}
+                    </p>
+                  </AdminField>
+                )}
+                {(coverAccounts.length > 0 || editing.cover_path) && (
+                  <AdminField label={id ? "Cover video / thumbnail" : "Video cover / thumbnail"}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {coverMedia && (
+                        <MediaThumb m={coverMedia} className="h-20 w-20 rounded-md object-cover" />
+                      )}
+                      <Button variant="outline" onClick={() => setCoverPicker(true)}>
+                        <ImageIcon className="h-4 w-4" />
+                        {id ? "Pilih cover" : "Choose cover"}
+                      </Button>
+                      {editing.cover_path && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={id ? "Hapus cover" : "Remove cover"}
+                          onClick={() => setEditing({ ...editing, cover_path: null })}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {platformNames(coverAccounts)} · JPG/PNG ·{" "}
+                      {id
+                        ? "Video tunggal; TikTok Business, YouTube non-Shorts terverifikasi"
+                        : "Single video; TikTok Business, verified non-Shorts YouTube"}
+                    </p>
+                  </AdminField>
+                )}
+                {editing.results
+                  ?.filter((r) => r.first_comment)
+                  .map((r) => (
+                    <p key={r.account_id} className="text-xs text-muted-foreground">
+                      {accName(r.account_id)} · {id ? "Komentar pertama" : "First comment"}:{" "}
+                      {r.first_comment?.status}
+                      {r.first_comment?.error_message ? ` — ${r.first_comment.error_message}` : ""}
+                    </p>
+                  ))}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <AdminField label={id ? "Jadwal posting" : "Publish at"}>
                     <Input
@@ -1396,6 +1515,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                     (previewMedia.mime_type ?? "").startsWith("video/") ? (
                       <video
                         src={previewMedia.url}
+                        poster={coverMedia?.url ?? undefined}
                         muted
                         controls
                         className="aspect-square w-full bg-secondary object-cover"
@@ -1474,6 +1594,17 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
         </DialogContent>
       </Dialog>
 
+      {editing && (
+        <MediaPickerDialog
+          workspaceId={workspaceId}
+          open={coverPicker}
+          onOpenChange={setCoverPicker}
+          selected={editing.cover_path ? [editing.cover_path] : []}
+          imagesOnly
+          maxSelection={1}
+          onConfirm={(paths) => setEditing((e) => (e ? { ...e, cover_path: paths[0] ?? null } : e))}
+        />
+      )}
       {editing && (
         <MediaPickerDialog
           workspaceId={workspaceId}

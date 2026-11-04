@@ -35,6 +35,9 @@ export async function getPool(): Promise<MysqlPool> {
       timezone: "Z", // return DATETIME values as UTC
       dateStrings: true, // DATE/DATETIME/TIMESTAMP -> strings ("YYYY-MM-DD HH:MM:SS")
       namedPlaceholders: false,
+      // Cache pernyataan siap-pakai per koneksi dibatasi (bawaan mysql2 = 16000 per koneksi): SQL dinamis di modul
+      // Production/ERP bisa menghabiskan `max_prepared_stmt_count` server (16382) → semua query gagal.
+      maxPreparedStatements: envNumber("MYSQL_MAX_PREPARED", 200),
     });
   }
   return _pool;

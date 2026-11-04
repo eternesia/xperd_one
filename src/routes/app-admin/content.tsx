@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -28,6 +28,14 @@ import {
 } from "@/components/ui/table";
 import { adminDelete, adminList, adminSave } from "@/lib/platform.functions";
 import { TablePager, TableSearch, usePaged, rowText } from "@/components/app/admin-table";
+import { BRAND } from "@/lib/xperd";
+import {
+  CONTACT_KEYS,
+  getWebsiteContacts,
+  saveXperdContact,
+  type WebsiteSite,
+  type XperdContactValues,
+} from "@/lib/xperd-contact.functions";
 
 export const Route = createFileRoute("/app-admin/content")({
   head: () => ({
@@ -143,7 +151,9 @@ function ContentPage() {
   });
 
   const [site, setSite] = useState<"xperd" | "qalling">("xperd");
-  const siteItems = items.filter((c) => (site === "qalling") === c.section.startsWith("qalling."));
+  const siteItems = items.filter(
+    (c) => c.section !== "contact" && (site === "qalling") === c.section.startsWith("qalling."),
+  );
   const pg = usePaged(siteItems, rowText);
 
   return (
@@ -169,6 +179,9 @@ function ContentPage() {
           <Plus /> New entry
         </Button>
       </header>
+
+      <ContactForm site="xperd" title="Kontak website XPERD" idPrefix="contact" />
+      <ContactForm site="qalling" title="Kontak website Qalling" idPrefix="qcontact" />
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
@@ -548,3 +561,79 @@ const QALLING_PRESET = [
     body_en: "Create ideas and post drafts straight from AI chat via MCP.",
   },
 ];
+
+const QALLING_PLACEHOLDERS: Record<string, string> = {
+  email: "halo@qalling.id",
+  whatsapp: "6281200000000",
+  hours: "Senin–Jumat, 09.00–17.00 WIB",
+  website: "https://",
+};
+
+const CONTACT_FIELDS: {
+  key: (typeof CONTACT_KEYS)[number];
+  label: string;
+  type?: string;
+  placeholder: string;
+}[] = [
+  { key: "email", label: "Email", type: "email", placeholder: BRAND.email },
+  { key: "phone", label: "Telepon / HP", placeholder: BRAND.phone },
+  { key: "whatsapp", label: "WhatsApp", placeholder: BRAND.whatsapp },
+  { key: "address", label: "Alamat", placeholder: BRAND.address },
+  { key: "hours", label: "Jam layanan", placeholder: "Senin–Jumat, 09.00–17.00 WIB" },
+  { key: "website", label: "Website lain", type: "url", placeholder: "https://" },
+];
+
+/** Kontak yang tampil di footer, halaman Kontak, dan Tentang tiap situs; kosong = memakai nilai bawaan. */
+function ContactForm({
+  site,
+  title,
+  idPrefix,
+}: {
+  site: WebsiteSite;
+  title: string;
+  idPrefix: string;
+}) {
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["admin-website-contact", site],
+    queryFn: () => getWebsiteContacts({ data: { site } }),
+  });
+  const [f, setF] = useState<XperdContactValues | null>(null);
+  useEffect(() => {
+    if (data && !f) setF(data);
+  }, [data, f]);
+  const save = useMutation({
+    mutationFn: async () => {
+      if (f) await saveXperdContact({ data: { site, values: f } });
+    },
+    onSuccess: () => {
+      toast.success("Kontak website disimpan");
+      void qc.invalidateQueries({ queryKey: ["admin-website-contact", site] });
+      void qc.invalidateQueries({ queryKey: ["site-content"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  if (!f) return null;
+  return (
+    <section className="space-y-4 rounded-lg border border-border bg-card p-5">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {CONTACT_FIELDS.map((c) => (
+          <div key={c.key} className="space-y-1">
+            <Label htmlFor={`${idPrefix}-${c.key}`}>{c.label}</Label>
+            <Input
+              id={`${idPrefix}-${c.key}`}
+              type={c.type}
+              placeholder={site === "qalling" ? (QALLING_PLACEHOLDERS[c.key] ?? "") : c.placeholder}
+              value={f[c.key] ?? ""}
+              onChange={(e) => setF({ ...f, [c.key]: e.target.value })}
+            />
+          </div>
+        ))}
+      </div>
+      <Button disabled={save.isPending} onClick={() => save.mutate()}>
+        Simpan kontak
+      </Button>
+    </section>
+  );
+}

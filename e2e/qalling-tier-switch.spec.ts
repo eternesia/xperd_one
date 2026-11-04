@@ -188,11 +188,12 @@ test("GANTI PAKET: trial mandiri (Rp0) + Super Admin → Users", async ({ page }
   );
   const email = String((await q("SELECT email FROM profiles WHERE id = ?", [userId]))[0].email);
   await page.goto("/app-admin/users");
-  await expect(page.getByRole("columnheader", { name: "Terdaftar" })).toBeVisible({
+  await expect(page.getByRole("columnheader", { name: "Jumlah workspace" })).toBeVisible({
     timeout: 60_000,
   });
-  await page.getByPlaceholder("Cari nama, email, workspace…").fill(email);
-  const row = page.getByRole("row").filter({ hasText: email }).first();
+  await page.getByPlaceholder("Cari tenant, email, workspace…").fill(email);
+  await page.getByRole("button", { name: "Detail" }).first().click();
+  const row = page.getByRole("dialog").getByRole("row").filter({ hasText: email }).first();
   await row.getByRole("button", { name: "Paket Qalling" }).click();
   const d2 = page.getByRole("dialog");
   await expect(d2.getByText(/Paket saat ini:/)).toBeVisible({ timeout: 30_000 });

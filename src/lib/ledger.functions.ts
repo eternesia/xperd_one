@@ -271,6 +271,11 @@ export const insertInvMovements = createServerFn({ method: "POST" })
       for (const [k, v] of Object.entries(r)) {
         if (INV_ALLOWED.has(k)) payload[k] = v;
       }
+      // Production (BS New 16): penerimaan barang item berprofil produksi → lot karantina + pergerakan ber-lot (satu transaksi).
+      if (payload.ref_type === "goods_receipt") {
+        const { attachGrnLot } = await import("./production-lots.server");
+        if (await attachGrnLot(data.workspaceId, context.userId, payload)) continue;
+      }
       const cols = Object.keys(payload);
       await execute(
         `INSERT INTO inv_movements (\`${cols.join("`,`")}\`) VALUES (${cols.map(() => "?").join(", ")})`,
@@ -333,28 +338,19 @@ export const fetchMovingAverageCosts = createServerFn({ method: "POST" })
   .validator((i: unknown) => i as { workspaceId: string; codes: string[]; upToDate?: string })
   .handler(async ({ data, context }) => {
     await withMember(data.workspaceId, context.userId);
-    const { execute } = await import("@/integrations/mysql/pool");
     const codes = [...new Set((data.codes ?? []).filter(Boolean))];
     if (!codes.length) return [] as { item_code: string; unit_cost: number }[];
-    const ph = codes.map(() => "?").join(", ");
-    const params: unknown[] = [data.workspaceId, ...codes];
-    let sql = `SELECT item_code,
-                      SUM(CASE WHEN value > 0 THEN value ELSE qty * unit_cost END) AS total_value,
-                      SUM(qty) AS total_qty
-                 FROM inv_movements
-                WHERE workspace_id = ? AND qty > 0 AND item_code IN (${ph})`;
-    if (data.upToDate) {
-      sql += " AND movement_date <= ?";
-      params.push(data.upToDate);
+    // BS New 16: HPP rata-rata AKTIF (memutar ulang mutasi kronologis, pembalikan bernilai asli), bukan rata-rata seumur hidup.
+    const { erpAverageCost } = await import("@/lib/erp-posting.server");
+    const upTo = data.upToDate ?? "9999-12-31";
+    const out: { item_code: string; unit_cost: number }[] = [];
+    for (const code of codes) {
+      const { execute } = await import("@/integrations/mysql/pool");
+      const has = (await execute("SELECT 1 AS x FROM inv_movements WHERE workspace_id = ? AND item_code = ? AND qty > 0 LIMIT 1", [data.workspaceId, code])) as unknown[];
+      if (!has.length) continue; // belum pernah diterima → pemanggil jatuh ke harga pokok master
+      out.push({ item_code: code, unit_cost: await erpAverageCost(null, data.workspaceId, code, upTo) });
     }
-    sql += " GROUP BY item_code";
-    const rows = (await execute(sql, params)) as { item_code: string; total_value: number; total_qty: number }[];
-    return rows
-      .filter((r) => Number(r.total_qty) > 0.000001)
-      .map((r) => ({
-        item_code: r.item_code,
-        unit_cost: Number(r.total_value) / Number(r.total_qty),
-      }));
+    return out;
   });
 
 export const fetchFaAssets = createServerFn({ method: "POST" })

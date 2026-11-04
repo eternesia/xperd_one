@@ -26,12 +26,24 @@ export async function assertMediaQuota(
   media: { size_bytes: number; mime_type?: string | null },
   excludeId?: string,
 ) {
-  const lim = await workspaceLimits(workspaceId);
-  if (!lim) return;
   const size = Number(media.size_bytes);
   if (!Number.isFinite(size) || size < 0) throw new Error("Invalid media size");
+  // Batas tier (pesan spesifik paket) dicek dulu, lalu kebijakan unggah Super Admin (berlaku semua paket).
+  await assertTierMediaQuota(workspaceId, size, media.mime_type, excludeId);
+  const { assertMediaPolicy } = await import("./media-policy.server");
+  await assertMediaPolicy({ size_bytes: size, mime_type: media.mime_type });
+}
+
+async function assertTierMediaQuota(
+  workspaceId: string,
+  size: number,
+  mime_type: string | null | undefined,
+  excludeId?: string,
+) {
+  const lim = await workspaceLimits(workspaceId);
+  if (!lim) return;
   const videoCap = num(lim.max_video_mb);
-  if (media.mime_type?.startsWith("video/") && videoCap !== null && size > videoCap * 1_000_000)
+  if (mime_type?.startsWith("video/") && videoCap !== null && size > videoCap * 1_000_000)
     throw new Error("Video exceeds tier limit");
   const gb = num(lim.storage_gb);
   if (gb === null) return;

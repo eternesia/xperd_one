@@ -169,7 +169,9 @@ export const verifySignupOtp = createServerFn({ method: "POST" })
     await execute("UPDATE registration_otps SET consumed_at = NOW(6) WHERE id = ?", [otp.id]);
 
     const { provisionRegistrationCore } = await import("@/lib/provisioning-core.server");
-    const result = await provisionRegistrationCore(data.registrationId, data.password);
+    const result = await provisionRegistrationCore(data.registrationId, data.password, {
+      signupSource: "xperd",
+    });
     try {
       const g = await loadGateway(PLATFORM_SCOPE);
       const reg = await executeOne<{ contact_name: string }>(

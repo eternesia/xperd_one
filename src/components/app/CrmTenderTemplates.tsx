@@ -119,7 +119,7 @@ export async function generateTenderDocx(
   workspace: ReturnType<typeof useApp>["activeWorkspace"],
 ) {
   const response = await fetch(`/api/workspace-files?path=${encodeURIComponent(template.template_path)}`);
-  if (!response.ok) throw new Error("Berkas template tidak dapat dibaca");
+  if (!response.ok) throw new Error("File template tidak dapat dibaca");
   const blob = await response.blob();
   return buildLetterheadedDocx(blob, letterheadProfile(workspace));
 }
@@ -156,7 +156,7 @@ export function TenderTemplates({
   const save = useMutation({
     mutationFn: async () => {
       const existing = templates.find((item) => item.id === form.id);
-      if (!existing && !form.docx) throw new Error(t("A DOCX file is required", "Berkas DOCX wajib dipilih"));
+      if (!existing && !form.docx) throw new Error(t("A DOCX file is required", "File DOCX wajib dipilih"));
       if (form.docx && !form.docx.name.toLowerCase().endsWith(".docx")) {
         throw new Error(t("Template must be a .docx file", "Template harus berformat .docx"));
       }

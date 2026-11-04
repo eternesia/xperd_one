@@ -25,6 +25,7 @@ import { Route as SiteRegisterRouteImport } from './routes/_site/register'
 import { Route as SiteResourcesRouteImport } from './routes/_site/resources'
 import { Route as SiteSolutionsRouteImport } from './routes/_site/solutions'
 import { Route as SiteTechnologyRouteImport } from './routes/_site/technology'
+import { Route as ApiProductionDocumentRouteImport } from './routes/api/production-document'
 import { Route as ApiWorkspaceFilesRouteImport } from './routes/api/workspace-files'
 import { Route as AppAdminIndexRouteImport } from './routes/app-admin/index'
 import { Route as AppAdminAddonsRouteImport } from './routes/app-admin/addons'
@@ -59,12 +60,14 @@ import { Route as QallingKelebihanRouteImport } from './routes/qalling.kelebihan
 import { Route as QallingKontakRouteImport } from './routes/qalling.kontak'
 import { Route as QallingLoginRouteImport } from './routes/qalling.login'
 import { Route as QallingSolusiRouteImport } from './routes/qalling.solusi'
+import { Route as QallingTestimoniRouteImport } from './routes/qalling.testimoni'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport } from './routes/[.well-known]/oauth-protected-resource/mcp'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as ApiPublicCrmMediaRouteImport } from './routes/api/public/crm-media'
 import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
+import { Route as ProductionWorkspaceIdSectionRouteImport } from './routes/production.$workspaceId.$section'
 import { Route as QallingAppIndexRouteImport } from './routes/qalling.app.index'
 import { Route as QallingAppSubmoduleIdRouteImport } from './routes/qalling.app.$submoduleId'
 import { Route as QallingAppAiRouteImport } from './routes/qalling.app.ai'
@@ -78,6 +81,7 @@ import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/pu
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
+import { Route as ApiPublicSiteAssetKeyRouteImport } from './routes/api/public/site-asset/$key'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
 import { Route as ApiPublicWebhooksWalletDokuRouteImport } from './routes/api/public/webhooks/wallet-doku'
 import { Route as ApiPublicWebhooksWalletMidtransRouteImport } from './routes/api/public/webhooks/wallet-midtrans'
@@ -174,6 +178,11 @@ const SiteTechnologyRoute = SiteTechnologyRouteImport.update({
   id: '/technology',
   path: '/technology',
   getParentRoute: () => SiteRoute,
+} as any)
+const ApiProductionDocumentRoute = ApiProductionDocumentRouteImport.update({
+  id: '/api/production-document',
+  path: '/api/production-document',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWorkspaceFilesRoute = ApiWorkspaceFilesRouteImport.update({
   id: '/api/workspace-files',
@@ -345,6 +354,11 @@ const QallingSolusiRoute = QallingSolusiRouteImport.update({
   path: '/qalling/solusi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QallingTestimoniRoute = QallingTestimoniRouteImport.update({
+  id: '/qalling/testimoni',
+  path: '/qalling/testimoni',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char91DotwellKnownChar93OauthProtectedResourceMcpRoute =
   Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport.update({
     id: '/mcp',
@@ -376,6 +390,12 @@ const AppWWorkspaceIdRoute = AppWWorkspaceIdRouteImport.update({
   path: '/w/$workspaceId',
   getParentRoute: () => AppRoute,
 } as any)
+const ProductionWorkspaceIdSectionRoute =
+  ProductionWorkspaceIdSectionRouteImport.update({
+    id: '/production/$workspaceId/$section',
+    path: '/production/$workspaceId/$section',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const QallingAppIndexRoute = QallingAppIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -441,6 +461,11 @@ const ApiPublicMetaCallbackRoute = ApiPublicMetaCallbackRouteImport.update({
 const ApiPublicMetaWebhookRoute = ApiPublicMetaWebhookRouteImport.update({
   id: '/api/public/meta/webhook',
   path: '/api/public/meta/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSiteAssetKeyRoute = ApiPublicSiteAssetKeyRouteImport.update({
+  id: '/api/public/site-asset/$key',
+  path: '/api/public/site-asset/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicWebhooksMidtransRoute =
@@ -544,6 +569,7 @@ export interface FileRoutesByFullPath {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
@@ -575,6 +601,7 @@ export interface FileRoutesByFullPath {
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/testimoni': typeof QallingTestimoniRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
   '/qalling/': typeof QallingIndexRoute
@@ -583,6 +610,7 @@ export interface FileRoutesByFullPath {
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
+  '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
@@ -597,6 +625,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
@@ -626,6 +655,7 @@ export interface FileRoutesByTo {
   '/resources': typeof SiteResourcesRoute
   '/solutions': typeof SiteSolutionsRoute
   '/technology': typeof SiteTechnologyRoute
+  '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
@@ -656,6 +686,7 @@ export interface FileRoutesByTo {
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/testimoni': typeof QallingTestimoniRoute
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
   '/app': typeof AppIndexRoute
@@ -664,6 +695,7 @@ export interface FileRoutesByTo {
   '/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
+  '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
@@ -678,6 +710,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
@@ -710,6 +743,7 @@ export interface FileRoutesById {
   '/_site/resources': typeof SiteResourcesRoute
   '/_site/solutions': typeof SiteSolutionsRoute
   '/_site/technology': typeof SiteTechnologyRoute
+  '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
@@ -741,6 +775,7 @@ export interface FileRoutesById {
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/testimoni': typeof QallingTestimoniRoute
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
@@ -750,6 +785,7 @@ export interface FileRoutesById {
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
+  '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
   '/qalling/app/ai': typeof QallingAppAiRoute
   '/qalling/app/billing': typeof QallingAppBillingRoute
@@ -764,6 +800,7 @@ export interface FileRoutesById {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
   '/api/public/webhooks/wallet-midtrans': typeof ApiPublicWebhooksWalletMidtransRoute
@@ -798,6 +835,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
@@ -829,6 +867,7 @@ export interface FileRouteTypes {
     | '/qalling/kontak'
     | '/qalling/login'
     | '/qalling/solusi'
+    | '/qalling/testimoni'
     | '/app-admin/'
     | '/app/'
     | '/qalling/'
@@ -837,6 +876,7 @@ export interface FileRouteTypes {
     | '/api/public/crm-media'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
+    | '/production/$workspaceId/$section'
     | '/qalling/app/$submoduleId'
     | '/qalling/app/ai'
     | '/qalling/app/billing'
@@ -851,6 +891,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
@@ -880,6 +921,7 @@ export interface FileRouteTypes {
     | '/resources'
     | '/solutions'
     | '/technology'
+    | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
@@ -910,6 +952,7 @@ export interface FileRouteTypes {
     | '/qalling/kontak'
     | '/qalling/login'
     | '/qalling/solusi'
+    | '/qalling/testimoni'
     | '/'
     | '/app-admin'
     | '/app'
@@ -918,6 +961,7 @@ export interface FileRouteTypes {
     | '/products/$slug'
     | '/api/public/crm-media'
     | '/api/public/visit'
+    | '/production/$workspaceId/$section'
     | '/qalling/app/$submoduleId'
     | '/qalling/app/ai'
     | '/qalling/app/billing'
@@ -932,6 +976,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
@@ -963,6 +1008,7 @@ export interface FileRouteTypes {
     | '/_site/resources'
     | '/_site/solutions'
     | '/_site/technology'
+    | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
     | '/app-admin/announcements'
@@ -994,6 +1040,7 @@ export interface FileRouteTypes {
     | '/qalling/kontak'
     | '/qalling/login'
     | '/qalling/solusi'
+    | '/qalling/testimoni'
     | '/_site/'
     | '/app-admin/'
     | '/app/'
@@ -1003,6 +1050,7 @@ export interface FileRouteTypes {
     | '/api/public/crm-media'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
+    | '/production/$workspaceId/$section'
     | '/qalling/app/$submoduleId'
     | '/qalling/app/ai'
     | '/qalling/app/billing'
@@ -1017,6 +1065,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
     | '/api/public/webhooks/wallet-midtrans'
@@ -1042,6 +1091,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotwellKnownChar93OauthAuthorizationServerRoute: typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
+  ApiProductionDocumentRoute: typeof ApiProductionDocumentRoute
   ApiWorkspaceFilesRoute: typeof ApiWorkspaceFilesRoute
   LRuleIdRoute: typeof LRuleIdRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
@@ -1055,13 +1105,16 @@ export interface RootRouteChildren {
   QallingKontakRoute: typeof QallingKontakRoute
   QallingLoginRoute: typeof QallingLoginRoute
   QallingSolusiRoute: typeof QallingSolusiRoute
+  QallingTestimoniRoute: typeof QallingTestimoniRoute
   QallingIndexRoute: typeof QallingIndexRoute
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
+  ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
+  ApiPublicSiteAssetKeyRoute: typeof ApiPublicSiteAssetKeyRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
   ApiPublicWebhooksWalletDokuRoute: typeof ApiPublicWebhooksWalletDokuRoute
   ApiPublicWebhooksWalletMidtransRoute: typeof ApiPublicWebhooksWalletMidtransRoute
@@ -1182,6 +1235,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/technology'
       preLoaderRoute: typeof SiteTechnologyRouteImport
       parentRoute: typeof SiteRoute
+    }
+    '/api/production-document': {
+      id: '/api/production-document'
+      path: '/api/production-document'
+      fullPath: '/api/production-document'
+      preLoaderRoute: typeof ApiProductionDocumentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/workspace-files': {
       id: '/api/workspace-files'
@@ -1421,6 +1481,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingSolusiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/qalling/testimoni': {
+      id: '/qalling/testimoni'
+      path: '/qalling/testimoni'
+      fullPath: '/qalling/testimoni'
+      preLoaderRoute: typeof QallingTestimoniRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.well-known/oauth-protected-resource/mcp': {
       id: '/.well-known/oauth-protected-resource/mcp'
       path: '/mcp'
@@ -1462,6 +1529,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/w/$workspaceId'
       preLoaderRoute: typeof AppWWorkspaceIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/production/$workspaceId/$section': {
+      id: '/production/$workspaceId/$section'
+      path: '/production/$workspaceId/$section'
+      fullPath: '/production/$workspaceId/$section'
+      preLoaderRoute: typeof ProductionWorkspaceIdSectionRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/qalling/app/': {
       id: '/qalling/app/'
@@ -1552,6 +1626,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/meta/webhook'
       fullPath: '/api/public/meta/webhook'
       preLoaderRoute: typeof ApiPublicMetaWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/site-asset/$key': {
+      id: '/api/public/site-asset/$key'
+      path: '/api/public/site-asset/$key'
+      fullPath: '/api/public/site-asset/$key'
+      preLoaderRoute: typeof ApiPublicSiteAssetKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/webhooks/midtrans': {
@@ -1849,6 +1930,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthAuthorizationServerRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren,
+  ApiProductionDocumentRoute: ApiProductionDocumentRoute,
   ApiWorkspaceFilesRoute: ApiWorkspaceFilesRoute,
   LRuleIdRoute: LRuleIdRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
@@ -1862,13 +1944,16 @@ const rootRouteChildren: RootRouteChildren = {
   QallingKontakRoute: QallingKontakRoute,
   QallingLoginRoute: QallingLoginRoute,
   QallingSolusiRoute: QallingSolusiRoute,
+  QallingTestimoniRoute: QallingTestimoniRoute,
   QallingIndexRoute: QallingIndexRoute,
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,
   ApiPublicVisitRoute: ApiPublicVisitRoute,
+  ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
   ApiPublicJobsSubscriptionRenewalRoute: ApiPublicJobsSubscriptionRenewalRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
+  ApiPublicSiteAssetKeyRoute: ApiPublicSiteAssetKeyRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
   ApiPublicWebhooksWalletDokuRoute: ApiPublicWebhooksWalletDokuRoute,
   ApiPublicWebhooksWalletMidtransRoute: ApiPublicWebhooksWalletMidtransRoute,

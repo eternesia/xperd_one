@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Pure helpers that turn Tebar post payloads into Qalling post rows. Field names are read defensively. */
 
+import type { FirstCommentOutcome } from "./post-enhancements";
 export type TebarTarget = {
   account_id: string;
   status: string;
   permalink: string | null;
   error: string | null;
   post_id?: string;
+  first_comment?: FirstCommentOutcome;
 };
 
 export type MappedTebarPost = {
@@ -20,7 +22,14 @@ export type MappedTebarPost = {
   status: "draft" | "scheduled" | "published" | "failed";
   permalinks: string[];
   last_error: string | null;
-  results: { account_id: string; ok: boolean; id: string; permalink?: string; error?: string }[];
+  results: {
+    account_id: string;
+    ok: boolean;
+    id: string;
+    permalink?: string;
+    error?: string;
+    first_comment?: FirstCommentOutcome;
+  }[];
 };
 
 export function readTargets(raw: any): TebarTarget[] {
@@ -29,6 +38,7 @@ export function readTargets(raw: any): TebarTarget[] {
     .map((t: any) => ({
       account_id: String(t?.account_id ?? t?.account?.id ?? ""),
       status: String(t?.status ?? "pending").toLowerCase(),
+      ...(t?.first_comment ? { first_comment: t.first_comment as FirstCommentOutcome } : {}),
       permalink: (t?.permalink ?? t?.url ?? null) as string | null,
       error: (t?.error?.message ??
         t?.error_message ??
@@ -95,7 +105,10 @@ export function mapTebarPost(raw: any, accountMap: Map<string, string>): MappedT
     title: caption.split("\n")[0].slice(0, 80) || "Postingan Tebar",
     caption,
     media_url: mediaUrl,
-    account_ids: targets.map((t) => accountMap.get(t.account_id)!),
+    account_ids: targets.flatMap((t) => {
+      const local = accountMap.get(t.account_id);
+      return local ? [local] : [];
+    }),
     scheduled_at: when,
     published_at:
       status === "published" ? ((raw.published_at ?? targetPublished ?? when) as string) : null,
@@ -103,9 +116,10 @@ export function mapTebarPost(raw: any, accountMap: Map<string, string>): MappedT
     permalinks: targets.map((t) => t.permalink).filter((p): p is string => !!p),
     last_error: errors.length ? errors.join("; ") : null,
     results: targets.map((t) => ({
-      account_id: accountMap.get(t.account_id)!,
+      account_id: accountMap.get(t.account_id) ?? "",
       ok: t.status !== "failed" && t.status !== "error",
       id,
+      ...(t.first_comment ? { first_comment: t.first_comment } : {}),
       ...(t.permalink ? { permalink: t.permalink } : {}),
       ...(t.error ? { error: t.error } : {}),
     })),

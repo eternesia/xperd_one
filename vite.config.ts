@@ -25,6 +25,8 @@ export default defineConfig({
       allowedHosts: [
         "xperd.id", // Allow your specific domain
         ".xperd.id",             // Optional: allow all subdomains under lexco.id
+        ".qalling.id", // domain Qalling (uji dev dengan --host-resolver-rules)
+        ".qalling.net",
       ],
     },
   },

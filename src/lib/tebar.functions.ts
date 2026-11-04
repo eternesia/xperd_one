@@ -5,6 +5,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
+import { tebarAccountPageSchema } from "./tebar-account-page";
 import type { DeliveryResult } from "@/lib/post-delivery-rules";
 
 const isId = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v);
@@ -29,10 +30,11 @@ const iso = (v: unknown): string | null => {
 
 export const getTebarAdmin = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .handler(async ({ context }) => {
+  .validator((d: unknown) => tebarAccountPageSchema.parse(d ?? {}))
+  .handler(async ({ context, data }) => {
     await assertSuperAdmin(context.userId);
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
-    const { listTebarAccounts } = await import("@/lib/tebar.server");
+    const { listTebarAccountPage } = await import("@/lib/tebar.server");
     const s = await executeOne<{
       api_key: string | null;
       status: string;
@@ -42,24 +44,33 @@ export const getTebarAdmin = createServerFn({ method: "POST" })
     const ws = await execute<{ id: string; name: string }>(
       "SELECT id, name FROM workspaces ORDER BY name",
     );
-    const assigned = await execute<{ external_id: string; workspace_id: string }>(
-      "SELECT external_id, workspace_id FROM crm_social_accounts WHERE source = 'tebar'",
-    );
-    let accounts: Awaited<ReturnType<typeof listTebarAccounts>> = [];
+    let accounts: Awaited<ReturnType<typeof listTebarAccountPage>>["accounts"] = [];
+    let nextCursor: string | null = null;
     let fetchError: string | null = null;
     if (s?.api_key && s.status === "verified") {
       try {
-        accounts = await listTebarAccounts(s.api_key);
+        // Satu halaman upstream per permintaan; penetapan hanya dibaca untuk akun di halaman ini.
+        const page = await listTebarAccountPage(s.api_key, data.cursor, data.limit);
+        accounts = page.accounts;
+        nextCursor = page.nextCursor;
       } catch (e) {
         fetchError = (e as Error).message;
       }
     }
+    const ids = accounts.map((a) => a.id);
+    const assigned = ids.length
+      ? await execute<{ external_id: string; workspace_id: string }>(
+          `SELECT external_id, workspace_id FROM crm_social_accounts WHERE source = 'tebar' AND external_id IN (${ids.map(() => "?").join(",")})`,
+          ids,
+        )
+      : [];
     return {
       hasKey: !!s?.api_key,
       status: s?.status ?? "none",
       lastError: fetchError ?? s?.last_error ?? null,
       verifiedAt: iso(s?.verified_at),
       accounts,
+      nextCursor,
       workspaces: ws.map((w) => ({ id: String(w.id), name: String(w.name) })),
       assignments: Object.fromEntries(
         assigned.map((a) => [String(a.external_id), String(a.workspace_id)]),
@@ -78,12 +89,12 @@ export const saveTebarKey = createServerFn({ method: "POST" })
     await assertSuperAdmin(context.userId);
     const { execute } = await import("@/integrations/mysql/pool");
     const { sqlDateTime } = await import("@/lib/datetime");
-    const { listTebarAccounts } = await import("@/lib/tebar.server");
+    const { listTebarAccountPage } = await import("@/lib/tebar.server");
     let status = "verified";
     let lastError: string | null = null;
     let count = 0;
     try {
-      count = (await listTebarAccounts(data.apiKey)).length;
+      count = (await listTebarAccountPage(data.apiKey, null, 1)).accounts.length;
     } catch (e) {
       status = "invalid";
       lastError = (e as Error).message;

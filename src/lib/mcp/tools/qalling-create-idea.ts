@@ -1,8 +1,7 @@
 import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
+import { validateMediaFile } from "../../media-upload-policy";
 import { assertQallingAccess, getTokenUser, requireAuth } from "../db";
-
-const MAX_BYTES = 50 * 1024 * 1024;
 
 export default defineTool({
   name: "qalling_create_idea",
@@ -17,7 +16,9 @@ export default defineTool({
       .array(z.string().url())
       .max(5)
       .optional()
-      .describe("Public https URLs of images or videos to save (max 50 MB each)."),
+      .describe(
+        "Public https URLs of images or videos to save (file limits set by Super Admin; default 5 MB photo, 20 MB video).",
+      ),
   },
   annotations: {
     readOnlyHint: false,
@@ -29,6 +30,8 @@ export default defineTool({
     requireAuth(ctx);
     const { userId } = await getTokenUser(ctx);
     await assertQallingAccess(workspace_id, userId, "ideas_campaigns", true);
+    const { loadMediaPolicy } = await import("@/lib/media-policy.server");
+    const policy = await loadMediaPolicy();
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     const { saveWorkspaceFile, deleteWorkspaceFile, buildFilePath, MEDIA_FOLDER } =
       await import("@/lib/files.server");
@@ -57,7 +60,11 @@ export default defineTool({
       const type = (res.headers.get("content-type") || "").split(";")[0];
       if (!/^(image|video)\//.test(type)) throw new ToolError(`${url} is not an image or video.`);
       const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.byteLength > MAX_BYTES) throw new ToolError(`${url} is larger than 50 MB.`);
+      try {
+        validateMediaFile({ type, size: buf.byteLength }, policy);
+      } catch (e) {
+        throw new ToolError(`${url}: ${(e as Error).message}`);
+      }
       try {
         await assertMediaQuota(workspace_id, { size_bytes: buf.byteLength, mime_type: type });
       } catch {

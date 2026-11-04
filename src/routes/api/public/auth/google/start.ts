@@ -2,8 +2,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { randomBytes } from "node:crypto";
 
-const back = (code: string) =>
-  new Response(null, { status: 302, headers: { Location: `/qalling/login?google_error=${code}` } });
+const back = async (request: Request, code: string) => {
+  const g = await import("@/lib/google-oauth.server");
+  const { qallingPagePath } = await import("@/lib/qalling-urls");
+  const host = new URL(g.requestOrigin(request)).hostname;
+  return new Response(null, {
+    status: 302,
+    headers: { Location: qallingPagePath(host, `/qalling/login?google_error=${code}`) },
+  });
+};
 
 export const Route = createFileRoute("/api/public/auth/google/start")({
   server: {
@@ -11,8 +18,8 @@ export const Route = createFileRoute("/api/public/auth/google/start")({
       GET: async ({ request }) => {
         const g = await import("@/lib/google-oauth.server");
         const cfg = await g.loadGoogleConfig();
-        if (!cfg.enabled) return back("disabled");
-        if (!cfg.clientId || !cfg.secret) return back("not_configured");
+        if (!cfg.enabled) return back(request, "disabled");
+        if (!cfg.clientId || !cfg.secret) return back(request, "not_configured");
         const state = randomBytes(24).toString("hex");
         const url = new URL(g.googleUrls().auth);
         url.search = new URLSearchParams({

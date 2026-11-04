@@ -14,6 +14,7 @@ import {
   seo,
 } from "@/components/qalling/QallingSite";
 import { QallingStory } from "@/components/qalling/QallingStory";
+import { BenefitCards, Integrations, TestimonialGrid } from "@/components/qalling/QallingLanding";
 
 export const Route = createFileRoute("/qalling/")({
   head: () =>
@@ -30,7 +31,12 @@ function Block({
   children,
 }: {
   title: string;
-  to: "/qalling/solusi" | "/qalling/fitur" | "/qalling/kelebihan" | "/qalling/harga";
+  to:
+    | "/qalling/solusi"
+    | "/qalling/fitur"
+    | "/qalling/kelebihan"
+    | "/qalling/harga"
+    | "/qalling/testimoni";
   children: React.ReactNode;
 }) {
   const { pick } = useI18n();
@@ -117,8 +123,13 @@ function QallingLanding() {
           <ItemGrid items={FEATURES.filter((_, i) => [0, 1, 5, 6, 7, 12].includes(i))} />
         )}
       </Block>
+      <Integrations />
+      <BenefitCards />
       <Block title={pick("Why Qalling", "Kenapa Qalling")} to="/qalling/kelebihan">
         <ItemGrid items={ADVANTAGES} cols={2} />
+      </Block>
+      <Block title={pick("Testimonials", "Testimoni")} to="/qalling/testimoni">
+        <TestimonialGrid />
       </Block>
       <Block title={pick("Pricing", "Harga")} to="/qalling/harga">
         <PricingGrid />

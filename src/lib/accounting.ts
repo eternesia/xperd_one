@@ -57,6 +57,9 @@ export type AccViewKind =
   | "ap-card"
   | "ar-aging"
   | "ap-aging"
+  // BS New 16: nota kredit piutang/hutang.
+  | "ar-credit-memo"
+  | "ap-credit-memo"
   | "period-closing"
   // Ronde 29 (BS New 8): revaluasi kurs pos moneter valas.
   | "fx-revaluation";
@@ -81,6 +84,8 @@ export const ACC_ENTITIES: AccEntity[] = [
   { submoduleId: "ap-card", en: "AP Card", id_: "Kartu Hutang" },
   { submoduleId: "ar-aging", en: "AR Aging", id_: "Umur Piutang" },
   { submoduleId: "ap-aging", en: "AP Aging", id_: "Umur Hutang" },
+  { submoduleId: "ar-credit-memo", en: "AR Credit Memo", id_: "Nota Kredit Piutang" },
+  { submoduleId: "ap-credit-memo", en: "AP Credit Memo", id_: "Nota Kredit Hutang" },
   { submoduleId: "period-closing", en: "Period Closing", id_: "Tutup Periode" },
   { submoduleId: "fx-revaluation", en: "FX Revaluation", id_: "Revaluasi Kurs" },
 ];
@@ -188,9 +193,17 @@ export interface ManualLineInput {
 
 export async function postManualEntry(
   workspaceId: string,
-  input: { entry_no: string; entry_date: string; memo: string; lines: ManualLineInput[]; source_type?: string },
+  input: {
+    entry_no: string;
+    entry_date: string;
+    memo: string;
+    lines: ManualLineInput[];
+    source_type?: string;
+  },
 ) {
-  const clean = input.lines.filter((l) => l.account_code && (l.debit > 0.0001 || l.credit > 0.0001));
+  const clean = input.lines.filter(
+    (l) => l.account_code && (l.debit > 0.0001 || l.credit > 0.0001),
+  );
   if (!clean.length) throw new Error("At least one journal line is required.");
   const totalDebit = clean.reduce((s, l) => s + Number(l.debit || 0), 0);
   const totalCredit = clean.reduce((s, l) => s + Number(l.credit || 0), 0);
@@ -282,7 +295,10 @@ export async function verifyOpeningBalance(
 
   // ledger as of the opening balance period — exactly what the GL reports read
   const periodEntries = await fetchEntries(workspaceId, "", entry.entry_date);
-  const periodLines = await fetchLines(workspaceId, periodEntries.map((e) => e.id));
+  const periodLines = await fetchLines(
+    workspaceId,
+    periodEntries.map((e) => e.id),
+  );
   const entryLines = periodLines.filter((l) => l.entry_id === entryId);
 
   if (!periodEntries.some((e) => e.id === entryId)) {
@@ -292,8 +308,12 @@ export async function verifyOpeningBalance(
 
   const postedDebit = entryLines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
   const postedCredit = entryLines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
-  if (Math.abs(postedDebit - postedCredit) > 0.5) issues.push("Debit and credit of the posted entry do not balance.");
-  if (Math.abs(postedDebit - Number(entry.total_debit)) > 0.5 || Math.abs(postedCredit - Number(entry.total_credit)) > 0.5) {
+  if (Math.abs(postedDebit - postedCredit) > 0.5)
+    issues.push("Debit and credit of the posted entry do not balance.");
+  if (
+    Math.abs(postedDebit - Number(entry.total_debit)) > 0.5 ||
+    Math.abs(postedCredit - Number(entry.total_credit)) > 0.5
+  ) {
     issues.push("Journal line totals do not match the entry header totals.");
   }
 
@@ -322,7 +342,10 @@ export async function verifyOpeningBalance(
       Math.abs(ledgerDelta - posted) < 0.5 && (!expected.length || Math.abs(exp - posted) < 0.5);
     return {
       code,
-      name: meta.get(code)?.name ?? entryLines.find((l) => l.account_code === code)?.account_name ?? code,
+      name:
+        meta.get(code)?.name ??
+        entryLines.find((l) => l.account_code === code)?.account_name ??
+        code,
       expected: exp,
       posted,
       ledgerDelta,
@@ -330,7 +353,8 @@ export async function verifyOpeningBalance(
     };
   });
 
-  if (rows.some((r) => !r.ok)) issues.push("Some accounts do not reflect the entered opening balance in the ledger.");
+  if (rows.some((r) => !r.ok))
+    issues.push("Some accounts do not reflect the entered opening balance in the ledger.");
 
   return {
     ok: issues.length === 0,
@@ -422,15 +446,24 @@ export function buildCashFlow(
     const group = byEntry.get(entry.id) ?? [];
     const cashLines = group.filter((l) => cash.has(l.account_code));
     if (!cashLines.length) continue;
-    const cashDelta = cashLines.reduce((s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0), 0);
+    const cashDelta = cashLines.reduce(
+      (s, l) => s + (Number(l.debit) || 0) - (Number(l.credit) || 0),
+      0,
+    );
     if (Math.abs(cashDelta) < 0.005) continue;
 
     const others = group.filter((l) => !cash.has(l.account_code));
     const weights = others.map((l) => Math.abs((Number(l.debit) || 0) - (Number(l.credit) || 0)));
     const weightSum = weights.reduce((s, w) => s + w, 0);
-    const targets = others.length && weightSum > 0
-      ? others.map((l, i) => ({ line: l, share: (weights[i] / weightSum) * cashDelta }))
-      : [{ line: { account_code: "—", account_name: entry.memo ?? "Unclassified" } as AccLine, share: cashDelta }];
+    const targets =
+      others.length && weightSum > 0
+        ? others.map((l, i) => ({ line: l, share: (weights[i] / weightSum) * cashDelta }))
+        : [
+            {
+              line: { account_code: "—", account_name: entry.memo ?? "Unclassified" } as AccLine,
+              share: cashDelta,
+            },
+          ];
 
     for (const { line, share } of targets) {
       const account = meta.get(line.account_code);
@@ -455,7 +488,9 @@ export function buildCashFlow(
     }
   }
 
-  const rows = [...map.values()].sort((a, b) => (a.group === b.group ? a.code.localeCompare(b.code) : a.group.localeCompare(b.group)));
+  const rows = [...map.values()].sort((a, b) =>
+    a.group === b.group ? a.code.localeCompare(b.code) : a.group.localeCompare(b.group),
+  );
   const netChange = totals.operating + totals.investing + totals.financing;
   return { rows, totals, opening: openingCash, netChange, closing: openingCash + netChange };
 }
@@ -503,7 +538,9 @@ export function buildEquityStatement(
     period.filter((r) => r.type === "revenue").reduce((s, r) => s + r.balance, 0) -
     period.filter((r) => r.type === "expense").reduce((s, r) => s + r.balance, 0);
 
-  const codes = [...new Set([...openingEquity.map((r) => r.code), ...periodEquity.map((r) => r.code)])].sort();
+  const codes = [
+    ...new Set([...openingEquity.map((r) => r.code), ...periodEquity.map((r) => r.code)]),
+  ].sort();
   const rows: EquityMovementRow[] = codes.map((code) => {
     const o = openingEquity.find((r) => r.code === code);
     const p = periodEquity.find((r) => r.code === code);

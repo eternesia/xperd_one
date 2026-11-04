@@ -96,6 +96,14 @@ function Launcher() {
                 </div>
               );
             }
+            if (locked && !isManager) {
+              // Billing hanya untuk pengelola workspace: peran lain melihat kartu terkunci tanpa tautan.
+              return (
+                <div key={m.id} className={cn(base, "cursor-not-allowed opacity-60")} aria-disabled>
+                  {inner}
+                </div>
+              );
+            }
             if (locked) {
               return (
                 <Link

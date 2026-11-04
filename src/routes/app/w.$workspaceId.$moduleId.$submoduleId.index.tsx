@@ -27,6 +27,7 @@ import { findCbEntity } from "@/lib/cashbank";
 import { findInvEntity } from "@/lib/inventory";
 import { findModule } from "@/lib/modules";
 import { findPrcEntity } from "@/lib/procurement";
+import { ProductionView } from "@/components/app/ProductionView";
 import { findSlsEntity } from "@/lib/sales";
 import { findFaEntity } from "@/lib/fixedasset";
 import { findTaxEntity } from "@/lib/tax";
@@ -114,6 +115,8 @@ function SubModuleBody({
   const mod = findModule(moduleId);
   const sub = mod?.submodules.find((s) => s.id === submoduleId);
   if (!mod || !sub) return null;
+
+  if (moduleId === "manufacturing") return <ProductionView workspaceId={workspaceId} section={submoduleId} />;
 
   if (moduleId === "master-data") {
     const entity = findMasterEntity(submoduleId);

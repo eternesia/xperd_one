@@ -12,6 +12,7 @@ import {
   testPlatformStorage,
 } from "@/lib/platform-storage.functions";
 import { seo } from "@/components/qalling/QallingSite";
+import { MediaUploadSettings } from "@/components/app/MediaUploadSettings";
 export const Route = createFileRoute("/app-admin/storage")({
   head: () =>
     seo(
@@ -65,6 +66,7 @@ function StoragePage() {
   }
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <MediaUploadSettings />
       <h1 className="text-2xl font-semibold">Object Storage</h1>
       <p className="text-sm text-muted-foreground">
         Media saat ini tetap di penyimpanan Cloud. Pengaturan ini menyiapkan dan menguji tujuan

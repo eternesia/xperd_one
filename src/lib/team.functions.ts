@@ -15,7 +15,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
   .validator((data: CreateUserInput) => {
     if (!data?.workspaceId) throw new Error("Workspace is required");
     if (!data.email?.includes("@")) throw new Error("Valid email is required");
-    if (!data.password || data.password.length < 8) throw new Error("Password must be at least 8 characters");
+    if (!data.password || data.password.length < 8)
+      throw new Error("Password must be at least 8 characters");
     if (!["admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
     return data;
   })
@@ -29,7 +30,10 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
     const { hashPassword } = await import("@/lib/auth-jwt.server");
 
     const email = data.email.trim().toLowerCase();
-    const existing = await executeOne<{ id: string }>("SELECT id FROM app_users WHERE email = ? LIMIT 1", [email]);
+    const existing = await executeOne<{ id: string }>(
+      "SELECT id FROM app_users WHERE email = ? LIMIT 1",
+      [email],
+    );
     const newUserId = existing?.id ?? uuid();
 
     await transaction(async (conn) => {
@@ -60,20 +64,24 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
 
 export const updateWorkspaceUser = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((data: {
-    workspaceId: string;
-    targetUserId: string;
-    fullName?: string;
-    phone?: string;
-    password?: string;
-  }) => {
-    if (!data?.workspaceId || !data.targetUserId) throw new Error("Missing user");
-    if (data.password && data.password.length < 8) throw new Error("Password must be at least 8 characters");
-    return data;
-  })
+  .validator(
+    (data: {
+      workspaceId: string;
+      targetUserId: string;
+      fullName?: string;
+      phone?: string;
+      password?: string;
+    }) => {
+      if (!data?.workspaceId || !data.targetUserId) throw new Error("Missing user");
+      if (data.password && data.password.length < 8)
+        throw new Error("Password must be at least 8 characters");
+      return data;
+    },
+  )
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole, isWorkspaceMember } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) throw new Error("Forbidden");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"])))
+      throw new Error("Forbidden");
     if (!(await isWorkspaceMember(data.workspaceId, data.targetUserId))) {
       throw new Error("User is not a member of this workspace");
     }
@@ -128,8 +136,8 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<WorkspaceAccessResult> => {
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
 
-    const member = await executeOne<{ role: string }>(
-      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
+    const member = await executeOne<{ role: string; custom_role_id: string | null }>(
+      "SELECT role, custom_role_id FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
       [data.workspaceId, context.userId],
     );
 
@@ -146,6 +154,29 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
       if (Number(owner?.c ?? 0) > 0) role = "owner";
     }
     if (!role) throw new Error("Forbidden");
+
+    // Peran kustom: izin diambil dari `permissions` peran itu (menu yang tidak dicentang ditolak eksplisit saat disimpan).
+    if (member?.custom_role_id && role !== "owner") {
+      const custom = await executeOne<{ permissions: unknown }>(
+        "SELECT permissions FROM workspace_custom_roles WHERE id = ? AND workspace_id = ?",
+        [member.custom_role_id, data.workspaceId],
+      );
+      if (custom) {
+        const perms = (
+          typeof custom.permissions === "string"
+            ? JSON.parse(custom.permissions)
+            : custom.permissions
+        ) as Record<string, { view?: boolean; edit?: boolean }>;
+        return {
+          role: role as WorkspaceRole,
+          access: Object.entries(perms ?? {}).map(([k, p]) => ({
+            module_id: k,
+            can_view: Boolean(p?.view),
+            can_edit: Boolean(p?.view && p?.edit),
+          })),
+        };
+      }
+    }
 
     const rows = await execute<{ module_id: string; can_view: number; can_edit: number }>(
       "SELECT module_id, can_view, can_edit FROM workspace_role_access WHERE workspace_id = ? AND role = ?",
@@ -233,11 +264,13 @@ export const listTenantUsers = createServerFn({ method: "POST" })
 /** #58 (BS New 3): beri akses workspace ini ke user tenant yang sudah ada. */
 export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((data: { workspaceId: string; targetUserId: string; role: "admin" | "staff" | "viewer" }) => {
-    if (!data?.workspaceId || !data.targetUserId) throw new Error("Missing user or workspace");
-    if (!["admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
-    return data;
-  })
+  .validator(
+    (data: { workspaceId: string; targetUserId: string; role: "admin" | "staff" | "viewer" }) => {
+      if (!data?.workspaceId || !data.targetUserId) throw new Error("Missing user or workspace");
+      if (!["admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
+      return data;
+    },
+  )
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
     if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
@@ -259,7 +292,8 @@ export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
         WHERE m.user_id = ? AND w.tenant_id = ?`,
       [data.targetUserId, ws.tenant_id],
     );
-    if (Number(belongs?.c ?? 0) === 0) throw new Error("That user does not belong to this organisation");
+    if (Number(belongs?.c ?? 0) === 0)
+      throw new Error("That user does not belong to this organisation");
 
     const { assertUserQuota } = await import("@/lib/qalling-quota.server");
 
@@ -360,7 +394,9 @@ export const getAccessMatrix = createServerFn({ method: "POST" })
         fullName: profileById.get(id)?.full_name ?? null,
         email: profileById.get(id)?.email ?? null,
         roles: Object.fromEntries(
-          (members ?? []).filter((row) => row.user_id === id).map((row) => [row.workspace_id, row.role]),
+          (members ?? [])
+            .filter((row) => row.user_id === id)
+            .map((row) => [row.workspace_id, row.role]),
         ),
       })),
     };
@@ -369,11 +405,19 @@ export const getAccessMatrix = createServerFn({ method: "POST" })
 /** Set/hapus peran user pada satu workspace dari matriks akses. */
 export const setWorkspaceAccess = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((data: { targetUserId: string; targetWorkspaceId: string; role: "none" | "admin" | "staff" | "viewer" }) => {
-    if (!data?.targetUserId || !data.targetWorkspaceId) throw new Error("Missing user or workspace");
-    if (!["none", "admin", "staff", "viewer"].includes(data.role)) throw new Error("Invalid role");
-    return data;
-  })
+  .validator(
+    (data: {
+      targetUserId: string;
+      targetWorkspaceId: string;
+      role: "none" | "admin" | "staff" | "viewer";
+    }) => {
+      if (!data?.targetUserId || !data.targetWorkspaceId)
+        throw new Error("Missing user or workspace");
+      if (!["none", "admin", "staff", "viewer"].includes(data.role))
+        throw new Error("Invalid role");
+      return data;
+    },
+  )
   .handler(async ({ data, context }) => {
     // Semantik mengikuti BS New 10 persis: tidak bisa mengubah akses sendiri,
     // pemilik tenant selalu boleh, selain itu harus owner/admin di workspace itu.
