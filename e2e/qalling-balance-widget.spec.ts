@@ -28,8 +28,8 @@ test("QALLING topbar: widget saldo = SQL dan tombol Top up", async ({ page }) =>
     const widget = page.getByTestId("qalling-balance");
     await expect(widget).toBeVisible({ timeout: 60_000 });
     await expect(widget).toContainText(expected.replace(/\s/g, " "));
-    await widget.getByRole("link", { name: "Top up" }).click();
-    await expect(page).toHaveURL(/\/qalling\/app\/billing\?tab=saldo/);
+    await widget.click(); // seluruh pil adalah tautan ke Tagihan (New 16)
+    await expect(page).toHaveURL(/\/qalling\/app\/billing/);
   } finally {
     await conn.end();
   }

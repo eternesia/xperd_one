@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getWalletBalance } from "@/lib/wallet.functions";
+import { getWallet } from "@/lib/wallet.functions";
 import { provisionGoogleSignup } from "@/lib/qalling-auth.functions";
 import { SIGNUP_TIER_KEY } from "@/components/qalling/qalling-auth";
 
@@ -97,14 +97,14 @@ function QallingShell() {
       return !c;
     });
   const qc = useQueryClient();
-  const fetchBalance = useServerFn(getWalletBalance);
-  const balanceQ = useQuery({
-    queryKey: ["wallet", "balance", tenant?.id],
-    enabled: Boolean(tenant?.id),
-    queryFn: () => fetchBalance({ data: { tenantId: tenant!.id } }),
-    refetchOnWindowFocus: true,
-    staleTime: 30_000,
+  const fetchWallet = useServerFn(getWallet);
+  const walletQuery = useQuery({
+    queryKey: ["wallet", tenant?.id, 0],
+    queryFn: () => fetchWallet({ data: { tenantId: tenant!.id, page: 0 } }),
+    enabled: !!tenant?.id,
+    staleTime: 60_000,
   });
+  const balance = walletQuery.data?.balance;
 
   useEffect(() => {
     if (loading) return;
@@ -339,28 +339,28 @@ function QallingShell() {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            {tenant && balanceQ.data && (
-              <div
+            {tenant?.id && (
+              <Link
+                to="/qalling/app/billing"
                 data-testid="qalling-balance"
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-2.5 pr-1 text-xs"
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-secondary"
+                aria-label={lang === "id" ? "Saldo, isi ulang di Tagihan" : "Balance, top up in Billing"}
               >
                 <Wallet className="h-3.5 w-3.5 text-primary" />
-                <span className="font-semibold">
-                  {new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    maximumFractionDigits: 0,
-                  }).format(balanceQ.data.balance)}
+                <span>
+                  {balance === undefined
+                    ? "…"
+                    : new Intl.NumberFormat("id-ID", {
+                        style: "currency",
+                        currency: "IDR",
+                        maximumFractionDigits: 0,
+                      }).format(balance)}
                 </span>
-                <Link
-                  to="/qalling/app/billing"
-                  search={{ tab: "saldo" }}
-                  className="inline-flex items-center gap-0.5 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground hover:opacity-90"
-                >
+                <span className="flex items-center gap-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
                   <Plus className="h-3 w-3" />
-                  Top up
-                </Link>
-              </div>
+                  <span className="hidden sm:inline">Top up</span>
+                </span>
+              </Link>
             )}
             <QallingPreferences />
             <span className="hidden max-w-[200px] truncate text-sm text-muted-foreground sm:block">
