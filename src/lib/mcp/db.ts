@@ -45,3 +45,57 @@ export async function assertQallingAccess(
   if (!(await workspaceHasFeature(workspaceId, feature)))
     throw new Error("This workspace plan does not include this Qalling feature.");
 }
+
+/**
+ * BS New 17: akses Qalling per bagian (`media` atau `post-scheduler`) untuk tool posting/media. Syarat: anggota workspace,
+ * fitur `mcp_api` DAN `publishing` aktif, izin Role Access / peran kustom untuk `crm`, `crm/ai`, `crm/<bagian>`
+ * (view; edit bila `write`), dan hak tulis workspace bila `write`. Pemilik tenant/owner selalu lolos izin menu.
+ */
+export async function assertQallingSection(
+  workspaceId: string,
+  userId: string,
+  section: "media" | "post-scheduler",
+  write: boolean,
+): Promise<void> {
+  const { execute, executeOne } = await import("@/integrations/mysql/pool");
+  const { workspaceHasFeature } = await import("@/lib/entitlements.server");
+  const member = await executeOne<{ role: string; custom_role_id: string | null }>(
+    "SELECT role, custom_role_id FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
+    [workspaceId, userId],
+  );
+  const denied = "Access denied: your plan or workspace membership does not allow this Qalling integration.";
+  if (!member) throw new Error(denied);
+  for (const f of ["mcp_api", "publishing"])
+    if (!(await workspaceHasFeature(workspaceId, f))) throw new Error(denied);
+  const { allowsSection } = await import("./qalling-rules");
+  const permissions = new Map<string, { canView: boolean; canEdit: boolean }>();
+  if (member.role !== "owner") {
+    if (member.custom_role_id) {
+      const c = await executeOne<{ permissions: unknown }>(
+        "SELECT permissions FROM workspace_custom_roles WHERE id = ? AND workspace_id = ?",
+        [member.custom_role_id, workspaceId],
+      );
+      if (!c) throw new Error("Access denied: workspace permissions could not be checked.");
+      const entries = (typeof c.permissions === "string" ? JSON.parse(c.permissions) : c.permissions) as Record<
+        string,
+        { view?: boolean; edit?: boolean }
+      >;
+      for (const [k, p] of Object.entries(entries ?? {}))
+        permissions.set(k, { canView: !!p?.view, canEdit: !!p?.view && !!p?.edit });
+    } else {
+      const rows = await execute<{ module_id: string; can_view: number; can_edit: number }>(
+        "SELECT module_id, can_view, can_edit FROM workspace_role_access WHERE workspace_id = ? AND role = ?",
+        [workspaceId, member.role],
+      );
+      for (const p of rows)
+        permissions.set(p.module_id, { canView: Number(p.can_view) === 1, canEdit: Number(p.can_edit) === 1 });
+    }
+  }
+  if (!allowsSection(member.role, permissions, section, write))
+    throw new Error("Access denied: your role does not allow this action.");
+  if (write) {
+    const { canWriteWorkspace } = await import("@/lib/auth-context.server");
+    if (!(await canWriteWorkspace(workspaceId, userId)))
+      throw new Error("Access denied: your role cannot write in this workspace.");
+  }
+}

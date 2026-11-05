@@ -161,3 +161,15 @@ Modul **Production** (add-on `manufacturing`) diporting bertahap ke modul `manuf
 | M11–M12 | Traceability maju/mundur + simulasi recall, laporan produksi (CSV/PDF/Excel), log limbah B3, dasbor, editor fitur tier `mfg_*` | 046 |
 
 Deviasi M11–M12 dari New 16: gerbang pakai seksi menu sendiri (`traceability`, `reports`, `waste`, `dashboard`) alih-alih `lots`/`orders`/`settings`; Traceability & Recall wajib fitur `mfg_trace`; log limbah mengunci tanggal/kode/jumlah/satuan setelah dicatat (New 16 membolehkan ubah semua kolom lewat audit); PDF memakai kop `workspaces.name/legal_name/address` (kolom telepon/email tidak ada di Old).
+
+## Ronde 58 — MCP BS New 17 (15 → 17 tool)
+
+Diff New 17 vs New 16 pada `src/lib/mcp`: `qalling_create_post_draft` diganti **`qalling_create_post`** (draft / carousel hingga 10 lampiran / terjadwal),
+tool baru **`qalling_list_media`** dan **`qalling_publish_post_now`** (pratinjau → konfirmasi → antre), `qalling_list_posts` (status `publishing`, `media_count`),
+instruksi server baru. Port ke Old (MySQL, tanpa Lovable/Supabase): `mcp/qalling-rules.ts` (skema input, waktu jadwal, target akun, CDN media yang diizinkan, izin per bagian),
+`mcp/qalling-media.ts` (media_ids pustaka + impor media_urls dengan kebijakan unggah/kuota, `redirect: error`, tanpa host sembarang), `assertQallingSection` di `mcp/db.ts`
+(anggota + fitur `mcp_api` **dan** `publishing` + Role Access/peran kustom `crm`, `crm/ai`, `crm/<bagian>` + hak tulis), tiga tool, `index.ts` (versi 1.1.1).
+Aturan: Meta native 1 gambar, carousel/video untuk akun Tebar, carousel hanya gambar, akun harus terhubung, Instagram/TikTok/YouTube/Pinterest butuh media saat dikirim.
+`publish_post_now` mengubah post menjadi `scheduled` pada waktu sekarang dengan compare-and-set; pengiriman dilakukan **cron social-publish** (wajib berjalan, lihat OPERATIONS.md).
+Tidak dibawa: `requireOAuthClientClaim` (khusus penerbit OAuth Supabase; server OAuth Old sendiri menerbitkan token), tes `qalling-rules.test.ts` (Old tanpa Vitest — dicakup `e2e/mcp-posts.spec.ts`).
+Belum teruji: impor sukses `media_urls` dari CDN nyata (host dibatasi ke CDN publik; penolakan host lain/http/port diuji).

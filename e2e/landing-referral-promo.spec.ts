@@ -292,9 +292,10 @@ test("KONTAK website XPERD: bawaan, diatur admin, kembali ke bawaan", async ({ p
   const qSaved = await q("SELECT * FROM site_content WHERE section = 'qalling.kontak'");
   try {
     await page.goto("/app-admin/content");
+    await page.getByRole("button", { name: /^Website Qalling/ }).click(); // editor kontak per tab (paritas live)
     await page.locator("#qcontact-phone").fill("+62 21 1234 5678");
     await page.locator("#qcontact-hours").fill("Senin–Jumat 09.00–17.00");
-    await page.getByRole("button", { name: "Simpan kontak" }).nth(1).click();
+    await page.getByRole("button", { name: "Simpan kontak" }).click();
     await expect(page.getByText("Kontak website disimpan").first()).toBeVisible({
       timeout: 30_000,
     });

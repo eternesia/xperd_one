@@ -180,9 +180,6 @@ function ContentPage() {
         </Button>
       </header>
 
-      <ContactForm site="xperd" title="Kontak website XPERD" idPrefix="contact" />
-      <ContactForm site="qalling" title="Kontak website Qalling" idPrefix="qcontact" />
-
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="flex gap-2">
@@ -244,7 +241,13 @@ function ContentPage() {
           )}
           <TableSearch value={pg.query} onChange={pg.setQuery} placeholder="Cari konten…" />
         </div>
-        <p className="px-4 pt-3 text-xs text-muted-foreground">
+        <ContactForm
+          key={site}
+          site={site}
+          title={`Kontak website ${site === "xperd" ? "XPERD" : "QALLING"}`}
+          idPrefix={site === "xperd" ? "contact" : "qcontact"}
+        />
+        <p className="px-4 pt-7 text-xs text-muted-foreground">
           Konten Qalling memakai awalan section <code>qalling.</code> (mis. qalling.hero,
           qalling.kontak).
         </p>
@@ -627,7 +630,7 @@ function ContactForm({
   });
   if (!f) return null;
   return (
-    <section className="space-y-4 rounded-lg border border-border bg-card p-5">
+    <section className="space-y-4 border-b border-border p-4">
       <h2 className="text-lg font-semibold">{title}</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         {CONTACT_FIELDS.map((c) => (
@@ -643,7 +646,7 @@ function ContactForm({
           </div>
         ))}
       </div>
-      <Button disabled={save.isPending} onClick={() => save.mutate()}>
+      <Button variant="gold" disabled={save.isPending} onClick={() => save.mutate()}>
         Simpan kontak
       </Button>
     </section>

@@ -14,9 +14,9 @@ export default defineTool({
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace id from list_workspaces."),
     status: z
-      .enum(["draft", "scheduled", "published", "failed"])
+      .enum(["draft", "scheduled", "publishing", "published", "failed"])
       .optional()
-      .describe("Only posts with this status."),
+      .describe("Only posts with this status; publishing means pending, never resend."),
     limit: z.number().int().min(1).max(50).default(20).describe("Maximum posts to return."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
@@ -26,17 +26,22 @@ export default defineTool({
     await assertQallingAccess(workspace_id, userId, "publishing");
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute<Record<string, unknown>>(
-      `SELECT id, title, caption, status, scheduled_at, published_at, account_ids, last_error, permalinks
+      `SELECT id, title, caption, status, scheduled_at, published_at, account_ids, last_error, permalinks, media_paths
          FROM crm_scheduled_posts WHERE workspace_id = ? ${status ? "AND status = ?" : ""}
         ORDER BY scheduled_at DESC LIMIT ${Number(limit)}`,
       status ? [workspace_id, status] : [workspace_id],
     );
     const posts = rows.map((p) => ({
-      ...p,
+      id: p.id,
+      title: p.title,
+      caption: p.caption,
+      status: p.status,
       scheduled_at: iso(p.scheduled_at),
       published_at: iso(p.published_at),
       account_ids: arr(p.account_ids),
+      last_error: p.last_error,
       permalinks: arr(p.permalinks),
+      media_count: arr(p.media_paths).length,
     }));
     return {
       content: [{ type: "text", text: JSON.stringify(posts) }],
