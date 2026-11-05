@@ -425,18 +425,30 @@ function ContentPage() {
                       return;
                     }
                     try {
+                      // Kompres bertahap (lebar ↓, kualitas ↓) sampai ≤ 1.000.000 karakter data-URL.
                       const bitmap = await createImageBitmap(file);
-                      const scale = Math.min(1, 1600 / bitmap.width);
-                      const canvas = document.createElement("canvas");
-                      canvas.width = Math.round(bitmap.width * scale);
-                      canvas.height = Math.round(bitmap.height * scale);
-                      const context = canvas.getContext("2d");
-                      if (!context) throw new Error("Gambar tidak dapat diproses");
-                      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-                      bitmap.close();
-                      const value = canvas.toDataURL("image/webp", 0.8);
-                      if (value.length > 1_000_000)
-                        throw new Error("Gambar terlalu besar setelah kompresi");
+                      let value = "";
+                      try {
+                        outer: for (const maxWidth of [1600, 1280, 1024, 800, 640]) {
+                          const scale = Math.min(1, maxWidth / bitmap.width);
+                          const canvas = document.createElement("canvas");
+                          canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+                          canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+                          const context = canvas.getContext("2d");
+                          if (!context) throw new Error("Gambar tidak dapat diproses");
+                          context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                          for (const quality of [0.8, 0.7, 0.6, 0.5]) {
+                            const candidate = canvas.toDataURL("image/webp", quality);
+                            if (candidate.length <= 1_000_000) {
+                              value = candidate;
+                              break outer;
+                            }
+                          }
+                        }
+                      } finally {
+                        bitmap.close();
+                      }
+                      if (!value) throw new Error("Gambar terlalu besar setelah kompresi");
                       setForm((v) => ({ ...v, image_url: value }));
                     } catch (err) {
                       toast.error(err instanceof Error ? err.message : "Gambar tidak valid");

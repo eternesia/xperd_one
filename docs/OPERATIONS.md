@@ -18,6 +18,7 @@ Semua nama variabel di bawah **diambil langsung dari kode**, bukan asumsi.
 | `NODE_ENV` / `APP_ENV` | tidak | `files.server.ts`, `scripts/wipe.mjs` | `production` mengaktifkan cookie `secure` + root storage `/app/storage`; juga memblokir `db:wipe` |
 | `STORAGE_DIR` | tidak | `src/lib/files.server.ts` | Menimpa lokasi berkas unggahan (default `./storage` dev, `/app/storage` produksi) |
 | `SOCIAL_PUBLISH_SECRET` | **ya** (produksi) | `src/routes/api/public/hooks/social-publish.ts` | Rahasia hook cron auto-publish. Kosong = endpoint publik terbuka |
+| `CRON_SECRET` | **ya** (produksi) | `src/lib/cron-auth.server.ts` | Rahasia cron perpanjangan langganan (`/api/public/jobs/subscription-renewal`); kosong → memakai `SOCIAL_PUBLISH_SECRET`, keduanya kosong → endpoint menjawab 403 |
 | `VITE_QALLING_HOSTS` | tidak | `src/lib/qalling.ts` | Daftar host Qalling dipisah koma (default `qalling.id,qalling.net` + `www`). Dipakai redirect host → `/qalling` |
 | `APP_PUBLIC_URL` | **ya** (produksi, di balik proxy) | `src/lib/crm-media.server.ts` (`publicOrigin`) | Alamat publik aplikasi tanpa slash, mis. `https://qalling.id`. Dipakai untuk tautan media. Tujuan kembali pembayaran DOKU dan login Google **tidak** memakainya: Redirect URI mengikuti domain yang dipakai pengguna (`X-Forwarded-Host/Proto`), path tetap `/api/public/auth/google/callback`. Kosong = memakai alamat permintaan (di balik proxy bisa berupa alamat internal → Google `redirect_uri_mismatch`) |
 | `SUPERADMIN_EMAIL` | tidak | `src/lib/auth-context.server.ts` | Email yang otomatis diberi peran `admin` saat pertama login (default email pemilik repo) |
@@ -63,11 +64,24 @@ migrasi ikut naik saat deploy. Port aplikasi di-bind ke localhost
 (tempatkan `server_name qalling.id` → `/qalling` di sana; redirect klien di
 `__root.tsx` hanya jaring pengaman).
 
-**Cron auto-publish** (wajib bila memakai penjadwal postingan sosial):
+**Penjadwalan (cron) — wajib diaktifkan di produksi.** Aplikasi tidak punya scheduler internal; dua endpoint
+dipanggil cron eksternal di server (crontab host atau container cron). Rahasia dikirim lewat header
+`x-cron-secret` atau `x-webhook-secret` (atau `?secret=`):
+
+| Tugas | Endpoint | Rahasia | Interval |
+|---|---|---|---|
+| Auto-publish postingan sosial terjadwal (Qalling), maks 25 per panggilan | `GET/POST /api/public/hooks/social-publish` | `SOCIAL_PUBLISH_SECRET` (kosong = **terbuka**, isi di produksi) | tiap menit |
+| Perpanjangan langganan ERP dari saldo (tenant yang opt-in), maks 25 per panggilan | `POST /api/public/jobs/subscription-renewal` | `CRON_SECRET` (atau `SOCIAL_PUBLISH_SECRET`); tanpa rahasia = 403 | tiap jam |
 
 ```cron
 * * * * * curl -fsS -H "x-webhook-secret: $SOCIAL_PUBLISH_SECRET" http://127.0.0.1:3000/api/public/hooks/social-publish >/dev/null
+0 * * * * curl -fsS -X POST -H "x-cron-secret: $CRON_SECRET" http://127.0.0.1:3000/api/public/jobs/subscription-renewal >/dev/null
 ```
+
+Tanpa cron pertama, postingan yang dijadwalkan **tidak terbit otomatis** (tombol "Post now" tetap jalan); tanpa cron
+kedua, perpanjangan otomatis dari saldo tidak berjalan. Modul **Production tidak butuh cron**: semua aksi (order, jurnal,
+stok, lot) berjalan dari tindakan pengguna; pengecekan registrasi kedaluwarsa dihitung saat dipakai.
+Cek cepat: panggil endpoint dengan rahasia yang benar → `200` dan JSON hasil; tanpa rahasia → `403`.
 
 ## 4. CI
 
