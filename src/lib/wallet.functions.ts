@@ -54,6 +54,20 @@ const mapLedger = (r: Record<string, unknown>) => ({
   invoice_id: (r.invoice_id as string | null) ?? null,
 });
 
+/** Saldo saja (widget topbar Qalling) — ringan dibanding `getWallet` yang memuat mutasi & top-up. */
+export const getWalletBalance = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => z.object({ tenantId: z.string().uuid() }).parse(v))
+  .handler(async ({ data, context }) => {
+    await assertMember(data.tenantId, context.userId);
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const row = await executeOne<{ balance_idr: number }>(
+      "SELECT balance_idr FROM wallet_accounts WHERE tenant_id = ?",
+      [data.tenantId],
+    );
+    return { balance: Number(row?.balance_idr ?? 0) };
+  });
+
 export const getWallet = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((v: unknown) => scope.parse(v))

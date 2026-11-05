@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SubscriptionCheckout } from "@/components/app/SubscriptionCheckout";
+import { TierFeatures } from "@/components/qalling/TierFeatures";
 import { useApp } from "@/lib/app-context";
 import { listAddonOptions, listAddonTiers } from "@/lib/addon-catalog.functions";
 import { getTrialTierState } from "@/lib/trial-tier.functions";
@@ -37,6 +38,13 @@ export function AddonTierChoices() {
     queryKey: ["addon-options"],
     queryFn: () => listAddonOptions({ data: { activeOnly: true } }),
   });
+  // Urutan tampil seperti live (tabel opsi tak punya kolom urut): WhatsApp, user, storage, lalu paket akun tambahan.
+  const OPTION_ORDER = ["qalling_whatsapp", "qalling_extra_user", "qalling_extra_storage", "qalling_extra_accounts_5"];
+  const rank = (code: string) => {
+    const i = OPTION_ORDER.indexOf(code);
+    return i === -1 ? OPTION_ORDER.length : i;
+  };
+  const sortedOptions = [...options].sort((x, y) => rank(x.code) - rank(y.code) || x.code.localeCompare(y.code));
   return (
     <section className="space-y-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
       <h2 className="text-base font-semibold">Qalling · Pilihan paket</h2>
@@ -79,6 +87,9 @@ export function AddonTierChoices() {
                 <dt className="text-muted-foreground">Posting /bulan</dt>
                 <dd>{t.limits.monthly_post_limit ?? "∞"}</dd>
               </dl>
+              <div className="my-4 flex-1">
+                <TierFeatures features={t.features as Record<string, boolean>} compare />
+              </div>
               {tenantId && trial.data?.canSwitch ? (
                 <TrialTierSwitch
                   tenantId={tenantId}
@@ -104,7 +115,7 @@ export function AddonTierChoices() {
       </div>
       {options.length > 0 && <h3 className="pt-2 text-sm font-semibold">Tambahan opsional</h3>}
       <div className="divide-y divide-border">
-        {options.map((o) => (
+        {sortedOptions.map((o) => (
           <div
             key={o.id}
             className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
