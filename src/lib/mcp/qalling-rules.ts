@@ -47,7 +47,10 @@ export function validatePostTargets(accounts: Account[], types: string[], sendin
     accounts.some((a) => ["instagram", "tiktok", "youtube", "pinterest"].includes(a.platform))
   )
     throw new Error("The selected platform requires an image or video.");
-  if (sending && accounts.some((a) => a.source === "meta" && !["instagram", "facebook"].includes(a.platform)))
+  if (
+    sending &&
+    accounts.some((a) => a.source === "meta" && !["instagram", "facebook"].includes(a.platform))
+  )
     throw new Error("This native platform does not support publishing.");
 }
 
@@ -77,7 +80,12 @@ export function remoteMediaUrl(value: string) {
 }
 
 type Permission = { canView: boolean; canEdit: boolean };
-export function allowsSection(role: string, permissions: Map<string, Permission>, section: string, write: boolean) {
+export function allowsSection(
+  role: string,
+  permissions: Map<string, Permission>,
+  section: string,
+  write: boolean,
+) {
   if (role === "owner") return true;
   if (write && role === "viewer") return false;
   return ["crm", "crm/ai", `crm/${section}`].every((key) => {

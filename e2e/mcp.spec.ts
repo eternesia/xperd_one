@@ -186,6 +186,7 @@ test("MCP: token pribadi, tool, batas paket, OAuth PKCE, pencabutan", async ({ p
       "qalling_list_social_accounts",
       "qalling_publish_post_now",
       "qalling_search_leads",
+      "qalling_upload_media",
       "search_items",
     ].sort(),
   );

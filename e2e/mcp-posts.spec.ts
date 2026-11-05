@@ -97,6 +97,30 @@ test("MCP posting: create_post, list_media, publish_post_now, list_posts", async
   expect(pg.next_offset).toBe(2);
   expect((await call("qalling_list_media", { workspace_id: crypto.randomUUID() })).isError).toBe(true);
 
+  /* ---------- upload_media ---------- */
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const up = await call("qalling_upload_media", { workspace_id: ws, file_base64: png, mime_type: "image/png", name: `${TAG} up.png` });
+  expect(up.isError).toBeFalsy();
+  const upId = JSON.parse(up.text).media_id as string;
+  const [upRow] = await q("SELECT mime_type, size_bytes, created_by FROM crm_media WHERE id = ? AND workspace_id = ?", [upId, ws]);
+  expect(upRow.mime_type).toBe("image/png");
+  expect(Number(upRow.size_bytes)).toBe(Buffer.from(png, "base64").length);
+  expect(upRow.created_by).toBe(userId);
+  expect(JSON.parse((await call("qalling_list_media", { workspace_id: ws, search: TAG })).text).total).toBe(4);
+  const usePost = await call("qalling_create_post", { workspace_id: ws, account_ids: [ig], title: `${TAG} uploaded`, caption: "x", media_ids: [upId] });
+  expect(usePost.isError).toBeFalsy();
+  for (const bad of [
+    { workspace_id: ws }, // tanpa url/file
+    { workspace_id: ws, url: "https://example.com/a.png", file_base64: png, mime_type: "image/png" }, // keduanya
+    { workspace_id: ws, file_base64: png }, // tanpa mime_type
+    { workspace_id: ws, file_base64: "!!!bukan base64!!!", mime_type: "image/png" },
+    { workspace_id: ws, url: "https://example.com/a.png" }, // CDN tidak diizinkan
+    { workspace_id: crypto.randomUUID(), file_base64: png, mime_type: "image/png" },
+  ]) {
+    expect((await call("qalling_upload_media", bad)).isError, JSON.stringify(bad).slice(0, 60)).toBe(true);
+  }
+  expect(JSON.parse((await call("qalling_list_media", { workspace_id: ws, search: TAG })).text).total).toBe(4);
+
   /* ---------- create_post ---------- */
   const draft = await call("qalling_create_post", { workspace_id: ws, account_ids: [ig], title: `${TAG} draft`, caption: "Halo" });
   expect(draft.isError).toBeFalsy();
@@ -179,6 +203,7 @@ test("MCP posting: create_post, list_media, publish_post_now, list_posts", async
   for (const [name, args] of [
     ["qalling_create_post", { workspace_id: ws, account_ids: [ig], title: `${TAG} lite`, caption: "x" }],
     ["qalling_list_media", { workspace_id: ws }],
+    ["qalling_upload_media", { workspace_id: ws, file_base64: "AAAA", mime_type: "image/png" }],
     ["qalling_publish_post_now", { workspace_id: ws, post_id: d.id, confirm: true }],
   ] as const) {
     const r = await call(name, args as Record<string, unknown>);

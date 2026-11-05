@@ -63,7 +63,8 @@ export async function assertQallingSection(
     "SELECT role, custom_role_id FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
     [workspaceId, userId],
   );
-  const denied = "Access denied: your plan or workspace membership does not allow this Qalling integration.";
+  const denied =
+    "Access denied: your plan or workspace membership does not allow this Qalling integration.";
   if (!member) throw new Error(denied);
   for (const f of ["mcp_api", "publishing"])
     if (!(await workspaceHasFeature(workspaceId, f))) throw new Error(denied);
@@ -76,10 +77,9 @@ export async function assertQallingSection(
         [member.custom_role_id, workspaceId],
       );
       if (!c) throw new Error("Access denied: workspace permissions could not be checked.");
-      const entries = (typeof c.permissions === "string" ? JSON.parse(c.permissions) : c.permissions) as Record<
-        string,
-        { view?: boolean; edit?: boolean }
-      >;
+      const entries = (
+        typeof c.permissions === "string" ? JSON.parse(c.permissions) : c.permissions
+      ) as Record<string, { view?: boolean; edit?: boolean }>;
       for (const [k, p] of Object.entries(entries ?? {}))
         permissions.set(k, { canView: !!p?.view, canEdit: !!p?.view && !!p?.edit });
     } else {
@@ -88,7 +88,10 @@ export async function assertQallingSection(
         [workspaceId, member.role],
       );
       for (const p of rows)
-        permissions.set(p.module_id, { canView: Number(p.can_view) === 1, canEdit: Number(p.can_edit) === 1 });
+        permissions.set(p.module_id, {
+          canView: Number(p.can_view) === 1,
+          canEdit: Number(p.can_edit) === 1,
+        });
     }
   }
   if (!allowsSection(member.role, permissions, section, write))

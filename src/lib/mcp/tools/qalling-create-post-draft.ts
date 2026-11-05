@@ -12,9 +12,17 @@ export default defineTool({
     "Create a Qalling post with a caption and up to 10 ordered image/video attachments from media_ids (library) or media_urls (supported HTTPS CDNs); multiple images create a carousel. Save for review with publish_mode=draft (default), or schedule directly with publish_mode=scheduled and a future scheduled_at including a timezone offset. Scheduled delivery requires the Qalling scheduler to be running. For immediate posting, create a draft then use qalling_publish_post_now with explicit user approval. Carousels/video require Tebar-connected accounts; native Meta supports one image only.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace id from list_workspaces."),
-    account_ids: z.array(z.string().uuid()).min(1).max(10).describe("Ids from qalling_list_social_accounts."),
+    account_ids: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(10)
+      .describe("Ids from qalling_list_social_accounts."),
     title: z.string().min(1).max(150).describe("Short internal title."),
-    caption: z.string().max(5000).default("").describe("Post caption; may be empty when media is attached."),
+    caption: z
+      .string()
+      .max(5000)
+      .default("")
+      .describe("Post caption; may be empty when media is attached."),
     scheduled_at: z
       .string()
       .datetime({ offset: true })
@@ -41,13 +49,19 @@ export default defineTool({
         "Ordered HTTPS image/video URLs on supported OpenAI/Google Storage/Cloudinary/Unsplash/Replicate/Fal CDNs, imported into private workspace storage after media_ids. Multiple images form a carousel; maximum 10 attachments total. For other hosts upload in Qalling and use media_ids.",
       ),
   },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
   handler: async (args, ctx) => {
     requireAuth(ctx);
     const parsed = postInputSchema.safeParse(args);
     if (!parsed.success) throw new ToolError(parsed.error.issues.map((i) => i.message).join("; "));
     const input = parsed.data;
-    const { workspace_id, account_ids, title, caption, publish_mode, media_ids, media_urls } = input;
+    const { workspace_id, account_ids, title, caption, publish_mode, media_ids, media_urls } =
+      input;
     const { userId } = await getTokenUser(ctx);
     let scheduledAt: string;
     try {
@@ -60,12 +74,19 @@ export default defineTool({
       await assertQallingSection(workspace_id, userId, "media", media_urls.length > 0);
     const { execute, uuid } = await import("@/integrations/mysql/pool");
     const unique = [...new Set(account_ids)];
-    const owned = await execute<{ id: string; platform: string; source: string | null; status: string }>(
+    const owned = await execute<{
+      id: string;
+      platform: string;
+      source: string | null;
+      status: string;
+    }>(
       `SELECT id, platform, source, status FROM crm_social_accounts WHERE workspace_id = ? AND id IN (${unique.map(() => "?").join(",")})`,
       [workspace_id, ...unique],
     );
     if (owned.length !== unique.length)
-      throw new ToolError("account_not_found: use ids from qalling_list_social_accounts for this workspace.");
+      throw new ToolError(
+        "account_not_found: use ids from qalling_list_social_accounts for this workspace.",
+      );
     try {
       validatePostTargets(owned, [], false);
     } catch (e) {
@@ -74,7 +95,11 @@ export default defineTool({
     const { media, cleanup } = await resolveMedia(workspace_id, userId, media_ids, media_urls);
     try {
       try {
-        validatePostTargets(owned, media.map((m) => m.mime_type), publish_mode === "scheduled");
+        validatePostTargets(
+          owned,
+          media.map((m) => m.mime_type),
+          publish_mode === "scheduled",
+        );
       } catch (e) {
         throw new ToolError((e as Error).message);
       }
@@ -97,7 +122,16 @@ export default defineTool({
         await execute(
           `INSERT INTO crm_scheduled_posts (id, workspace_id, title, caption, account_ids, media_paths, scheduled_at, status, source)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mcp')`,
-          [id, workspace_id, title, caption, JSON.stringify(unique), JSON.stringify(media.map((m) => m.file_path)), when, publish_mode],
+          [
+            id,
+            workspace_id,
+            title,
+            caption,
+            JSON.stringify(unique),
+            JSON.stringify(media.map((m) => m.file_path)),
+            when,
+            publish_mode,
+          ],
         );
       } catch {
         throw new ToolError("Post could not be saved.");
@@ -112,7 +146,10 @@ export default defineTool({
             ? "Scheduled in Qalling; sent to the provider when due."
             : "Draft saved for review in Qalling → Posts.",
       };
-      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result,
+      };
     } catch (e) {
       await cleanup();
       throw e;

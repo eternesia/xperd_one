@@ -18,9 +18,16 @@ export default defineTool({
     confirm: z
       .boolean()
       .default(false)
-      .describe("False previews; true authorizes immediate publication after explicit user approval."),
+      .describe(
+        "False previews; true authorizes immediate publication after explicit user approval.",
+      ),
   },
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
   handler: async ({ workspace_id, post_id, confirm }, ctx) => {
     requireAuth(ctx);
     const { userId } = await getTokenUser(ctx);
@@ -43,11 +50,25 @@ export default defineTool({
       [workspace_id, post_id],
     );
     if (!post) throw new ToolError("Post not found in this workspace.");
-    if (!canEditSchedule({ status: post.status, source: post.source ?? undefined, external_id: post.external_id }))
-      throw new ToolError("Post already submitted or cannot be resent. Check its status; do not retry.");
+    if (
+      !canEditSchedule({
+        status: post.status,
+        source: post.source ?? undefined,
+        external_id: post.external_id,
+      })
+    )
+      throw new ToolError(
+        "Post already submitted or cannot be resent. Check its status; do not retry.",
+      );
     const ids = [...new Set(arr(post.account_ids))];
     const accounts = ids.length
-      ? await execute<{ id: string; account_name: string; platform: string; source: string | null; status: string }>(
+      ? await execute<{
+          id: string;
+          account_name: string;
+          platform: string;
+          source: string | null;
+          status: string;
+        }>(
           `SELECT id, account_name, platform, source, status FROM crm_social_accounts
             WHERE workspace_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
           [workspace_id, ...ids],
@@ -62,12 +83,20 @@ export default defineTool({
           [workspace_id, ...paths],
         )
       : [];
-    if (paths.some((p) => !media.some((m) => m.file_path === p))) throw new ToolError("Media not found in this workspace.");
+    if (paths.some((p) => !media.some((m) => m.file_path === p)))
+      throw new ToolError("Media not found in this workspace.");
     if (post.media_url)
-      throw new ToolError("Attach workspace library media before publishing this post through MCP.");
-    if (!post.caption?.trim() && !paths.length) throw new ToolError("Add a caption or media before publishing.");
+      throw new ToolError(
+        "Attach workspace library media before publishing this post through MCP.",
+      );
+    if (!post.caption?.trim() && !paths.length)
+      throw new ToolError("Add a caption or media before publishing.");
     try {
-      validatePostTargets(accounts, media.map((m) => m.mime_type), true);
+      validatePostTargets(
+        accounts,
+        media.map((m) => m.mime_type),
+        true,
+      );
     } catch (e) {
       throw new ToolError((e as Error).message);
     }
@@ -82,7 +111,10 @@ export default defineTool({
         message:
           "Ask the user to approve this post and these destination accounts before calling with confirm=true.",
       };
-      return { content: [{ type: "text", text: JSON.stringify(preview) }], structuredContent: preview };
+      return {
+        content: [{ type: "text", text: JSON.stringify(preview) }],
+        structuredContent: preview,
+      };
     }
     const now = Date.now();
     const due = Date.parse(`${String(post.scheduled_at).replace(" ", "T")}Z`) <= now;
@@ -90,9 +122,13 @@ export default defineTool({
       const queuedAlready = {
         post_id,
         status: "scheduled",
-        message: "Already queued for delivery. Do not submit again; read status with qalling_list_posts.",
+        message:
+          "Already queued for delivery. Do not submit again; read status with qalling_list_posts.",
       };
-      return { content: [{ type: "text", text: JSON.stringify(queuedAlready) }], structuredContent: queuedAlready };
+      return {
+        content: [{ type: "text", text: JSON.stringify(queuedAlready) }],
+        structuredContent: queuedAlready,
+      };
     }
     // Compare-and-set: tidak berebut dengan cron dan tidak mengubah post yang sudah diproses.
     const upd = await run(
@@ -101,7 +137,9 @@ export default defineTool({
       [workspace_id, post_id, post.status, post.scheduled_at],
     );
     if (!upd.affectedRows)
-      throw new ToolError("Post changed or is being processed. Read its current status; do not resend.");
+      throw new ToolError(
+        "Post changed or is being processed. Read its current status; do not resend.",
+      );
     const after = await executeOne<{ id: string; status: string; scheduled_at: string }>(
       "SELECT id, status, scheduled_at FROM crm_scheduled_posts WHERE id = ?",
       [post_id],
@@ -109,7 +147,9 @@ export default defineTool({
     const out = {
       post_id,
       status: after?.status ?? "scheduled",
-      scheduled_at: after ? new Date(`${String(after.scheduled_at).replace(" ", "T")}Z`).toISOString() : null,
+      scheduled_at: after
+        ? new Date(`${String(after.scheduled_at).replace(" ", "T")}Z`).toISOString()
+        : null,
       message:
         "Queued for immediate delivery on the next scheduler tick (about one minute). Not yet confirmed published; read qalling_list_posts for the outcome.",
     };

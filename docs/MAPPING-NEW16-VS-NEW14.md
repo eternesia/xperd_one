@@ -173,3 +173,8 @@ Aturan: Meta native 1 gambar, carousel/video untuk akun Tebar, carousel hanya ga
 `publish_post_now` mengubah post menjadi `scheduled` pada waktu sekarang dengan compare-and-set; pengiriman dilakukan **cron social-publish** (wajib berjalan, lihat OPERATIONS.md).
 Tidak dibawa: `requireOAuthClientClaim` (khusus penerbit OAuth Supabase; server OAuth Old sendiri menerbitkan token), tes `qalling-rules.test.ts` (Old tanpa Vitest — dicakup `e2e/mcp-posts.spec.ts`).
 Belum teruji: impor sukses `media_urls` dari CDN nyata (host dibatasi ke CDN publik; penolakan host lain/http/port diuji).
+
+## Ronde 59 — MCP BS New 18 (v1.2.0)
+
+New 18 vs New 17 hanya berbeda di MCP: tool ke-18 `qalling_upload_media` (url CDN yang diizinkan **atau** `file_base64` + `mime_type`, nama opsional, satu berkas per panggilan, hasil `media_id` untuk `qalling_create_post`). Instruksi server diperbarui dan versi menjadi 1.2.0.
+Old: `src/lib/mcp/tools/qalling-upload-media.ts` + helper bersama `storeMedia` di `qalling-media.ts` (kuota tier, kebijakan unggah Super Admin, penyimpanan file lokal, baris `crm_media`; pembersihan bila insert gagal). Dilindungi seperti tool Qalling lain (`mcp_api` + izin bagian `media` tulis). Uji: `e2e/mcp-posts.spec.ts`, `e2e/mcp.spec.ts` (18 nama).

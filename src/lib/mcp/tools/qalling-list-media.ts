@@ -37,13 +37,24 @@ export default defineTool({
       params.push(`${type}/%`);
     }
     try {
-      const rows = await execute<{ id: string; name: string; mime_type: string; size_bytes: number; created_at: string }>(
+      const rows = await execute<{
+        id: string;
+        name: string;
+        mime_type: string;
+        size_bytes: number;
+        created_at: string;
+      }>(
         `SELECT id, name, mime_type, size_bytes, created_at FROM crm_media WHERE ${where.join(" AND ")}
           ORDER BY created_at DESC, id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
         params,
       );
       const total = Number(
-        (await executeOne<{ n: number }>(`SELECT COUNT(*) AS n FROM crm_media WHERE ${where.join(" AND ")}`, params))?.n ?? 0,
+        (
+          await executeOne<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM crm_media WHERE ${where.join(" AND ")}`,
+            params,
+          )
+        )?.n ?? 0,
       );
       const result = {
         media: rows.map((m) => ({
@@ -56,7 +67,10 @@ export default defineTool({
         total,
         next_offset: offset + limit < total ? offset + limit : null,
       };
-      return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result,
+      };
     } catch {
       throw new ToolError("Workspace media could not be loaded.");
     }
