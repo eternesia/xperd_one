@@ -423,16 +423,16 @@ function ContentPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    if (file.size > 5_000_000) {
-                      toast.error("Gambar maksimal 5 MB");
+                    if (file.size > 10 * 1024 * 1024) {
+                      toast.error("Gambar maksimal 10 MB");
                       return;
                     }
                     try {
-                      // Kompres bertahap (lebar ↓, kualitas ↓) sampai ≤ 1.000.000 karakter data-URL.
+                      // Kompres bertahap (lebar ↓, kualitas ↓) sampai ≤ 3.000.000 karakter data-URL.
                       const bitmap = await createImageBitmap(file);
                       let value = "";
                       try {
-                        outer: for (const maxWidth of [1600, 1280, 1024, 800, 640]) {
+                        outer: for (const maxWidth of [2400, 1920, 1600, 1280, 1024, 800, 640]) {
                           const scale = Math.min(1, maxWidth / bitmap.width);
                           const canvas = document.createElement("canvas");
                           canvas.width = Math.max(1, Math.round(bitmap.width * scale));
@@ -442,7 +442,7 @@ function ContentPage() {
                           context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
                           for (const quality of [0.8, 0.7, 0.6, 0.5]) {
                             const candidate = canvas.toDataURL("image/webp", quality);
-                            if (candidate.length <= 1_000_000) {
+                            if (candidate.length <= 3_000_000) {
                               value = candidate;
                               break outer;
                             }
