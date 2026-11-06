@@ -140,12 +140,12 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
     /* ---------------------------- Piutang & Hutang ---------------------------- */
     await run({ id: "ar", group: "Piutang & Hutang", title: "Saldo piutang usaha (1200) = faktur − penerimaan − retur" }, async () => {
       const r = (await execute(
-        `SELECT COALESCE(SUM(CASE WHEN doc_type = 'ar_invoice' THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS inc,
-                COALESCE(SUM(CASE WHEN doc_type IN ('sales_receipt','sales_return') THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS dec
+        `SELECT COALESCE(SUM(CASE WHEN doc_type = 'ar_invoice' THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS sum_inc,
+                COALESCE(SUM(CASE WHEN doc_type IN ('sales_receipt','sales_return') THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS sum_dec
            FROM sls_documents WHERE workspace_id = ? AND status NOT IN ('draft','cancelled') AND COALESCE(advance_kind,'') <> 'advance'`,
         [ws],
       )) as R[];
-      const sub = n(r[0].inc) - n(r[0].dec);
+      const sub = n(r[0].sum_inc) - n(r[0].sum_dec);
       const gl = net("1200");
       const diff = gl - sub;
       const detail = [{ label: "Saldo akun 1200 (buku besar)", value: rp(gl) }, { label: "Faktur − penerimaan − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];
@@ -155,12 +155,12 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
     });
     await run({ id: "ap", group: "Piutang & Hutang", title: "Saldo hutang usaha (2000) = faktur − pembayaran − retur" }, async () => {
       const r = (await execute(
-        `SELECT COALESCE(SUM(CASE WHEN doc_type = 'ap_invoice' THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS inc,
-                COALESCE(SUM(CASE WHEN doc_type IN ('purchase_payment','purchase_return') THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS dec
+        `SELECT COALESCE(SUM(CASE WHEN doc_type = 'ap_invoice' THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS sum_inc,
+                COALESCE(SUM(CASE WHEN doc_type IN ('purchase_payment','purchase_return') THEN total * COALESCE(NULLIF(exchange_rate,0),1) ELSE 0 END),0) AS sum_dec
            FROM prc_documents WHERE workspace_id = ? AND status NOT IN ('draft','cancelled') AND COALESCE(advance_kind,'') <> 'advance'`,
         [ws],
       )) as R[];
-      const sub = n(r[0].inc) - n(r[0].dec);
+      const sub = n(r[0].sum_inc) - n(r[0].sum_dec);
       const gl = -net("2000");
       const diff = gl - sub;
       const detail = [{ label: "Saldo akun 2000 (buku besar)", value: rp(gl) }, { label: "Faktur − pembayaran − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];

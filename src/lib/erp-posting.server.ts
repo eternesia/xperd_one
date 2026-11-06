@@ -881,6 +881,26 @@ export async function erpSaveDocumentTx(
           );
           if (bl[0]) prof = { item_class: null };
         }
+        // Barang jadi/bulk hasil produksi juga ber-lot walau tanpa profil atau bukan bahan BoM.
+        if (!prof) {
+          const [hl] = await conn.execute<any[]>(
+            "SELECT 1 AS x FROM mfg_lots WHERE workspace_id = ? AND item_id = ? AND is_active = 1 LIMIT 1",
+            [ws, item.id],
+          );
+          if (hl[0]) prof = { item_class: null };
+        }
+      }
+      // Penjualan item ber-lot tanpa lot yang dipilih: pilih otomatis lot Released (FEFO) yang stoknya cukup.
+      if (side === "sales" && sign < 0 && prof && !lotId && mfgOn) {
+        lotId = await selectLot(conn, {
+          workspaceId: ws,
+          userId,
+          itemId: item.id,
+          warehouse,
+          qty: l.qty,
+          key: derivedUuid(`${input.key}:${i}`),
+          reason: l.lot_reason || `Penjualan ${number} (lot otomatis FEFO)`,
+        });
       }
       if (side === "sales" && sign < 0 && prof && !lotId)
         throw bad("Production item requires a released lot");
@@ -897,7 +917,6 @@ export async function erpSaveDocumentTx(
         unitCost = r4(orig.reduce((s, r) => s + Math.abs(num(r.value)), 0) / q);
         lotId = (mfgOn && orig.find((r) => r.mfg_lot_id)?.mfg_lot_id) || null;
       } else unitCost = r4(await erpAverageCost(conn, ws, code, day, lotId));
-      if (lotId) unitCost = Math.round(unitCost);
       if (sign < 0) {
         const [bal] = await conn.execute<any[]>(
           `SELECT COALESCE(SUM(qty),0) AS q FROM inv_movements WHERE workspace_id = ? AND item_code = ? AND warehouse_code = ? ${lotId ? "AND mfg_lot_id = ?" : ""} FOR UPDATE`,

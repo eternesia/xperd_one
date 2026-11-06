@@ -17,11 +17,11 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         gold: "bg-[image:var(--gradient-gold)] text-gold-foreground font-semibold shadow-[var(--shadow-gold)] hover:brightness-108 hover:-translate-y-0.5 transition-all duration-300",
-        navy: "bg-navy text-primary-foreground font-medium shadow-[var(--shadow-elevate)] hover:bg-navy-soft hover:-translate-y-0.5 transition-all duration-300",
+        navy: "bg-navy text-primary-foreground font-medium shadow-[var(--shadow-elevate)] hover:bg-navy-soft hover:-translate-y-0.5 transition-all duration-300 dark:bg-navy-soft dark:hover:bg-[oklch(0.42_0.06_262)] dark:border dark:border-white/10",
         outlineGold:
           "border border-gold/60 text-gold bg-transparent font-medium hover:bg-gold/10 hover:border-gold transition-colors",
         onDark:
-          "border border-white/25 bg-white/5 text-primary-foreground font-medium backdrop-blur-sm hover:bg-white/12 transition-colors",
+          "border border-white/25 bg-white/5 text-white font-medium backdrop-blur-sm hover:bg-white/12 transition-colors",
       },
       size: {
         default: "h-9 px-4 py-2",

@@ -160,6 +160,22 @@
   color: oklch(0.97 0.01 250);
 }
 
+/* Dark mode: --primary-foreground becomes dark (it sits on the gold primary).
+   On navy backgrounds that left `text-primary-foreground` dark-on-dark, so
+   buttons/menus vanished. Scope a light foreground to navy surfaces and keep
+   the dark one on gold surfaces (also when nested inside a navy panel). */
+.dark .bg-navy,
+.dark .bg-navy-deep,
+.dark .bg-navy-soft,
+.dark [class*="gradient-navy"] {
+  --primary-foreground: oklch(0.98 0.005 250);
+}
+.dark .bg-primary,
+.dark .bg-gold,
+.dark [class*="gradient-gold"] {
+  --primary-foreground: oklch(0.2 0.05 262);
+}
+
 /* Dark mode: navy text is unreadable on dark surfaces. Keep all navy-labelled
    headings and labels on the light foreground token. */
 .dark .text-navy {
