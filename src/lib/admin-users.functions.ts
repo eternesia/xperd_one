@@ -384,11 +384,38 @@ export const adminRemoveWorkspaceAccess = createServerFn({ method: "POST" })
 // Sengaja TIDAK memakai trigger DB maupun tabel/kolom baru: daftar tabel yang
 // dibersihkan ada di konstanta TX_TABLES di bawah, dijalankan satu transaksi
 // MySQL (atomic) dan diverifikasi ulang sebelum commit. Master data (item,
-// customer, supplier, COA, gudang, paket) tidak disentuh.
+// customer, supplier, COA, gudang, paket, BoM & master Production) tidak disentuh;
+// transaksi Production (order, lot, QC, biaya) ikut dibersihkan.
 // ---------------------------------------------------------------------------
+
+/**
+ * Data transaksi Production (anak dulu sesuai FK). Master Production (BoM, spesifikasi QC, profil item,
+ * pemetaan akun, pengaturan, pusat kerja, routing, registrasi, peran, dokumen terlampir) dan jejak audit
+ * TIDAK dihapus. Penghitung penomoran ikut direset agar nomor order/lot/inspeksi mulai dari awal.
+ */
+const MFG_TX_TABLES = [
+  "mfg_qc_results",
+  "mfg_deviations",
+  "mfg_qc_inspections",
+  "mfg_lot_selections",
+  "mfg_lot_genealogy",
+  "mfg_batch_steps",
+  "mfg_order_costs",
+  "mfg_order_labor",
+  "mfg_order_materials",
+  "mfg_order_outputs",
+  "mfg_order_transitions",
+  "mfg_journal_events",
+  "mfg_orders",
+  "mfg_lots",
+  "mfg_waste_logs",
+  "mfg_number_allocations",
+  "mfg_number_counters",
+] as const;
 
 /** Urutan penting: anak dulu (lines -> documents) agar tidak melanggar FK. */
 const TX_TABLES = [
+  ...MFG_TX_TABLES,
   "acc_journal_lines",
   "acc_journal_entries",
   "sls_shipment_scans",
