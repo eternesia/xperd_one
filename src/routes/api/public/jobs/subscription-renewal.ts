@@ -10,7 +10,16 @@ export const Route = createFileRoute("/api/public/jobs/subscription-renewal")({
         if (failure) return failure;
         const { renewDueTenants } = await import("@/lib/billing-wallet.server");
         try {
-          return Response.json(await renewDueTenants(25));
+          const renewal = await renewDueTenants(25);
+          // Email notifikasi best-effort: kegagalan di sini tidak boleh memengaruhi hasil perpanjangan.
+          let notifications: unknown = null;
+          try {
+            const { runBillingNotifications } = await import("@/lib/billing-notifications.server");
+            notifications = await runBillingNotifications();
+          } catch {
+            notifications = { error: "notifications_failed" };
+          }
+          return Response.json({ ...renewal, notifications });
         } catch {
           return Response.json({ error: "renewal_failed" }, { status: 500 });
         }

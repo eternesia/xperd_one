@@ -72,6 +72,7 @@ dipanggil cron eksternal di server (crontab host atau container cron). Rahasia d
 |---|---|---|---|
 | Auto-publish postingan sosial terjadwal (Qalling), maks 25 per panggilan | `GET/POST /api/public/hooks/social-publish` | `SOCIAL_PUBLISH_SECRET` (kosong = **terbuka**, isi di produksi) | tiap menit |
 | Perpanjangan langganan ERP dari saldo (tenant yang opt-in), maks 25 per panggilan | `POST /api/public/jobs/subscription-renewal` | `CRON_SECRET` (atau `SOCIAL_PUBLISH_SECRET`); tanpa rahasia = 403 | tiap jam |
+| Email notifikasi: pengingat trial (7/3/1/0 hari), saldo kurang untuk perpanjangan, bukti pembayaran (topup/perpanjangan), ringkasan posting mingguan. Idempoten (tabel `email_notifications`, kunci unik). Juga dijalankan otomatis oleh job perpanjangan di atas; endpoint ini hanya bila ingin jadwal terpisah | `POST /api/public/jobs/billing-notifications` | sama seperti di atas | tiap jam |
 
 ```cron
 * * * * * curl -fsS -H "x-webhook-secret: $SOCIAL_PUBLISH_SECRET" http://127.0.0.1:3000/api/public/hooks/social-publish >/dev/null
@@ -137,3 +138,12 @@ server {
 > Opsional setelah rewrite proxy dihapus: `QALLING_LEGACY_REDIRECT=1` mengalihkan permanen `qalling.id/qalling/*` → alamat bersih. Host tambahan: `VITE_QALLING_HOSTS` (saat build).
 > Daftarkan Redirect URI Google dan tujuan kembali DOKU dengan alamat bersih domain (mis. `https://qalling.id/api/public/auth/google/callback`) — tidak berubah.
 
+
+
+### Email notifikasi billing
+
+- Wajib: gateway email platform aktif (Resend/Brevo/SendGrid). Jika belum, job menjawab `skipped: email_gateway_not_configured` dan tidak ada yang ditandai terkirim.
+- `PUBLIC_APP_ORIGIN` menentukan tautan di email (default `https://qalling.id`).
+- Migrasi `051_email_notifications.sql` membuat `email_notifications` dan `notification_prefs`. Invoice yang lunas sebelum fitur aktif tidak dikirimi email susulan (penanda `invoice-receipts-start`).
+- Pemilik akun dapat mematikan pengingat trial, bukti pembayaran, dan ringkasan mingguan di Qalling → Tagihan & Saldo. Peringatan saldo kurang dan perpanjangan gagal selalu dikirim.
+- Email invoice berisi rincian dan tautan; PDF tetap diunduh dari halaman tagihan (gateway tidak mendukung lampiran).

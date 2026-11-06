@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { NotificationPrefsCard } from "@/components/qalling/NotificationPrefsCard";
 import { WalletPanel } from "@/components/app/WalletPanel";
 import { AddonTierChoices } from "@/components/app/AddonTierChoices";
 import { listTenantInvoices } from "@/lib/platform.functions";
@@ -53,7 +54,7 @@ function QallingBilling() {
           <TabsTrigger value="paket">Paket</TabsTrigger>
           <TabsTrigger value="tagihan">Riwayat tagihan</TabsTrigger>
         </TabsList>
-        <TabsContent value="saldo" className="mt-4"><WalletPanel key={tenant.id} tenantId={tenant.id} /></TabsContent>
+        <TabsContent value="saldo" className="mt-4 space-y-4"><WalletPanel key={tenant.id} tenantId={tenant.id} /><NotificationPrefsCard tenantId={tenant.id} /></TabsContent>
         <TabsContent value="paket" className="mt-4"><AddonTierChoices /></TabsContent>
         <TabsContent value="tagihan" className="mt-4">
           <section className="rounded-xl border bg-card p-4 shadow-sm">
