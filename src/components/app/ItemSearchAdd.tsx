@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,12 @@ export function ItemSearchAdd({
   const [cursor, setCursor] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setRect({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 320) });
+  }, [open, term]);
   const hits = useMemo(() => {
     const t = term.trim().toLowerCase();
     if (!t) return [];
@@ -98,8 +105,8 @@ export function ItemSearchAdd({
           }
         }}
       />
-      {open && term.trim() !== "" && (
-        <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
+      {open && term.trim() !== "" && rect && typeof document !== "undefined" && createPortal(
+        <ul style={{ position: "fixed", top: rect.top, left: rect.left, width: rect.width }} className="z-[100] max-h-64 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-lg">
           {hits.length === 0 && (
             <li className="px-3 py-2 text-sm text-muted-foreground">
               {onFreeText ? "Tidak ada kecocokan — Enter untuk menambah sebagai teks bebas." : "Tidak ditemukan."}
@@ -122,7 +129,8 @@ export function ItemSearchAdd({
               {o.hint ? <span className="text-xs text-muted-foreground">{o.hint}</span> : null}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body,
       )}
     </div>
   );
