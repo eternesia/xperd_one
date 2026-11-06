@@ -63,7 +63,7 @@ export function ItemSearchAdd({
   }
 
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative w-full md:w-5/12 md:min-w-[20rem]", className)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={ref}
