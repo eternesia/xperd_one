@@ -79,6 +79,7 @@ import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.ref
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
 import { Route as QallingDocsIndexRouteImport } from './routes/qalling.docs.index'
 import { Route as QallingDocsSlugRouteImport } from './routes/qalling.docs.$slug'
+import { Route as ApiPublicDocsMcpToolsRouteImport } from './routes/api/public/docs/mcp-tools'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
 import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/api/public/jobs/billing-notifications'
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
@@ -454,6 +455,11 @@ const QallingDocsSlugRoute = QallingDocsSlugRouteImport.update({
   path: '/qalling/docs/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicDocsMcpToolsRoute = ApiPublicDocsMcpToolsRouteImport.update({
+  id: '/api/public/docs/mcp-tools',
+  path: '/api/public/docs/mcp-tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksSocialPublishRoute =
   ApiPublicHooksSocialPublishRouteImport.update({
     id: '/api/public/hooks/social-publish',
@@ -642,6 +648,7 @@ export interface FileRoutesByFullPath {
   '/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
   '/qalling/docs/': typeof QallingDocsIndexRoute
+  '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -730,6 +737,7 @@ export interface FileRoutesByTo {
   '/products': typeof SiteProductsIndexRoute
   '/qalling/app': typeof QallingAppIndexRoute
   '/qalling/docs': typeof QallingDocsIndexRoute
+  '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -823,6 +831,7 @@ export interface FileRoutesById {
   '/_site/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
   '/qalling/docs/': typeof QallingDocsIndexRoute
+  '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -917,6 +926,7 @@ export interface FileRouteTypes {
     | '/products/'
     | '/qalling/app/'
     | '/qalling/docs/'
+    | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1005,6 +1015,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/qalling/app'
     | '/qalling/docs'
+    | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1097,6 +1108,7 @@ export interface FileRouteTypes {
     | '/_site/products/'
     | '/qalling/app/'
     | '/qalling/docs/'
+    | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1149,6 +1161,7 @@ export interface RootRouteChildren {
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   QallingDocsSlugRoute: typeof QallingDocsSlugRoute
   QallingDocsIndexRoute: typeof QallingDocsIndexRoute
+  ApiPublicDocsMcpToolsRoute: typeof ApiPublicDocsMcpToolsRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
   ApiPublicJobsBillingNotificationsRoute: typeof ApiPublicJobsBillingNotificationsRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -1654,6 +1667,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingDocsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/docs/mcp-tools': {
+      id: '/api/public/docs/mcp-tools'
+      path: '/api/public/docs/mcp-tools'
+      fullPath: '/api/public/docs/mcp-tools'
+      preLoaderRoute: typeof ApiPublicDocsMcpToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/social-publish': {
       id: '/api/public/hooks/social-publish'
       path: '/api/public/hooks/social-publish'
@@ -2012,6 +2032,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   QallingDocsSlugRoute: QallingDocsSlugRoute,
   QallingDocsIndexRoute: QallingDocsIndexRoute,
+  ApiPublicDocsMcpToolsRoute: ApiPublicDocsMcpToolsRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
   ApiPublicJobsBillingNotificationsRoute:
     ApiPublicJobsBillingNotificationsRoute,
