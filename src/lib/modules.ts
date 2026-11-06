@@ -311,10 +311,10 @@ const MODULE_DEFS: AppModule[] = [
     addon: "manufacturing",
     submodules: [
       {
-        ...s("profiles", "Item Profiles (RM / PM / FG)", "Profil Item (RM / PM / FG)"),
+        ...s("profiles", "Item Profiles", "Profil Item"),
         icon: PackageCheck,
       },
-      { ...s("boms", "Formulation / BoM (Phases)", "Formulasi / BoM (Phase)"), icon: FlaskConical },
+      { ...s("boms", "Formulation / BoM", "Formulasi / BoM"), icon: FlaskConical },
       {
         ...s("lots", "Material Stock & Lots", "Stok Bahan & Lot"),
         icon: PackageSearch,

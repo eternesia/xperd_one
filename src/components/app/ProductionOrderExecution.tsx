@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminField, AdminSelect } from './admin-ui';
@@ -14,6 +15,7 @@ import { nextOrderStatus, type OrderStatus } from '@/lib/production-orders';
 import { saveProductionPdf } from '@/lib/production-pdf';
 
 const LABEL: Record<string, string> = { draft: 'Draf', planned: 'Direncanakan', released: 'Dirilis', in_progress: 'Berjalan', qc_pending: 'Menunggu QC', completed: 'Selesai', closed: 'Ditutup', cancelled: 'Dibatalkan' };
+const fmt = (n: number | null | undefined) => Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 4 });
 const rp = (n: number | null | undefined) => `Rp${Math.round(n ?? 0).toLocaleString('id-ID')}`;
 type Prompt = { title: string; withQty?: boolean; qty?: string; onSubmit: (reason: string, qty: number | null) => Promise<void> };
 
@@ -26,16 +28,25 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
       const document = await getDocument({ data: { workspaceId, orderId } });
       if (!document.order || !document.tenant) throw Error('Dokumen tidak ditemukan');
       const o = document.order;
+      const dt = (v: unknown) => (v ? new Date(String(v)).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '-');
+      const who = (n: unknown, at: unknown) => (n ? `${n}${at ? ` · ${dt(at)}` : ''}` : '-');
+      const matTot = document.materials.reduce((a, m) => a + Number(m.issued_qty ?? 0), 0);
+      const OUT: Record<string, string> = { finished: 'Barang jadi', co_product: 'Ko-produk', by_product: 'Produk samping', scrap: 'Scrap', rework: 'Rework' };
       await saveProductionPdf(o.order_no, 'Perintah Produksi & Batch Record', document.tenant, [
-        { title: 'Identitas batch', headers: ['Order', 'Produk', 'Lot', 'Status', 'Rencana'], rows: [[o.order_no, o.item_name, o.batch_lot_no, LABEL[o.status], `${o.planned_qty} ${o.uom}`]] },
-        { title: 'Material & daftar timbang', headers: ['Item', 'Rencana', 'Terkoreksi', 'Aktual', 'Potensi %', 'Override'], rows: document.materials.map((m) => [m.item_code, m.planned_qty, m.corrected_qty, m.issued_qty, m.potency_used_pct, m.override_reason]) },
-        { title: 'Batch record & verifikasi', headers: ['#', 'Instruksi', 'Nilai', 'Satuan', 'Pelaksana / waktu', 'Verifikator / waktu'], rows: document.steps.map((s) => [s.sequence, s.instruction, s.value, s.measure_unit, `${s.performed_by ?? '-'} / ${s.performed_at ?? '-'}`, `${s.verified_by ?? '-'} / ${s.verified_at ?? '-'}`]) },
-        { title: 'Hasil produksi', headers: ['Jenis', 'Lot', 'Qty', 'Satuan', 'QC'], rows: document.outputs.map((x) => [x.output_type, x.lot_no, x.qty, x.uom, x.qc_status]) },
-        { title: 'Biaya aktual', headers: ['Material', 'Tenaga kerja', 'Overhead', 'Total', 'Per unit', 'Selisih'], rows: document.costs.map((c) => [c.material_cost, c.labor_cost, c.overhead_cost, c.total_cost, c.unit_cost, c.variance]) },
+        { title: 'Identitas batch', headers: ['Order', 'Produk', 'Lot', 'Status', 'Rencana'], rows: [[o.order_no, o.item_name, o.batch_lot_no, LABEL[o.status] ?? o.status, `${fmt(Number(o.planned_qty))} ${o.uom}`]], right: [] },
+        { title: 'Material & daftar timbang', headers: ['Item', 'Rencana', 'Terkoreksi', 'Aktual', 'Satuan', 'Potensi %', 'Override'], right: [1, 2, 3, 5],
+          rows: document.materials.map((m) => [m.item_code, fmt(Number(m.planned_qty)), fmt(Number(m.corrected_qty)), fmt(Number(m.issued_qty)), m.uom ?? '', m.potency_used_pct != null ? `${Number(m.potency_used_pct).toFixed(2)}%` : '-', m.override_reason ?? '-']),
+          foot: ['Total', '', '', fmt(matTot), '', '', ''] },
+        { title: 'Batch record & verifikasi', headers: ['#', 'Instruksi', 'Nilai', 'Satuan', 'Pelaksana', 'Verifikator'], right: [0, 2],
+          rows: document.steps.map((s) => [s.sequence, s.instruction, s.value != null ? fmt(Number(s.value)) : '-', s.measure_unit ?? '-', who(s.performed_by, s.performed_at), who(s.verified_by, s.verified_at)]) },
+        { title: 'Hasil produksi', headers: ['Jenis', 'Lot', 'Qty', 'Satuan', 'QC'], right: [2],
+          rows: document.outputs.map((x) => [OUT[x.output_type] ?? x.output_type, x.lot_no, fmt(Number(x.qty)), x.uom, x.qc_status]) },
+        { title: 'Biaya aktual', headers: ['Material', 'Tenaga kerja', 'Overhead', 'Total', 'Per unit', 'Selisih standar'], right: [0, 1, 2, 3, 4, 5],
+          rows: document.costs.map((c) => [rp(Number(c.material_cost)), rp(Number(c.labor_cost)), rp(Number(c.overhead_cost)), rp(Number(c.total_cost)), rp(Number(c.unit_cost)), rp(Number(c.variance))]) },
       ]);
     });
   }
-  const selected = orderId; const [busy, setBusy] = useState(false);
+  const selected = orderId; const [busy, setBusy] = useState(false); const [sub, setSub] = useState('bahan');
   const [prompt, setPrompt] = useState<Prompt | null>(null), [pReason, setPReason] = useState(''), [pQty, setPQty] = useState('');
   const [out, setOut] = useState<{ type: 'finished' | 'co_product' | 'by_product' | 'scrap' | 'rework'; itemId: string; qty: string; reason: string } | null>(null);
   const [lab, setLab] = useState<{ centerId: string; hours: string; reason: string } | null>(null);
@@ -62,33 +73,64 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
         {['released', 'in_progress'].includes(order.status) && (det?.materials ?? []).some((m) => Number(m.issued_qty) < Number(m.corrected_qty)) && <Button disabled={busy || !d.canWrite} onClick={() => run(async () => { const r = await issueAll({ data: { workspaceId, orderId: order.id, reason: 'Issue semua bahan sesuai BOM' } }); toast.success(`${r.count} bahan diissue`); })}>Issue semua bahan</Button>}
         {['draft', 'planned', 'released'].includes(order.status) && <Button variant="outline" disabled={busy || !d.canWrite} onClick={() => ask({ title: 'Batalkan order', onSubmit: async (reason) => { await transition({ data: { workspaceId, orderId: order.id, status: 'cancelled', key: crypto.randomUUID(), reason } }); } })}>Batalkan</Button>}
       </div>
-      {dq.isPending ? <Loader2 className="animate-spin" /> : det && <div className="space-y-6">
-        <section><h3 className="mb-2 font-medium">Material & daftar timbang</h3><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Item', 'Rencana', 'Terkoreksi', 'Diissue', 'Lot', 'Potensi', ''].map((h, i) => <TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>
+      {dq.isPending ? <Loader2 className="animate-spin" /> : det && <div className="space-y-4">
+        {(() => {
+          const mats = det.materials, issuedN = mats.filter((m) => Number(m.issued_qty) >= Number(m.corrected_qty) && Number(m.corrected_qty) > 0).length;
+          const stepsDone = det.steps.filter((s) => ['done', 'verified'].includes(s.status)).length, stepsVer = det.steps.filter((s) => s.status === 'verified').length;
+          const outQty = det.outputs.filter((x) => x.output_type === 'finished').reduce((s, x) => s + Number(x.qty), 0);
+          const hours = det.labor.reduce((s, l) => s + Number(l.hours), 0);
+          const laborCost = det.labor.reduce((s, l) => s + Number(l.hours) * (Number(l.labor_rate) + Number(l.overhead_rate)), 0);
+          const cards: { label: string; value: string; hint?: string }[] = [
+            { label: 'Status', value: LABEL[order.status] ?? order.status, hint: order.batch_lot_no },
+            { label: 'Bahan di-issue', value: `${issuedN} / ${mats.length}`, hint: mats.length ? `${Math.round((issuedN / mats.length) * 100)}% baris` : undefined },
+            { label: 'Batch record', value: `${stepsDone} / ${det.steps.length}`, hint: `${stepsVer} terverifikasi` },
+            { label: 'Output barang jadi', value: `${fmt(outQty)} ${order.uom ?? ''}`, hint: `Rencana ${fmt(Number(order.planned_qty))} ${order.uom ?? ''}` },
+            { label: 'Jam kerja', value: `${fmt(hours)} jam`, hint: hours ? `Konversi ${rp(laborCost)}` : undefined },
+            { label: 'Total biaya', value: det.costs ? rp(det.costs.total_cost) : 'Belum dihitung', hint: det.costs ? `${rp(det.costs.unit_cost)} / unit` : 'Dihitung saat order ditutup' },
+          ];
+          return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{cards.map((c) => <div key={c.label} className="rounded-xl border border-border bg-card p-3"><p className="text-xs text-muted-foreground">{c.label}</p><p className="mt-1 text-base font-semibold">{c.value}</p>{c.hint && <p className="text-xs text-muted-foreground">{c.hint}</p>}</div>)}</div>;
+        })()}
+        <Tabs value={sub} onValueChange={setSub}>
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="bahan">Bahan ({det.materials.length})</TabsTrigger>
+            <TabsTrigger value="batch">Batch record ({det.steps.length})</TabsTrigger>
+            <TabsTrigger value="output">Output & jam kerja</TabsTrigger>
+            <TabsTrigger value="biaya">Biaya & jurnal</TabsTrigger>
+          </TabsList>
+
+        <TabsContent value="bahan" className="rounded-2xl border border-border bg-card p-4"><section><h3 className="mb-2 font-medium">Material & daftar timbang</h3><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Item', 'Rencana', 'Terkoreksi', 'Diissue', 'Lot', 'Potensi', ''].map((h, i) => <TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>
           {det.materials.map((m) => <TableRow key={m.id}><TableCell>{item(m.item_id)?.code}{m.is_balancing ? ' · penyeimbang' : ''}{m.override_reason ? ' · override' : ''}</TableCell><TableCell>{m.planned_qty} {m.uom}</TableCell><TableCell className="font-medium">{m.corrected_qty}</TableCell><TableCell>{m.issued_qty}</TableCell><TableCell>{lotNo(m.lot_id)}</TableCell><TableCell>{m.potency_used_pct != null ? `${Number(m.potency_used_pct).toFixed(2)}%` : '—'}</TableCell><TableCell><div className="flex gap-1">
             <Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status) || m.issued_qty >= m.corrected_qty} onClick={() => ask({ title: `Issue ${item(m.item_id)?.code}`, withQty: true, qty: String(Math.max(0, m.corrected_qty - m.issued_qty)), onSubmit: async (reason, qty) => { await issue({ data: { workspaceId, materialId: m.id, qty: qty ?? 0, lotId: m.lot_id, key: crypto.randomUUID(), reason } }); toast.success('Material diissue'); } })}>Issue</Button>
             <Button size="sm" variant="ghost" disabled={busy || m.issued_qty > 0 || !['released', 'in_progress'].includes(order.status)} onClick={() => ask({ title: 'Override kuantitas (supervisor)', withQty: true, qty: String(m.corrected_qty), onSubmit: async (reason, qty) => { await override({ data: { workspaceId, materialId: m.id, qty: qty ?? 0, reason } }); } })}>Override</Button>
           </div></TableCell></TableRow>)}
           {!det.materials.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Material dihitung saat order dirilis.</TableCell></TableRow>}
-        </TableBody></Table></div></section>
+        </TableBody></Table></div></section></TabsContent>
 
-        <section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Batch record (eBMR)</h3><Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status)} onClick={() => setStep({ instruction: '', measure_label: '', measure_unit: '', min_value: '', max_value: '', reason: '' })}><Plus className="size-4" />Langkah</Button></div><div className="space-y-2">
+        <TabsContent value="batch" className="rounded-2xl border border-border bg-card p-4"><section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Batch record (eBMR)</h3><Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status)} onClick={() => setStep({ instruction: '', measure_label: '', measure_unit: '', min_value: '', max_value: '', reason: '' })}><Plus className="size-4" />Langkah</Button></div><div className="space-y-2">
           {det.steps.map((s) => <div key={s.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">{s.sequence}. {s.instruction}</p><p className="text-xs text-muted-foreground">{s.measure_label ? `${s.measure_label} ${s.min_value ?? '…'}–${s.max_value ?? '…'} ${s.measure_unit ?? ''}` : 'Tanpa nilai ukur'}{s.value != null ? ` · tercatat ${s.value}${s.within_limits === false ? ' (di luar batas)' : ''}` : ''}</p></div><div className="flex items-center gap-2"><Badge variant={s.status === 'verified' ? 'default' : 'secondary'}>{s.status}</Badge>
             {s.status === 'pending' && <Button size="sm" disabled={busy || order.status !== 'in_progress'} onClick={() => ask({ title: `Kerjakan langkah ${s.sequence}`, withQty: !!s.measure_label, onSubmit: async (reason, qty) => { await perform({ data: { workspaceId, stepId: s.id, value: s.measure_label ? qty : null, reason } }); } })}>Kerjakan</Button>}
             {s.status === 'done' && <Button size="sm" variant="outline" disabled={busy} onClick={() => ask({ title: `Verifikasi langkah ${s.sequence}`, onSubmit: async (reason) => { await verify({ data: { workspaceId, stepId: s.id, reason } }); toast.success('Langkah diverifikasi'); } })}>Verifikasi</Button>}
           </div></div>)}
           {!det.steps.length && <p className="text-sm text-muted-foreground">Langkah dibuat dari BOM saat rilis.</p>}
         </div></section>
+        {det.deviations.length > 0 && <section className="mt-6"><h3 className="mb-2 font-medium">Deviasi</h3>{det.deviations.map((v) => <p key={v.id} className="text-sm">{v.deviation_no} · {v.source} · <Badge variant={v.status === 'closed' ? 'default' : 'destructive'}>{v.status}</Badge> {v.description}</p>)}</section>}
+        </TabsContent>
 
-        <section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Output & jam kerja</h3><div className="flex gap-2"><Button size="sm" variant="outline" disabled={busy || order.status !== 'in_progress'} onClick={() => setOut({ type: 'finished', itemId: order.item_id, qty: String(order.expected_output_qty ?? ''), reason: '' })}><Plus className="size-4" />Output</Button><Button size="sm" variant="outline" disabled={busy || !['in_progress', 'qc_pending'].includes(order.status) || !d.centers.length} onClick={() => setLab({ centerId: d.centers[0]?.id ?? '', hours: '', reason: '' })}><Plus className="size-4" />Jam kerja</Button></div></div>
-          <Table><TableBody>{det.outputs.map((x) => <TableRow key={x.id}><TableCell>{x.output_type}</TableCell><TableCell>{item(x.item_id)?.code}</TableCell><TableCell>{x.qty} {x.uom}</TableCell><TableCell>{lotNo(x.lot_id)} {det.lots.find((l) => l.id === x.lot_id)?.qc_status ? `(${det.lots.find((l) => l.id === x.lot_id)?.qc_status})` : ''}</TableCell></TableRow>)}
-          {det.labor.map((l) => <TableRow key={l.id}><TableCell>jam kerja</TableCell><TableCell>{d.centers.find((c) => c.id === l.work_center_id)?.code}</TableCell><TableCell>{l.hours} jam</TableCell><TableCell>{rp(l.hours * (Number(l.labor_rate) + Number(l.overhead_rate)))}</TableCell></TableRow>)}</TableBody></Table>
+        <TabsContent value="output" className="rounded-2xl border border-border bg-card p-4"><section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Output & jam kerja</h3><div className="flex gap-2"><Button size="sm" variant="outline" disabled={busy || order.status !== 'in_progress'} onClick={() => setOut({ type: 'finished', itemId: order.item_id, qty: String(order.expected_output_qty ?? ''), reason: '' })}><Plus className="size-4" />Output</Button><Button size="sm" variant="outline" disabled={busy || !['in_progress', 'qc_pending'].includes(order.status) || !d.centers.length} onClick={() => setLab({ centerId: d.centers[0]?.id ?? '', hours: '', reason: '' })}><Plus className="size-4" />Jam kerja</Button></div></div>
+          <Table><TableBody>{det.outputs.map((x) => <TableRow key={x.id}><TableCell>{x.output_type}</TableCell><TableCell>{item(x.item_id)?.code}</TableCell><TableCell>{fmt(Number(x.qty))} {x.uom}</TableCell><TableCell>{lotNo(x.lot_id)} {det.lots.find((l) => l.id === x.lot_id)?.qc_status ? `(${det.lots.find((l) => l.id === x.lot_id)?.qc_status})` : ''}</TableCell></TableRow>)}
+          {det.labor.map((l) => <TableRow key={l.id}><TableCell>jam kerja</TableCell><TableCell>{d.centers.find((c) => c.id === l.work_center_id)?.code}</TableCell><TableCell>{l.hours} jam</TableCell><TableCell className="text-right">{rp(l.hours * (Number(l.labor_rate) + Number(l.overhead_rate)))}</TableCell></TableRow>)}</TableBody></Table>
           {order.status === 'qc_pending' && <p className="mt-2 text-sm text-muted-foreground">Lot hasil berstatus karantina. Lakukan inspeksi rilis akhir di menu Quality, lalu tandai order Selesai.</p>}
         </section>
 
-        {det.deviations.length > 0 && <section><h3 className="mb-2 font-medium">Deviasi</h3>{det.deviations.map((v) => <p key={v.id} className="text-sm">{v.deviation_no} · {v.source} · <Badge variant={v.status === 'closed' ? 'default' : 'destructive'}>{v.status}</Badge> {v.description}</p>)}</section>}
+        </TabsContent>
 
-        {det.costs && <section><h3 className="mb-2 font-medium">Biaya</h3><div className="grid gap-2 text-sm sm:grid-cols-4"><p>Material {rp(det.costs.material_cost)}</p><p>Tenaga kerja {rp(det.costs.labor_cost)}</p><p>Overhead {rp(det.costs.overhead_cost)}</p><p className="font-medium">Total {rp(det.costs.total_cost)} · {rp(det.costs.unit_cost)}/unit</p><p>Standar {rp(det.costs.std_total_cost)}</p><p className={det.costs.variance > 0 ? 'text-destructive' : ''}>Selisih {rp(det.costs.variance)}</p></div></section>}
-        {det.journals.length > 0 && <section><h3 className="mb-2 font-medium">Jurnal</h3><Table><TableBody>{det.journals.map((j) => <TableRow key={j.id}><TableCell>{j.event_code}</TableCell><TableCell>{rp(j.amount)}</TableCell><TableCell><Badge variant={j.status === 'posted' ? 'default' : j.status.startsWith('blocked') ? 'destructive' : 'secondary'}>{j.status}</Badge></TableCell><TableCell className="text-xs text-muted-foreground">{j.message}</TableCell></TableRow>)}</TableBody></Table></section>}
+        <TabsContent value="biaya" className="space-y-4 rounded-2xl border border-border bg-card p-4">
+          {det.costs ? <section><h3 className="mb-2 font-medium">Biaya produksi (COGM)</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {[['Material', det.costs.material_cost], ['Tenaga kerja', det.costs.labor_cost], ['Overhead', det.costs.overhead_cost], ['Total', det.costs.total_cost], ['Per unit', det.costs.unit_cost], ['Standar', det.costs.std_total_cost]].map(([l, v]) => <div key={String(l)} className="rounded-xl border border-border p-3"><p className="text-xs text-muted-foreground">{l}</p><p className={`mt-1 text-base font-semibold ${l === 'Total' ? 'text-gold' : ''}`}>{rp(Number(v))}</p></div>)}
+          </div><p className={`mt-2 text-sm ${det.costs.variance > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>Selisih terhadap standar: {rp(det.costs.variance)}{!det.costs.std_total_cost ? ' (biaya standar belum diisi)' : ''}</p></section> : <p className="text-sm text-muted-foreground">Biaya dihitung saat order ditutup.</p>}
+          {det.journals.length > 0 && <section><h3 className="mb-2 font-medium">Jurnal</h3><Table><TableHeader><TableRow><TableHead>Kode</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Status</TableHead><TableHead>Catatan</TableHead></TableRow></TableHeader><TableBody>{det.journals.map((j) => <TableRow key={j.id}><TableCell>{j.event_code}</TableCell><TableCell className="text-right">{rp(j.amount)}</TableCell><TableCell><Badge variant={j.status === 'posted' ? 'default' : j.status.startsWith('blocked') ? 'destructive' : 'secondary'}>{j.status}</Badge></TableCell><TableCell className="text-xs text-muted-foreground">{j.message}</TableCell></TableRow>)}</TableBody></Table></section>}
+        </TabsContent>
+        </Tabs>
       </div>}
     </>
 
