@@ -197,6 +197,27 @@ export const issueProductionMaterial = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const issueAllProductionMaterials = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws.extend({ orderId: zId, reason }))
+  .handler(async ({ data, context }) => {
+    const { execute } = await import("@/integrations/mysql/pool");
+    const { randomUUID } = await import("node:crypto");
+    const m = await import("./production-orders.server");
+    const rows = await execute<R>(
+      "SELECT id, corrected_qty, issued_qty, lot_id FROM mfg_order_materials WHERE workspace_id = ? AND order_id = ? AND issued_qty < corrected_qty ORDER BY sequence",
+      [data.workspaceId, data.orderId],
+    );
+    let count = 0;
+    for (const r of rows) {
+      const qty = Math.round((num0(r.corrected_qty) - num0(r.issued_qty)) * 10000) / 10000;
+      if (!(qty > 0)) continue;
+      await m.issueMaterial(data.workspaceId, context.userId, { materialId: String(r.id), qty, lotId: (r.lot_id as string | null) ?? null, key: randomUUID(), reason: data.reason });
+      count++;
+    }
+    return { count };
+  });
+
 export const overrideProductionMaterial = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator(ws.extend({ materialId: zId, qty: z.number().min(0), reason }))
