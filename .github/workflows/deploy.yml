@@ -25,9 +25,9 @@ jobs:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.1
         with:
-          host: 43.157.241.82
-          username: ubuntu
-          port: 22
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
           key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
           envs: GH_TOKEN,GH_ACTOR
           script: |
