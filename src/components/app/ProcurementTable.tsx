@@ -515,6 +515,8 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
 
   return (
     <div className="space-y-4">
+      {!open && (
+      <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-[0.28em] text-gold">{t("PROCUREMENT", "PEMBELIAN")}</p>
@@ -754,26 +756,25 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
         </div>
       </div>
 
-      <Dialog
-        open={open}
-        onOpenChange={(v) => {
-          setOpen(v);
-          if (!v) resetForm();
-        }}
-      >
-        <DialogContent className="max-h-[94vh] w-[96vw] max-w-7xl overflow-x-hidden overflow-y-auto sm:max-w-7xl">
-          <DialogHeader>
-            <DialogTitle>
+      </>
+      )}
+      {open && (
+        <div className="w-full space-y-4">
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setOpen(false); resetForm(); }}>
+            <ChevronLeft className="h-4 w-4" /> {t("Back to list", "Kembali ke daftar")}
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
               {editingId ? t("Edit Draft", "Edit Draf") : t("Create New", "Buat Baru")} ·{" "}
               {lang === "id" ? entity.id_ : entity.en}
-            </DialogTitle>
-            <DialogDescription>
+            </h1>
+            <p className="text-sm text-muted-foreground">
               {t(
                 "Leave the number empty to auto-generate it. The status is set automatically.",
                 "Kosongkan nomor untuk dibuat otomatis. Status diatur otomatis.",
               )}
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </div>
 
           <form
             className="space-y-5"
@@ -1148,18 +1149,18 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
               </span>
             </label>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => { setOpen(false); resetForm(); }}>
                 {t("Cancel", "Batal")}
               </Button>
               <Button type="submit" variant="gold" disabled={create.isPending}>
                 {create.isPending && <Loader2 className="animate-spin" />}
                 {isDraft ? t("Save draft", "Simpan draf") : t("Submit", "Kirim")}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
       <CancelDocumentDialog
         workspaceId={workspaceId}
         side="purchase"
