@@ -38,9 +38,9 @@ jobs:
             # Token bawaan CI/CD (GITHUB_TOKEN) hanya untuk login ghcr.io selama job ini.
             echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.yml pull
+            docker compose -f docker-compose.yml up -d --force-recreate --remove-orphans
+            docker compose -f docker-compose.yml ps
 
             docker logout ghcr.io || true
         env:
