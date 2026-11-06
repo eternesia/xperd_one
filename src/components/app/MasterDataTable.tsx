@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getConsistencyReport } from "@/lib/consistency.functions";
 import {
   ChevronLeft,
   ChevronRight,
@@ -108,6 +110,19 @@ function ReferenceSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+function SampleDataBanner({ workspaceId }: { workspaceId: string }) {
+  const run = useServerFn(getConsistencyReport);
+  const q = useQuery({ queryKey: ["sample-data", workspaceId], staleTime: 60_000, queryFn: () => run({ data: { workspaceId, only: ["placeholder", "zeroprice"] } }) });
+  const items = (q.data?.checks ?? []).filter((c) => c.status === "warn" || c.status === "info");
+  if (!items.length) return null;
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+      <p className="font-medium">Data item belum final</p>
+      <ul className="mt-1 list-disc pl-5">{items.map((c) => <li key={c.id}>{c.summary}{c.rows?.length ? ` — contoh: ${c.rows.slice(0, 3).map((r) => r.label).join(", ")}` : ""}</li>)}</ul>
+    </div>
   );
 }
 
@@ -323,6 +338,7 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
 
   return (
     <div className="space-y-4">
+      {entity.table === "md_items" && <SampleDataBanner workspaceId={workspaceId} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-[0.28em] text-gold">MASTER DATA</p>

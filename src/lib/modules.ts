@@ -266,6 +266,7 @@ const MODULE_DEFS: AppModule[] = [
       s("period-closing", "Period Closing", "Tutup Periode"),
       // Ronde 29 (BS New 8): revaluasi kurs akhir periode (PSAK 10).
       s("fx-revaluation", "FX Revaluation", "Revaluasi Kurs"),
+      s("consistency", "Consistency Check", "Cek Konsistensi"),
     ],
   },
   {
@@ -465,7 +466,7 @@ const SUB_ICONS: Record<string, LucideIcon> = {
   "opening-balance": BookOpen, journals: BookText, ledger: BookOpen, "trial-balance": Scale,
   "balance-sheet": Landmark, "profit-loss": TrendingUp, "cash-flow": Banknote, "equity-changes": Layers,
   "ar-card": Contact, "ap-card": Contact, "ar-aging": Clock, "ap-aging": Clock,
-  "ar-credit-memo": FileText, "ap-credit-memo": FileText, "period-closing": Lock, "fx-revaluation": Coins,
+  "ar-credit-memo": FileText, "ap-credit-memo": FileText, "period-closing": Lock, "fx-revaluation": Coins, consistency: ShieldCheck,
   assets: Building, depreciation: TrendingUp, disposal: Undo2,
   "vat-in": Receipt, "vat-out": Receipt, withholding: Percent, efaktur: FileSpreadsheet,
   executive: LineChart, sales: HandCoins, purchasing: ShoppingCart, inventory: Boxes, financial: Landmark, exports: FileSpreadsheet,
