@@ -428,7 +428,7 @@ function TenancyPage() {
                       title="Reset transaction data"
                       onClick={async () => {
                         const typed = prompt(
-                          `Reset SEMUA transaksi "${t.name}" (jurnal, penjualan, pembelian, stok, kas/bank, pajak)? Master data tetap.\nKetik RESET untuk melanjutkan.`,
+                          `Reset SEMUA transaksi "${t.name}" (jurnal, penjualan, pembelian, stok, kas/bank, pajak, serta order produksi, lot, QC & biaya Production)? Master data (item, BoM, supplier, COA) tetap.\nKetik RESET untuk melanjutkan.`,
                         );
                         if (typed !== "RESET") return;
                         try {

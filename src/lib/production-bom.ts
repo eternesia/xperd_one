@@ -7,6 +7,8 @@ const pct = z.number().min(0).max(100).refine((v) => Math.abs(v * 1e6 - Math.rou
 export const bomLineSchema = z.object({
   item_id: zId,
   line_type: z.enum(["ingredient", "packaging", "co_product", "by_product"]),
+  /** Phase proses skincare (A, B, C …); kosong untuk BoM tanpa phase. */
+  phase: z.string().trim().max(20),
   qty_per_base: qty,
   uom: z.string().min(1),
   basis: z.enum(["gross", "active_equivalent"]),
@@ -29,6 +31,8 @@ export const bomValuesSchema = z.object({
   effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   effective_to: z.string().nullable(),
   registration_id: zId.nullable(),
+  dosage_form: z.string().trim().max(80).nullable(),
+  source_document: z.string().trim().max(200).nullable(),
 });
 export const saveBomSchema = z.object({
   workspaceId: zId,
@@ -40,20 +44,22 @@ export const saveBomSchema = z.object({
 });
 export type BomLine = z.infer<typeof bomLineSchema>;
 export function compareBomLines(a: BomLine[], b: BomLine[]) {
-  return [...new Set([...a, ...b].map((l) => l.item_id))].map((id) => ({
-    item_id: id,
-    before: a.find((l) => l.item_id === id),
-    after: b.find((l) => l.item_id === id),
-  }));
+  const key = (l: BomLine) => `${l.item_id}|${l.phase ?? ""}`;
+  return [...new Set([...a, ...b].map(key))].map((k) => {
+    const before = a.find((l) => key(l) === k);
+    const after = b.find((l) => key(l) === k);
+    return { item_id: (before ?? after)!.item_id, phase: (before ?? after)!.phase ?? "", before, after };
+  });
 }
 export function parseBomCsv(text: string, items: { id: string; code: string }[], units: string[]): BomLine[] {
   // XLSX supplies standards-compliant quoted CSV parsing before this normalized conversion.
   const rows = text.trim().split(/\r?\n/);
   const header = rows.shift()?.split(",");
-  if (!header || header.join(",") !== "item_code,qty,uom,basis,line_type")
-    throw Error("Kolom CSV: item_code,qty,uom,basis,line_type");
+  const base = "item_code,qty,uom,basis,line_type";
+  if (!header || ![base, `${base},phase`].includes(header.join(",")))
+    throw Error(`Kolom CSV: ${base}[,phase]`);
   return rows.map((row, i) => {
-    const [code, amount, uom, basis, line_type] = row.split(",");
+    const [code, amount, uom, basis, line_type, phase = ""] = row.split(",");
     const item = items.find((it) => it.code === code);
     if (!item || !units.includes(uom)) throw Error(`Baris ${i + 2}: item/satuan tidak ditemukan`);
     return bomLineSchema.parse({
@@ -62,6 +68,7 @@ export function parseBomCsv(text: string, items: { id: string; code: string }[],
       uom,
       basis,
       line_type,
+      phase: phase.trim(),
       ai_target_pct: null,
       potency_compensate: basis === "active_equivalent",
       tolerance_pct: 0,
