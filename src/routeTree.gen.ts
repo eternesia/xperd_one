@@ -77,6 +77,8 @@ import { Route as QallingAppClientsRouteImport } from './routes/qalling.app.clie
 import { Route as QallingAppProfileRouteImport } from './routes/qalling.app.profile'
 import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.referral'
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
+import { Route as QallingDocsIndexRouteImport } from './routes/qalling.docs.index'
+import { Route as QallingDocsSlugRouteImport } from './routes/qalling.docs.$slug'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
 import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/api/public/jobs/billing-notifications'
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
@@ -442,6 +444,16 @@ const QallingAppReportsRoute = QallingAppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => QallingAppRoute,
 } as any)
+const QallingDocsIndexRoute = QallingDocsIndexRouteImport.update({
+  id: '/qalling/docs/',
+  path: '/qalling/docs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingDocsSlugRoute = QallingDocsSlugRouteImport.update({
+  id: '/qalling/docs/$slug',
+  path: '/qalling/docs/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksSocialPublishRoute =
   ApiPublicHooksSocialPublishRouteImport.update({
     id: '/api/public/hooks/social-publish',
@@ -626,8 +638,10 @@ export interface FileRoutesByFullPath {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
+  '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -712,8 +726,10 @@ export interface FileRoutesByTo {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/products': typeof SiteProductsIndexRoute
   '/qalling/app': typeof QallingAppIndexRoute
+  '/qalling/docs': typeof QallingDocsIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -803,8 +819,10 @@ export interface FileRoutesById {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/_site/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
+  '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -895,8 +913,10 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/docs/$slug'
     | '/products/'
     | '/qalling/app/'
+    | '/qalling/docs/'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -981,8 +1001,10 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/docs/$slug'
     | '/products'
     | '/qalling/app'
+    | '/qalling/docs'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1071,8 +1093,10 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/docs/$slug'
     | '/_site/products/'
     | '/qalling/app/'
+    | '/qalling/docs/'
     | '/api/public/hooks/social-publish'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1123,6 +1147,8 @@ export interface RootRouteChildren {
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
+  QallingDocsSlugRoute: typeof QallingDocsSlugRoute
+  QallingDocsIndexRoute: typeof QallingDocsIndexRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
   ApiPublicJobsBillingNotificationsRoute: typeof ApiPublicJobsBillingNotificationsRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -1614,6 +1640,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingAppReportsRouteImport
       parentRoute: typeof QallingAppRoute
     }
+    '/qalling/docs/': {
+      id: '/qalling/docs/'
+      path: '/qalling/docs'
+      fullPath: '/qalling/docs/'
+      preLoaderRoute: typeof QallingDocsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/docs/$slug': {
+      id: '/qalling/docs/$slug'
+      path: '/qalling/docs/$slug'
+      fullPath: '/qalling/docs/$slug'
+      preLoaderRoute: typeof QallingDocsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/social-publish': {
       id: '/api/public/hooks/social-publish'
       path: '/api/public/hooks/social-publish'
@@ -1970,6 +2010,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,
   ApiPublicVisitRoute: ApiPublicVisitRoute,
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
+  QallingDocsSlugRoute: QallingDocsSlugRoute,
+  QallingDocsIndexRoute: QallingDocsIndexRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
   ApiPublicJobsBillingNotificationsRoute:
     ApiPublicJobsBillingNotificationsRoute,

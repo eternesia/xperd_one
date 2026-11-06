@@ -40,7 +40,9 @@ export function qallingInternalUrl(url: URL): URL {
   if (path === "/") result.pathname = "/qalling/";
   else if (["/register", "/daftar", "/register/", "/daftar/", "/qalling/register"].includes(path))
     result.pathname = "/qalling/daftar";
-  else if (/^\/(login|solusi|fitur|kelebihan|harga|kontak|testimoni)(\/)?$/.test(path))
+  else if (
+    /^\/(login|solusi|fitur|kelebihan|harga|kontak|testimoni|docs(\/[\w-]+)?)(\/)?$/.test(path)
+  )
     result.pathname = `/qalling${path}`;
   else if (
     (path === "/app" || path.startsWith("/app/")) &&

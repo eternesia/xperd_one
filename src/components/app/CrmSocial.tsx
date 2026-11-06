@@ -191,17 +191,12 @@ const TEBAR_PLATFORMS = [
   { id: "discord", label: "Discord", hintId: "Channel server", hintEn: "Server channel" },
 ];
 
-function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: number }) {
+/** Sinkronisasi akun Tebar + penanganan hasil kembalian OAuth (?status=connected&state=<workspace>). */
+function useTebarSync(workspaceId: string) {
   const { lang } = useI18n();
   const id = lang === "id";
   const qc = useQueryClient();
-  const statusFn = useServerFn(getTebarStatus);
-  const startFn = useServerFn(startTebarConnect);
   const syncFn = useServerFn(syncTebarAccounts);
-  const { data: st } = useQuery({
-    queryKey: ["tebar-status", workspaceId],
-    queryFn: () => statusFn({ data: { workspaceId } }),
-  });
   const sync = useMutation({
     mutationFn: () => syncFn({ data: { workspaceId } }),
     onSuccess: (r) => {
@@ -210,24 +205,6 @@ function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: 
     },
     onError: (e: Error) => toast.error(e.message),
   });
-  const start = useMutation({
-    mutationFn: (platform?: string) => {
-      const u = new URL(window.location.href);
-      u.search = "";
-      return startFn({
-        data: {
-          workspaceId,
-          returnUrl: u.toString(),
-          platforms: platform ? [platform] : undefined,
-        },
-      });
-    },
-    onSuccess: (r) => {
-      window.location.href = r.url;
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const s = q.get("status");
@@ -242,66 +219,7 @@ function TebarConnectCard({ workspaceId, count }: { workspaceId: string; count: 
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
-
-  const ready = st?.ready;
-  return (
-    <Card>
-      <CardContent className="space-y-4 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-semibold">
-              {id ? "Hubungkan akun sosial" : "Connect social accounts"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {id
-                ? "Pilih platform, login dengan akun Anda, lalu izinkan akses. Tanpa App ID atau pendaftaran tambahan."
-                : "Pick a platform, sign in with your account and grant access. No App ID or extra signup needed."}
-            </p>
-          </div>
-          <Badge variant={count ? "default" : "secondary"}>
-            {count} {id ? "terhubung" : "connected"}
-          </Badge>
-        </div>
-        {st && !ready ? (
-          <p className="text-sm text-muted-foreground">
-            {id
-              ? "Fitur koneksi belum diaktifkan admin XPERD."
-              : "Connection is not enabled by XPERD admin yet."}
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
-              {TEBAR_PLATFORMS.map((p) => (
-                <Button
-                  key={p.id}
-                  size="sm"
-                  variant="outline"
-                  disabled={start.isPending || !ready}
-                  onClick={() => start.mutate(p.id)}
-                >
-                  <Plus className="h-3 w-3" /> {p.label}
-                </Button>
-              ))}
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => sync.mutate()}
-              disabled={sync.isPending || !ready}
-            >
-              {sync.isPending
-                ? id
-                  ? "Menyinkronkan..."
-                  : "Syncing..."
-                : id
-                  ? "Sinkronkan"
-                  : "Sync"}
-            </Button>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
+  return sync;
 }
 
 export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
@@ -311,6 +229,8 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
   const { data: accounts = [] } = useAccounts(workspaceId);
   const [open, setOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const sync = useTebarSync(workspaceId);
   const { data: nativeMeta } = useMetaSettings(workspaceId);
   const nativeFn = useServerFn(startMetaConnect);
   const nativeConnect = useMutation({
@@ -396,6 +316,13 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
   const activeCount = accounts.filter((a) => a.status !== "disconnected").length;
   const maxAccounts = entitlements.qalling?.limits.max_accounts ?? null;
   const isFull = accountsFull(entitlements.qalling?.limits, activeCount);
+  const shown = (() => {
+    const t = search.trim().toLowerCase();
+    if (!t) return accounts;
+    return accounts.filter((a) =>
+      [a.account_name, a.handle, platformLabel(a.platform)].join(" ").toLowerCase().includes(t),
+    );
+  })();
 
   return (
     <div className="space-y-6">
@@ -412,21 +339,32 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Button
-            onClick={() =>
-              isFull
-                ? toast.error(
-                    id
-                      ? `Kuota akun paket Anda penuh (${maxAccounts}). Upgrade paket untuk menambah akun.`
-                      : `Account quota full (${maxAccounts}). Upgrade to add more.`,
-                  )
-                : setPickOpen(true)
-            }
-            variant={isFull ? "outline" : "default"}
-          >
-            {isFull ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{" "}
-            {id ? "Tambah Akun" : "Add Account"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => sync.mutate()}
+              disabled={sync.isPending || !tebarSt?.ready}
+            >
+              <RefreshCw className={cn("h-4 w-4", sync.isPending && "animate-spin")} />{" "}
+              {id ? "Sinkronkan" : "Sync"}
+            </Button>
+            <Button
+              onClick={() =>
+                isFull
+                  ? toast.error(
+                      id
+                        ? `Kuota akun paket Anda penuh (${maxAccounts}). Upgrade paket untuk menambah akun.`
+                        : `Account quota full (${maxAccounts}). Upgrade to add more.`,
+                    )
+                  : setPickOpen(true)
+              }
+              variant={isFull ? "outline" : "default"}
+            >
+              {isFull ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{" "}
+              {id ? "Tambah Akun" : "Add Account"}
+            </Button>
+          </div>
           {maxAccounts != null && (
             <span className="text-xs text-muted-foreground">
               {activeCount}/{maxAccounts} {id ? "akun terpakai" : "accounts used"}
@@ -435,10 +373,6 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
         </div>
       </div>
 
-      <TebarConnectCard
-        workspaceId={workspaceId}
-        count={accounts.filter((a) => a.source === "tebar").length}
-      />
       {nativeMeta?.native_social_enabled && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
           <div className="flex items-center gap-2">
@@ -463,22 +397,59 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map((a) => (
-            <Card key={a.id}>
-              <CardContent className="space-y-2 p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-1">
-                    <Badge variant="secondary">{platformLabel(a.platform)}</Badge>
-                    {a.source === "meta" || a.source === "tebar" ? (
-                      <Badge className="gap-1">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {id ? "Terhubung" : "Connected"}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">Manual</Badge>
-                    )}
+        <Card>
+          <CardContent className="p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+              <p className="text-sm font-medium">
+                {shown.length}
+                {shown.length !== accounts.length ? ` / ${accounts.length}` : ""}{" "}
+                {id ? "akun" : "accounts"}
+              </p>
+              {accounts.length > 6 && (
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={id ? "Cari akun atau platform…" : "Search accounts or platforms…"}
+                  className="h-8 max-w-64"
+                  aria-label={id ? "Cari akun" : "Search accounts"}
+                />
+              )}
+            </div>
+            <ul className="divide-y">
+              {shown.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                    <SocialIcon platform={a.platform} className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{a.account_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {platformLabel(a.platform)}
+                      {a.handle ? ` · @${a.handle.replace(/^@/, "")}` : ""}
+                    </p>
                   </div>
+                  {a.source === "meta" || a.source === "tebar" ? (
+                    <Badge className="hidden gap-1 sm:inline-flex">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {id ? "Terhubung" : "Connected"}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="hidden sm:inline-flex">
+                      Manual
+                    </Badge>
+                  )}
+                  {a.profile_url && (
+                    <a
+                      href={a.profile_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={id ? "Buka profil" : "Open profile"}
+                      title={id ? "Buka profil" : "Open profile"}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
                   <Button
                     size="icon"
                     variant="ghost"
@@ -487,25 +458,16 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
-                <p className="font-semibold">{a.account_name}</p>
-                {a.handle && (
-                  <p className="text-sm text-muted-foreground">@{a.handle.replace(/^@/, "")}</p>
-                )}
-                {a.profile_url && (
-                  <a
-                    href={a.profile_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-gold underline"
-                  >
-                    {id ? "Buka profil" : "Open profile"} <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </li>
+              ))}
+              {shown.length === 0 && (
+                <li className="p-6 text-center text-sm text-muted-foreground">
+                  {id ? "Tidak ada akun yang cocok." : "No matching accounts."}
+                </li>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
       )}
 
       <Dialog open={pickOpen} onOpenChange={setPickOpen}>

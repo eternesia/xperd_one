@@ -147,3 +147,13 @@ server {
 - Migrasi `051_email_notifications.sql` membuat `email_notifications` dan `notification_prefs`. Invoice yang lunas sebelum fitur aktif tidak dikirimi email susulan (penanda `invoice-receipts-start`).
 - Pemilik akun dapat mematikan pengingat trial, bukti pembayaran, dan ringkasan mingguan di Qalling → Tagihan & Saldo. Peringatan saldo kurang dan perpanjangan gagal selalu dikirim.
 - Email invoice berisi rincian dan tautan; PDF tetap diunduh dari halaman tagihan (gateway tidak mendukung lampiran).
+
+### Batas ukuran unggahan di proxy
+
+Nginx secara bawaan menolak body >1 MB (`413 Request Entity Too Large`) sebelum permintaan sampai ke aplikasi. Unggahan Media Qalling sekarang dikirim berpotongan ±512 KB sehingga tetap lolos, tetapi bila ingin unggahan lain (dokumen, bukti, MCP `file_base64`) bebas dari batas ini, tambahkan di blok server proxy:
+
+```nginx
+client_max_body_size 64m;
+```
+
+Potongan sementara disimpan di `<STORAGE_DIR>/.chunk-uploads` dan dibersihkan otomatis setelah 1 jam bila unggahan terbengkalai.
