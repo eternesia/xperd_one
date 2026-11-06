@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminField, AdminSelect } from './admin-ui';
-import { getProductionOrderDetail, getProductionOrderDocument, getProductionOrders, issueProductionMaterial, logProductionLabor, overrideProductionMaterial, performProductionStep, recordProductionOutput, saveProductionStep, transitionProductionOrder, verifyProductionStep } from '@/lib/production-orders.functions';
+import { getProductionOrderDetail, getProductionOrderDocument, getProductionOrders, issueAllProductionMaterials, issueProductionMaterial, logProductionLabor, overrideProductionMaterial, performProductionStep, recordProductionOutput, saveProductionStep, transitionProductionOrder, verifyProductionStep } from '@/lib/production-orders.functions';
 import { nextOrderStatus, type OrderStatus } from '@/lib/production-orders';
 import { saveProductionPdf } from '@/lib/production-pdf';
 
@@ -18,7 +18,7 @@ const rp = (n: number | null | undefined) => `Rp${Math.round(n ?? 0).toLocaleStr
 type Prompt = { title: string; withQty?: boolean; qty?: string; onSubmit: (reason: string, qty: number | null) => Promise<void> };
 
 export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId: string; orderId: string }) {
-  const list = useServerFn(getProductionOrders), detail = useServerFn(getProductionOrderDetail), transition = useServerFn(transitionProductionOrder), issue = useServerFn(issueProductionMaterial), override = useServerFn(overrideProductionMaterial), saveStep = useServerFn(saveProductionStep), perform = useServerFn(performProductionStep), verify = useServerFn(verifyProductionStep), output = useServerFn(recordProductionOutput), labor = useServerFn(logProductionLabor);
+  const list = useServerFn(getProductionOrders), detail = useServerFn(getProductionOrderDetail), transition = useServerFn(transitionProductionOrder), issue = useServerFn(issueProductionMaterial), issueAll = useServerFn(issueAllProductionMaterials), override = useServerFn(overrideProductionMaterial), saveStep = useServerFn(saveProductionStep), perform = useServerFn(performProductionStep), verify = useServerFn(verifyProductionStep), output = useServerFn(recordProductionOutput), labor = useServerFn(logProductionLabor);
   const qc = useQueryClient();
   const getDocument = useServerFn(getProductionOrderDocument);
   async function exportDocument(orderId: string) {
@@ -59,6 +59,7 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" disabled={busy} onClick={() => void exportDocument(order.id)}><Download className="size-4" />PDF batch record</Button>
         {(() => { const nxt = nextOrderStatus(order.status as OrderStatus); const NEXT: Record<string, string> = { qc_pending: 'Selesai produksi → kirim ke QC', completed: 'Tandai selesai (lot sudah rilis QC)', closed: 'Tutup order & hitung biaya' }; return nxt && NEXT[nxt] ? <Button disabled={busy || !d.canWrite} onClick={() => ask({ title: NEXT[nxt], onSubmit: async (reason) => { await transition({ data: { workspaceId, orderId: order.id, status: nxt as 'qc_pending', key: crypto.randomUUID(), reason } }); toast.success(NEXT[nxt]); } })}><ArrowRight className="size-4" />{NEXT[nxt]}</Button> : null; })()}
+        {['released', 'in_progress'].includes(order.status) && (det?.materials ?? []).some((m) => m.issued_qty < m.corrected_qty) && <Button disabled={busy || !d.canWrite} onClick={() => run(async () => { const r = await issueAll({ data: { workspaceId, orderId: order.id, reason: 'Issue semua bahan sesuai BOM' } }); toast.success(`${r.count} bahan diissue`); })}>Issue semua bahan</Button>}
         {['draft', 'planned', 'released'].includes(order.status) && <Button variant="outline" disabled={busy || !d.canWrite} onClick={() => ask({ title: 'Batalkan order', onSubmit: async (reason) => { await transition({ data: { workspaceId, orderId: order.id, status: 'cancelled', key: crypto.randomUUID(), reason } }); } })}>Batalkan</Button>}
       </div>
       {dq.isPending ? <Loader2 className="animate-spin" /> : det && <div className="space-y-6">
