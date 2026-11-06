@@ -1060,7 +1060,8 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                               <SelectContent>
                                 <SelectItem value="__none">{t("Non-taxable (0%)", "Tanpa pajak (0%)")}</SelectItem>
                                 {taxOptions
-                                  .filter((r) => r.code)
+                                  // Pembelian: sembunyikan PPN Keluaran (vat_out) agar tidak salah pilih; opsi yang sudah terpilih tetap tampil.
+                                  .filter((r) => r.code && (r.taxType !== "vat_out" || r.code === l.tax_code))
                                   .map((r) => (
                                     <SelectItem key={r.code} value={r.code}>
                                       {r.label}

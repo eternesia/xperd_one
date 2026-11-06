@@ -1298,7 +1298,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                               <SelectContent>
                                 <SelectItem value="__none">{t("Non-taxable (0%)", "Tanpa pajak (0%)")}</SelectItem>
                                 {taxOptions
-                                  .filter((r) => r.code)
+                                  // Penjualan: sembunyikan PPN Masukan (vat_in) agar tidak salah pilih; opsi yang sudah terpilih tetap tampil.
+                                  .filter((r) => r.code && (r.taxType !== "vat_in" || r.code === l.tax_code))
                                   .map((r) => (
                                     <SelectItem key={r.code} value={r.code}>
                                       {r.label}

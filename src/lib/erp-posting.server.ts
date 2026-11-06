@@ -290,6 +290,17 @@ export async function erpPostJournal(
       p.reverses ?? null,
     ],
   );
+  // Nama akun diambil dari COA workspace (md_accounts) bila baris belum membawa nama
+  // atau namanya sama dengan kodenya, sehingga akun baru (mis. 1310) tidak tampil "1310 · 1310".
+  const coaName = new Map<string, string>();
+  const needName = [...new Set(lines.filter((l) => !l.account_name || l.account_name === l.account_code).map((l) => l.account_code))];
+  if (needName.length) {
+    const [rows] = await conn.execute<any[]>(
+      `SELECT code, name FROM md_accounts WHERE workspace_id = ? AND code IN (${needName.map(() => "?").join(",")})`,
+      [p.ws, ...needName],
+    );
+    for (const r of rows as any[]) coaName.set(String(r.code), String(r.name));
+  }
   let n = 0;
   for (const l of lines) {
     n++;
@@ -301,7 +312,7 @@ export async function erpPostJournal(
         p.ws,
         n,
         l.account_code,
-        l.account_name ?? l.account_code,
+        (l.account_name && l.account_name !== l.account_code ? l.account_name : coaName.get(l.account_code)) ?? l.account_name ?? l.account_code,
         l.description ?? p.memo,
         l.debit,
         l.credit,
