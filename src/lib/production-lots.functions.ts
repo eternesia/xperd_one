@@ -21,14 +21,18 @@ export const getProductionLots = createServerFn({ method: "POST" })
     const w = data.workspaceId;
     const where = ["workspace_id = ?", "is_active = 1"];
     const params: unknown[] = [w];
-    if (data.status) {
+    if (data.status === "expired") {
+      where.push("(qc_status = 'expired' OR (expiry_date IS NOT NULL AND expiry_date < CURDATE()))");
+    } else if (data.status === "hold") {
+      where.push("qc_status = 'hold'");
+    } else if (data.status) {
       where.push("qc_status = ?");
       params.push(data.status);
     }
     const term = data.search.trim().replace(/[%_\\]/g, "");
     if (term) {
-      where.push("lot_no LIKE ?");
-      params.push(`%${term}%`);
+      where.push("(lot_no LIKE ? OR item_id IN (SELECT id FROM md_items WHERE workspace_id = ? AND (code LIKE ? OR name LIKE ?)))");
+      params.push(`%${term}%`, w, `%${term}%`, `%${term}%`);
     }
     const [lots, total, items, warehouses, profiles, suppliers, canWrite] = await Promise.all([
       execute<any>(
@@ -48,7 +52,35 @@ export const getProductionLots = createServerFn({ method: "POST" })
       w,
       lots.map((l) => l.id),
     );
+    // Ringkasan KPI + gudang tempat saldo lot berada (satu layar sederhana).
+    const [kpiRows, whRows] = await Promise.all([
+      execute<{ qc_status: string; n: number }>(
+        "SELECT qc_status, COUNT(*) AS n FROM mfg_lots WHERE workspace_id = ? AND is_active = 1 GROUP BY qc_status",
+        [w],
+      ),
+      lots.length
+        ? execute<{ mfg_lot_id: string; warehouse_code: string; q: number }>(
+            `SELECT mfg_lot_id, warehouse_code, SUM(qty) AS q FROM inv_movements
+              WHERE workspace_id = ? AND movement_type <> 'transfer' AND mfg_lot_id IN (${lots.map(() => "?").join(",")})
+              GROUP BY mfg_lot_id, warehouse_code HAVING SUM(qty) <> 0`,
+            [w, ...lots.map((l) => l.id)],
+          )
+        : Promise.resolve([] as { mfg_lot_id: string; warehouse_code: string; q: number }[]),
+    ]);
+    const kpi = { total: 0, quarantine: 0, released: 0, hold: 0, rejected: 0 };
+    for (const r of kpiRows) {
+      const c = Number(r.n);
+      kpi.total += c;
+      if (r.qc_status === "quarantine") kpi.quarantine += c;
+      else if (r.qc_status === "released") kpi.released += c;
+      else if (r.qc_status === "hold") kpi.hold += c;
+      else if (r.qc_status === "rejected") kpi.rejected += c;
+    }
+    const lotWarehouses: Record<string, string> = {};
+    for (const r of whRows) lotWarehouses[r.mfg_lot_id] = [lotWarehouses[r.mfg_lot_id], r.warehouse_code].filter(Boolean).join(", ");
     return {
+      kpi,
+      lotWarehouses,
       onHand,
       lots: lots.map((l) => ({
         ...l,

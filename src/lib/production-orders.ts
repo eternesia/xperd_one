@@ -49,6 +49,14 @@ export const orderSchema = z.object({
   warehouse_from: z.string().min(1),
   warehouse_to: z.string().min(1),
   notes: z.string().max(2000),
+  location_from: z.string().max(80).nullable().default(null),
+  location_to: z.string().max(80).nullable().default(null),
+  source_type: z.enum(["bom", "qc"]).default("bom"),
+  qc_spec_id: zId.nullable().default(null),
+  equipment: z
+    .array(z.object({ center_id: zId.nullable(), name: z.string().trim().min(1).max(120), note: z.string().max(300).default("") }))
+    .max(100)
+    .default([]),
 });
 
 export const MAPPING_KEYS = [

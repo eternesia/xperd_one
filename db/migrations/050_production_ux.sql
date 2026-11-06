@@ -19,3 +19,5 @@ PREPARE mfg_stmt FROM @ddl;
 EXECUTE mfg_stmt;
 DEALLOCATE PREPARE mfg_stmt;
 
+-- Status BoM disederhanakan menjadi draft / approved: versi yang menggantung di 'in_review' dikembalikan ke draft.
+UPDATE mfg_bom_versions SET status = 'draft' WHERE status = 'in_review';

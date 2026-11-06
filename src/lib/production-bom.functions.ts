@@ -175,8 +175,8 @@ export const saveProductionBom = createServerFn({ method: "POST" })
         )
           throw new ProductionError("Bahan atau satuan tidak valid.");
       }
-      if (new Set(data.lines.map((l) => l.item_id)).size !== data.lines.length)
-        throw new ProductionError("Bahan yang sama tidak boleh muncul dua kali dalam satu versi.");
+      if (new Set(data.lines.map((l) => `${l.item_id}|${l.phase ?? ""}`)).size !== data.lines.length)
+        throw new ProductionError("Bahan yang sama tidak boleh muncul dua kali pada phase yang sama.");
       let bomId: string | null = data.bomId;
       let versionId: string;
       let before: any = null;
@@ -195,8 +195,8 @@ export const saveProductionBom = createServerFn({ method: "POST" })
           bomId = uuid();
           try {
             await conn.execute(
-              "INSERT INTO mfg_boms (id, workspace_id, item_id, code, formulation_code, target_content, target_unit, created_by) VALUES (?,?,?,?,?,?,?,?)",
-              [bomId, w, v.item_id, v.code, v.formulation_code, v.target_content, v.target_unit, context.userId],
+              "INSERT INTO mfg_boms (id, workspace_id, item_id, code, formulation_code, target_content, target_unit, bom_level, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+              [bomId, w, v.item_id, v.code, v.formulation_code, v.target_content, v.target_unit, v.bom_level ?? 1, context.userId],
             );
           } catch (e: any) {
             if (e?.code === "ER_DUP_ENTRY") throw new ProductionError("Kode BOM sudah dipakai.");
@@ -252,10 +252,9 @@ export const transitionProductionBom = createServerFn({ method: "POST" })
   .validator(
     ws.extend({
       versionId: zId,
-      status: z.enum(["draft", "in_review", "approved"]),
+      status: z.enum(["draft", "approved"]),
       key: zId,
       reason: z.string().trim().min(1).max(2000),
-      signature: zId.nullable(),
       override: z.boolean(),
     }),
   )
@@ -264,7 +263,7 @@ export const transitionProductionBom = createServerFn({ method: "POST" })
     const { mfgActionAssert } = await import("@/lib/production-access.server");
     const { transaction, uuid } = await import("@/integrations/mysql/pool");
     const w = data.workspaceId;
-    await mfgActionAssert(w, context.userId, "boms", data.status === "approved" ? ["qa_manager"] : EDIT_ROLES);
+    await mfgActionAssert(w, context.userId, "boms", EDIT_ROLES);
     return transaction(async (conn) => {
       const one = async (sql: string, p: unknown[]) => (await conn.execute<any[]>(sql, p as any[]))[0][0];
       const ver = await one("SELECT * FROM mfg_bom_versions WHERE workspace_id = ? AND id = ? FOR UPDATE", [w, data.versionId]);
@@ -275,24 +274,14 @@ export const transitionProductionBom = createServerFn({ method: "POST" })
           throw new ProductionError("Konflik pengulangan permintaan.");
         return { id: data.versionId };
       }
-      const ok = (ver.status === "draft" && data.status === "in_review") || (ver.status === "in_review" && ["draft", "approved"].includes(data.status));
+      const ok = ver.status === "draft" && data.status === "approved";
       if (!ok) throw new ProductionError("Transisi BOM tidak valid.");
       let issues: string[] = [];
       if (data.status === "approved") {
-        if (ver.created_by === context.userId || ver.last_modified_by === context.userId)
-          throw new ProductionError("Persetujuan ditolak: pembuat/penyunting tidak dapat menyetujui BOM sendiri.");
         const cnt = await one("SELECT COUNT(*) AS n FROM mfg_bom_lines WHERE workspace_id = ? AND bom_version_id = ?", [w, data.versionId]);
         if (Number(cnt.n) === 0) throw new ProductionError("BOM kosong.");
         issues = await compositionIssues(conn, w, data.versionId);
         if (issues.length && !data.override) throw new ProductionError(`Komposisi tidak sesuai: ${issues.join("; ")}`);
-        if (data.override && !(await mfgRoles(w, context.userId)).includes("qa_manager"))
-          throw new ProductionError("Pengecualian memerlukan peran QA manager eksplisit.", 403);
-        const [r] = await conn.execute<any>(
-          `UPDATE mfg_approval_challenges SET consumed_at = NOW(6) WHERE id = ? AND workspace_id = ? AND version_id = ? AND actor = ?
-              AND verified_at IS NOT NULL AND consumed_at IS NULL AND expires_at > NOW(6)`,
-          [data.signature ?? "", w, data.versionId, context.userId],
-        );
-        if (!r.affectedRows) throw new ProductionError("Verifikasi ulang baru diperlukan.", 403);
       }
       await conn.execute(
         "INSERT INTO mfg_bom_transitions (id, workspace_id, version_id, from_status, to_status, idempotency_key, reason, created_by) VALUES (?,?,?,?,?,?,?,?)",
@@ -311,77 +300,67 @@ export const transitionProductionBom = createServerFn({ method: "POST" })
         oldValue: { status: ver.status },
         newValue: data.status === "approved" ? { status: "approved", composition_issues: issues } : { status: data.status },
         reason: data.reason,
-        signed: data.status === "approved" ? "otp" : null,
-      });
+              });
       return { id: data.versionId };
     });
   });
 
-export const sendBomApprovalCode = createServerFn({ method: "POST" })
+/** Data halaman form BoM (baru / buka / revisi): master + versi yang dibuka. */
+export const getBomFormData = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator(ws.extend({ versionId: zId }))
+  .validator(ws.extend({ versionId: zId.nullable() }))
   .handler(async ({ data, context }) => {
-    const { ProductionError } = await import("@/lib/production.server");
+    const { mfgAssert, ProductionError, d10 } = await import("@/lib/production.server");
     const { mfgActionAllowed } = await import("@/lib/production-access.server");
-    const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
+    const { execute, executeOne } = await import("@/integrations/mysql/pool");
     const w = data.workspaceId;
-    const v = await executeOne<any>("SELECT created_by, last_modified_by, status FROM mfg_bom_versions WHERE workspace_id = ? AND id = ?", [w, data.versionId]);
-    if (
-      !(await mfgActionAllowed(w, context.userId, "boms", ["qa_manager"])) ||
-      !v ||
-      v.created_by === context.userId ||
-      v.last_modified_by === context.userId ||
-      v.status !== "in_review"
-    )
-      throw new ProductionError("Pembuat tidak dapat menyetujui versinya sendiri.", 403);
-    const email = context.user.email;
-    if (!email) throw new ProductionError("Email akun belum tersedia.");
-    const recent = await execute<any>(
-      "SELECT id FROM mfg_approval_challenges WHERE actor = ? AND created_at >= (NOW(6) - INTERVAL 60 SECOND) LIMIT 1",
-      [context.userId],
-    );
-    if (recent.length) throw new ProductionError("Tunggu satu menit sebelum mengirim ulang kode.");
-    const { loadGateway, sendViaGateway, PLATFORM_SCOPE } = await import("@/lib/email-gateway.server");
-    const demo = process.env.MFG_ESIGN_DEMO === "1";
-    const g = demo ? null : await loadGateway(PLATFORM_SCOPE);
-    if (!g && !demo) throw new ProductionError("Email persetujuan belum dikonfigurasi.");
-    const id = uuid();
-    const code = String((await import("node:crypto")).randomInt(0, 1_000_000)).padStart(6, "0");
-    await execute(
-      "INSERT INTO mfg_approval_challenges (id, workspace_id, version_id, actor, code_hash, expires_at) VALUES (?,?,?,?,?, NOW(6) + INTERVAL 300 SECOND)",
-      [id, w, data.versionId, context.userId, await sha(`${id}:${code}`)],
-    );
-    if (demo || !g) return { id, demoCode: code as string | null };
-    await sendViaGateway(g, {
-      to: email,
-      subject: "Persetujuan BOM — XPERD",
-      html: `<p>Kode persetujuan BOM Anda: <strong>${code}</strong>. Berlaku 5 menit.</p>`,
-      text: `Kode persetujuan BOM: ${code}. Berlaku 5 menit.`,
-    });
-    return { id, demoCode: null as string | null };
-  });
-
-export const verifyBomApprovalCode = createServerFn({ method: "POST" })
-  .middleware([requireAppAuth])
-  .validator(ws.extend({ challengeId: zId, code: z.string().regex(/^\d{6}$/) }))
-  .handler(async ({ data, context }) => {
-    const { ProductionError } = await import("@/lib/production.server");
-    const { transaction } = await import("@/integrations/mysql/pool");
-    const hash = await sha(`${data.challengeId}:${data.code}`);
-    const ok = await transaction(async (conn) => {
-      const [rows] = await conn.execute<any[]>(
-        "SELECT * FROM mfg_approval_challenges WHERE id = ? AND workspace_id = ? AND actor = ? FOR UPDATE",
-        [data.challengeId, data.workspaceId, context.userId],
-      );
-      const c = rows[0];
-      if (!c || c.consumed_at || c.verified_at || new Date(c.expires_at).getTime() <= Date.now() || c.attempts >= 5) return false;
-      const match = c.code_hash === hash;
-      await conn.execute(
-        "UPDATE mfg_approval_challenges SET attempts = attempts + 1, verified_at = ? WHERE id = ?",
-        [match ? new Date() : null, data.challengeId],
-      );
-      return match;
-    });
-    if (!ok) throw new ProductionError("Kode salah, kedaluwarsa, atau sudah dipakai.");
-    return { id: data.challengeId };
+    await mfgAssert(w, context.userId, "boms", false);
+    const [items, units, regs, codes, canWrite] = await Promise.all([
+      execute<any>("SELECT id, code, name FROM md_items WHERE workspace_id = ? AND is_active = 1 ORDER BY code LIMIT 2000", [w]),
+      execute<any>("SELECT code FROM md_uoms WHERE workspace_id = ? AND is_active = 1 ORDER BY created_at, code", [w]),
+      execute<any>("SELECT id, item_id, registration_no FROM mfg_product_registrations WHERE workspace_id = ? AND is_active = 1", [w]),
+      execute<any>("SELECT code FROM mfg_formulation_codes WHERE workspace_id = ? AND is_active = 1", [w]),
+      mfgActionAllowed(w, context.userId, "boms", EDIT_ROLES),
+    ]);
+    let version: any = null;
+    let bom: any = null;
+    if (data.versionId) {
+      version = await executeOne<any>("SELECT * FROM mfg_bom_versions WHERE workspace_id = ? AND id = ?", [w, data.versionId]);
+      if (!version) throw new ProductionError("Versi tidak tersedia.", 403);
+      bom = await executeOne<any>("SELECT * FROM mfg_boms WHERE workspace_id = ? AND id = ?", [w, version.bom_id]);
+    }
+    return {
+      items: items as { id: string; code: string; name: string }[],
+      units: units as { code: string }[],
+      registrations: regs as { id: string; item_id: string; registration_no: string }[],
+      codes: codes as { code: string }[],
+      canWrite,
+      version: version
+        ? {
+            id: version.id as string,
+            bom_id: version.bom_id as string,
+            version_no: Number(version.version_no),
+            status: version.status as "draft" | "approved",
+            base_batch_qty: Number(version.base_batch_qty),
+            base_uom: version.base_uom as string,
+            std_yield_pct: Number(version.std_yield_pct),
+            effective_from: d10(version.effective_from),
+            effective_to: version.effective_to ? d10(version.effective_to) : null,
+            registration_id: (version.registration_id ?? null) as string | null,
+            dosage_form: (version.dosage_form ?? null) as string | null,
+            source_document: (version.source_document ?? null) as string | null,
+          }
+        : null,
+      bom: bom
+        ? {
+            id: bom.id as string,
+            item_id: bom.item_id as string,
+            code: bom.code as string,
+            formulation_code: (bom.formulation_code ?? null) as string | null,
+            target_content: bom.target_content === null ? null : Number(bom.target_content),
+            target_unit: (bom.target_unit ?? null) as "%w/w" | "g/L" | null,
+            bom_level: Number(bom.bom_level ?? 1),
+          }
+        : null,
+    };
   });

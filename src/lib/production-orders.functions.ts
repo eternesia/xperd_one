@@ -13,6 +13,18 @@ const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const num0 = (v: unknown) => Number(v ?? 0);
 const bool = (v: unknown) => Number(v) === 1;
 const d10 = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+const jsonArr = <T>(v: unknown): T => {
+  if (Array.isArray(v)) return v as T;
+  if (typeof v === "string") {
+    try {
+      const p = JSON.parse(v);
+      return (Array.isArray(p) ? p : []) as T;
+    } catch {
+      return [] as T;
+    }
+  }
+  return [] as T;
+};
 
 async function can(workspaceId: string, userId: string, section: string, roles: string[]) {
   const { mfgAction } = await import("./production-orders.server");
@@ -35,21 +47,24 @@ export const getProductionOrders = createServerFn({ method: "POST" })
     const { execute } = await import("@/integrations/mysql/pool");
     const w = data.workspaceId;
     await gate(w, context.userId, "orders");
-    const [orders, items, boms, versions, warehouses, centers, canWrite] = await Promise.all([
+    const [orders, items, boms, versions, warehouses, centers, canWrite, specs] = await Promise.all([
       execute<R>(
         `SELECT * FROM mfg_orders WHERE workspace_id = ? ${data.status ? "AND status = ?" : ""} ORDER BY created_at DESC LIMIT 200`,
         data.status ? [w, data.status] : [w],
       ),
       execute<R>("SELECT id, code, name, uom_code FROM md_items WHERE workspace_id = ? AND is_active = 1 LIMIT 1000", [w]),
-      execute<R>("SELECT id, item_id, code FROM mfg_boms WHERE workspace_id = ? LIMIT 1000", [w]),
+      execute<R>("SELECT id, item_id, code, bom_level FROM mfg_boms WHERE workspace_id = ? LIMIT 1000", [w]),
       execute<R>("SELECT id, bom_id, version_no, status, base_batch_qty, base_uom FROM mfg_bom_versions WHERE workspace_id = ? AND status = 'approved' LIMIT 1000", [w]),
       execute<R>("SELECT code, name FROM md_warehouses WHERE workspace_id = ? AND is_active = 1", [w]),
       execute<R>("SELECT id, code, name FROM mfg_work_centers WHERE workspace_id = ? AND is_active = 1", [w]),
       can(w, context.userId, "orders", ["production_planner", "production_supervisor"]),
+      execute<R>("SELECT id, item_id, code, name, stage FROM mfg_qc_specs WHERE workspace_id = ? AND status = 'approved' AND is_active = 1 LIMIT 1000", [w]),
     ]);
     return {
+      specs: specs as { id: string; item_id: string; code: string; name: string; stage: string }[],
       orders: orders.map((o) => ({
         ...o,
+        equipment: jsonArr<{ center_id: string | null; name: string; note: string }[]>(o.equipment),
         planned_qty: num0(o.planned_qty),
         expected_output_qty: n(o.expected_output_qty),
         yield_pct: n(o.yield_pct),
@@ -57,7 +72,7 @@ export const getProductionOrders = createServerFn({ method: "POST" })
         planned_end: d10(o.planned_end),
       })),
       items: items as { id: string; code: string; name: string; uom_code: string | null }[],
-      boms: boms as { id: string; item_id: string; code: string }[],
+      boms: boms as { id: string; item_id: string; code: string; bom_level: number }[],
       versions: versions.map((v) => ({ ...v, base_batch_qty: num0(v.base_batch_qty) })) as any[],
       warehouses: warehouses as { code: string; name: string }[],
       centers: centers as { id: string; code: string; name: string }[],
@@ -87,7 +102,19 @@ export const getProductionOrderDetail = createServerFn({ method: "POST" })
       execute<R>("SELECT id, lot_no, qc_status FROM mfg_lots WHERE workspace_id = ? LIMIT 1000", [w]),
     ]);
     const cost = costs[0];
+    const [ord] = await execute<R>("SELECT * FROM mfg_orders WHERE workspace_id = ? AND id = ?", [w, o]);
     return {
+      order: ord
+        ? {
+            ...ord,
+            planned_qty: num0(ord.planned_qty),
+            expected_output_qty: n(ord.expected_output_qty),
+            yield_pct: n(ord.yield_pct),
+            planned_start: d10(ord.planned_start),
+            planned_end: d10(ord.planned_end),
+            equipment: jsonArr<{ center_id: string | null; name: string; note: string }[]>(ord.equipment),
+          }
+        : null,
       materials: materials.map((m) => ({
         ...m,
         planned_qty: num0(m.planned_qty),
@@ -212,7 +239,7 @@ export const performProductionStep = createServerFn({ method: "POST" })
 
 export const verifyProductionStep = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator(ws.extend({ stepId: zId, signature: zId, reason }))
+  .validator(ws.extend({ stepId: zId, reason }))
   .handler(async ({ data, context }) => {
     const m = await import("./production-orders.server");
     await m.verifyStep(data.workspaceId, context.userId, data);

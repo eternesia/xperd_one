@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -51,4 +51,15 @@ export function ProductionPageShell({
       {children}
     </div>
   );
+}
+
+/** Pindah ke halaman dokumen Production: docId "new", id, atau awalan khusus menu. */
+export function useProductionDocNav(workspaceId: string, section: string) {
+  const nav = useNavigate();
+  return (docId: string) =>
+    nav({
+      to: "/app/w/$workspaceId/$moduleId/$submoduleId/$docId",
+      params: { workspaceId, moduleId: "manufacturing", submoduleId: section, docId },
+      search: { print: undefined },
+    });
 }

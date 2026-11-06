@@ -1,4 +1,4 @@
-// Production M5 — mutu: spesifikasi QC, inspeksi, hasil (lulus/gagal dihitung server), keputusan lot (e-sign), deviasi/CAPA.
+// Production M5 — mutu: spesifikasi QC, inspeksi, hasil (lulus/gagal dihitung server), keputusan lot (tanpa OTP), deviasi/CAPA.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
@@ -33,7 +33,7 @@ export const getProductionQuality = createServerFn({ method: "POST" })
       mfgStrictRole(w, context.userId, QA_ONLY),
     ]);
     return {
-      specs: specs.map((s) => ({ ...s, is_active: Number(s.is_active) === 1, created_at: iso(s.created_at), updated_at: iso(s.updated_at) })) as any[],
+      specs: specs.map((s) => ({ ...s, status: (s.status ?? "approved") as "draft" | "approved", approved_at: iso(s.approved_at), is_active: Number(s.is_active) === 1, created_at: iso(s.created_at), updated_at: iso(s.updated_at) })) as any[],
       params: params.map((p) => ({ ...p, min_value: n(p.min_value), max_value: n(p.max_value), is_critical: Number(p.is_critical) === 1, is_active: true })) as any[],
       inspections: inspections.map((i) => ({ ...i, signed_at: iso(i.signed_at), created_at: iso(i.created_at) })) as any[],
       deviations: deviations.map((v) => ({ ...v, closed_at: iso(v.closed_at), created_at: iso(v.created_at), updated_at: iso(v.updated_at) })) as any[],
@@ -79,7 +79,7 @@ export const saveQcSpec = createServerFn({ method: "POST" })
         id = uuid();
         try {
           await conn.execute(
-            "INSERT INTO mfg_qc_specs (id, workspace_id, item_id, bom_version_id, stage, code, name, created_by) VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO mfg_qc_specs (id, workspace_id, item_id, bom_version_id, stage, code, name, status, created_by) VALUES (?,?,?,?,?,?,?,'draft',?)",
             [id, data.workspaceId, v.item_id, bom, v.stage, v.code, v.name, context.userId],
           );
         } catch (e: any) {
@@ -90,6 +90,7 @@ export const saveQcSpec = createServerFn({ method: "POST" })
         const [r] = await conn.execute<any[]>("SELECT * FROM mfg_qc_specs WHERE id = ? AND workspace_id = ? FOR UPDATE", [id, data.workspaceId]);
         before = r[0];
         if (!before) throw new ProductionError("Spesifikasi tidak tersedia.", 403);
+        if ((before.status ?? "approved") !== "draft") throw new ProductionError("Spesifikasi approved terkunci; kembalikan ke draft untuk mengubah.");
         const [used] = await conn.execute<any[]>("SELECT 1 FROM mfg_qc_inspections WHERE workspace_id = ? AND spec_id = ? LIMIT 1", [data.workspaceId, id]);
         if (used.length) throw new ProductionError("Spesifikasi sudah dipakai; buat kode baru.");
         await conn.execute("UPDATE mfg_qc_specs SET name = ?, is_active = ? WHERE id = ?", [v.name, v.is_active ? 1 : 0, id]);
@@ -110,6 +111,33 @@ export const saveQcSpec = createServerFn({ method: "POST" })
     });
   });
 
+export const transitionQcSpec = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws.extend({ id: zId, status: z.enum(["draft", "approved"]) }))
+  .handler(async ({ data, context }) => {
+    const { mfgAudit, ProductionError } = await import("@/lib/production.server");
+    const { mfgActionAssert } = await import("@/lib/production-lots.server");
+    const { transaction } = await import("@/integrations/mysql/pool");
+    await mfgActionAssert(data.workspaceId, context.userId, "quality", QC_ROLES);
+    return transaction(async (conn) => {
+      const [r] = await conn.execute<any[]>("SELECT * FROM mfg_qc_specs WHERE id = ? AND workspace_id = ? FOR UPDATE", [data.id, data.workspaceId]);
+      const s = r[0];
+      if (!s) throw new ProductionError("Spesifikasi tidak tersedia.", 403);
+      const cur = (s.status ?? "approved") as string;
+      if (cur === data.status) return { id: data.id };
+      if (data.status === "approved") {
+        const [pc] = await conn.execute<any[]>("SELECT COUNT(*) AS n FROM mfg_qc_spec_params WHERE workspace_id = ? AND spec_id = ? AND is_active = 1", [data.workspaceId, data.id]);
+        if (!Number(pc[0]?.n)) throw new ProductionError("Spesifikasi belum punya parameter.");
+      } else {
+        const [used] = await conn.execute<any[]>("SELECT 1 FROM mfg_qc_inspections WHERE workspace_id = ? AND spec_id = ? LIMIT 1", [data.workspaceId, data.id]);
+        if (used.length) throw new ProductionError("Spesifikasi sudah dipakai inspeksi; buat kode baru.");
+      }
+      await conn.execute("UPDATE mfg_qc_specs SET status = ?, approved_by = ?, approved_at = ? WHERE id = ?", [data.status, data.status === "approved" ? context.userId : null, data.status === "approved" ? new Date() : null, data.id]);
+      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_qc_specs", entityId: data.id, action: data.status === "approved" ? "APPROVE" : "UPDATE", oldValue: { status: cur }, newValue: { status: data.status }, reason: data.status === "approved" ? "Approve spesifikasi QC" : "Kembalikan spesifikasi QC ke draft" });
+      return { id: data.id };
+    });
+  });
+
 export const createQcInspection = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator(ws.extend({ specId: zId, lotId: zId.nullable(), orderId: zId.nullable(), sampleId: z.string().trim().min(1).max(120), key: zId, reason }))
@@ -125,6 +153,7 @@ export const createQcInspection = createServerFn({ method: "POST" })
       const [sp] = await conn.execute<any[]>("SELECT * FROM mfg_qc_specs WHERE workspace_id = ? AND id = ? AND is_active = 1", [data.workspaceId, data.specId]);
       const s = sp[0];
       if (!s) throw new ProductionError("Spesifikasi tidak tersedia.");
+      if ((s.status ?? "approved") !== "approved") throw new ProductionError("Spesifikasi harus berstatus approved.");
       if (data.lotId) {
         const [l] = await conn.execute<any[]>("SELECT item_id FROM mfg_lots WHERE workspace_id = ? AND id = ?", [data.workspaceId, data.lotId]);
         if (!l[0] || l[0].item_id !== s.item_id) throw new ProductionError("Spesifikasi tidak cocok dengan item lot.");
@@ -197,11 +226,10 @@ export const recordQcResults = createServerFn({ method: "POST" })
 
 export const decideLot = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator(ws.extend({ lotId: zId, status: z.enum(["released", "rejected", "hold"]), signature: zId, reason }))
+  .validator(ws.extend({ lotId: zId, status: z.enum(["released", "rejected", "hold"]), reason }))
   .handler(async ({ data, context }) => {
     const { mfgAudit, ProductionError, jakartaToday, d10 } = await import("@/lib/production.server");
     const { mfgActionAllowed, mfgStrictRole } = await import("@/lib/production-lots.server");
-    const { consumeEsign } = await import("@/lib/production-esign.server");
     const { transaction } = await import("@/integrations/mysql/pool");
     if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)) || !(await mfgStrictRole(data.workspaceId, context.userId, QA_ONLY)))
       throw new ProductionError("Persetujuan QA manager diperlukan.", 403);
@@ -218,9 +246,8 @@ export const decideLot = createServerFn({ method: "POST" })
         if (od.length) throw new ProductionError("Tutup deviasi terbuka sebelum rilis.");
         if (l.expiry_date && d10(l.expiry_date) < jakartaToday()) throw new ProductionError("Lot kedaluwarsa tidak dapat dirilis.");
       }
-      await consumeEsign(conn, data.workspaceId, context.userId, data.signature, "mfg_lots", data.lotId, `lot_${data.status}`);
       await conn.execute("UPDATE mfg_lots SET qc_status = ? WHERE id = ?", [data.status, data.lotId]);
-      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_lots", entityId: data.lotId, action: "UPDATE", oldValue: { qc_status: l.qc_status }, newValue: { qc_status: data.status }, reason: data.reason, signed: "otp" });
+      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_lots", entityId: data.lotId, action: "UPDATE", oldValue: { qc_status: l.qc_status }, newValue: { qc_status: data.status }, reason: data.reason });
       return { status: data.status as string };
     });
   });
@@ -273,11 +300,10 @@ export const saveDeviation = createServerFn({ method: "POST" })
 
 export const closeDeviation = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator(ws.extend({ id: zId, signature: zId, reason }))
+  .validator(ws.extend({ id: zId, reason }))
   .handler(async ({ data, context }) => {
     const { mfgAudit, ProductionError } = await import("@/lib/production.server");
     const { mfgActionAllowed, mfgStrictRole } = await import("@/lib/production-lots.server");
-    const { consumeEsign } = await import("@/lib/production-esign.server");
     const { transaction } = await import("@/integrations/mysql/pool");
     if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)) || !(await mfgStrictRole(data.workspaceId, context.userId, QA_ONLY)))
       throw new ProductionError("Persetujuan QA manager diperlukan.", 403);
@@ -286,9 +312,8 @@ export const closeDeviation = createServerFn({ method: "POST" })
       const d = r[0];
       if (!d || d.status === "closed") throw new ProductionError("Deviasi tidak tersedia atau sudah ditutup.");
       if (!String(d.root_cause ?? "").trim() || !String(d.capa ?? "").trim()) throw new ProductionError("Akar masalah dan CAPA wajib.");
-      await consumeEsign(conn, data.workspaceId, context.userId, data.signature, "mfg_deviations", data.id, "deviation_close");
       await conn.execute("UPDATE mfg_deviations SET status = 'closed', closed_by = ?, closed_at = ? WHERE id = ?", [context.userId, new Date(), data.id]);
-      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_deviations", entityId: data.id, action: "UPDATE", oldValue: { status: d.status }, newValue: { status: "closed" }, reason: data.reason, signed: "otp" });
+      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_deviations", entityId: data.id, action: "UPDATE", oldValue: { status: d.status }, newValue: { status: "closed" }, reason: data.reason });
       return { id: data.id };
     });
   });

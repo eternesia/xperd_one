@@ -143,6 +143,12 @@ export async function saveOrder(
       if (!(await row(conn, "SELECT 1 AS x FROM md_warehouses WHERE workspace_id = ? AND code = ? AND is_active = 1", [ws, code])))
         throw bad("Gudang tidak tersedia.");
     }
+    if (ver.status !== "approved") throw bad("Versi BOM harus berstatus approved.");
+    if (v.qc_spec_id) {
+      const spec = await row(conn, "SELECT item_id, status, is_active FROM mfg_qc_specs WHERE workspace_id = ? AND id = ?", [ws, v.qc_spec_id]);
+      if (!spec || spec.item_id !== bom.item_id) throw bad("Spesifikasi QC bukan milik produk ini.");
+      if (spec.status !== "approved" || Number(spec.is_active) !== 1) throw bad("Spesifikasi QC harus berstatus approved.");
+    }
     const vals = [
       bom.item_id,
       ver.id,
@@ -153,6 +159,11 @@ export async function saveOrder(
       v.warehouse_from,
       v.warehouse_to,
       v.notes || null,
+      v.location_from || null,
+      v.location_to || null,
+      v.source_type === "qc" ? "qc" : "bom",
+      v.qc_spec_id || null,
+      JSON.stringify(v.equipment ?? []),
     ];
     if (v.planned_start && v.planned_end && v.planned_end < v.planned_start) throw bad("Tanggal selesai sebelum mulai.");
     let id = input.id;
@@ -161,8 +172,9 @@ export async function saveOrder(
       id = uuid();
       const no = await issueNumber(conn, ws, userId, "order", id);
       await conn.execute(
-        `INSERT INTO mfg_orders (id, workspace_id, order_no, item_id, bom_version_id, planned_qty, uom, planned_start, planned_end, warehouse_from, warehouse_to, notes, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO mfg_orders (id, workspace_id, order_no, item_id, bom_version_id, planned_qty, uom, planned_start, planned_end, warehouse_from, warehouse_to, notes,
+           location_from, location_to, source_type, qc_spec_id, equipment, created_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, ws, no, ...vals, userId] as any,
       );
     } else {
@@ -170,7 +182,8 @@ export async function saveOrder(
       if (!before || !["draft", "planned"].includes(before.status)) throw bad("Hanya order draf/terencana yang dapat diubah.");
       await conn.execute(
         `UPDATE mfg_orders SET item_id = ?, bom_version_id = ?, planned_qty = ?, uom = ?, planned_start = ?, planned_end = ?,
-                warehouse_from = ?, warehouse_to = ?, notes = ? WHERE workspace_id = ? AND id = ?`,
+                warehouse_from = ?, warehouse_to = ?, notes = ?, location_from = ?, location_to = ?, source_type = ?, qc_spec_id = ?, equipment = ?
+          WHERE workspace_id = ? AND id = ?`,
         [...vals, ws, id] as any,
       );
     }
@@ -488,17 +501,15 @@ async function consumeEsign(conn: PoolConnection, ws: string, userId: string, si
   if (!r.affectedRows) throw new ProductionError("Tanda tangan elektronik segar diperlukan.", 403);
 }
 
-export async function verifyStep(ws: string, userId: string, input: { stepId: string; signature: string; reason: string }) {
+export async function verifyStep(ws: string, userId: string, input: { stepId: string; reason: string }) {
   await mfgAction(ws, userId, "orders", ["production_supervisor", "qa_manager"]);
   const reason = needReason(input.reason);
   return transaction(async (conn) => {
     const s = await row(conn, "SELECT * FROM mfg_batch_steps WHERE workspace_id = ? AND id = ? FOR UPDATE", [ws, input.stepId]);
     if (!s || s.status !== "done") throw bad("Langkah belum dikerjakan.");
-    if (s.performed_by === userId) throw new ProductionError("Verifikator harus berbeda dari pelaksana.", 403);
-    await consumeEsign(conn, ws, userId, input.signature, "mfg_batch_steps", s.id, "step_verify");
-    await conn.execute("UPDATE mfg_batch_steps SET status = 'verified', verified_by = ?, verified_at = NOW(6), signature_id = ? WHERE id = ?", [userId, input.signature, s.id]);
+    await conn.execute("UPDATE mfg_batch_steps SET status = 'verified', verified_by = ?, verified_at = NOW(6) WHERE id = ?", [userId, s.id]);
     const after = await row(conn, "SELECT * FROM mfg_batch_steps WHERE id = ?", [s.id]);
-    await mfgAudit(conn, { workspaceId: ws, userId, table: "mfg_batch_steps", entityId: s.id, action: "VERIFY", oldValue: s, newValue: after, reason, signed: "otp" });
+    await mfgAudit(conn, { workspaceId: ws, userId, table: "mfg_batch_steps", entityId: s.id, action: "VERIFY", oldValue: s, newValue: after, reason });
     return { id: s.id as string };
   });
 }
