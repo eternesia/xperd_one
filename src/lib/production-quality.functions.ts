@@ -18,7 +18,7 @@ export const getProductionQuality = createServerFn({ method: "POST" })
   .validator(ws)
   .handler(async ({ data, context }) => {
     const { mfgAssert, d10 } = await import("@/lib/production.server");
-    const { mfgActionAllowed, mfgStrictRole } = await import("@/lib/production-lots.server");
+    const { mfgActionAllowed } = await import("@/lib/production-lots.server");
     const { execute } = await import("@/integrations/mysql/pool");
     await mfgAssert(data.workspaceId, context.userId, "quality", false);
     const w = data.workspaceId;
@@ -30,7 +30,7 @@ export const getProductionQuality = createServerFn({ method: "POST" })
       execute<any>("SELECT id, lot_no, item_id, qc_status, expiry_date FROM mfg_lots WHERE workspace_id = ? AND is_active = 1 ORDER BY lot_no LIMIT 1000", [w]),
       execute<any>("SELECT id, code, name FROM md_items WHERE workspace_id = ? AND is_active = 1 ORDER BY code LIMIT 1000", [w]),
       mfgActionAllowed(w, context.userId, "quality", QC_ROLES),
-      mfgStrictRole(w, context.userId, QA_ONLY),
+      mfgActionAllowed(w, context.userId, "quality", QA_ONLY),
     ]);
     return {
       specs: specs.map((s) => ({ ...s, status: (s.status ?? "approved") as "draft" | "approved", approved_at: iso(s.approved_at), is_active: Number(s.is_active) === 1, created_at: iso(s.created_at), updated_at: iso(s.updated_at) })) as any[],
@@ -224,31 +224,54 @@ export const recordQcResults = createServerFn({ method: "POST" })
     });
   });
 
+async function decideOneLot(conn: import("mysql2/promise").PoolConnection, data: { workspaceId: string; lotId: string; status: "released" | "rejected" | "hold"; reason: string }, userId: string) {
+  const { mfgAudit, ProductionError, jakartaToday, d10 } = await import("@/lib/production.server");
+  const [lr] = await conn.execute<any[]>("SELECT * FROM mfg_lots WHERE workspace_id = ? AND id = ? FOR UPDATE", [data.workspaceId, data.lotId]);
+  const l = lr[0];
+  if (!l) throw new ProductionError("Lot tidak tersedia.", 403);
+  if (["rejected", "expired"].includes(l.qc_status)) throw new ProductionError("Status akhir lot tidak dapat diubah.");
+  if (l.qc_status === data.status) return { status: data.status as string };
+  if (data.status === "released") {
+    const [li] = await conn.execute<any[]>("SELECT status FROM mfg_qc_inspections WHERE workspace_id = ? AND lot_id = ? AND status <> 'pending' ORDER BY signed_at DESC, created_at DESC LIMIT 1", [data.workspaceId, data.lotId]);
+    if (li[0]?.status === "failed") throw new ProductionError("Inspeksi terakhir lot gagal; tidak dapat dirilis.");
+    if (!li[0]) {
+      // Inspeksi wajib hanya bila item punya spesifikasi QC approved; tanpa spesifikasi, rilis langsung (tercatat di audit).
+      const [sp] = await conn.execute<any[]>("SELECT 1 FROM mfg_qc_specs WHERE workspace_id = ? AND item_id = ? AND status = 'approved' AND is_active = 1 LIMIT 1", [data.workspaceId, l.item_id]);
+      if (sp.length) throw new ProductionError("Lot butuh inspeksi lulus sebelum rilis (item ini punya spesifikasi QC approved).");
+    }
+    const [od] = await conn.execute<any[]>("SELECT 1 FROM mfg_deviations WHERE workspace_id = ? AND lot_id = ? AND status <> 'closed' LIMIT 1", [data.workspaceId, data.lotId]);
+    if (od.length) throw new ProductionError("Tutup deviasi terbuka sebelum rilis.");
+    if (l.expiry_date && d10(l.expiry_date) < jakartaToday()) throw new ProductionError("Lot kedaluwarsa tidak dapat dirilis.");
+  }
+  await conn.execute("UPDATE mfg_lots SET qc_status = ? WHERE id = ?", [data.status, data.lotId]);
+  await mfgAudit(conn, { workspaceId: data.workspaceId, userId: userId, table: "mfg_lots", entityId: data.lotId, action: "UPDATE", oldValue: { qc_status: l.qc_status }, newValue: { qc_status: data.status }, reason: data.reason });
+  return { status: data.status as string };
+}
+
 export const decideLot = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator(ws.extend({ lotId: zId, status: z.enum(["released", "rejected", "hold"]), reason }))
   .handler(async ({ data, context }) => {
     const { mfgAudit, ProductionError, jakartaToday, d10 } = await import("@/lib/production.server");
-    const { mfgActionAllowed, mfgStrictRole } = await import("@/lib/production-lots.server");
+    const { mfgActionAllowed } = await import("@/lib/production-lots.server");
     const { transaction } = await import("@/integrations/mysql/pool");
-    if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)) || !(await mfgStrictRole(data.workspaceId, context.userId, QA_ONLY)))
-      throw new ProductionError("Persetujuan QA manager diperlukan.", 403);
+    if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)))
+      throw new ProductionError("Akses QC untuk aksi ini diperlukan.", 403);
+    return transaction((conn) => decideOneLot(conn, data, context.userId));
+  });
+
+export const bulkDecideLots = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws.extend({ lotIds: z.array(zId).min(1).max(200), status: z.enum(["released", "rejected", "hold"]), reason }))
+  .handler(async ({ data, context }) => {
+    const { ProductionError } = await import("@/lib/production.server");
+    const { mfgActionAllowed } = await import("@/lib/production-lots.server");
+    const { transaction } = await import("@/integrations/mysql/pool");
+    if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)))
+      throw new ProductionError("Akses QC untuk aksi ini diperlukan.", 403);
     return transaction(async (conn) => {
-      const [lr] = await conn.execute<any[]>("SELECT * FROM mfg_lots WHERE workspace_id = ? AND id = ? FOR UPDATE", [data.workspaceId, data.lotId]);
-      const l = lr[0];
-      if (!l) throw new ProductionError("Lot tidak tersedia.", 403);
-      if (["rejected", "expired"].includes(l.qc_status)) throw new ProductionError("Status akhir lot tidak dapat diubah.");
-      if (l.qc_status === data.status) return { status: data.status as string };
-      if (data.status === "released") {
-        const [li] = await conn.execute<any[]>("SELECT status FROM mfg_qc_inspections WHERE workspace_id = ? AND lot_id = ? AND status <> 'pending' ORDER BY signed_at DESC, created_at DESC LIMIT 1", [data.workspaceId, data.lotId]);
-        if (!li[0] || li[0].status === "failed") throw new ProductionError("Lot butuh inspeksi lulus sebelum rilis.");
-        const [od] = await conn.execute<any[]>("SELECT 1 FROM mfg_deviations WHERE workspace_id = ? AND lot_id = ? AND status <> 'closed' LIMIT 1", [data.workspaceId, data.lotId]);
-        if (od.length) throw new ProductionError("Tutup deviasi terbuka sebelum rilis.");
-        if (l.expiry_date && d10(l.expiry_date) < jakartaToday()) throw new ProductionError("Lot kedaluwarsa tidak dapat dirilis.");
-      }
-      await conn.execute("UPDATE mfg_lots SET qc_status = ? WHERE id = ?", [data.status, data.lotId]);
-      await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "mfg_lots", entityId: data.lotId, action: "UPDATE", oldValue: { qc_status: l.qc_status }, newValue: { qc_status: data.status }, reason: data.reason });
-      return { status: data.status as string };
+      for (const lotId of data.lotIds) await decideOneLot(conn, { workspaceId: data.workspaceId, lotId, status: data.status, reason: data.reason }, context.userId);
+      return { count: data.lotIds.length };
     });
   });
 
@@ -303,10 +326,10 @@ export const closeDeviation = createServerFn({ method: "POST" })
   .validator(ws.extend({ id: zId, reason }))
   .handler(async ({ data, context }) => {
     const { mfgAudit, ProductionError } = await import("@/lib/production.server");
-    const { mfgActionAllowed, mfgStrictRole } = await import("@/lib/production-lots.server");
+    const { mfgActionAllowed } = await import("@/lib/production-lots.server");
     const { transaction } = await import("@/integrations/mysql/pool");
-    if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)) || !(await mfgStrictRole(data.workspaceId, context.userId, QA_ONLY)))
-      throw new ProductionError("Persetujuan QA manager diperlukan.", 403);
+    if (!(await mfgActionAllowed(data.workspaceId, context.userId, "quality", QA_ONLY)))
+      throw new ProductionError("Akses QC untuk aksi ini diperlukan.", 403);
     return transaction(async (conn) => {
       const [r] = await conn.execute<any[]>("SELECT * FROM mfg_deviations WHERE workspace_id = ? AND id = ? FOR UPDATE", [data.workspaceId, data.id]);
       const d = r[0];
