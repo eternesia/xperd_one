@@ -276,8 +276,7 @@ export async function attachGrnLot(
     [workspaceId, String(row.item_code ?? "")],
   );
   if (!item) return false;
-  if (!(await mfgActionAllowed(workspaceId, userId, "lots", ["warehouse", "production_supervisor"])))
-    throw new ProductionError("Penerimaan GRN Production dilarang untuk peran ini.", 403);
+  // Penerimaan barang sudah dibatasi izin modul Procurement; lot karantina dibuat otomatis tanpa peran Production khusus.
   const wh = String(row.warehouse_code ?? "");
   const qty = num(row.qty);
   if (!wh || !isQty4(qty)) throw new ProductionError("GRN Production butuh gudang dan kuantitas positif.");

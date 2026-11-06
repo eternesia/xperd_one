@@ -930,8 +930,6 @@ export async function erpSaveDocumentTx(
         });
         moved = true;
       } else if (mfgOn && prof && dt === "goods_receipt") {
-        if (!(await mfgActionAllowed(ws, userId, "lots", ["warehouse", "production_supervisor"])))
-          throw bad("Penerimaan GRN Production dilarang untuk peran ini.");
         const mvId = uuid();
         const newLot = uuid();
         await conn.execute(
