@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { assertQallingSection, getTokenUser, requireAuth } from "../db";
 import { postInputSchema, postTime, validatePostTargets } from "../qalling-rules";
 import { resolveMedia } from "../qalling-media";
+import { platformOptionsSchema, validatePlatformOptions } from "../../platform-options";
 
 // BS New 17: `qalling_create_post` menggantikan `qalling_create_post_draft` — draft, carousel (hingga 10 lampiran) atau terjadwal.
 export default defineTool({
@@ -29,6 +30,11 @@ export default defineTool({
       .optional()
       .describe(
         "Optional first comment posted by the account right after publishing (e.g. hashtags or a link). Supported platforms only; limits differ per platform (TikTok 150 characters).",
+      ),
+    platform_options: platformOptionsSchema
+      .optional()
+      .describe(
+        "Per-platform options keyed by platform name (instagram, facebook, threads, linkedin, youtube, tiktok, pinterest, x, telegram, discord); only for Tebar-connected accounts of a selected platform. E.g. threads.poll, instagram.collaborators/trial/format, linkedin.visibility/document, tiktok.privacy_level, pinterest.board_id. YouTube requires youtube.made_for_kids (ask the user). See qalling_get_platform_rules.",
       ),
     scheduled_at: z
       .string()
@@ -110,6 +116,13 @@ export default defineTool({
       } catch (e) {
         throw new ToolError((e as Error).message);
       }
+      const optionsError = validatePlatformOptions(input.platform_options, owned, {
+        singleVideo: media.length === 1 && !!media[0].mime_type?.startsWith("video/"),
+        mediaCount: media.length,
+        hasCaption: !!caption.trim(),
+        requireYoutubeKids: true,
+      });
+      if (optionsError) throw new ToolError(optionsError);
       // Cek ulang setelah unduhan: jadwal yang sudah lewat tidak boleh masuk antrean.
       let time: string;
       try {
@@ -127,14 +140,17 @@ export default defineTool({
       const id = uuid();
       try {
         await execute(
-          `INSERT INTO crm_scheduled_posts (id, workspace_id, title, caption, first_comment, account_ids, media_paths, scheduled_at, status, source)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'mcp')`,
+          `INSERT INTO crm_scheduled_posts (id, workspace_id, title, caption, first_comment, platform_options, account_ids, media_paths, scheduled_at, status, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'mcp')`,
           [
             id,
             workspace_id,
             title,
             caption,
             input.first_comment?.trim() || null,
+            input.platform_options && Object.keys(input.platform_options).length
+              ? JSON.stringify(input.platform_options)
+              : null,
             JSON.stringify(unique),
             JSON.stringify(media.map((m) => m.file_path)),
             when,

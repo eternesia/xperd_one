@@ -1,6 +1,7 @@
 // Aturan murni tool posting Qalling (BS New 17): skema input, waktu jadwal, target akun, CDN media yang diizinkan, izin per bagian.
 import { z } from "zod/v4";
 import { validateScheduleTime } from "../post-delivery-rules";
+import { platformOptionsSchema } from "../platform-options";
 
 export const postInputSchema = z
   .object({
@@ -9,6 +10,7 @@ export const postInputSchema = z
     title: z.string().trim().min(1).max(150),
     caption: z.string().max(5000).default(""),
     first_comment: z.string().trim().max(2200).optional(),
+    platform_options: platformOptionsSchema.optional(),
     scheduled_at: z.string().datetime({ offset: true }).optional(),
     publish_mode: z.enum(["draft", "scheduled"]).default("draft"),
     media_ids: z.array(z.string().uuid()).max(10).default([]),

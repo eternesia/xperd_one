@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { executeOne } from "@/integrations/mysql/pool";
 import { targetEnhancementOptions, type FirstCommentOutcome } from "./post-enhancements";
+import { mergePlatformOptions, type PlatformOptions } from "./platform-options";
 import { accountPagePath, normalizeAccountPage } from "./tebar-account-page";
 
 /** Basis API Tebar; dapat ditimpa (`TEBAR_API_BASE`) untuk server tiruan saat uji. */
@@ -131,6 +132,7 @@ export async function publishTebar(
     coverUrl?: string;
     platforms: Record<string, string>;
     title: string;
+    platformOptions?: PlatformOptions | null;
   },
 ) {
   const groups = new Map<string, string[]>();
@@ -151,7 +153,7 @@ export async function publishTebar(
       const body: Record<string, unknown> = {
         content,
         targets: accs.map((account_id) => {
-          const options = enhancements
+          const base = enhancements
             ? targetEnhancementOptions(
                 enhancements.platforms[account_id],
                 enhancements.firstComment,
@@ -159,6 +161,13 @@ export async function publishTebar(
                 enhancements.title,
               )
             : {};
+          const options = enhancements
+            ? mergePlatformOptions(
+                enhancements.platforms[account_id],
+                base,
+                enhancements.platformOptions,
+              )
+            : base;
           return { account_id, ...(Object.keys(options).length ? { options } : {}) };
         }),
       };

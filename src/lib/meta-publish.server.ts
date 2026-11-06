@@ -10,6 +10,7 @@ import { sqlDateTime } from "./datetime";
 import { signMediaUrl } from "./crm-media.server";
 import { workspaceHasQalling } from "./social-interactions.server";
 import { deliveryStatus } from "./post-delivery-rules";
+import { parsePlatformOptions, validatePlatformOptions } from "./platform-options";
 import { validateEnhancements, type FirstCommentOutcome } from "./post-enhancements";
 
 /** Basis Graph API; bisa ditimpa (`META_GRAPH_BASE`) untuk server tiruan saat uji. */
@@ -83,8 +84,9 @@ export async function publishPost(
     account_ids: unknown;
     first_comment: string | null;
     cover_path: string | null;
+    platform_options: unknown;
   }>(
-    "SELECT id, title, caption, media_url, media_paths, account_ids, first_comment, cover_path FROM crm_scheduled_posts WHERE id = ? AND workspace_id = ? LIMIT 1",
+    "SELECT id, title, caption, media_url, media_paths, account_ids, first_comment, cover_path, platform_options FROM crm_scheduled_posts WHERE id = ? AND workspace_id = ? LIMIT 1",
     [postId, workspaceId],
   );
   if (!post) throw new Error("Post not found");
@@ -124,6 +126,13 @@ export async function publishPost(
       !!library.find((m) => m.file_path === paths[0])?.mime_type?.startsWith("video/")) ||
     (!paths.length && !!post.media_url && /\.(mp4|mov|webm)(?:[?#]|$)/i.test(post.media_url));
   validateEnhancements(accounts, post.first_comment ?? "", post.cover_path, singleVideo);
+  const platformOptions = parsePlatformOptions(post.platform_options);
+  const optionsError = validatePlatformOptions(platformOptions, accounts, {
+    singleVideo,
+    mediaCount: paths.length + (post.media_url ? 1 : 0),
+    hasCaption: !!caption,
+  });
+  if (optionsError) throw new Error(optionsError);
   const coverUrl = post.cover_path ? signMediaUrl(origin, post.cover_path) : undefined;
   const signed = parseArr(post.media_paths).map((p) => signMediaUrl(origin, p));
   const mediaUrls = [...(post.media_url ? [post.media_url] : []), ...signed];
@@ -147,6 +156,7 @@ export async function publishPost(
           firstComment: post.first_comment ?? "",
           coverUrl,
           title: post.title,
+          platformOptions,
           platforms: Object.fromEntries(
             tebarAccs.map((a) => [a.external_id as string, a.platform]),
           ),

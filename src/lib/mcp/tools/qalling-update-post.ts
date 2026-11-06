@@ -5,6 +5,11 @@ import { arr, iso, json } from "../qalling-common";
 import { canEditSchedule, validateScheduleTime } from "../../post-delivery-rules";
 import { validatePostTargets } from "../qalling-rules";
 import { resolveMedia } from "../qalling-media";
+import {
+  parsePlatformOptions,
+  platformOptionsSchema,
+  validatePlatformOptions,
+} from "../../platform-options";
 
 export default defineTool({
   name: "qalling_update_post",
@@ -21,6 +26,13 @@ export default defineTool({
       .max(2200)
       .optional()
       .describe("First comment posted right after publishing. Pass an empty string to remove it."),
+    platform_options: platformOptionsSchema
+      .nullable()
+      .optional()
+      .describe(
+        "Per-platform options keyed by platform name (instagram, facebook, threads, linkedin, youtube, tiktok, pinterest, x, telegram, discord); only for Tebar-connected accounts of a selected platform. E.g. threads.poll, instagram.collaborators/trial/format, linkedin.visibility/document, tiktok.privacy_level, pinterest.board_id. YouTube requires youtube.made_for_kids (ask the user). See qalling_get_platform_rules." +
+          " Replaces all stored options; pass null to clear.",
+      ),
     account_ids: z.array(z.string().uuid()).min(1).max(10).optional(),
     media_ids: z
       .array(z.string().uuid())
@@ -46,7 +58,7 @@ export default defineTool({
     if (a.media_ids?.length) await assertQallingSection(a.workspace_id, userId, "media", false);
     const { execute, executeOne, result: run } = await import("@/integrations/mysql/pool");
     const p = await executeOne<Record<string, unknown>>(
-      `SELECT id, title, caption, status, source, external_id, scheduled_at, account_ids, media_paths
+      `SELECT id, title, caption, status, source, external_id, scheduled_at, account_ids, media_paths, platform_options
          FROM crm_scheduled_posts WHERE workspace_id = ? AND id = ?`,
       [a.workspace_id, a.post_id],
     );
@@ -65,7 +77,9 @@ export default defineTool({
       a.title === undefined &&
       a.caption === undefined &&
       a.account_ids === undefined &&
-      a.media_ids === undefined
+      a.media_ids === undefined &&
+      a.first_comment === undefined &&
+      a.platform_options === undefined
     )
       throw new ToolError("Nothing to change: pass at least one field.");
 
@@ -112,6 +126,18 @@ export default defineTool({
       } catch (e) {
         throw new ToolError((e as Error).message);
       }
+      // Opsi yang tersimpan tetap divalidasi terhadap akun/media baru agar tidak gagal saat terbit.
+      const effectiveOptions =
+        a.platform_options !== undefined
+          ? a.platform_options
+          : parsePlatformOptions(p.platform_options);
+      const optionsError = validatePlatformOptions(effectiveOptions, accounts, {
+        singleVideo: media.length === 1 && !!media[0].mime_type?.startsWith("video/"),
+        mediaCount: media.length,
+        hasCaption: !!caption.trim(),
+        requireYoutubeKids: a.platform_options !== undefined,
+      });
+      if (optionsError) throw new ToolError(optionsError);
       let when: string | null = null;
       if (a.scheduled_at !== undefined || status === "scheduled") {
         try {
@@ -139,6 +165,14 @@ export default defineTool({
       if (a.first_comment !== undefined) {
         sets.push("first_comment = ?");
         params.push(a.first_comment.trim() || null);
+      }
+      if (a.platform_options !== undefined) {
+        sets.push("platform_options = ?");
+        params.push(
+          a.platform_options && Object.keys(a.platform_options).length
+            ? JSON.stringify(a.platform_options)
+            : null,
+        );
       }
       if (when) {
         sets.push("scheduled_at = ?");
