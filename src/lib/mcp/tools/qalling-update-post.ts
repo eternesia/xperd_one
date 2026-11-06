@@ -16,6 +16,11 @@ export default defineTool({
     post_id: z.string().uuid().describe("Post id from qalling_list_posts."),
     title: z.string().trim().min(1).max(150).optional(),
     caption: z.string().max(5000).optional(),
+    first_comment: z
+      .string()
+      .max(2200)
+      .optional()
+      .describe("First comment posted right after publishing. Pass an empty string to remove it."),
     account_ids: z.array(z.string().uuid()).min(1).max(10).optional(),
     media_ids: z
       .array(z.string().uuid())
@@ -131,6 +136,10 @@ export default defineTool({
         JSON.stringify(media.map((m) => m.file_path)),
         status,
       ];
+      if (a.first_comment !== undefined) {
+        sets.push("first_comment = ?");
+        params.push(a.first_comment.trim() || null);
+      }
       if (when) {
         sets.push("scheduled_at = ?");
         params.push(new Date(when));

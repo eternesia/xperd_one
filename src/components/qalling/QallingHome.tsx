@@ -302,20 +302,32 @@ export function QallingHome() {
         </div>
       </div>
       {hasCrm && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             ["leads", pick("Leads", "Prospek"), crm?.leads],
+            [
+              "follow-ups",
+              pick("Follow-ups overdue", "Follow up terlambat"),
+              crm?.followUpsOverdue,
+            ],
+            ["follow-ups", pick("Follow-ups today", "Follow up hari ini"), crm?.followUpsToday],
             ["inbox", pick("Unread conversations", "Percakapan belum dibaca"), crm?.inbox],
             ["automations", pick("Active automations", "Automasi aktif"), crm?.automation],
-          ].map(([key, label, count]) => (
+          ].map(([key, label, count], i) => (
             <Link
-              key={String(key)}
+              key={`${String(key)}-${i}`}
               to="/qalling/app/$submoduleId"
               params={{ submoduleId: String(key) }}
               className="rounded-lg border bg-card p-4"
             >
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="mt-2 text-2xl font-medium">{count ?? "—"}</p>
+              <p
+                className={`mt-2 text-2xl font-medium ${
+                  i === 1 && Number(count) > 0 ? "text-destructive" : ""
+                }`}
+              >
+                {count ?? "—"}
+              </p>
             </Link>
           ))}
         </div>
