@@ -55,7 +55,7 @@ export function validatePostTargets(accounts: Account[], types: string[], sendin
 }
 
 // Hanya CDN media yang dikenal (bukan host sembarang, IP literal, atau redirect) — mencegah SSRF/DNS-rebinding.
-const MEDIA_HOSTS = [
+export const MEDIA_HOSTS = [
   "oaidalleapiprodscus.blob.core.windows.net",
   "oaiusercontent.com",
   "storage.googleapis.com",
