@@ -187,7 +187,7 @@ export async function postLotMovement(
     movementId?: string;
   },
 ): Promise<string> {
-  if (!isQty4(p.qty) || p.qty === 0 || !Number.isInteger(p.unitCost) || !p.key)
+  if (!isQty4(p.qty) || p.qty === 0 || !isQty4(p.unitCost) || !p.key)
     throw new ProductionError("Presisi/kunci pergerakan tidak valid.");
   // replay idempoten
   const [dup] = await conn.execute<any[]>(
