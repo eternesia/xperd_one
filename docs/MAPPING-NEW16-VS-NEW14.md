@@ -178,3 +178,12 @@ Belum teruji: impor sukses `media_urls` dari CDN nyata (host dibatasi ke CDN pub
 
 New 18 vs New 17 hanya berbeda di MCP: tool ke-18 `qalling_upload_media` (url CDN yang diizinkan **atau** `file_base64` + `mime_type`, nama opsional, satu berkas per panggilan, hasil `media_id` untuk `qalling_create_post`). Instruksi server diperbarui dan versi menjadi 1.2.0.
 Old: `src/lib/mcp/tools/qalling-upload-media.ts` + helper bersama `storeMedia` di `qalling-media.ts` (kuota tier, kebijakan unggah Super Admin, penyimpanan file lokal, baris `crm_media`; pembersihan bila insert gagal). Dilindungi seperti tool Qalling lain (`mcp_api` + izin bagian `media` tulis). Uji: `e2e/mcp-posts.spec.ts`, `e2e/mcp.spec.ts` (18 nama).
+
+## Ronde 60 — Production BS New 19
+
+Migrasi `048_production_new19.sql`. Disamakan dari New 19:
+- Sidebar Production bernomor (1. Setup · Profil Item … 6. Laporan Produksi); panduan 4 langkah di halaman Quality.
+- Biaya konversi per unit hasil di Profil Item (`conv_labor_per_unit`, `conv_other_per_unit`): masuk ke biaya order (`other_cost`), standar, dan jurnal baru J4 (`other_applied`); J5C memuat biaya lain.
+- Lot & Stok: kolom Qty on hand, panel Rekonsiliasi stok vs lot, tombol Inisiasi lot dari stok eksisting. Item bahan BOM juga terkendali lot.
+- Stok keluar manual selalu memakai HPP rata-rata (kolom biaya dikunci). GRN/retur beli memakai akun persediaan hasil pemetaan per item (selisih ke 1300).
+- Mode uji `MFG_ESIGN_DEMO=1`: kode tanda tangan/persetujuan BOM tampil di layar (JANGAN diaktifkan di produksi).

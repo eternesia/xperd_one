@@ -820,6 +820,7 @@ export async function erpSaveDocumentTx(
     dt === "sales_return" ||
     ((dt === "ap_invoice" || dt === "ar_invoice") && !receipt);
   let stockCostTotal = 0;
+  const stockByAccount = new Map<string, number>(); // akun persediaan per item (GRN/retur beli)
   const cogs: JLine[] = [];
   const stockMovementIds: string[] = [];
   if (needsStock && stockedLines.length) {
@@ -852,6 +853,14 @@ export async function erpSaveDocumentTx(
           [ws, item.id],
         );
         prof = pr[0] ?? null;
+        // Item yang dipakai sebagai bahan di BOM juga terkendali lot (New 19) walau belum punya profil aktif.
+        if (!prof) {
+          const [bl] = await conn.execute<any[]>(
+            "SELECT 1 AS x FROM mfg_bom_lines WHERE workspace_id = ? AND item_id = ? LIMIT 1",
+            [ws, item.id],
+          );
+          if (bl[0]) prof = { item_class: null };
+        }
       }
       if (side === "sales" && sign < 0 && prof && !lotId)
         throw bad("Production item requires a released lot");
@@ -999,6 +1008,10 @@ export async function erpSaveDocumentTx(
       }
       const value = r2(l.qty * unitCost);
       stockCostTotal += value;
+      if (side === "purchase") {
+        const pacct = await stockAccountFor(conn, ws, item.id, mfgOn);
+        stockByAccount.set(pacct, r2((stockByAccount.get(pacct) ?? 0) + value));
+      }
       if (side === "sales") {
         const acct = await stockAccountFor(conn, ws, item.id, mfgOn);
         cogs.push(
@@ -1018,7 +1031,13 @@ export async function erpSaveDocumentTx(
   const apStockLines = lines; // alias
   if (dt === "goods_receipt") {
     const memo = memoBase("Goods receipt");
-    await postJ(dt, memo, [jl("1300", netBase, 0), jl("2050", 0, netBase, ACCOUNT_NAMES["2050"])]);
+    // Debit ke akun persediaan hasil pemetaan tiap item (bahan baku / barang jadi); selisih ke 1300.
+    const grLines: JLine[] = [...stockByAccount].map(([code, v]) => jl(code, v, 0));
+    grLines.push(jl("2050", 0, netBase, ACCOUNT_NAMES["2050"]));
+    const stockGr = r2(stockCostTotal);
+    if (!grLines.length || Math.abs(netBase - stockGr) > 0.005)
+      grLines.push(jl("1300", Math.max(netBase - stockGr, 0), Math.max(stockGr - netBase, 0)));
+    await postJ(dt, memo, grLines);
   } else if (dt === "ap_invoice") {
     const memo = memoBase("AP invoice");
     const debits = new Map<string, JLine>();
@@ -1058,7 +1077,9 @@ export async function erpSaveDocumentTx(
     const stockB = r2(stockCostTotal);
     const jlines: JLine[] = [
       jl(grir ? "2050" : "2000", grir ? netBase : totalB, 0),
-      jl("1300", 0, stockB),
+      ...(stockByAccount.size
+        ? [...stockByAccount].map(([code, v]) => jl(code, 0, v))
+        : [jl("1300", 0, stockB)]),
     ];
     if (!grir) jlines.push(jl("1400", 0, vatB), jl("2200", whtB, 0));
     if (Math.abs(netBase - stockB) > 0.005)
@@ -1506,8 +1527,9 @@ export async function salesLotOptions(ws: string, itemCodes: string[], warehouse
     );
     const prof = it
       ? await executeOne<Row>(
-          "SELECT 1 AS x FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ? AND is_active = 1",
-          [ws, it.id],
+          `SELECT 1 AS x FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ? AND is_active = 1
+           UNION SELECT 1 FROM mfg_bom_lines WHERE workspace_id = ? AND item_id = ? LIMIT 1`,
+          [ws, it.id, ws, it.id],
         )
       : null;
     if (!prof) continue;

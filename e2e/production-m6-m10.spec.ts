@@ -82,7 +82,7 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
   /* ---------- fixture ---------- */
   await c.execute("INSERT INTO md_uoms (id, workspace_id, code, name) VALUES (?,?, 'KG', 'Kilogram')", [uuid(), ws]);
   for (const w of ["WH-RM", "WH-FG"]) await c.execute("INSERT INTO md_warehouses (id, workspace_id, code, name) VALUES (?,?,?,?)", [uuid(), ws, w, w]);
-  const acc: Record<string, string> = { rm_inventory: "9101", wip_material: "9102", wip_conversion: "9103", fg_inventory: "9104", labor_applied: "9105", overhead_applied: "9106" };
+  const acc: Record<string, string> = { rm_inventory: "9101", wip_material: "9102", wip_conversion: "9103", fg_inventory: "9104", labor_applied: "9105", overhead_applied: "9106", other_applied: "9107" };
   for (const code of Object.values(acc)) await c.execute("INSERT INTO md_accounts (id, workspace_id, code, name, account_type) VALUES (?,?,?,?, 'asset')", [uuid(), ws, code, `Akun ${code}`]);
   const item = async (code: string, cost: number, cls: string, shelf: number | null) => {
     const id = uuid();
@@ -323,22 +323,25 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
   expect(t2.ok).toBe(false); // deviasi terbuka
   expect(t2.error).toMatch(/deviasi/i);
   await c.execute("UPDATE mfg_deviations SET status = 'closed', root_cause = 'x', capa = 'x', closed_by = ?, closed_at = NOW(6) WHERE workspace_id = ?", [adminId, ws]);
+  // New 19: biaya konversi per unit hasil di profil item (tenaga kerja Rp100 + biaya lain Rp50 per unit; hasil 190)
+  await c.execute("UPDATE mfg_item_profiles SET conv_labor_per_unit = 100, conv_other_per_unit = 50 WHERE workspace_id = ? AND item_id = ?", [ws, fg.id]);
   expect((await T("closed")).ok).toBe(true);
 
   /* ---------- biaya: aktual vs standar dari SQL ---------- */
   const [cost] = await q("SELECT * FROM mfg_order_costs WHERE order_id = ?", [orderId]);
   const mat = 67500;
-  const labor = 2.5 * 60000;
+  const labor = 2.5 * 60000 + 190 * 100;
+  const oth = 190 * 50;
   const ovh = 2.5 * 40000;
   const stdMat = 20 * 1100 + 180 * 90;
-  const stdConv = ((30 + 60 * 2) / 60) * (50000 + 30000);
-  expect([Number(cost.material_cost), Number(cost.labor_cost), Number(cost.overhead_cost), Number(cost.total_cost)]).toEqual([mat, labor, ovh, mat + labor + ovh]);
-  expect([Number(cost.output_qty), Number(cost.unit_cost)]).toEqual([190, Math.round((mat + labor + ovh) / 190)]);
-  expect([Number(cost.std_material_cost), Number(cost.std_conversion_cost), Number(cost.std_total_cost), Number(cost.variance)]).toEqual([stdMat, stdConv, stdMat + stdConv, mat + labor + ovh - (stdMat + stdConv)]);
+  const stdConv = ((30 + 60 * 2) / 60) * (50000 + 30000) + 200 * (100 + 50);
+  expect([Number(cost.material_cost), Number(cost.labor_cost), Number(cost.overhead_cost), Number(cost.other_cost), Number(cost.total_cost)]).toEqual([mat, labor, ovh, oth, mat + labor + ovh + oth]);
+  expect([Number(cost.output_qty), Number(cost.unit_cost)]).toEqual([190, Math.round((mat + labor + ovh + oth) / 190)]);
+  expect([Number(cost.std_material_cost), Number(cost.std_conversion_cost), Number(cost.std_total_cost), Number(cost.variance)]).toEqual([stdMat, stdConv, stdMat + stdConv, mat + labor + ovh + oth - (stdMat + stdConv)]);
 
   /* ---------- jurnal: outbox ---------- */
   let ev = await q("SELECT event_code, amount, status FROM mfg_journal_events WHERE order_id = ? ORDER BY event_code", [orderId]);
-  expect(ev).toHaveLength(5);
+  expect(ev).toHaveLength(6); // J1–J4, J5C, J5M (J4 = biaya lain dari profil item)
   expect(ev.every((e) => e.status === "blocked_mapping")).toBe(true); // mapping akun belum diisi
   expect(await q("SELECT 1 FROM acc_journal_entries WHERE workspace_id = ?", [ws])).toHaveLength(0);
   for (const [k, a] of Object.entries(acc)) expect((await ord(page, "saveProductionMapping", { mappingKey: k, account: a, reason: "Mapping uji" })).ok).toBe(true);
@@ -355,10 +358,10 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
   expect((await ord(page, "retryProductionJournals", { orderId, reason: "ulang lagi" })).ok).toBe(true); // idempoten
   ev = await q("SELECT event_code, amount, status FROM mfg_journal_events WHERE order_id = ? ORDER BY event_code", [orderId]);
   expect(ev.map((e) => [e.event_code, Number(e.amount), e.status])).toEqual([
-    ["J1", mat, "posted"], ["J2", labor, "posted"], ["J3", ovh, "posted"], ["J5C", labor + ovh, "posted"], ["J5M", mat, "posted"],
+    ["J1", mat, "posted"], ["J2", labor, "posted"], ["J3", ovh, "posted"], ["J4", oth, "posted"], ["J5C", labor + ovh + oth, "posted"], ["J5M", mat, "posted"],
   ]);
   const entries = await q("SELECT * FROM acc_journal_entries WHERE workspace_id = ?", [ws]);
-  expect(entries).toHaveLength(5);
+  expect(entries).toHaveLength(6);
   for (const e of entries) {
     const ls = await q("SELECT account_code, debit, credit FROM acc_journal_lines WHERE entry_id = ?", [e.id]);
     expect(ls.reduce((s, l) => s + Number(l.debit), 0)).toBe(ls.reduce((s, l) => s + Number(l.credit), 0));
@@ -366,7 +369,8 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
   const bal = async (code: string) => Number((await q("SELECT COALESCE(SUM(debit-credit),0) b FROM acc_journal_lines WHERE workspace_id = ? AND account_code = ?", [ws, code]))[0].b);
   expect(await bal("9102")).toBe(0); // WIP material habis
   expect(await bal("9103")).toBe(0); // WIP konversi habis
-  expect(await bal("9104")).toBe(mat + labor + ovh); // barang jadi
+  expect(await bal("9104")).toBe(mat + labor + ovh + oth); // barang jadi
+  expect(await bal("9107")).toBe(-oth); // biaya lain dibebankan
   expect(await bal("9101")).toBe(-mat);
   // UI akuntansi menampilkan rekonsiliasi
   await page.goto(`/app/w/${ws}/manufacturing/accounting`);
@@ -383,16 +387,16 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
   const rv = await ord(page, "reverseProductionJournals", { orderId, reason: "Koreksi E2E" });
   expect(rv.ok && rv.v.ok).toBe(true);
   ev = await q("SELECT event_code, amount, status FROM mfg_journal_events WHERE order_id = ? ORDER BY event_code", [orderId]);
-  expect(ev).toHaveLength(10);
+  expect(ev).toHaveLength(12);
   expect(ev.filter((e) => e.event_code.startsWith("R-")).every((e) => e.status === "posted" && Number(e.amount) < 0)).toBe(true);
   expect(ev.filter((e) => !e.event_code.startsWith("R-")).every((e) => e.status === "reversed")).toBe(true);
   expect(await bal("9104")).toBe(0);
   expect(await bal("9101")).toBe(0);
-  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(10);
+  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(12);
   await ord(page, "reverseProductionJournals", { orderId, reason: "ulang" });
-  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(10); // tidak berlipat
+  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(12); // tidak berlipat
   await ord(page, "retryProductionJournals", { orderId, reason: "tidak boleh posting ulang yang dibalik" });
-  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(10);
+  expect((await q("SELECT COUNT(*) n FROM acc_journal_entries WHERE workspace_id = ?", [ws]))[0].n).toBe(12);
   expect((await q("SELECT COUNT(*) n FROM mfg_order_costs WHERE order_id = ?", [orderId]))[0].n).toBe(1); // biaya tidak dihitung ulang
 
   /* ---------- lot dijual: hanya rilis + registrasi berlaku ---------- */
@@ -411,7 +415,7 @@ test("PRODUCTION M6–M10: order, issue, batch record, output, biaya, jurnal, pe
     expect(audit.some((a) => a.entity_table === t), t).toBe(true);
   await page.goto(`/app/w/${ws}/manufacturing/orders`);
   await page.getByRole("button", { name: "Lihat" }).first().click();
-  await expect(page.getByText(/Total Rp317\.500/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Total Rp346\.000/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("posted").first()).toBeVisible();
   await ctxN.close();
   await ctxS.close();

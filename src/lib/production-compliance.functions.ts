@@ -100,6 +100,8 @@ export const saveProductionProfile = createServerFn({ method: "POST" })
         v.potency_basis,
         v.requires_qc_incoming ? 1 : 0,
         v.fefo ? 1 : 0,
+        v.conv_labor_per_unit,
+        v.conv_other_per_unit,
         v.is_active ? 1 : 0,
       ];
       let id: string;
@@ -107,15 +109,15 @@ export const saveProductionProfile = createServerFn({ method: "POST" })
         id = ex[0].id;
         await conn.execute(
           `UPDATE mfg_item_profiles SET item_class=?, cas_no=?, ghs_classes=?, un_number=?, is_b3=?, shelf_life_days=?, storage_condition=?,
-             incompatible_classes=?, density_g_ml=?, potency_basis=?, requires_qc_incoming=?, fefo=?, is_active=? WHERE id = ? AND workspace_id = ?`,
+             incompatible_classes=?, density_g_ml=?, potency_basis=?, requires_qc_incoming=?, fefo=?, conv_labor_per_unit=?, conv_other_per_unit=?, is_active=? WHERE id = ? AND workspace_id = ?`,
           [...cols, id, data.workspaceId],
         );
       } else {
         id = uuid();
         await conn.execute(
           `INSERT INTO mfg_item_profiles (item_class, cas_no, ghs_classes, un_number, is_b3, shelf_life_days, storage_condition,
-             incompatible_classes, density_g_ml, potency_basis, requires_qc_incoming, fefo, is_active, id, workspace_id, item_id, created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             incompatible_classes, density_g_ml, potency_basis, requires_qc_incoming, fefo, conv_labor_per_unit, conv_other_per_unit, is_active, id, workspace_id, item_id, created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [...cols, id, data.workspaceId, data.itemId, context.userId],
         );
       }

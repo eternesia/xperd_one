@@ -58,6 +58,7 @@ export const MAPPING_KEYS = [
   "fg_inventory",
   "labor_applied",
   "overhead_applied",
+  "other_applied",
   "production_variance",
   "scrap_loss",
 ] as const;

@@ -24,7 +24,7 @@ export function ProductionSignDialog({ workspaceId, target, onClose, onSigned }:
         <p className="text-sm text-muted-foreground">Tanda tangan elektronik memakai kode 6 digit yang dikirim ke email akun Anda.</p>
         <div className="flex justify-end gap-2">
           {!challenge
-            ? <Button disabled={busy || !reason.trim() || !target} onClick={() => run(async () => { if (!target) return; const r = await send({ data: { workspaceId, entityTable: target.entityTable, entityId: target.entityId, action: target.action } }); setChallenge(r.id); toast.success('Kode dikirim ke email Anda'); })}>Kirim kode</Button>
+            ? <Button disabled={busy || !reason.trim() || !target} onClick={() => run(async () => { if (!target) return; const r = await send({ data: { workspaceId, entityTable: target.entityTable, entityId: target.entityId, action: target.action } }); setChallenge(r.id); if (r.demoCode) { setCode(r.demoCode); toast.success(`Mode uji: kode ${r.demoCode} terisi otomatis`); } else toast.success('Kode dikirim ke email Anda'); })}>Kirim kode</Button>
             : <Button disabled={busy || code.length !== 6} onClick={() => run(async () => { await verify({ data: { workspaceId, challengeId: challenge, code } }); await onSigned(challenge, reason); close(); })}>Tanda tangani</Button>}
         </div>
       </div>

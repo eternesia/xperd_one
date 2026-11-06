@@ -272,7 +272,7 @@ export async function attachGrnLot(
   if (row.ref_type !== "goods_receipt" || !(num(row.qty) > 0)) return false;
   if (!(await mfgHasEntitlement(workspaceId))) return false;
   const item = await executeOne<{ id: string }>(
-    "SELECT i.id FROM md_items i JOIN mfg_item_profiles p ON p.item_id = i.id AND p.workspace_id = i.workspace_id AND p.is_active = 1 WHERE i.workspace_id = ? AND i.code = ? AND i.is_active = 1",
+    "SELECT i.id FROM md_items i WHERE i.workspace_id = ? AND i.code = ? AND i.is_active = 1 AND (EXISTS (SELECT 1 FROM mfg_item_profiles p WHERE p.item_id = i.id AND p.workspace_id = i.workspace_id AND p.is_active = 1) OR EXISTS (SELECT 1 FROM mfg_bom_lines bl WHERE bl.item_id = i.id AND bl.workspace_id = i.workspace_id))",
     [workspaceId, String(row.item_code ?? "")],
   );
   if (!item) return false;
@@ -318,6 +318,94 @@ export async function attachGrnLot(
     });
   });
   return true;
+}
+
+/** Saldo on hand per lot (net gerakan non-transfer ber-lot). */
+export async function lotOnHand(workspaceId: string, lotIds: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  if (!lotIds.length) return out;
+  const rows = await execute<{ mfg_lot_id: string; q: number }>(
+    `SELECT mfg_lot_id, SUM(qty) AS q FROM inv_movements WHERE workspace_id = ? AND movement_type <> 'transfer' AND mfg_lot_id IN (${lotIds.map(() => "?").join(",")}) GROUP BY mfg_lot_id`,
+    [workspaceId, ...lotIds],
+  );
+  for (const r of rows) out[r.mfg_lot_id] = num(r.q);
+  return out;
+}
+
+/** Rekonsiliasi per item: buku persediaan ERP vs nilai/kuantitas yang tertaut lot (non-transfer). */
+export async function lotReconciliation(workspaceId: string) {
+  const rows = await execute<{ item_code: string; name: string | null; lq: number; lv: number; oq: number; ov: number }>(
+    `SELECT m.item_code, i.name, SUM(m.qty) AS lq, SUM(m.value) AS lv,
+            SUM(CASE WHEN m.mfg_lot_id IS NOT NULL THEN m.qty ELSE 0 END) AS oq,
+            SUM(CASE WHEN m.mfg_lot_id IS NOT NULL THEN m.value ELSE 0 END) AS ov
+       FROM inv_movements m LEFT JOIN md_items i ON i.workspace_id = m.workspace_id AND i.code = m.item_code
+      WHERE m.workspace_id = ? AND m.movement_type <> 'transfer' GROUP BY m.item_code, i.name`,
+    [workspaceId],
+  );
+  return rows
+    .map((r) => ({
+      item_code: r.item_code,
+      name: r.name ?? r.item_code,
+      ledger_qty: num(r.lq),
+      ledger_value: num(r.lv),
+      lot_qty: num(r.oq),
+      lot_value: num(r.ov),
+      diff_value: num(r.lv) - num(r.ov),
+    }))
+    .sort((a, b) => Math.abs(b.diff_value) - Math.abs(a.diff_value));
+}
+
+/**
+ * Inisiasi lot dari stok eksisting (padanan `mfg_init_lots_from_stock`): tiap penerimaan GRN tanpa lot untuk item terkendali lot
+ * (profil aktif / bahan BOM) dibuatkan lot karantina `INIT-<GRN>-<id8>` dan ditautkan. Item yang sudah punya pengeluaran tanpa lot dilewati.
+ */
+export async function initLotsFromStock(workspaceId: string, userId: string) {
+  await mfgActionAssert(workspaceId, userId, "lots", ["warehouse", "production_supervisor", "qa_manager"]);
+  const { transaction, uuid } = await import("@/integrations/mysql/pool");
+  const { mfgAudit } = await import("./production.server");
+  return transaction(async (conn) => {
+    const [items] = await conn.execute<any[]>(
+      `SELECT i.id, i.code FROM md_items i WHERE i.workspace_id = ? AND i.is_active = 1
+         AND (EXISTS (SELECT 1 FROM mfg_item_profiles p WHERE p.workspace_id = i.workspace_id AND p.item_id = i.id AND p.is_active = 1)
+              OR EXISTS (SELECT 1 FROM mfg_bom_lines bl WHERE bl.workspace_id = i.workspace_id AND bl.item_id = i.id))
+         AND EXISTS (SELECT 1 FROM inv_movements m WHERE m.workspace_id = i.workspace_id AND m.item_code = i.code AND m.mfg_lot_id IS NULL AND m.ref_type = 'goods_receipt' AND m.qty > 0)`,
+      [workspaceId],
+    );
+    let linked = 0;
+    const skipped: string[] = [];
+    for (const it of items) {
+      const [neg] = await conn.execute<any[]>(
+        "SELECT 1 FROM inv_movements WHERE workspace_id = ? AND item_code = ? AND mfg_lot_id IS NULL AND movement_type <> 'transfer' AND qty < 0 LIMIT 1",
+        [workspaceId, it.code],
+      );
+      if (neg.length) {
+        skipped.push(it.code);
+        continue;
+      }
+      const [grns] = await conn.execute<any[]>(
+        "SELECT id, ref_number FROM inv_movements WHERE workspace_id = ? AND item_code = ? AND mfg_lot_id IS NULL AND ref_type = 'goods_receipt' AND qty > 0 AND movement_type = 'in' ORDER BY movement_date, created_at FOR UPDATE",
+        [workspaceId, it.code],
+      );
+      for (const g of grns) {
+        const lotId = uuid();
+        const lotNo = `INIT-${g.ref_number ?? "GRN"}-${String(g.id).slice(0, 8)}`;
+        await conn.execute(
+          "INSERT INTO mfg_lots (id, workspace_id, item_id, lot_no, qc_status, created_by) VALUES (?,?,?,?, 'quarantine', ?)",
+          [lotId, workspaceId, it.id, lotNo, userId],
+        );
+        await conn.execute(
+          "UPDATE inv_movements SET mfg_lot_id = ?, mfg_idempotency_key = COALESCE(mfg_idempotency_key, id) WHERE workspace_id = ? AND id = ? AND mfg_lot_id IS NULL",
+          [lotId, workspaceId, g.id],
+        );
+        await mfgAudit(conn, {
+          workspaceId, userId, table: "mfg_lots", entityId: lotId, action: "INSERT",
+          newValue: { lot_no: lotNo, qc_status: "quarantine" }, reason: "Inisiasi lot dari stok eksisting",
+        });
+        linked++;
+      }
+    }
+    return { linked, skipped };
+  });
 }
 
 export { jakartaToday, execute };

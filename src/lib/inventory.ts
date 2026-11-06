@@ -217,6 +217,15 @@ export async function insertMovements(workspaceId: string, rows: MovementInput[]
     workspaceId,
     rows.map((r) => r.item_code),
   );
+  // Pengeluaran stok manual selalu memakai biaya rata-rata bergerak (bukan biaya yang diedit).
+  const outs = rows.filter((r) => (Number(r.qty) || 0) < 0 && r.movement_type !== "transfer");
+  if (outs.length) {
+    const avg = await movingAverageCosts(
+      workspaceId,
+      outs.map((r) => r.item_code),
+    );
+    rows = rows.map((r) => (outs.includes(r) ? { ...r, unit_cost: avg.get(r.item_code) ?? 0 } : r));
+  }
   const payload = rows
     .filter((r) => r.item_code && !skip.has(r.item_code) && Math.abs(Number(r.qty) || 0) > 0.000001)
     .map((r) => ({

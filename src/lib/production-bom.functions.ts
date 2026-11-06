@@ -340,21 +340,23 @@ export const sendBomApprovalCode = createServerFn({ method: "POST" })
     );
     if (recent.length) throw new ProductionError("Tunggu satu menit sebelum mengirim ulang kode.");
     const { loadGateway, sendViaGateway, PLATFORM_SCOPE } = await import("@/lib/email-gateway.server");
-    const g = await loadGateway(PLATFORM_SCOPE);
-    if (!g) throw new ProductionError("Email persetujuan belum dikonfigurasi.");
+    const demo = process.env.MFG_ESIGN_DEMO === "1";
+    const g = demo ? null : await loadGateway(PLATFORM_SCOPE);
+    if (!g && !demo) throw new ProductionError("Email persetujuan belum dikonfigurasi.");
     const id = uuid();
     const code = String((await import("node:crypto")).randomInt(0, 1_000_000)).padStart(6, "0");
     await execute(
       "INSERT INTO mfg_approval_challenges (id, workspace_id, version_id, actor, code_hash, expires_at) VALUES (?,?,?,?,?, NOW(6) + INTERVAL 300 SECOND)",
       [id, w, data.versionId, context.userId, await sha(`${id}:${code}`)],
     );
+    if (demo || !g) return { id, demoCode: code as string | null };
     await sendViaGateway(g, {
       to: email,
       subject: "Persetujuan BOM — XPERD",
       html: `<p>Kode persetujuan BOM Anda: <strong>${code}</strong>. Berlaku 5 menit.</p>`,
       text: `Kode persetujuan BOM: ${code}. Berlaku 5 menit.`,
     });
-    return { id };
+    return { id, demoCode: null as string | null };
   });
 
 export const verifyBomApprovalCode = createServerFn({ method: "POST" })

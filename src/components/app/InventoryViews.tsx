@@ -602,6 +602,12 @@ export function StockMovementView({ entity, workspaceId }: { entity: InvEntity; 
                     type="number"
                     className="mt-1 h-9"
                     value={l.unit_cost}
+                    disabled={entity.movementType === "out"}
+                    title={
+                      entity.movementType === "out"
+                        ? t("Uses moving-average cost", "Memakai harga rata-rata bergerak")
+                        : undefined
+                    }
                     onChange={(e) => setLines((p) => p.map((r, i) => (i === idx ? { ...r, unit_cost: e.target.value } : r)))}
                   />
                 </div>

@@ -44,6 +44,9 @@ export function ProductionQualityView({ workspaceId }: { workspaceId: string }) 
 
   return <div className="space-y-6">
     <h1 className="text-2xl font-semibold">Quality</h1>
+    <ol className="grid gap-2 rounded-2xl border border-border bg-card p-4 text-sm sm:grid-cols-4">
+      {[['1', 'Spesifikasi', 'Buat spesifikasi QC per item'], ['2', 'Inspeksi', 'Buka inspeksi untuk lot karantina'], ['3', 'Hasil', 'Isi hasil uji tiap parameter'], ['4', 'Rilis', 'QA Manager rilis/tolak lot (perlu peran qa_manager)']].map(([n, t, d]) => <li key={n} className="flex gap-2"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{n}</span><span><strong className="block">{t}</strong><span className="text-muted-foreground">{d}</span></span></li>)}
+    </ol>
     <div className="flex flex-wrap gap-2">{([['inspections', 'Inspeksi & rilis lot'], ['specs', 'Spesifikasi'], ['deviations', 'Deviasi & CAPA']] as const).map(([k, l]) => <Button key={k} variant={tab === k ? 'default' : 'outline'} onClick={() => setTab(k)}>{l}</Button>)}</div>
     {!d.isQaManager && <p className="text-sm text-muted-foreground">Rilis/tolak lot dan penutupan deviasi hanya untuk peran QA manager.</p>}
 

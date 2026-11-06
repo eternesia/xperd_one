@@ -12,7 +12,7 @@ import { TableSearch } from './ProductionPagedTable';
 import { AdminField, AdminSelect } from './admin-ui';
 import { getProductionAccounting, retryProductionJournals, reverseProductionJournals, saveProductionMapping } from '@/lib/production-orders.functions';
 
-const KEYS = [['rm_inventory', 'Persediaan bahan baku'], ['wip_material', 'WIP material'], ['wip_conversion', 'WIP konversi'], ['fg_inventory', 'Persediaan barang jadi'], ['labor_applied', 'Tenaga kerja dibebankan'], ['overhead_applied', 'Overhead dibebankan'], ['production_variance', 'Selisih produksi'], ['scrap_loss', 'Rugi scrap/kedaluwarsa']] as const;
+const KEYS = [['rm_inventory', 'Persediaan bahan baku'], ['wip_material', 'WIP material'], ['wip_conversion', 'WIP konversi'], ['fg_inventory', 'Persediaan barang jadi'], ['labor_applied', 'Tenaga kerja dibebankan'], ['overhead_applied', 'Overhead dibebankan'], ['other_applied', 'Biaya lain dibebankan'], ['production_variance', 'Selisih produksi'], ['scrap_loss', 'Rugi scrap/kedaluwarsa']] as const;
 const rp = (n: number) => `Rp${Math.round(n).toLocaleString('id-ID')}`;
 
 export function ProductionAccountingView({ workspaceId }: { workspaceId: string }) {

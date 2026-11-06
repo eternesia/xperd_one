@@ -30,6 +30,8 @@ export const profileSchema = z
     ghs_classes: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
     incompatible_classes: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
     un_number: z.string().max(50).nullable().default(null),
+    conv_labor_per_unit: z.number().int().nonnegative().default(0),
+    conv_other_per_unit: z.number().int().nonnegative().default(0),
     is_active: z.boolean().default(true),
   })
   .strict();

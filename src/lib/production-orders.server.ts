@@ -592,9 +592,14 @@ async function computeOrderCost(conn: PoolConnection, ws: string, userId: string
   if (await row(conn, "SELECT 1 AS x FROM mfg_order_costs WHERE workspace_id = ? AND order_id = ?", [ws, o.id])) return;
   const mat = num((await row(conn, "SELECT COALESCE(-SUM(value),0) AS v FROM inv_movements WHERE workspace_id = ? AND ref_type = 'mfg_order' AND ref_id = ? AND qty < 0", [ws, o.id]))?.v);
   const lo = await row(conn, "SELECT COALESCE(SUM(hours*labor_rate),0) AS l, COALESCE(SUM(hours*overhead_rate),0) AS o FROM mfg_order_labor WHERE workspace_id = ? AND order_id = ?", [ws, o.id]);
-  const lab = Math.round(num(lo?.l));
-  const ovh = Math.round(num(lo?.o));
   const outq = num((await row(conn, "SELECT COALESCE(SUM(qty),0) AS q FROM mfg_order_outputs WHERE workspace_id = ? AND order_id = ? AND output_type = 'finished'", [ws, o.id]))?.q);
+  // Biaya konversi per unit hasil dari profil item (New 19): tenaga kerja ditambah ke labor, biaya lain ke other_cost.
+  const conv = await row(conn, "SELECT conv_labor_per_unit AS l, conv_other_per_unit AS o FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ?", [ws, o.item_id]);
+  const convLab = num(conv?.l);
+  const convOth = num(conv?.o);
+  const lab = Math.round(num(lo?.l)) + Math.round(outq * convLab);
+  const ovh = Math.round(num(lo?.o));
+  const oth = Math.round(outq * convOth);
   const stdm = Math.round(num((await row(conn, "SELECT COALESCE(SUM(m.planned_qty * i.cost_price),0) AS v FROM mfg_order_materials m JOIN md_items i ON i.id = m.item_id WHERE m.workspace_id = ? AND m.order_id = ?", [ws, o.id]))?.v));
   const ver = await row(conn, "SELECT base_batch_qty FROM mfg_bom_versions WHERE id = ?", [o.bom_version_id]);
   const ops = await rows(
@@ -605,15 +610,16 @@ async function computeOrderCost(conn: PoolConnection, ws: string, userId: string
     [ws, o.item_id],
   );
   const scale = ver ? num(o.planned_qty) / num(ver.base_batch_qty) : 0;
-  const stdc = Math.round(ops.reduce((s, r) => s + ((num(r.setup_minutes) + num(r.run_minutes) * scale) / 60) * (num(r.labor_rate_per_hour) + num(r.overhead_rate_per_hour)), 0));
+  const stdc0 = Math.round(ops.reduce((s, r) => s + ((num(r.setup_minutes) + num(r.run_minutes) * scale) / 60) * (num(r.labor_rate_per_hour) + num(r.overhead_rate_per_hour)), 0));
+  const stdc = stdc0 + Math.round(num(o.planned_qty) * (convLab + convOth));
   const outs = await rows(conn, "SELECT item_id, SUM(qty) AS q FROM mfg_order_outputs WHERE workspace_id = ? AND order_id = ? AND output_type IN ('finished','co_product') GROUP BY item_id", [ws, o.id]);
   const tot = outs.reduce((s, r) => s + num(r.q), 0);
   const alloc = outs.map((r) => ({ item_id: r.item_id, qty: num(r.q), share: tot ? Math.round((num(r.q) / tot) * 1e6) / 1e6 : 0 }));
-  const fin = mat + lab + ovh;
+  const fin = mat + lab + ovh + oth;
   await conn.execute(
-    `INSERT INTO mfg_order_costs (id, workspace_id, order_id, material_cost, labor_cost, overhead_cost, total_cost, output_qty, unit_cost,
-       std_material_cost, std_conversion_cost, std_total_cost, variance, co_product_allocation, computed_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [uuid(), ws, o.id, mat, lab, ovh, fin, outq, outq > 0 ? Math.round(fin / outq) : 0, stdm, stdc, stdm + stdc, fin - (stdm + stdc), JSON.stringify(alloc), userId],
+    `INSERT INTO mfg_order_costs (id, workspace_id, order_id, material_cost, labor_cost, overhead_cost, other_cost, total_cost, output_qty, unit_cost,
+       std_material_cost, std_conversion_cost, std_total_cost, variance, co_product_allocation, computed_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [uuid(), ws, o.id, mat, lab, ovh, oth, fin, outq, outq > 0 ? Math.round(fin / outq) : 0, stdm, stdc, stdm + stdc, fin - (stdm + stdc), JSON.stringify(alloc), userId],
   );
 }
 
@@ -684,11 +690,13 @@ async function postOrderJournals(conn: PoolConnection, ws: string, userId: strin
   const mat = num(c.material_cost);
   const lab = num(c.labor_cost);
   const ovh = num(c.overhead_cost);
+  const oth = num(c.other_cost);
   await postEvent(conn, ws, userId, o, "J1", mat, "wip_material", "rm_inventory", `Issue material ${o.order_no}`);
   await postEvent(conn, ws, userId, o, "J2", lab, "wip_conversion", "labor_applied", `Tenaga kerja ${o.order_no}`);
   await postEvent(conn, ws, userId, o, "J3", ovh, "wip_conversion", "overhead_applied", `Overhead ${o.order_no}`);
+  await postEvent(conn, ws, userId, o, "J4", oth, "wip_conversion", "other_applied", `Biaya lain dibebankan ${o.order_no}`);
   await postEvent(conn, ws, userId, o, "J5M", mat, "fg_inventory", "wip_material", `Barang jadi (material) ${o.order_no}`);
-  await postEvent(conn, ws, userId, o, "J5C", lab + ovh, "fg_inventory", "wip_conversion", `Barang jadi (konversi) ${o.order_no}`);
+  await postEvent(conn, ws, userId, o, "J5C", lab + ovh + oth, "fg_inventory", "wip_conversion", `Barang jadi (konversi) ${o.order_no}`);
 }
 
 export async function retryJournals(ws: string, userId: string, input: { orderId: string; reason: string }) {
@@ -778,7 +786,7 @@ export async function reconciliation(ws: string) {
   };
   const ev = await execute<Row>("SELECT event_code, amount FROM mfg_journal_events WHERE workspace_id = ? AND status IN ('posted','reversed')", [ws]);
   // Debit WIP: J1/J2/J3; kredit WIP: J5M/J5C. Event pembalik (R-…) membawa jumlah bertanda negatif sehingga pasangan asli+pembalik = 0.
-  const sign: Record<string, number> = { J1: 1, J2: 1, J3: 1, J5M: -1, J5C: -1 };
+  const sign: Record<string, number> = { J1: 1, J2: 1, J3: 1, J4: 1, J5M: -1, J5C: -1 };
   const events = ev.reduce((s, e) => s + (sign[String(e.event_code).replace(/^R-/, "")] ?? 0) * num(e.amount), 0);
   const lotValue = num((await executeOne<Row>("SELECT COALESCE(SUM(value),0) AS v FROM inv_movements WHERE workspace_id = ? AND mfg_lot_id IS NOT NULL", [ws]))?.v);
   const wipLedger = await bal(wip);

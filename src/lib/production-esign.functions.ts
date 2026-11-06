@@ -36,8 +36,10 @@ export const sendProductionSignCode = createServerFn({ method: "POST" })
     );
     if (recent) throw new ProductionError("Tunggu satu menit sebelum mengirim ulang kode.");
     const { loadGateway, sendViaGateway, PLATFORM_SCOPE } = await import("@/lib/email-gateway.server");
-    const g = await loadGateway(PLATFORM_SCOPE);
-    if (!g) throw new ProductionError("Email tanda tangan belum dikonfigurasi di Super Admin.");
+    // Hanya server uji/demo: MFG_ESIGN_DEMO=1 menampilkan kode di layar alih-alih mengirim email.
+    const demo = process.env.MFG_ESIGN_DEMO === "1";
+    const g = demo ? null : await loadGateway(PLATFORM_SCOPE);
+    if (!g && !demo) throw new ProductionError("Email tanda tangan belum dikonfigurasi di Super Admin.");
     const { randomInt } = await import("node:crypto");
     const { esignHash } = await import("@/lib/production-esign.server");
     const id = uuid();
@@ -46,6 +48,7 @@ export const sendProductionSignCode = createServerFn({ method: "POST" })
       `INSERT INTO mfg_esign_challenges (id, workspace_id, entity_table, entity_id, action, actor, code_hash, expires_at) VALUES (?,?,?,?,?,?,?,?)`,
       [id, data.workspaceId, data.entityTable, data.entityId, data.action, context.userId, esignHash(id, code), new Date(Date.now() + 300_000)],
     );
+    if (demo || !g) return { id, demoCode: code as string | null };
     try {
       await sendViaGateway(g, {
         to: email,
@@ -58,7 +61,7 @@ export const sendProductionSignCode = createServerFn({ method: "POST" })
       await execute("DELETE FROM mfg_esign_challenges WHERE id = ?", [id]);
       throw e;
     }
-    return { id };
+    return { id, demoCode: null as string | null };
   });
 
 export const verifyProductionSignCode = createServerFn({ method: "POST" })

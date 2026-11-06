@@ -43,7 +43,13 @@ export const getProductionLots = createServerFn({ method: "POST" })
       mfgActionAllowed(w, context.userId, "lots", LOT_ROLES),
     ]);
     const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+    const { lotOnHand } = await import("@/lib/production-lots.server");
+    const onHand = await lotOnHand(
+      w,
+      lots.map((l) => l.id),
+    );
     return {
+      onHand,
       lots: lots.map((l) => ({
         ...l,
         is_active: Number(l.is_active) === 1,
@@ -251,4 +257,22 @@ export const reverseLotMovement = createServerFn({ method: "POST" })
       await mfgAudit(conn, { workspaceId: data.workspaceId, userId: context.userId, table: "inv_movements", entityId: id, action: "REVERSAL", newValue: { reverses: o[0].id }, reason: data.reason });
       return { id };
     });
+  });
+
+export const getLotReconciliation = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws)
+  .handler(async ({ data, context }) => {
+    const { mfgAssert } = await import("@/lib/production.server");
+    const { lotReconciliation } = await import("@/lib/production-lots.server");
+    await mfgAssert(data.workspaceId, context.userId, "lots", false);
+    return { rows: await lotReconciliation(data.workspaceId) };
+  });
+
+export const initLotsFromStock = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws)
+  .handler(async ({ data, context }) => {
+    const { initLotsFromStock: run } = await import("@/lib/production-lots.server");
+    return run(data.workspaceId, context.userId);
   });
