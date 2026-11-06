@@ -78,6 +78,7 @@ import { Route as QallingAppProfileRouteImport } from './routes/qalling.app.prof
 import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.referral'
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
+import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/api/public/jobs/billing-notifications'
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
@@ -447,6 +448,12 @@ const ApiPublicHooksSocialPublishRoute =
     path: '/api/public/hooks/social-publish',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicJobsBillingNotificationsRoute =
+  ApiPublicJobsBillingNotificationsRouteImport.update({
+    id: '/api/public/jobs/billing-notifications',
+    path: '/api/public/jobs/billing-notifications',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsSubscriptionRenewalRoute =
   ApiPublicJobsSubscriptionRenewalRouteImport.update({
     id: '/api/public/jobs/subscription-renewal',
@@ -622,6 +629,7 @@ export interface FileRoutesByFullPath {
   '/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -707,6 +715,7 @@ export interface FileRoutesByTo {
   '/products': typeof SiteProductsIndexRoute
   '/qalling/app': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -797,6 +806,7 @@ export interface FileRoutesById {
   '/_site/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
@@ -888,6 +898,7 @@ export interface FileRouteTypes {
     | '/products/'
     | '/qalling/app/'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
@@ -973,6 +984,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/qalling/app'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
@@ -1062,6 +1074,7 @@ export interface FileRouteTypes {
     | '/_site/products/'
     | '/qalling/app/'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
@@ -1111,6 +1124,7 @@ export interface RootRouteChildren {
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
+  ApiPublicJobsBillingNotificationsRoute: typeof ApiPublicJobsBillingNotificationsRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
@@ -1607,6 +1621,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSocialPublishRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/billing-notifications': {
+      id: '/api/public/jobs/billing-notifications'
+      path: '/api/public/jobs/billing-notifications'
+      fullPath: '/api/public/jobs/billing-notifications'
+      preLoaderRoute: typeof ApiPublicJobsBillingNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/subscription-renewal': {
       id: '/api/public/jobs/subscription-renewal'
       path: '/api/public/jobs/subscription-renewal'
@@ -1950,6 +1971,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicVisitRoute: ApiPublicVisitRoute,
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
+  ApiPublicJobsBillingNotificationsRoute:
+    ApiPublicJobsBillingNotificationsRoute,
   ApiPublicJobsSubscriptionRenewalRoute: ApiPublicJobsSubscriptionRenewalRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,

@@ -230,7 +230,7 @@ export async function walletSettleTopup(p: {
   isAdmin?: boolean;
 }): Promise<TopupRow> {
   if (!p.gatewayVerified && !p.isAdmin) throw new Error("Forbidden");
-  return transaction(async (conn) => {
+  const settled = await transaction(async (conn) => {
     const [rows] = await conn.execute("SELECT * FROM topups WHERE id = ? FOR UPDATE", [p.id]);
     const r = (rows as TopupRow[])[0];
     if (!r) throw new Error("topup_not_found");
@@ -285,8 +285,20 @@ export async function walletSettleTopup(p: {
     );
     // Referral (New 12): komisi untuk referrer pada top-up pertama yang berhasil, satu transaksi dengan top-up.
     const { rewardReferralOn } = await import("./referral.server");
-    await rewardReferralOn(conn, { id: r.id, tenant_id: r.tenant_id, amount_idr: Number(r.amount_idr) });
+    await rewardReferralOn(conn, {
+      id: r.id,
+      tenant_id: r.tenant_id,
+      amount_idr: Number(r.amount_idr),
+    });
     const [after] = await conn.execute("SELECT * FROM topups WHERE id = ?", [p.id]);
     return (after as TopupRow[])[0];
   });
+  // Bukti pembayaran via email: best-effort, di luar transaksi; dedupe per invoice mencegah kirim ganda.
+  if (settled.status === "paid" && settled.invoice_id) {
+    const invoiceId = String(settled.invoice_id);
+    void import("./billing-notifications.server")
+      .then((m) => m.sendInvoiceReceiptNow(invoiceId))
+      .catch(() => {});
+  }
+  return settled;
 }

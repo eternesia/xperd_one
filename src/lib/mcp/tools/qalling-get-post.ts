@@ -1,3 +1,4 @@
+import { parsePlatformOptions } from "../../platform-options";
 import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
 import { assertQallingAccess, getTokenUser, requireAuth } from "../db";
@@ -20,7 +21,7 @@ export default defineTool({
     await assertQallingAccess(workspace_id, userId, "publishing");
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
     const p = await executeOne<Record<string, unknown>>(
-      `SELECT id, title, caption, first_comment, status, source, external_id, scheduled_at, published_at, account_ids,
+      `SELECT id, title, caption, first_comment, platform_options, status, source, external_id, scheduled_at, published_at, account_ids,
               media_paths, permalinks, results, last_error, created_at
          FROM crm_scheduled_posts WHERE workspace_id = ? AND id = ?`,
       [workspace_id, post_id],
@@ -53,6 +54,7 @@ export default defineTool({
       title: p.title,
       caption: p.caption,
       first_comment: p.first_comment ?? null,
+      platform_options: parsePlatformOptions(p.platform_options),
       status,
       scheduled_at: iso(p.scheduled_at),
       published_at: iso(p.published_at),
