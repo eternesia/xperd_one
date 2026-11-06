@@ -58,6 +58,23 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
     const mapRows = await rows("SELECT mapping_key, account_code FROM mfg_account_mappings WHERE workspace_id = ?").catch(() => [] as R[]);
     const mapped = (k: string) => String(mapRows.find((m) => m.mapping_key === k)?.account_code ?? "");
 
+    // Rincian saldo akun menurut sumber jurnal (saldo awal / jurnal manual / jenis dokumen) agar penyebab selisih terlihat.
+    const SRC: Record<string, string> = {
+      opening_balance: "saldo awal", manual: "jurnal manual", ar_invoice: "faktur piutang", sales_receipt: "penerimaan piutang", sales_return: "retur penjualan",
+      delivery_order: "surat jalan (HPP)", ap_invoice: "faktur hutang", purchase_payment: "pembayaran hutang", purchase_return: "retur pembelian",
+      goods_receipt: "penerimaan barang", mfg_order: "produksi", stock_in: "barang masuk", stock_out: "barang keluar", stock_opname: "stok opname", transfer: "transfer",
+    };
+    const bySource = async (codes: string[], sign: 1 | -1 = 1) => {
+      if (!codes.length) return [] as { label: string; value: string }[];
+      const r = await rows(
+        `SELECT COALESCE(NULLIF(e.source_type,''),'manual') AS st, SUM(l.debit - l.credit) AS v, COUNT(DISTINCT e.id) AS c
+           FROM acc_journal_lines l JOIN acc_journal_entries e ON e.id = l.entry_id
+          WHERE l.workspace_id = ? AND l.account_code IN (${codes.map(() => "?").join(",")}) GROUP BY st HAVING ABS(SUM(l.debit - l.credit)) > 0.5 ORDER BY ABS(SUM(l.debit - l.credit)) DESC LIMIT 10`,
+        codes,
+      );
+      return r.map((x) => ({ label: `  ↳ dari ${SRC[String(x.st)] ?? String(x.st)} (${n(x.c)} jurnal)`, value: rp(sign * n(x.v)) }));
+    };
+
     /* ------------------------------ Akuntansi ------------------------------ */
     await run({ id: "tb", group: "Akuntansi", title: "Neraca saldo seimbang (total debit = total kredit)" }, async () => {
       const t = (await rows("SELECT COALESCE(SUM(debit),0) AS d, COALESCE(SUM(credit),0) AS c, COUNT(*) AS n FROM acc_journal_lines WHERE workspace_id = ?"))[0];
@@ -85,7 +102,7 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
       }).slice(0, 15);
       return odd.length === 0
         ? { status: "ok", summary: "Tidak ada saldo akun yang tandanya janggal" }
-        : { status: "warn", summary: `${odd.length} akun bertanda tidak wajar`, rows: odd.map(([code, b]) => ({ label: `${code} ${b.name}`, value: rp(b.debit - b.credit) })), hint: "Aset bersaldo minus atau hutang bersaldo debit biasanya tanda stok keluar tanpa penerimaan, pembayaran berlebih, atau salah akun. Telusuri lewat Buku Besar akun itu." };
+        : { status: "warn", summary: `${odd.length} akun bertanda tidak wajar`, rows: (await Promise.all(odd.map(async ([code, b]) => [{ label: `${code} ${b.name}`, value: rp(b.debit - b.credit) }, ...(await bySource([code], b.type === "liability" ? -1 : 1))]))).flat(), hint: "Aset bersaldo minus atau hutang bersaldo debit biasanya tanda stok keluar tanpa penerimaan, pembayaran berlebih, atau salah akun. Telusuri lewat Buku Besar akun itu." };
     });
     await run({ id: "nojournal", group: "Akuntansi", title: "Dokumen terposting punya jurnal" }, async () => {
       const a = (await rows(
@@ -109,7 +126,7 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
       const sv = n(stockRow.v);
       const gl = invCodes.reduce((s, c) => s + net(c), 0);
       const diff = sv - gl;
-      const detail = [{ label: "Nilai stok menurut gerakan barang", value: rp(sv) }, ...invCodes.map((c) => ({ label: `Saldo akun ${c} ${bal.get(c)?.name ?? ""}`.trim(), value: rp(net(c)) })), { label: "Selisih", value: rp(diff) }];
+      const detail = [{ label: "Nilai stok menurut gerakan barang", value: rp(sv) }, ...invCodes.map((c) => ({ label: `Saldo akun ${c} ${bal.get(c)?.name ?? ""}`.trim(), value: rp(net(c)) })), { label: "Selisih", value: rp(diff) }, ...(await bySource(invCodes))];
       if (n(stockRow.n) === 0 && Math.abs(gl) <= TOL) return { status: "info", summary: "Belum ada gerakan stok", rows: detail };
       return Math.abs(diff) <= Math.max(TOL, Math.abs(sv) * 0.00005)
         ? { status: "ok", summary: `${rp(sv)} sama di kartu stok dan buku besar`, rows: detail }
@@ -148,7 +165,7 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
       const sub = n(r[0].sum_inc) - n(r[0].sum_dec);
       const gl = net("1200");
       const diff = gl - sub;
-      const detail = [{ label: "Saldo akun 1200 (buku besar)", value: rp(gl) }, { label: "Faktur − penerimaan − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];
+      const detail = [{ label: "Saldo akun 1200 (buku besar)", value: rp(gl) }, ...(await bySource(["1200"])), { label: "Faktur − penerimaan − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];
       return Math.abs(diff) <= TOL
         ? { status: "ok", summary: `${rp(gl)} cocok dengan dokumen`, rows: detail }
         : { status: "warn", summary: `Selisih ${rp(diff)} antara buku besar dan dokumen`, rows: detail, hint: "Selisih wajar bila ada saldo awal piutang, uang muka, atau memo kredit yang tidak ikut dihitung di sini. Selisih tak terduga berarti ada jurnal manual ke akun 1200 atau dokumen yang jurnalnya berbeda." };
@@ -163,7 +180,7 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
       const sub = n(r[0].sum_inc) - n(r[0].sum_dec);
       const gl = -net("2000");
       const diff = gl - sub;
-      const detail = [{ label: "Saldo akun 2000 (buku besar)", value: rp(gl) }, { label: "Faktur − pembayaran − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];
+      const detail = [{ label: "Saldo akun 2000 (buku besar)", value: rp(gl) }, ...(await bySource(["2000"], -1)), { label: "Faktur − pembayaran − retur (dokumen)", value: rp(sub) }, { label: "Selisih", value: rp(diff) }];
       return Math.abs(diff) <= TOL
         ? { status: "ok", summary: `${rp(gl)} cocok dengan dokumen`, rows: detail }
         : { status: "warn", summary: `Selisih ${rp(diff)} antara buku besar dan dokumen`, rows: detail, hint: "Sama seperti piutang: saldo awal hutang, uang muka, atau memo kredit bisa jadi penyebab. Bila tidak, cek jurnal manual ke akun 2000." };
