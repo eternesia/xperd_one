@@ -22,7 +22,7 @@ export interface ConsistencyCheck {
 
 type R = RowDataPacket;
 const n = (v: unknown) => Number(v ?? 0) || 0;
-const rp = (v: number) => `Rp${Math.round(v).toLocaleString("id-ID")}`;
+const rp = (v: number) => `Rp${(Math.round(v) || 0).toLocaleString("id-ID")}`;
 const q4 = (v: number) => v.toLocaleString("id-ID", { maximumFractionDigits: 4 });
 const TOL = 1; // toleransi pembulatan Rp1
 
