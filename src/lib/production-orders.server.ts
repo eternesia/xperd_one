@@ -641,6 +641,17 @@ async function computeOrderCost(conn: PoolConnection, ws: string, userId: string
        std_material_cost, std_conversion_cost, std_total_cost, variance, co_product_allocation, computed_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [uuid(), ws, o.id, mat, lab, ovh, oth, fin, outq, outq > 0 ? Math.round(fin / outq) : 0, stdm, stdc, stdm + stdc, fin - (stdm + stdc), JSON.stringify(alloc), userId],
   );
+  // Biaya lot barang jadi harus membawa total biaya produksi (bahan + tenaga kerja + overhead), bukan hanya bahan,
+  // agar HPP penjualan dan saldo persediaan FG sama dengan jurnal J5M + J5C.
+  if (outq > 0) {
+    const fu = Math.round((fin / outq) * 10000) / 10000;
+    await conn.execute(
+      `UPDATE inv_movements SET unit_cost = ?, value = ROUND(qty * ?, 4)
+        WHERE workspace_id = ? AND ref_type = 'mfg_order' AND ref_id = ? AND qty > 0
+          AND mfg_lot_id IN (SELECT lot_id FROM mfg_order_outputs WHERE workspace_id = ? AND order_id = ? AND output_type = 'finished' AND lot_id IS NOT NULL)`,
+      [fu, fu, ws, o.id, ws, o.id],
+    );
+  }
 }
 
 /* ----------------------------------------------------------------- jurnal */
