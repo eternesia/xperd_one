@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AdminField, AdminSelect } from "./admin-ui";
 import { TableSearch } from "./ProductionPagedTable";
+import { bulkDecideLots } from "@/lib/production-quality.functions";
 import {
   getLotReconciliation,
   getProductionLotCard,
@@ -51,6 +52,9 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ id: string | null; values: typeof fresh } | null>(null);
   const get = useServerFn(getProductionLots);
+  const bulk = useServerFn(bulkDecideLots);
+  const qcl = useQueryClient();
+  const [busy, setBusy] = useState(false);
   const q = useQuery({
     queryKey: ["production-lots", workspaceId, page, status, search],
     queryFn: () => get({ data: { workspaceId, page, status, search } }),
@@ -90,6 +94,18 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
           </div>
         ))}
       </div>
+
+      {data.lots.some((l) => l.qc_status === "quarantine") && data.canWrite && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
+          <span>Ada lot berstatus karantina. Lot dirilis langsung bila itemnya belum punya spesifikasi QC approved; bila sudah punya, lot harus melewati inspeksi di menu QC.</span>
+          <Button size="sm" disabled={busy} onClick={async () => {
+            const ids = data.lots.filter((l) => l.qc_status === "quarantine").map((l) => l.id);
+            setBusy(true);
+            try { const r = await bulk({ data: { workspaceId, lotIds: ids, status: "released", reason: "Rilis massal dari Stok Bahan" } }); toast.success(`${r.count} lot dirilis`); await qcl.invalidateQueries({ queryKey: ["production-lots"] }); }
+            catch (e) { toast.error(e instanceof Error ? e.message : "Rilis ditolak"); } finally { setBusy(false); }
+          }}>Rilis semua karantina di halaman ini ({data.lots.filter((l) => l.qc_status === "quarantine").length})</Button>
+        </div>
+      )}
 
       <UnlottedBanner workspaceId={workspaceId} canWrite={data.canWrite} />
 
