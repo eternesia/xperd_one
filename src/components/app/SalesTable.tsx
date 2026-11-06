@@ -78,6 +78,8 @@ interface DraftLine {
   tax_code: string;
   source_line_id?: string;
   max_qty?: number;
+  /** Diskon nominal per unit dari dokumen sumber; dipakai memprorata diskon saat qty diubah (retur/penagihan parsial). */
+  disc_per_unit?: number;
   /** Lot Production (hanya muncul bila workspace berentitlement `manufacturing`). */
   mfg_lot_id?: string | null;
 }
@@ -240,10 +242,15 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         qty: String(isAmountSettlement(entity.docType) ? Number(l.qty) || 1 : remainingQty(l)),
         uom_code: l.uom_code ?? "",
         unit_price: String(Number(l.unit_price ?? 0) * openRatio),
-        discount: String(Number(l.discount ?? 0) * openRatio),
+        discount: String(
+          isAmountSettlement(entity.docType)
+            ? Number(l.discount ?? 0) * openRatio
+            : Math.round(((Number(l.discount ?? 0) * remainingQty(l)) / (Number(l.qty) || 1)) * 100) / 100,
+        ),
         tax_rate: String(l.tax_rate ?? 0),
         tax_code: l.tax_code ?? "",
         source_line_id: l.id,
+        disc_per_unit: isAmountSettlement(entity.docType) ? undefined : Number(l.discount ?? 0) / (Number(l.qty) || 1),
         max_qty: isAmountSettlement(entity.docType) ? undefined : remainingQty(l),
       })),
     );
@@ -1237,7 +1244,14 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                               step="any"
                               className="h-9 w-24"
                               value={l.qty}
-                              onChange={(e) => patch({ qty: e.target.value })}
+                              onChange={(e) =>
+                                patch({
+                                  qty: e.target.value,
+                                  ...(l.disc_per_unit !== undefined
+                                    ? { discount: String(Math.round(l.disc_per_unit * (Number(e.target.value) || 0) * 100) / 100) }
+                                    : {}),
+                                })
+                              }
                             />
                             {l.max_qty !== undefined && (
                               <span className="mt-1 block text-[11px] text-muted-foreground">
