@@ -12,7 +12,7 @@ export async function convertConversationToLeadCore(
 
   return transaction(async (conn) => {
     const [crows] = await conn.execute(
-      `SELECT c.id, c.participant_name, c.last_message, c.lead_id, a.platform, a.account_name
+      `SELECT c.id, c.participant_name, c.last_message, c.lead_id, c.contact_id, a.platform, a.account_name
          FROM crm_conversations c LEFT JOIN crm_social_accounts a ON a.id = c.account_id
         WHERE c.workspace_id = ? AND c.id = ? FOR UPDATE`,
       [data.workspaceId, data.conversationId],
@@ -23,6 +23,7 @@ export async function convertConversationToLeadCore(
         participant_name: string | null;
         last_message: string | null;
         lead_id: string | null;
+        contact_id: string | null;
         platform: string | null;
         account_name: string | null;
       }[]
@@ -35,10 +36,29 @@ export async function convertConversationToLeadCore(
     const [codes] = await conn.execute("SELECT code FROM crm_leads WHERE workspace_id = ?", [
       data.workspaceId,
     ]);
+    // Pastikan percakapan punya kontak, lalu tautkan prospek ke kontak itu.
+    let contactId = conv.contact_id;
+    if (!contactId) {
+      contactId = uuid();
+      await conn.execute(
+        "INSERT INTO crm_contacts (id, workspace_id, name, phone, source, created_by) VALUES (?, ?, ?, ?, 'dm', ?)",
+        [
+          contactId,
+          data.workspaceId,
+          (conv.participant_name || "Prospek DM").slice(0, 255),
+          data.phone || null,
+          userId,
+        ],
+      );
+      await conn.execute("UPDATE crm_conversations SET contact_id = ? WHERE id = ?", [
+        contactId,
+        conv.id,
+      ]);
+    }
     const leadId = uuid();
     await conn.execute(
-      `INSERT INTO crm_leads (id, workspace_id, code, name, phone, source, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO crm_leads (id, workspace_id, code, name, phone, source, notes, contact_id, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         leadId,
         data.workspaceId,
@@ -50,6 +70,7 @@ export async function convertConversationToLeadCore(
           60,
         ),
         data.notes || (conv.last_message ? `Pesan terakhir: ${conv.last_message}` : null),
+        contactId,
         userId,
       ],
     );

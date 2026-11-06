@@ -1,3 +1,4 @@
+import { SocialContactsPanel } from "@/components/app/CrmSocialContacts";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useServerFn } from "@tanstack/react-start";
@@ -197,7 +198,7 @@ export function CrmView({
   if (submoduleId === "team") return <TeamPage embedded />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;
   if (submoduleId === "pipeline") return <PipelineView workspaceId={workspaceId} />;
-  if (submoduleId === "contacts") return <ContactsView workspaceId={workspaceId} />;
+  if (submoduleId === "contacts") return <ContactsHub workspaceId={workspaceId} />;
   if (submoduleId === "follow-ups") return <FollowUpView workspaceId={workspaceId} />;
   if (submoduleId === "broadcast") return <BroadcastView workspaceId={workspaceId} />;
   if (submoduleId === "wa-gateway") return <WaGatewayView workspaceId={workspaceId} />;
@@ -830,6 +831,45 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Kontak sosial (otomatis dari DM, bisa ditambah manual) + pelanggan ERP sebagai tab terpisah. */
+function ContactsHub({ workspaceId }: { workspaceId: string }) {
+  const { lang } = useI18n();
+  const id = lang === "id";
+  const [tab, setTab] = useState<"social" | "erp">("social");
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+        <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
+          {id ? "Kontak" : "Contacts"}
+        </h1>
+      </div>
+      <div className="flex gap-1 border-b">
+        {(
+          [
+            ["social", id ? "Kontak" : "Contacts"],
+            ["erp", id ? "Pelanggan (ERP)" : "Customers (ERP)"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === k ? "border-primary font-medium" : "border-transparent text-muted-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "social" ? (
+        <SocialContactsPanel workspaceId={workspaceId} />
+      ) : (
+        <ContactsView workspaceId={workspaceId} />
+      )}
     </div>
   );
 }
