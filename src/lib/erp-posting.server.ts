@@ -411,7 +411,16 @@ async function stockAccountFor(
     "SELECT item_class FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ? AND is_active = 1",
     [ws, itemId],
   );
-  const key = p[0]?.item_class === "finished_good" ? "fg_inventory" : "rm_inventory";
+  let isFg = p[0]?.item_class === "finished_good";
+  if (!p[0]) {
+    // Tanpa Item Profile: item yang menjadi produk BoM dianggap barang jadi/bulk, bukan bahan baku.
+    const [b] = await conn.execute<any[]>(
+      "SELECT 1 AS x FROM mfg_boms WHERE workspace_id = ? AND item_id = ? LIMIT 1",
+      [ws, itemId],
+    );
+    isFg = Boolean(b[0]);
+  }
+  const key = isFg ? "fg_inventory" : "rm_inventory";
   const [m] = await conn.execute<any[]>(
     "SELECT account_code FROM mfg_account_mappings WHERE workspace_id = ? AND mapping_key = ?",
     [ws, key],
