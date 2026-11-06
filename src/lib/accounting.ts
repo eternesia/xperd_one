@@ -62,7 +62,8 @@ export type AccViewKind =
   | "ap-credit-memo"
   | "period-closing"
   // Ronde 29 (BS New 8): revaluasi kurs pos moneter valas.
-  | "fx-revaluation";
+  | "fx-revaluation"
+  | "consistency";
 
 export interface AccEntity {
   submoduleId: AccViewKind;
@@ -88,6 +89,7 @@ export const ACC_ENTITIES: AccEntity[] = [
   { submoduleId: "ap-credit-memo", en: "AP Credit Memo", id_: "Nota Kredit Hutang" },
   { submoduleId: "period-closing", en: "Period Closing", id_: "Tutup Periode" },
   { submoduleId: "fx-revaluation", en: "FX Revaluation", id_: "Revaluasi Kurs" },
+  { submoduleId: "consistency", en: "Consistency Check", id_: "Cek Konsistensi" },
 ];
 
 export function findAccEntity(submoduleId?: string) {

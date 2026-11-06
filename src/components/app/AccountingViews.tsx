@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 // #45 (BS New 3): Kartu AR/AP & Aging (subledger) — komponen terpisah.
 import { AgingView, SubledgerCardView } from "@/components/app/SubledgerViews";
+import { ConsistencyView } from "@/components/app/ConsistencyView";
 // Ronde 29 (BS New 8): revaluasi kurs akhir periode.
 import { FxRevaluationView } from "@/components/app/FxRevaluationView";
 // #46 (BS New 3): kunci periode akuntansi.
@@ -2421,6 +2422,8 @@ export function AccountingView({
     // Ronde 29 (BS New 8): revaluasi kurs pos moneter valas.
     case "fx-revaluation":
       return <FxRevaluationView workspaceId={workspaceId} />;
+    case "consistency":
+      return <ConsistencyView workspaceId={workspaceId} />;
     default:
       return null;
   }
