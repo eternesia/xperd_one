@@ -127,8 +127,10 @@ export async function mfgHasAnyRole(workspaceId: string, userId: string, roles: 
     [workspaceId, userId],
   );
   if (m?.role === "owner" || m?.role === "admin") return true;
-  const mine = await mfgRoles(workspaceId, userId);
-  return mine.some((r) => roles.includes(r));
+  // Disederhanakan: hak akses Production diatur lewat matriks Role Access (lihat/ubah per menu). Peran produksi khusus
+  // (planner/supervisor/QA, dll.) tidak lagi wajib; setiap anggota workspace yang lolos matriks boleh bertindak.
+  void roles;
+  return Boolean(m);
 }
 
 export const reasonOf = (r: unknown): string => {
