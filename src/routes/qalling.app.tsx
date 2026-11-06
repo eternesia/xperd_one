@@ -4,6 +4,7 @@ import {
   CalendarRange,
   ChevronDown,
   FileBarChart,
+  BookOpen,
   Gift,
   CalendarDays,
   MessageSquare,
@@ -275,6 +276,7 @@ function QallingShell() {
       label: id ? "Tagihan & Saldo" : "Billing & Balance",
     },
     { to: "/qalling/app/referral", icon: Gift, label: "Referral" },
+    { to: "/qalling/docs", icon: BookOpen, label: id ? "Dokumentasi" : "Documentation" },
   ];
   const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
   const nav = (

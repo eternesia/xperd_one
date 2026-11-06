@@ -1,9 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { listWorkspaceRows } from "@/lib/data.functions";
 import { useApp } from "@/lib/app-context";
@@ -19,6 +26,47 @@ const tone: Record<string, string> = {
   failed: "bg-destructive/15 text-destructive",
 };
 const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+const STATUS_ID: Record<string, string> = {
+  published: "Terbit",
+  scheduled: "Terjadwal",
+  publishing: "Sedang terbit",
+  draft: "Draf",
+  failed: "Gagal",
+};
+const parseJson = (v: unknown): unknown => {
+  if (typeof v !== "string") return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+};
+/** permalinks bisa berupa array URL/objek atau peta akun → URL; ambil semua URL http(s) yang ada. */
+function linksOf(v: unknown): string[] {
+  const val = parseJson(v);
+  const out: string[] = [];
+  const walk = (x: unknown) => {
+    if (typeof x === "string") {
+      if (/^https?:\/\//i.test(x)) out.push(x);
+    } else if (Array.isArray(x)) x.forEach(walk);
+    else if (x && typeof x === "object") Object.values(x as Record<string, unknown>).forEach(walk);
+  };
+  walk(val);
+  return [...new Set(out)];
+}
+type CalPost = {
+  id: string;
+  title?: string;
+  status: string;
+  scheduled_at: string;
+  account_ids: string[];
+  caption?: string | null;
+  first_comment?: string | null;
+  last_error?: string | null;
+  media_paths?: unknown;
+  media_url?: string | null;
+  permalinks?: unknown;
+};
 
 export function CalendarPage() {
   const { activeWorkspace } = useApp();
@@ -34,6 +82,7 @@ export function CalendarPage() {
       return (res?.rows ?? []) as {
         id: string;
         platform: string;
+        account_name?: string | null;
         client_group_id: string | null;
       }[];
     },
@@ -55,6 +104,8 @@ export function CalendarPage() {
     },
   });
   const [client, setClient] = useState("all");
+  const [openDay, setOpenDay] = useState<Date | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -84,6 +135,12 @@ export function CalendarPage() {
           status: string;
           scheduled_at: string;
           account_ids: unknown;
+          caption: string | null;
+          first_comment: string | null;
+          last_error: string | null;
+          media_paths: unknown;
+          media_url: string | null;
+          permalinks: unknown;
         }[]
       )
         .map((p) => ({
@@ -96,7 +153,7 @@ export function CalendarPage() {
     },
   });
   const byDay = useMemo(() => {
-    const m = new Map<string, typeof posts>();
+    const m = new Map<string, CalPost[]>();
     const ids = new Set(accounts.filter((a) => a.client_group_id === client).map((a) => a.id));
     for (const p of posts) {
       if (client !== "all" && !p.account_ids.some((x: string) => ids.has(x))) continue;
@@ -179,7 +236,35 @@ export function CalendarPage() {
           {cells.map((d, i) => (
             <div
               key={i}
-              className={cn("min-h-24 border-b border-r border-border p-1.5", !d && "bg-muted/30")}
+              className={cn(
+                "min-h-24 border-b border-r border-border p-1.5",
+                !d && "bg-muted/30",
+                d && (byDay.get(key(d))?.length ?? 0) > 0 && "cursor-pointer hover:bg-muted/40",
+              )}
+              role={d && (byDay.get(key(d))?.length ?? 0) > 0 ? "button" : undefined}
+              tabIndex={d && (byDay.get(key(d))?.length ?? 0) > 0 ? 0 : undefined}
+              aria-label={
+                d
+                  ? `${d.getDate()} ${cursor.toLocaleDateString(lang === "id" ? "id-ID" : "en-US", { month: "long" })}: ${byDay.get(key(d))?.length ?? 0} postingan`
+                  : undefined
+              }
+              onClick={() => {
+                if (d && (byDay.get(key(d))?.length ?? 0) > 0) {
+                  setSelectedId(null);
+                  setOpenDay(d);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (
+                  (e.key === "Enter" || e.key === " ") &&
+                  d &&
+                  (byDay.get(key(d))?.length ?? 0) > 0
+                ) {
+                  e.preventDefault();
+                  setSelectedId(null);
+                  setOpenDay(d);
+                }
+              }}
             >
               {d && (
                 <>
@@ -228,6 +313,152 @@ export function CalendarPage() {
           ))}
         </div>
       </div>
+
+      <DayDialog
+        day={openDay}
+        posts={openDay ? (byDay.get(key(openDay)) ?? []) : []}
+        accounts={accounts}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onClose={() => setOpenDay(null)}
+        lang={lang}
+      />
     </div>
+  );
+}
+
+function DayDialog({
+  day,
+  posts,
+  accounts,
+  selectedId,
+  onSelect,
+  onClose,
+  lang,
+}: {
+  day: Date | null;
+  posts: CalPost[];
+  accounts: { id: string; platform: string; account_name?: string | null }[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  lang: string;
+}) {
+  const locale = lang === "id" ? "id-ID" : "en-US";
+  const sorted = useMemo(
+    () => [...posts].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
+    [posts],
+  );
+  const current = sorted.find((p) => p.id === selectedId) ?? sorted[0];
+  const time = (p: CalPost) =>
+    new Date(p.scheduled_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const media = useMemo(() => {
+    if (!current) return [] as string[];
+    const m = parseJson(current.media_paths);
+    const paths = Array.isArray(m) ? m.map(String) : [];
+    return paths.map((x) => `/api/workspace-files?path=${encodeURIComponent(x)}`);
+  }, [current]);
+  const accs = current ? accounts.filter((a) => current.account_ids.includes(a.id)) : [];
+  const links = current ? linksOf(current.permalinks) : [];
+  return (
+    <Dialog open={!!day} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {day?.toLocaleDateString(locale, {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </DialogTitle>
+          <DialogDescription>{sorted.length} postingan pada tanggal ini</DialogDescription>
+        </DialogHeader>
+        {sorted.length > 1 && (
+          <select
+            value={current?.id}
+            onChange={(e) => onSelect(e.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            aria-label="Pilih postingan"
+          >
+            {sorted.map((p) => (
+              <option key={p.id} value={p.id}>
+                {time(p)} · {p.title || "(tanpa judul)"} · {STATUS_ID[p.status] ?? p.status}
+              </option>
+            ))}
+          </select>
+        )}
+        {current && (
+          <div className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={cn("border-transparent", tone[current.status] ?? tone.draft)}>
+                {STATUS_ID[current.status] ?? current.status}
+              </Badge>
+              <span className="text-muted-foreground">{time(current)} WIB</span>
+            </div>
+            <h3 className="text-base font-semibold">{current.title || "(tanpa judul)"}</h3>
+            {accs.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {accs.map((a) => (
+                  <span
+                    key={a.id}
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+                  >
+                    <SocialIcon platform={a.platform} className="h-3 w-3" />
+                    {a.account_name || a.platform}
+                  </span>
+                ))}
+              </div>
+            )}
+            {current.caption && (
+              <p className="whitespace-pre-wrap rounded-md bg-muted/50 p-3">{current.caption}</p>
+            )}
+            {media.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {media.slice(0, 6).map((u) => (
+                  <img
+                    key={u}
+                    src={u}
+                    alt=""
+                    loading="lazy"
+                    className="aspect-square w-full rounded-md border object-cover"
+                  />
+                ))}
+              </div>
+            )}
+            {current.first_comment && (
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">Komentar pertama:</span> {current.first_comment}
+              </p>
+            )}
+            {current.last_error && current.status === "failed" && (
+              <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                {current.last_error}
+              </p>
+            )}
+            {links.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {links.slice(0, 5).map((u) => (
+                  <a
+                    key={u}
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary underline"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Lihat postingan
+                  </a>
+                ))}
+              </div>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "post-scheduler" }}>
+                Buka di Penjadwal
+              </Link>
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

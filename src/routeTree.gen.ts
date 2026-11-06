@@ -54,6 +54,7 @@ import { Route as OauthTokenRouteImport } from './routes/oauth.token'
 import { Route as QallingIndexRouteImport } from './routes/qalling.index'
 import { Route as QallingAppRouteImport } from './routes/qalling.app'
 import { Route as QallingDaftarRouteImport } from './routes/qalling.daftar'
+import { Route as QallingDocsRouteImport } from './routes/qalling.docs'
 import { Route as QallingFiturRouteImport } from './routes/qalling.fitur'
 import { Route as QallingHargaRouteImport } from './routes/qalling.harga'
 import { Route as QallingKelebihanRouteImport } from './routes/qalling.kelebihan'
@@ -323,6 +324,11 @@ const QallingAppRoute = QallingAppRouteImport.update({
 const QallingDaftarRoute = QallingDaftarRouteImport.update({
   id: '/qalling/daftar',
   path: '/qalling/daftar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingDocsRoute = QallingDocsRouteImport.update({
+  id: '/qalling/docs',
+  path: '/qalling/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QallingFiturRoute = QallingFiturRouteImport.update({
@@ -602,6 +608,7 @@ export interface FileRoutesByFullPath {
   '/oauth/token': typeof OauthTokenRoute
   '/qalling/app': typeof QallingAppRouteWithChildren
   '/qalling/daftar': typeof QallingDaftarRoute
+  '/qalling/docs': typeof QallingDocsRoute
   '/qalling/fitur': typeof QallingFiturRoute
   '/qalling/harga': typeof QallingHargaRoute
   '/qalling/kelebihan': typeof QallingKelebihanRoute
@@ -688,6 +695,7 @@ export interface FileRoutesByTo {
   '/oauth/register': typeof OauthRegisterRoute
   '/oauth/token': typeof OauthTokenRoute
   '/qalling/daftar': typeof QallingDaftarRoute
+  '/qalling/docs': typeof QallingDocsRoute
   '/qalling/fitur': typeof QallingFiturRoute
   '/qalling/harga': typeof QallingHargaRoute
   '/qalling/kelebihan': typeof QallingKelebihanRoute
@@ -778,6 +786,7 @@ export interface FileRoutesById {
   '/oauth/token': typeof OauthTokenRoute
   '/qalling/app': typeof QallingAppRouteWithChildren
   '/qalling/daftar': typeof QallingDaftarRoute
+  '/qalling/docs': typeof QallingDocsRoute
   '/qalling/fitur': typeof QallingFiturRoute
   '/qalling/harga': typeof QallingHargaRoute
   '/qalling/kelebihan': typeof QallingKelebihanRoute
@@ -871,6 +880,7 @@ export interface FileRouteTypes {
     | '/oauth/token'
     | '/qalling/app'
     | '/qalling/daftar'
+    | '/qalling/docs'
     | '/qalling/fitur'
     | '/qalling/harga'
     | '/qalling/kelebihan'
@@ -957,6 +967,7 @@ export interface FileRouteTypes {
     | '/oauth/register'
     | '/oauth/token'
     | '/qalling/daftar'
+    | '/qalling/docs'
     | '/qalling/fitur'
     | '/qalling/harga'
     | '/qalling/kelebihan'
@@ -1046,6 +1057,7 @@ export interface FileRouteTypes {
     | '/oauth/token'
     | '/qalling/app'
     | '/qalling/daftar'
+    | '/qalling/docs'
     | '/qalling/fitur'
     | '/qalling/harga'
     | '/qalling/kelebihan'
@@ -1112,6 +1124,7 @@ export interface RootRouteChildren {
   OauthTokenRoute: typeof OauthTokenRoute
   QallingAppRoute: typeof QallingAppRouteWithChildren
   QallingDaftarRoute: typeof QallingDaftarRoute
+  QallingDocsRoute: typeof QallingDocsRoute
   QallingFiturRoute: typeof QallingFiturRoute
   QallingHargaRoute: typeof QallingHargaRoute
   QallingKelebihanRoute: typeof QallingKelebihanRoute
@@ -1451,6 +1464,13 @@ declare module '@tanstack/react-router' {
       path: '/qalling/daftar'
       fullPath: '/qalling/daftar'
       preLoaderRoute: typeof QallingDaftarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/docs': {
+      id: '/qalling/docs'
+      path: '/qalling/docs'
+      fullPath: '/qalling/docs'
+      preLoaderRoute: typeof QallingDocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qalling/fitur': {
@@ -1959,6 +1979,7 @@ const rootRouteChildren: RootRouteChildren = {
   OauthTokenRoute: OauthTokenRoute,
   QallingAppRoute: QallingAppRouteWithChildren,
   QallingDaftarRoute: QallingDaftarRoute,
+  QallingDocsRoute: QallingDocsRoute,
   QallingFiturRoute: QallingFiturRoute,
   QallingHargaRoute: QallingHargaRoute,
   QallingKelebihanRoute: QallingKelebihanRoute,

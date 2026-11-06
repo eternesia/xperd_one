@@ -30,7 +30,8 @@ import {
 } from "@/components/app/ui-states";
 import { useApp } from "@/lib/app-context";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
-import { deleteWorkspaceFile, uploadWorkspaceFile } from "@/lib/files.functions";
+import { deleteWorkspaceFile } from "@/lib/files.functions";
+import { uploadFileChunked } from "@/lib/chunked-upload";
 import { useI18n } from "@/lib/i18n";
 import { fmtBytes, storageQuota } from "@/lib/qalling-quota";
 import { cn } from "@/lib/utils";
@@ -48,14 +49,6 @@ import { getMediaPolicy } from "@/lib/media-policy.functions";
  */
 export const CRM_MEDIA_FOLDER = "crm/media";
 const mediaUrl = (path: string) => `/api/workspace-files?path=${encodeURIComponent(path)}`;
-const fileToDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(r.error ?? new Error("read"));
-    r.readAsDataURL(file);
-  });
-
 export type MediaItem = {
   id: string;
   name: string;
@@ -121,13 +114,11 @@ function useUpload(workspaceId: string) {
       for (const original of files) {
         // Kompresi hanya setelah unggah dikirim dan tidak pernah menggantikan berkas dengan hasil yang lebih besar.
         const f = await compressCrmMedia(original, policy);
-        const { path } = await uploadWorkspaceFile({
-          data: {
-            workspaceId,
-            folder: CRM_MEDIA_FOLDER,
-            fileName: f.name,
-            dataUrl: await fileToDataUrl(f),
-          },
+        // Berpotongan kecil agar tidak terkena batas body proxy (±1 MB) pada gambar/video yang lebih besar.
+        const { path } = await uploadFileChunked({
+          workspaceId,
+          folder: CRM_MEDIA_FOLDER,
+          file: f,
         });
         try {
           await saveWorkspaceRow({

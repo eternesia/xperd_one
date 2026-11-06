@@ -66,6 +66,7 @@ const NAV = [
   { to: "/qalling/kelebihan", label: "Kelebihan" },
   { to: "/qalling/harga", label: "Harga" },
   { to: "/qalling/testimoni", label: "Testimoni" },
+  { to: "/qalling/docs", label: "Dokumentasi" },
   { to: "/qalling/kontak", label: "Kontak" },
 ] as const;
 
@@ -82,6 +83,7 @@ export function QallingShell({ children }: { children: ReactNode }) {
           Harga: "Pricing",
           Testimoni: "Testimonials",
           Kontak: "Contact",
+          Dokumentasi: "Docs",
         } as Record<string, string>
       )[label],
       label,

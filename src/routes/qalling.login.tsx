@@ -216,6 +216,10 @@ function QallingLogin() {
           {pick("Try free", "Coba gratis")}
         </Link>
         {" · "}
+        <Link to="/qalling/docs" className="underline-offset-4 hover:underline">
+          {pick("Documentation", "Dokumentasi")}
+        </Link>
+        {" · "}
         <Link to="/qalling" className="underline-offset-4 hover:underline">
           {pick("Back to website", "Kembali ke website")}
         </Link>
