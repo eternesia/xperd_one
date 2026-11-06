@@ -1,6 +1,12 @@
 /** Konten dokumentasi publik Qalling. Teks umum (tanpa angka harga/kuota) agar tidak cepat usang; angka resmi ada di halaman Harga. */
+export type DocGroup = "Mulai" | "Fitur" | "Platform" | "Pakai dengan AI" | "Lainnya";
+export const DOC_GROUPS: DocGroup[] = ["Mulai", "Fitur", "Platform", "Pakai dengan AI", "Lainnya"];
+
 export interface DocSection {
   id: string;
+  group: DocGroup;
+  /** Tabel opsional (mis. perbandingan platform). */
+  table?: { head: string[]; rows: string[][] };
   title: string;
   summary: string;
   steps?: string[];
@@ -10,6 +16,7 @@ export interface DocSection {
 export const QALLING_DOCS: DocSection[] = [
   {
     id: "mulai",
+    group: "Mulai",
     title: "Memulai",
     summary:
       "Qalling adalah CRM media sosial: jadwalkan postingan, balas komentar dan pesan, kelola lead, dan lihat laporan dalam satu dasbor.",
@@ -25,6 +32,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "akun",
+    group: "Mulai",
     title: "Menghubungkan akun media sosial",
     summary:
       "Akun Instagram, Facebook, Threads, TikTok, LinkedIn, YouTube, Pinterest, X, Telegram, dan Discord dapat dikelola dari satu tempat, sesuai paket Anda.",
@@ -40,6 +48,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "media",
+    group: "Fitur",
     title: "Pustaka Media",
     summary: "Simpan foto dan video di Konten → Media, lalu pakai ulang di banyak postingan.",
     steps: [
@@ -55,6 +64,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "posting",
+    group: "Fitur",
     title: "Membuat dan menjadwalkan postingan",
     summary:
       "Tulis caption, pilih akun tujuan, lampirkan media, lalu simpan sebagai draf, jadwalkan, atau terbitkan sekarang.",
@@ -73,6 +83,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "kalender",
+    group: "Fitur",
     title: "Kalender Konten",
     summary: "Lihat semua postingan per bulan. Klik tanggal untuk melihat detailnya.",
     steps: [
@@ -83,6 +94,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "ide",
+    group: "Fitur",
     title: "Ide dan Kampanye",
     summary: "Kumpulkan ide konten, kelompokkan dalam kampanye, lalu ubah menjadi postingan.",
     steps: [
@@ -93,6 +105,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "inbox",
+    group: "Fitur",
     title: "Inbox, komentar, dan otomasi",
     summary:
       "Balas pesan langsung (DM) dan komentar dari satu inbox, serta otomatiskan balasan yang berulang.",
@@ -109,6 +122,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "crm",
+    group: "Fitur",
     title: "Lead, kontak, dan pipeline",
     summary: "Ubah percakapan menjadi lead, catat riwayat interaksi, dan pantau tahapan penjualan.",
     steps: [
@@ -121,6 +135,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "analitik",
+    group: "Fitur",
     title: "Analitik dan jam terbaik",
     summary:
       "Lihat performa akun dan postingan, serta waktu terbaik untuk memposting, pada platform yang menyediakan datanya.",
@@ -135,6 +150,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "laporan",
+    group: "Fitur",
     title: "Klien dan laporan",
     summary: "Kelompokkan akun per klien dan buat laporan untuk dibagikan.",
     steps: [
@@ -147,7 +163,150 @@ export const QALLING_DOCS: DocSection[] = [
     ],
   },
   {
+    id: "platform",
+    group: "Platform",
+    title: "Ringkasan platform",
+    summary:
+      "Qalling mendukung banyak platform. Kemampuan tiap platform berbeda; tabel ini merangkum yang umum. Detail ada di halaman masing-masing.",
+    table: {
+      head: ["Platform", "Posting", "Komentar & statistik"],
+      rows: [
+        ["Instagram", "Foto, carousel, reel, story", "Tersedia"],
+        ["Facebook (Halaman)", "Teks, foto, video/reel", "Tersedia"],
+        ["Threads", "Teks, foto, video, poll, utas", "Sesuai platform"],
+        ["TikTok", "Video atau foto", "Sesuai platform"],
+        ["YouTube", "Satu video (Shorts otomatis bila memenuhi syarat)", "Sesuai platform"],
+        ["LinkedIn", "Teks, gambar, dokumen carousel, video", "Tidak tersedia"],
+        ["X", "Teks, foto, video", "Sesuai platform"],
+        ["Pinterest", "Satu foto per Pin ke sebuah board", "Tidak tersedia"],
+        ["Telegram", "Teks, album media ke channel/grup", "Tidak tersedia"],
+        ["Discord", "Teks dan berkas ke channel server", "Tidak tersedia"],
+      ],
+    },
+    tips: [
+      "Ketersediaan fitur juga bergantung pada paket Anda dan izin yang diberikan platform.",
+      "Opsi khusus per platform (poll, kolaborator, privasi, dan sebagainya) diatur lewat asisten AI atau penjadwal sesuai fiturnya.",
+    ],
+  },
+  {
+    id: "instagram",
+    group: "Platform",
+    title: "Instagram",
+    summary: "Posting feed, carousel, reel, dan story ke akun bisnis atau kreator.",
+    steps: [
+      "Foto tunggal, carousel (beberapa gambar), atau satu video (menjadi reel).",
+      "Story: tepat satu gambar atau video tanpa caption.",
+      "Kolaborator: undang hingga tiga akun sebagai ko-penulis (Collab post); mereka menerima undangan di aplikasi Instagram.",
+      "Trial reel: tampilkan reel ke non-pengikut dulu; akun harus memenuhi syarat dari Instagram.",
+      "Komentar pertama (hashtag atau tautan) diposting otomatis setelah terbit; maksimal 30 hashtag.",
+    ],
+    tips: ["Instagram selalu membutuhkan minimal satu gambar atau video."],
+  },
+  {
+    id: "facebook",
+    group: "Platform",
+    title: "Facebook (Halaman)",
+    summary: "Posting ke Halaman Facebook, bukan profil pribadi.",
+    steps: [
+      "Teks dengan kartu tautan, foto, atau satu video.",
+      "Satu video dapat terbit sebagai reel (vertikal) atau video biasa.",
+      "Komentar pertama didukung.",
+    ],
+    tips: ["Video Facebook diposting sendiri, tidak digabung dengan foto."],
+  },
+  {
+    id: "threads",
+    group: "Platform",
+    title: "Threads",
+    summary: "Posting teks, media, utas, dan poll.",
+    steps: [
+      "Teks hingga 500 karakter per bagian; teks yang lebih panjang dipecah menjadi utas (balasan berlanjut).",
+      "Poll berisi 2–4 pilihan (maksimal 25 karakter per pilihan).",
+      "Tag topik, kartu tautan, dan pengaturan siapa yang boleh membalas tersedia.",
+    ],
+    tips: ["Poll, kartu tautan, dan lampiran teks panjang hanya untuk posting tanpa media."],
+  },
+  {
+    id: "tiktok",
+    group: "Platform",
+    title: "TikTok",
+    summary: "Posting satu video atau 1–35 foto.",
+    steps: [
+      "Pilih mode: langsung terbit, atau kirim sebagai draf ke inbox TikTok untuk diselesaikan di aplikasi.",
+      "Privasi (publik, teman, pengikut, hanya saya) dipilih oleh Anda; izin komentar, duet, dan stitch diatur terpisah.",
+      "Cover video dapat dipilih dari bingkai tertentu.",
+    ],
+    tips: ["Komentar pertama maksimal 150 karakter dan hanya untuk akun dan mode tertentu."],
+  },
+  {
+    id: "youtube",
+    group: "Platform",
+    title: "YouTube",
+    summary: "Unggah satu video ke channel.",
+    steps: [
+      "Judul (1–100 karakter) wajib. Deskripsi diambil dari caption.",
+      "Anda harus menyatakan apakah video dibuat untuk anak-anak; ini tidak boleh diasumsikan.",
+      "Pilih privasi: publik, tidak publik, atau privat. Tag dan kategori opsional.",
+    ],
+    tips: ["Video vertikal atau persegi hingga 3 menit otomatis menjadi Shorts."],
+  },
+  {
+    id: "linkedin",
+    group: "Platform",
+    title: "LinkedIn",
+    summary: "Posting ke profil pribadi LinkedIn.",
+    steps: [
+      "Teks hingga 3000 karakter, satu gambar, 2–20 gambar, atau satu video MP4.",
+      "Visibilitas: publik atau hanya koneksi.",
+      "Beberapa gambar dapat diposting sebagai dokumen carousel (PDF) dengan judul.",
+    ],
+    tips: ["Komentar dan statistik LinkedIn tidak tersedia di Qalling."],
+  },
+  {
+    id: "x",
+    group: "Platform",
+    title: "X",
+    summary: "Posting teks, foto, atau video ke akun X.",
+    steps: [
+      'Tandai "dibuat dengan AI" untuk posting dengan foto atau video bila relevan.',
+      "Periksa biaya per posting di halaman Harga atau ke pengelola layanan sebelum memposting.",
+    ],
+  },
+  {
+    id: "pinterest",
+    group: "Platform",
+    title: "Pinterest",
+    summary: "Posting satu foto sebagai Pin ke sebuah board.",
+    steps: [
+      "Pilih board tujuan; ini wajib.",
+      "Judul (maks 100 karakter) dan tautan tujuan opsional; caption menjadi deskripsi (maks 800 karakter).",
+    ],
+    tips: ["Pin video belum tersedia. Komentar dan statistik tidak tersedia."],
+  },
+  {
+    id: "telegram",
+    group: "Platform",
+    title: "Telegram",
+    summary: "Posting ke channel atau grup tempat bot ditambahkan.",
+    steps: [
+      "Teks hingga 4096 karakter, atau 1024 karakter bila disertai media; hingga 10 media sebagai album.",
+      "Opsi senyap dan larangan teruskan/simpan tersedia.",
+    ],
+    tips: ["Bot ditambahkan ke channel atau grup dari dasbor, bukan dari Telegram."],
+  },
+  {
+    id: "discord",
+    group: "Platform",
+    title: "Discord",
+    summary: "Posting ke channel server.",
+    steps: [
+      "Teks hingga 2000 karakter dan hingga 10 berkas (maks 20 MB per berkas).",
+      "Sebutan seperti @everyone tidak pernah memberi notifikasi ke siapa pun.",
+    ],
+  },
+  {
     id: "ai",
+    group: "Pakai dengan AI",
     title: "Kelola Qalling lewat ChatGPT atau Claude",
     summary:
       "Hubungkan asisten AI ke Qalling agar dapat membuat draf, menjadwalkan, membaca komentar, dan mengelola lead lewat percakapan.",
@@ -163,6 +322,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "tagihan",
+    group: "Lainnya",
     title: "Tagihan, saldo, dan perpanjangan",
     summary:
       "Isi saldo, perpanjang langganan dari saldo, dan unduh bukti pembayaran di Tagihan & Saldo.",
@@ -178,6 +338,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "referral",
+    group: "Lainnya",
     title: "Referral",
     summary: "Ajak teman memakai Qalling dan dapatkan komisi dalam bentuk saldo.",
     steps: [
@@ -187,6 +348,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "tim",
+    group: "Lainnya",
     title: "Tim dan keamanan",
     summary: "Undang anggota tim dan atur akses sesuai peran.",
     steps: [
@@ -197,6 +359,7 @@ export const QALLING_DOCS: DocSection[] = [
   },
   {
     id: "faq",
+    group: "Lainnya",
     title: "Pertanyaan umum",
     summary: "Jawaban singkat untuk kendala yang paling sering muncul.",
     tips: [
