@@ -96,6 +96,15 @@ async function lotUnitCost(conn: PoolConnection, ws: string, lotId: string): Pro
   return num(r?.q) > 0 ? Math.round(num(r?.v) / num(r?.q)) : 0;
 }
 
+/**
+ * Gerbang registrasi produk (pestisida/BPOM) hanya berlaku bila workspace memakai registrasi,
+ * yaitu sudah punya minimal satu baris registrasi. Workspace skincare tanpa registrasi tidak terhambat.
+ */
+export async function usesRegistrations(conn: { execute: (sql: string, p?: any[]) => Promise<any> }, ws: string): Promise<boolean> {
+  const [r] = await conn.execute("SELECT 1 AS x FROM mfg_product_registrations WHERE workspace_id = ? LIMIT 1", [ws]);
+  return (r as any[]).length > 0;
+}
+
 /** Registrasi produk aktif & berlaku (padanan `mfg_registration_valid`). */
 export async function registrationFor(conn: PoolConnection, ws: string, itemId: string, date: string) {
   return row(
@@ -179,7 +188,7 @@ async function releaseOrder(conn: PoolConnection, ws: string, userId: string, o:
   if (d10(v.effective_from) > today || (v.effective_to && d10(v.effective_to) < today)) throw bad("Versi BOM belum/tidak lagi berlaku.");
   const prof = await row(conn, "SELECT * FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ? AND is_active = 1", [ws, o.item_id]);
   let regId: string | null = null;
-  if (prof?.item_class === "finished_good") {
+  if (prof?.item_class === "finished_good" && (await usesRegistrations(conn, ws))) {
     const reg = await registrationFor(conn, ws, o.item_id, today);
     if (!reg) throw bad("Registrasi produk aktif diperlukan.");
     regId = reg.id;
@@ -813,7 +822,7 @@ export async function assertLotSellable(ws: string, lotId: string, itemCode: str
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
   if (l.qc_status !== "released" || (l.expiry_date && d10(l.expiry_date) < today)) throw bad("Lot belum dirilis untuk dijual.");
   const prof = await q("SELECT item_class FROM mfg_item_profiles WHERE workspace_id = ? AND item_id = ? AND is_active = 1", [ws, l.item_id]);
-  if (prof?.item_class === "finished_good") {
+  if (prof?.item_class === "finished_good" && (await q("SELECT 1 AS x FROM mfg_product_registrations WHERE workspace_id = ? LIMIT 1", [ws]))) {
     const reg = await q(
       "SELECT id FROM mfg_product_registrations WHERE workspace_id = ? AND item_id = ? AND is_active = 1 AND status = 'active' AND valid_from <= ? AND valid_until >= ? LIMIT 1",
       [ws, l.item_id, today, today],

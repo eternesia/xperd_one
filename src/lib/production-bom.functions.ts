@@ -46,7 +46,9 @@ async function compositionIssues(conn: any, workspaceId: string, versionId: stri
     bomFormulationCode: v.bom_fc,
     today: jakartaToday(),
     tolerance: Number(set?.bom_ai_tolerance_pct ?? 0),
-    requiresRegistration: Boolean(prof),
+    // Skincare tanpa registrasi produk tidak dihambat; gerbang aktif bila workspace sudah memakai registrasi.
+    requiresRegistration:
+      Boolean(prof) && (await q("SELECT 1 AS x FROM mfg_product_registrations WHERE workspace_id = ? LIMIT 1", [workspaceId])).length > 0,
     registration: reg
       ? {
           item_id: reg.item_id,
@@ -212,23 +214,23 @@ export const saveProductionBom = createServerFn({ method: "POST" })
       if (before) {
         await conn.execute(
           `UPDATE mfg_bom_versions SET base_batch_qty=?, base_uom=?, std_yield_pct=?, effective_from=?, effective_to=?, registration_id=?,
-             change_reason=?, last_modified_by=? WHERE id = ? AND workspace_id = ?`,
-          [v.base_batch_qty, v.base_uom, v.std_yield_pct, v.effective_from, v.effective_to || null, v.registration_id, data.reason, context.userId, versionId, w],
+             dosage_form=?, source_document=?, change_reason=?, last_modified_by=? WHERE id = ? AND workspace_id = ?`,
+          [v.base_batch_qty, v.base_uom, v.std_yield_pct, v.effective_from, v.effective_to || null, v.registration_id, v.dosage_form || null, v.source_document || null, data.reason, context.userId, versionId, w],
         );
         await conn.execute("DELETE FROM mfg_bom_lines WHERE bom_version_id = ? AND workspace_id = ?", [versionId, w]);
       } else {
         const m = await one("SELECT COALESCE(MAX(version_no),0) + 1 AS n FROM mfg_bom_versions WHERE workspace_id = ? AND bom_id = ?", [w, bomId]);
         await conn.execute(
           `INSERT INTO mfg_bom_versions (id, workspace_id, bom_id, version_no, base_batch_qty, base_uom, std_yield_pct, effective_from, effective_to,
-             registration_id, change_reason, created_by, last_modified_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [versionId, w, bomId, Number(m.n), v.base_batch_qty, v.base_uom, v.std_yield_pct, v.effective_from, v.effective_to || null, v.registration_id, data.reason, context.userId, context.userId],
+             registration_id, dosage_form, source_document, change_reason, created_by, last_modified_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [versionId, w, bomId, Number(m.n), v.base_batch_qty, v.base_uom, v.std_yield_pct, v.effective_from, v.effective_to || null, v.registration_id, v.dosage_form || null, v.source_document || null, data.reason, context.userId, context.userId],
         );
       }
       for (const [i, l] of data.lines.entries()) {
         await conn.execute(
-          `INSERT INTO mfg_bom_lines (id, workspace_id, bom_version_id, item_id, line_type, qty_per_base, uom, basis, ai_target_pct, potency_compensate,
-             tolerance_pct, is_critical, sequence, add_step_note, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [uuid(), w, versionId, l.item_id, l.line_type, l.qty_per_base, l.uom, l.basis, l.ai_target_pct, l.potency_compensate ? 1 : 0, l.tolerance_pct, l.is_critical ? 1 : 0, i + 1, l.add_step_note || null, context.userId],
+          `INSERT INTO mfg_bom_lines (id, workspace_id, bom_version_id, item_id, line_type, phase, qty_per_base, uom, basis, ai_target_pct, potency_compensate,
+             tolerance_pct, is_critical, sequence, add_step_note, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [uuid(), w, versionId, l.item_id, l.line_type, l.phase || "", l.qty_per_base, l.uom, l.basis, l.ai_target_pct, l.potency_compensate ? 1 : 0, l.tolerance_pct, l.is_critical ? 1 : 0, i + 1, l.add_step_note || null, context.userId],
         );
       }
       await mfgAudit(conn, {
