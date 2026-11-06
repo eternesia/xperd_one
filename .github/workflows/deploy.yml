@@ -1,121 +1,48 @@
 name: Deploy Docker Image (Manager)
 
+# Setelah workflow "Build and Push Docker Image" sukses di master (atau manual):
+# SSH ke server -> /var/www/html/xperd-one-production -> compose pull -> up -d.
 on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Tag image (default: latest = image hasil build terbaru dari master)'
-        required: false
-        default: 'latest'
-        type: string
-      image_name:
-        description: 'Nama image (default: owner/repo, mis. eternesia/xperd_one)'
-        required: false
-        default: ''
-        type: string
-      # Tidak ada input remote_dir / nama service: dir, file compose, nama service
-      # dan env file di-discover otomatis dari label compose container yang jalan.
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
-      - name: Deploy over SSH to manager
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.1
         with:
-          host: ${{ secrets.SSH_MANAGER_HOST }}
-          username: ${{ secrets.SSH_MANAGER_USER }}
-          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          host: 43.157.241.82
+          username: ubuntu
+          port: 22
           key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
-          envs: IMAGE,REPO,ACTOR,PAT
+          envs: GH_TOKEN,GH_ACTOR
           script: |
             set -euo pipefail
+            cd /var/www/html/xperd-one-production
+            pwd
 
-            TARGET="${IMAGE:?IMAGE tidak diset}"
-            REPO_NAME="${REPO##*/}"
-            IMAGE_REPO="${TARGET%:*}"
+            # Token bawaan CI/CD (GITHUB_TOKEN) hanya untuk login ghcr.io selama job ini.
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
 
-            echo "=== Deploy ${TARGET} (manager) ==="
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
+            docker compose -f docker-compose.prod.yml ps
 
-            # --- 1. find the running app container (any tag of this image) ----
-            CID=""
-            for c in $(docker ps -q); do
-              img="$(docker inspect -f '{{.Config.Image}}' "$c")"
-              case "$img" in
-                "${IMAGE_REPO}"|"${IMAGE_REPO}":*) CID="$c"; break ;;
-              esac
-            done
-            if [ -z "$CID" ]; then
-              for c in $(docker ps -q); do
-                img="$(docker inspect -f '{{.Config.Image}}' "$c")"
-                case "$img" in *"${REPO_NAME}"*) CID="$c"; break ;; esac
-              done
-            fi
-            if [ -z "$CID" ]; then
-              echo "ERROR: tidak ada container jalan yang memakai image '${REPO_NAME}'."
-              docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-              exit 1
-            fi
-            echo ">>> Container: $(docker inspect -f '{{.Name}}' "$CID") (image lama: $(docker inspect -f '{{.Config.Image}}' "$CID"))"
-
-            # --- 2. read the compose project metadata off that container ------
-            PROJ_DIR="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.working_dir"}}{{end}}' "$CID")"
-            CONFIG="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.config_files"}}{{end}}' "$CID")"
-            SVC="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.service"}}{{end}}' "$CID")"
-            PROJ="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project"}}{{end}}' "$CID")"
-            ENVFILE="$(docker inspect -f '{{if .Config.Labels}}{{index .Config.Labels "com.docker.compose.project.environment_file"}}{{end}}' "$CID")"
-
-            if [ -z "$PROJ_DIR" ] || [ -z "$SVC" ]; then
-              echo "ERROR: container bukan hasil 'docker compose' (label compose kosong)."
-              exit 1
-            fi
-
-            [ -n "$CONFIG" ] || CONFIG="${PROJ_DIR}/docker-compose.prod.yml"
-            if [ -z "$ENVFILE" ]; then
-              ENVFILE="${PROJ_DIR}/.env.prod"
-              [ -f "$ENVFILE" ] || ENVFILE="${PROJ_DIR}/.env"
-            fi
-            echo ">>> project=${PROJ:-<default>} dir=${PROJ_DIR} service=${SVC} config=${CONFIG} env=${ENVFILE}"
-
-            cd "$PROJ_DIR"
-            COMPOSE=(docker compose --project-directory "$PROJ_DIR" -f "$CONFIG")
-            [ -n "$PROJ" ] && COMPOSE+=(-p "$PROJ")
-
-            if [ -f "$ENVFILE" ]; then
-              COMPOSE+=(--env-file "$ENVFILE")
-              if grep -q '^APP_IMAGE=' "$ENVFILE"; then
-                cp -a "$ENVFILE" "${ENVFILE}.bak.$(date +%Y%m%d%H%M%S)"
-                sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${TARGET}|" "$ENVFILE"
-              else
-                echo "APP_IMAGE=${TARGET}" >> "$ENVFILE"
-              fi
-              echo ">>> ${ENVFILE}: APP_IMAGE=${TARGET}"
-            else
-              echo ">>> Peringatan: env file tidak ditemukan — compose dijalankan tanpa --env-file"
-            fi
-
-            # --- 3. login + pull ---------------------------------------------
-            if [ -n "${PAT:-}" ]; then
-              echo "$PAT" | docker login ghcr.io -u "${ACTOR:-github}" --password-stdin
-            else
-              echo ">>> GHCR_PAT tidak diset — memakai kredensial docker yang sudah ada di host"
-            fi
-
-            echo ">>> Pulling ${TARGET}"
-            docker pull "$TARGET"
-
-            # --- 4. recreate ONLY the app service ----------------------------
-            "${COMPOSE[@]}" up -d --force-recreate "$SVC"
-
-            # --- 5. verify ---------------------------------------------------
-            NEW_ID="$("${COMPOSE[@]}" ps -q "$SVC")"
-            echo ">>> image id container: $(docker inspect -f '{{.Image}}' "$NEW_ID")"
-            echo ">>> created: $(docker inspect -f '{{.Created}}' "$NEW_ID")"
-            docker image inspect --format '>>> RepoDigests: {{join .RepoDigests ", "}}' "$TARGET" || true
-            echo "=== Deploy complete ==="
+            docker logout ghcr.io || true
         env:
-          IMAGE: ghcr.io/${{ inputs.image_name || github.repository }}:${{ inputs.image_tag || 'latest' }}
-          REPO: ${{ github.repository }}
-          ACTOR: ${{ github.actor }}
-          PAT: ${{ secrets.GHCR_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
