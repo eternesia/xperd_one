@@ -1,0 +1,50 @@
+name: Migrate Database (Manager)
+
+# Berjalan otomatis setelah workflow "Deploy Docker Image (Manager)" selesai sukses di master (atau manual).
+# SSH ke server -> /var/www/html/xperd-one-production -> docker compose exec web node scripts/migrate.mjs
+# Migrasi idempoten: tiap file db/migrations/*.sql hanya diterapkan sekali (tercatat di db_apply_log).
+on:
+  workflow_run:
+    workflows: ["Deploy Docker Image (Manager)"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run migrations over SSH
+        uses: appleboy/ssh-action@v1.0.1
+        with:
+          host: ${{ secrets.SSH_MANAGER_HOST }}
+          username: ${{ secrets.SSH_MANAGER_USER }}
+          port: ${{ secrets.SSH_MANAGER_PORT || 22 }}
+          key: ${{ secrets.SSH_MANAGER_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+            cd /var/www/html/xperd-one-production
+
+            # Container web baru saja di-recreate oleh deploy: tunggu MySQL & web siap (maks. ~2 menit).
+            migrated=0
+            for i in $(seq 1 12); do
+              if docker compose -f docker-compose.yml exec -T web node scripts/migrate.mjs; then
+                migrated=1
+                break
+              fi
+              echo "migrate belum berhasil (percobaan $i/12), tunggu 10 detik..."
+              sleep 10
+            done
+
+            if [ "$migrated" -ne 1 ]; then
+              echo "::error::Migrasi database gagal"
+              docker compose -f docker-compose.yml ps
+              exit 1
+            fi
+            echo "Migrasi selesai."
