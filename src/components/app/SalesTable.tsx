@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ItemPicker } from "@/components/app/ItemPicker";
+import { ItemSearchAdd } from "@/components/app/ItemSearchAdd";
 import { CashBankPicker, PartyPicker, WarehousePicker } from "@/components/app/Pickers";
 // Ronde 29 (BS New 8): mata uang dokumen + kurs.
 import { CurrencyFields } from "@/components/app/CurrencyFields";
@@ -101,6 +101,18 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const { data: taxOptions = [] } = useLineTaxOptions(workspaceId, lang);
   const taxByCode = useMemo(() => new Map(taxOptions.map((o) => [o.code, o])), [taxOptions]);
+  const { data: itemRows = [] } = useQuery({
+    queryKey: ["line-items", workspaceId],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const res = await listWorkspaceRows({
+        data: { table: "md_items", workspaceId, orderBy: "code", orderDir: "asc", limit: 5000, filters: { is_active: 1 } },
+      });
+      return (res?.rows ?? []) as unknown as { code: string; name: string; uom_code: string | null; cost_price: number | null; sell_price: number | null }[];
+    },
+  });
+  const itemByCode = useMemo(() => new Map(itemRows.map((r) => [r.code, r])), [itemRows]);
+  const itemOptions = useMemo(() => itemRows.map((r) => ({ id: r.code, code: r.code, name: r.name, hint: r.uom_code })), [itemRows]);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -133,7 +145,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
     currency: "IDR",
     exchange_rate: 1,
   });
-  const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
+  const [lines, setLines] = useState<DraftLine[]>([]);
 
   const queryKey = ["sls", entity.docType, workspaceId, page, pageSize, search, status, from, to];
 
@@ -280,7 +292,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
   }, [lines, taxByCode]);
 
   const resetForm = () => {
-    setLines([emptyLine()]);
+    setLines([]);
     setSourceId("");
     setSourceLines([]);
     setSourceOpenTotal(0);
@@ -315,6 +327,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
       const doc_number = header.doc_number.trim() || nextDocNumber(entity.prefix, total + 1);
       postingKey.current ??= crypto.randomUUID();
       const usable = lines.filter((l) => l.item_code || l.description);
+      if (!usable.length) throw new Error(t("Add at least one line.", "Tambahkan minimal satu baris."));
       // Satu transaksi di server: dokumen, baris, saldo sumber, stok/HPP, jurnal, kas/bank, uang muka (BS New 16).
       const res = await erpSaveDocument({
         data: {
@@ -486,7 +499,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
               tax_code: l.tax_code ?? "",
               source_line_id: l.source_line_id ?? undefined,
             }))
-          : [emptyLine()],
+          : [],
       );
       setOpen(true);
     } catch (e) {
@@ -1047,7 +1060,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                         setSourceId("");
                         setSourceLines([]);
                         setSourceOpenTotal(0);
-                        setLines([emptyLine()]);
+                        setLines([]);
                       }}
                     >
                       <X className="h-4 w-4" /> {t("Clear", "Bersihkan")}
@@ -1180,9 +1193,6 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-navy dark:text-primary-foreground">{t("Lines", "Rincian")}</p>
-                <Button type="button" variant="outline" size="sm" onClick={() => setLines([...lines, emptyLine()])}>
-                  <Plus className="h-4 w-4" /> {t("Add line", "Tambah baris")}
-                </Button>
               </div>
               <div className="overflow-x-auto rounded-xl border border-border">
                 <table className="w-full text-sm">
@@ -1208,19 +1218,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                       return (
                         <tr key={idx} className="border-t border-border align-top">
                           <td className="min-w-[14rem] p-1">
-                            <ItemPicker
-                              workspaceId={workspaceId}
-                              value={l.item_code}
-                              onPick={(item) =>
-                                patch({
-                                  item_code: item.code,
-                                  description: item.name,
-                                  uom_code: item.uom_code ?? "",
-                                  unit_price:
-                                    Number(l.unit_price) > 0 ? l.unit_price : String(item.sell_price ?? item.cost_price ?? 0),
-                                })
-                              }
-                            />
+                            <div className="px-2 py-2 text-sm font-medium">{l.item_code || <span className="text-muted-foreground">{t("(free text)", "(teks bebas)")}</span>}</div>
                             {(entity.docType === "delivery_order" || entity.docType === "ar_invoice") && !sourceId && (
                               <SalesLotPicker
                                 workspaceId={workspaceId}
@@ -1321,6 +1319,29 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                         </tr>
                       );
                     })}
+                                      <tr className="border-t border-border">
+                      <td className="p-1" colSpan={entity.docType === "delivery_order" ? 5 : 8}>
+                        <ItemSearchAdd
+                          className="md:w-full md:max-w-md md:min-w-0"
+                          options={itemOptions}
+                          placeholder={t("Add item: type code / name then Enter", "Tambah item: ketik kode / nama lalu Enter")}
+                          onAdd={(o) => {
+                            const it = itemByCode.get(o.id);
+                            setLines((ls) => [
+                              ...ls,
+                              {
+                                ...emptyLine(),
+                                item_code: o.id,
+                                description: it?.name ?? o.name ?? "",
+                                uom_code: it?.uom_code ?? "",
+                                unit_price: String(it?.sell_price ?? it?.cost_price ?? 0),
+                              },
+                            ]);
+                          }}
+                          onFreeText={(text) => setLines((ls) => [...ls, { ...emptyLine(), description: text }])}
+                        />
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
