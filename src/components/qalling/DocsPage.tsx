@@ -1,29 +1,60 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Copy, Link2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { QallingShell } from "@/components/qalling/QallingSite";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DOC_GROUPS, QALLING_DOCS, type DocSection } from "@/lib/qalling-docs";
+import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/lib/i18n";
+import { AREA_GROUPS, QALLING_DOCS, type DocArea, type DocSection } from "@/lib/qalling-docs";
+import { GROUP_EN, QALLING_DOCS_EN } from "@/lib/qalling-docs.en";
 
-const toMarkdown = (d: DocSection) =>
-  [
-    `# ${d.title}`,
+type Lang = "id" | "en";
+const areaOf = (d: DocSection): DocArea => d.area ?? "guide";
+
+/** Teks dokumen sesuai bahasa; EN jatuh kembali ke Indonesia bila belum ada terjemahan. */
+function localize(d: DocSection, lang: Lang) {
+  const en = lang === "en" ? QALLING_DOCS_EN[d.id] : undefined;
+  return {
+    title: en?.title ?? d.title,
+    summary: en?.summary ?? d.summary,
+    steps: en?.steps ?? d.steps,
+    tips: en?.tips ?? d.tips,
+    table: en?.table ?? d.table,
+    code: d.code?.map((c, i) => ({ ...c, title: en?.codeTitles?.[i] ?? c.title })),
+  };
+}
+const groupLabel = (g: string, lang: Lang) => (lang === "en" ? (GROUP_EN[g] ?? g) : g);
+
+const AREA_TABS: { area: DocArea; id: string; en: string; first: string }[] = [
+  { area: "guide", id: "Panduan", en: "Guide", first: "mulai" },
+  { area: "developer", id: "Developer", en: "Developer", first: "dev-intro" },
+  { area: "api", id: "API Reference", en: "API Reference", first: "api-reference" },
+];
+
+const toMarkdown = (d: DocSection, lang: Lang) => {
+  const x = localize(d, lang);
+  const steps = lang === "en" ? "Steps" : "Langkah";
+  return [
+    `# ${x.title}`,
     "",
-    d.summary,
-    ...(d.table
+    x.summary,
+    ...(x.table
       ? [
           "",
-          `| ${d.table.head.join(" | ")} |`,
-          `| ${d.table.head.map(() => "---").join(" | ")} |`,
-          ...d.table.rows.map((r) => `| ${r.join(" | ")} |`),
+          `| ${x.table.head.join(" | ")} |`,
+          `| ${x.table.head.map(() => "---").join(" | ")} |`,
+          ...x.table.rows.map((r) => `| ${r.join(" | ")} |`),
         ]
       : []),
-    ...(d.steps ? ["", "## Langkah", ...d.steps.map((x, i) => `${i + 1}. ${x}`)] : []),
-    ...(d.tips ? ["", "## Tips", ...d.tips.map((x) => `- ${x}`)] : []),
+    ...(x.steps ? ["", `## ${steps}`, ...x.steps.map((s, i) => `${i + 1}. ${s}`)] : []),
+    ...(x.code ? x.code.flatMap((c) => ["", `\`\`\`${c.lang}`, c.body, "```"]) : []),
+    ...(x.tips ? ["", "## Tips", ...x.tips.map((t) => `- ${t}`)] : []),
   ].join("\n");
+};
 
 function Heading({ id, children }: { id: string; children: string }) {
   return (
@@ -34,12 +65,12 @@ function Heading({ id, children }: { id: string; children: string }) {
       {children}
       <a
         href={`#${id}`}
-        aria-label={`Tautan ke ${children}`}
+        aria-label={children}
         onClick={() => {
           const url = `${window.location.origin}${window.location.pathname}#${id}`;
-          navigator.clipboard?.writeText(url).then(() => toast.success("Tautan disalin"));
+          navigator.clipboard?.writeText(url).then(() => toast.success("Link copied"));
         }}
-        className="ml-2 inline-flex align-middle text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        className="ml-2 inline-flex align-middle text-muted-foreground opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
       >
         <Link2 className="h-4 w-4" />
       </a>
@@ -47,11 +78,206 @@ function Heading({ id, children }: { id: string; children: string }) {
   );
 }
 
+function CodeBlock({ title, body, lang }: { title?: string; body: string; lang: string }) {
+  return (
+    <div className="mt-3 overflow-hidden rounded-lg border bg-secondary/40">
+      <div className="flex items-center justify-between border-b bg-secondary/70 px-3 py-1.5 text-xs text-muted-foreground">
+        <span>{title ?? lang}</span>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 hover:text-foreground"
+          onClick={() => navigator.clipboard?.writeText(body).then(() => toast.success("Copied"))}
+        >
+          <Copy className="h-3 w-3" /> Copy
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-3 text-xs leading-relaxed">
+        <code>{body}</code>
+      </pre>
+    </div>
+  );
+}
+
+type ApiTool = {
+  name: string;
+  title: string;
+  description: string;
+  readOnly: boolean;
+  params: {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+    default?: unknown;
+  }[];
+};
+
+const CATEGORIES: [string, string, RegExp][] = [
+  [
+    "Posts & media",
+    "Postingan & media",
+    /post|media|idea|platform_rules|publishing_limits|best_times/,
+  ],
+  ["Inbox & comments", "Inbox & komentar", /conversation|dm|comment|automation|template/],
+  ["Analytics", "Analitik", /insights/],
+  ["CRM", "CRM", /lead|activit|contact|crm|search_leads/],
+  ["ERP", "ERP", /.*/],
+];
+const categoryOf = (n: string) =>
+  CATEGORIES.find(([, , re], i) =>
+    i === CATEGORIES.length - 1
+      ? !n.startsWith("qalling_")
+      : n.startsWith("qalling_") && re.test(n),
+  ) ?? CATEGORIES[0];
+
+function ApiReference({ lang }: { lang: Lang }) {
+  const [q, setQ] = useState("");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["mcp-tools-doc"],
+    queryFn: async () => {
+      const r = await fetch("/api/public/docs/mcp-tools");
+      if (!r.ok) throw new Error("failed");
+      return (await r.json()) as { server: { name: string; version: string }; tools: ApiTool[] };
+    },
+    staleTime: 300_000,
+  });
+  const groups = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const list = (data?.tools ?? []).filter(
+      (t) => !term || `${t.name} ${t.title} ${t.description}`.toLowerCase().includes(term),
+    );
+    const map = new Map<string, ApiTool[]>();
+    for (const t of list) {
+      const [en, id] = categoryOf(t.name);
+      const label = lang === "en" ? en : id;
+      map.set(label, [...(map.get(label) ?? []), t]);
+    }
+    return [...map.entries()];
+  }, [data, q, lang]);
+
+  if (isLoading)
+    return (
+      <p className="mt-6 text-sm text-muted-foreground">{lang === "en" ? "Loading…" : "Memuat…"}</p>
+    );
+  if (error || !data)
+    return (
+      <p className="mt-6 text-sm text-destructive">
+        {lang === "en" ? "The tool list could not be loaded." : "Daftar tool tidak dapat dimuat."}
+      </p>
+    );
+  return (
+    <div className="mt-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={lang === "en" ? "Filter tools…" : "Saring tool…"}
+            className="h-9 pl-9"
+            aria-label="Filter"
+          />
+        </div>
+        <Badge variant="secondary">
+          {data.server.name} v{data.server.version} · {data.tools.length} tools
+        </Badge>
+      </div>
+      {groups.map(([label, tools]) => (
+        <section key={label} className="mt-6">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-primary/80">
+            {label}
+          </h3>
+          <div className="mt-2 space-y-2">
+            {tools.map((t) => (
+              <details
+                key={t.name}
+                id={t.name}
+                className="group rounded-lg border bg-card open:shadow-sm"
+              >
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5">
+                  <code className="text-sm font-semibold text-primary">{t.name}</code>
+                  <Badge variant={t.readOnly ? "secondary" : "outline"}>
+                    {t.readOnly
+                      ? lang === "en"
+                        ? "read-only"
+                        : "baca saja"
+                      : lang === "en"
+                        ? "changes data"
+                        : "mengubah data"}
+                  </Badge>
+                  <span className="w-full text-xs text-muted-foreground sm:w-auto sm:flex-1 sm:truncate">
+                    {t.title}
+                  </span>
+                </summary>
+                <div className="space-y-3 border-t px-3 py-3 text-sm">
+                  <p className="text-muted-foreground">{t.description}</p>
+                  {t.params.length > 0 ? (
+                    <div className="overflow-x-auto rounded-md border">
+                      <table className="w-full text-xs">
+                        <thead className="bg-secondary/60 text-left">
+                          <tr>
+                            <th className="px-2 py-1.5">
+                              {lang === "en" ? "Parameter" : "Parameter"}
+                            </th>
+                            <th className="px-2 py-1.5">{lang === "en" ? "Type" : "Tipe"}</th>
+                            <th className="px-2 py-1.5">
+                              {lang === "en" ? "Description" : "Keterangan"}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {t.params.map((p) => (
+                            <tr key={p.name} className="border-t align-top">
+                              <td className="px-2 py-1.5 font-mono">
+                                {p.name}
+                                {p.required && <span className="text-destructive"> *</span>}
+                              </td>
+                              <td className="px-2 py-1.5 font-mono text-muted-foreground">
+                                {p.type}
+                              </td>
+                              <td className="px-2 py-1.5 text-muted-foreground">
+                                {p.description}
+                                {p.default !== undefined && (
+                                  <span className="block">
+                                    {lang === "en" ? "Default" : "Bawaan"}:{" "}
+                                    <code>{JSON.stringify(p.default)}</code>
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {lang === "en" ? "No parameters." : "Tanpa parameter."}
+                    </p>
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+      ))}
+      {groups.length === 0 && (
+        <p className="mt-6 text-sm text-muted-foreground">
+          {lang === "en" ? "No tools match." : "Tidak ada tool yang cocok."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function DocsPage({ slug }: { slug?: string }) {
+  const { lang: rawLang } = useI18n();
+  const lang: Lang = rawLang === "en" ? "en" : "id";
   const doc = QALLING_DOCS.find((d) => d.id === (slug ?? QALLING_DOCS[0].id));
+  const area = doc ? areaOf(doc) : "guide";
   const [q, setQ] = useState("");
   const [focus, setFocus] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const t = (en: string, id: string) => (lang === "en" ? en : id);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -65,32 +291,53 @@ export function DocsPage({ slug }: { slug?: string }) {
   }, []);
 
   const results = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    if (!t) return [];
-    return QALLING_DOCS.filter((s) =>
-      [s.title, s.summary, ...(s.steps ?? []), ...(s.tips ?? [])]
+    const term = q.trim().toLowerCase();
+    if (!term) return [];
+    return QALLING_DOCS.filter((s) => {
+      const x = localize(s, lang);
+      return [x.title, x.summary, ...(x.steps ?? []), ...(x.tips ?? [])]
         .join(" ")
         .toLowerCase()
-        .includes(t),
-    ).slice(0, 8);
-  }, [q]);
+        .includes(term);
+    }).slice(0, 8);
+  }, [q, lang]);
 
-  const index = doc ? QALLING_DOCS.indexOf(doc) : -1;
-  const prev = index > 0 ? QALLING_DOCS[index - 1] : null;
-  const next = index >= 0 && index < QALLING_DOCS.length - 1 ? QALLING_DOCS[index + 1] : null;
-  const toc = doc
+  const inArea = QALLING_DOCS.filter((d) => areaOf(d) === area);
+  const index = doc ? inArea.indexOf(doc) : -1;
+  const prev = index > 0 ? inArea[index - 1] : null;
+  const next = index >= 0 && index < inArea.length - 1 ? inArea[index + 1] : null;
+  const x = doc ? localize(doc, lang) : null;
+  const toc = x
     ? [
-        ...(doc.table ? [{ id: "tabel", label: "Perbandingan" }] : []),
-        ...(doc.steps ? [{ id: "langkah", label: "Langkah" }] : []),
-        ...(doc.tips ? [{ id: "tips", label: "Tips" }] : []),
+        ...(x.table ? [{ id: "tabel", label: t("Comparison", "Perbandingan") }] : []),
+        ...(x.steps ? [{ id: "langkah", label: t("Steps", "Langkah") }] : []),
+        ...(x.code ? [{ id: "contoh", label: t("Examples", "Contoh") }] : []),
+        ...(x.tips ? [{ id: "tips", label: "Tips" }] : []),
       ]
     : [];
 
   return (
     <QallingShell>
-      <section className="container-x py-8">
-        <div className="mx-auto mb-6 max-w-xl">
-          <div className="relative">
+      <section className="container-x py-6">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b">
+          <div className="flex gap-1">
+            {AREA_TABS.map((tab) => (
+              <Link
+                key={tab.area}
+                to="/qalling/docs/$slug"
+                params={{ slug: tab.first }}
+                className={
+                  "-mb-px border-b-2 px-3 py-2 text-sm " +
+                  (tab.area === area
+                    ? "border-primary font-semibold text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground")
+                }
+              >
+                {lang === "en" ? tab.en : tab.id}
+              </Link>
+            ))}
+          </div>
+          <div className="relative mb-2 w-full max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={input}
@@ -98,15 +345,15 @@ export function DocsPage({ slug }: { slug?: string }) {
               onChange={(e) => setQ(e.target.value)}
               onFocus={() => setFocus(true)}
               onBlur={() => setTimeout(() => setFocus(false), 150)}
-              placeholder="Cari panduan…  (Ctrl/⌘ + K)"
-              className="pl-9"
-              aria-label="Cari dokumentasi"
+              placeholder={t("Search docs…  (Ctrl/⌘ + K)", "Cari dokumentasi…  (Ctrl/⌘ + K)")}
+              className="h-9 pl-9"
+              aria-label={t("Search docs", "Cari dokumentasi")}
             />
             {focus && q.trim() && (
-              <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg">
+              <ul className="absolute right-0 z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg">
                 {results.length === 0 && (
                   <li className="px-3 py-2 text-sm text-muted-foreground">
-                    Tidak ada hasil untuk “{q}”.
+                    {t("No results for", "Tidak ada hasil untuk")} “{q}”.
                   </li>
                 )}
                 {results.map((r) => (
@@ -117,10 +364,12 @@ export function DocsPage({ slug }: { slug?: string }) {
                       onClick={() => setQ("")}
                       className="block px-3 py-2 hover:bg-secondary"
                     >
-                      <span className="text-sm font-medium">{r.title}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{r.group}</span>
+                      <span className="text-sm font-medium">{localize(r, lang).title}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {groupLabel(r.group, lang)}
+                      </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {r.summary}
+                        {localize(r, lang).summary}
                       </span>
                     </Link>
                   </li>
@@ -130,46 +379,50 @@ export function DocsPage({ slug }: { slug?: string }) {
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[230px_minmax(0,1fr)_180px]">
+        <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)_180px]">
           <nav
-            aria-label="Daftar dokumentasi"
-            className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"
+            aria-label={t("Documentation", "Dokumentasi")}
+            className="rounded-xl border border-primary/15 bg-primary/5 p-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"
           >
-            {DOC_GROUPS.map((g) => (
-              <div key={g} className="mb-4">
-                <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {g}
+            {AREA_GROUPS[area].map((g) => (
+              <div key={g} className="mb-4 last:mb-0">
+                <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-primary/70">
+                  {groupLabel(g, lang)}
                 </p>
                 <ul className="space-y-0.5 text-sm">
-                  {QALLING_DOCS.filter((d) => d.group === g).map((d) => (
-                    <li key={d.id}>
-                      <Link
-                        to="/qalling/docs/$slug"
-                        params={{ slug: d.id }}
-                        className={
-                          "block rounded-md px-2 py-1.5 hover:bg-secondary " +
-                          (d.id === doc?.id
-                            ? "bg-secondary font-medium text-foreground"
-                            : "text-muted-foreground")
-                        }
-                      >
-                        {d.title}
-                      </Link>
-                    </li>
-                  ))}
+                  {inArea
+                    .filter((d) => d.group === g)
+                    .map((d) => (
+                      <li key={d.id}>
+                        <Link
+                          to="/qalling/docs/$slug"
+                          params={{ slug: d.id }}
+                          className={
+                            "block rounded-md px-2 py-1.5 transition-colors " +
+                            (d.id === doc?.id
+                              ? "bg-primary/15 font-medium text-primary"
+                              : "text-foreground/70 hover:bg-primary/10 hover:text-primary")
+                          }
+                        >
+                          {localize(d, lang).title}
+                        </Link>
+                      </li>
+                    ))}
                 </ul>
               </div>
             ))}
           </nav>
 
           <article className="min-w-0">
-            {!doc ? (
+            {!doc || !x ? (
               <div>
-                <h1 className="text-2xl font-bold">Halaman tidak ditemukan</h1>
+                <h1 className="text-2xl font-bold">
+                  {t("Page not found", "Halaman tidak ditemukan")}
+                </h1>
                 <p className="mt-2 text-muted-foreground">
-                  Pilih topik dari daftar di samping atau{" "}
-                  <Link to="/qalling/docs" className="text-gold underline">
-                    mulai dari awal
+                  {t("Pick a topic from the list or ", "Pilih topik dari daftar atau ")}
+                  <Link to="/qalling/docs" className="text-primary underline">
+                    {t("start from the beginning", "mulai dari awal")}
                   </Link>
                   .
                 </p>
@@ -178,35 +431,37 @@ export function DocsPage({ slug }: { slug?: string }) {
               <>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gold">
-                      {doc.group}
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      {groupLabel(doc.group, lang)}
                     </p>
-                    <h1 className="text-3xl font-bold text-navy dark:text-foreground">
-                      {doc.title}
-                    </h1>
+                    <h1 className="text-3xl font-bold text-navy dark:text-foreground">{x.title}</h1>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() =>
                       navigator.clipboard
-                        ?.writeText(toMarkdown(doc))
-                        .then(() => toast.success("Disalin sebagai Markdown"))
+                        ?.writeText(toMarkdown(doc, lang))
+                        .then(() =>
+                          toast.success(t("Copied as Markdown", "Disalin sebagai Markdown")),
+                        )
                     }
                   >
-                    <Copy className="h-4 w-4" /> Salin Markdown
+                    <Copy className="h-4 w-4" /> {t("Copy Markdown", "Salin Markdown")}
                   </Button>
                 </div>
-                <p className="mt-3 text-muted-foreground">{doc.summary}</p>
+                <p className="mt-3 text-muted-foreground">{x.summary}</p>
 
-                {doc.table && (
+                {doc.id === "api-reference" && <ApiReference lang={lang} />}
+
+                {x.table && (
                   <>
-                    <Heading id="tabel">Perbandingan</Heading>
+                    <Heading id="tabel">{t("Comparison", "Perbandingan")}</Heading>
                     <div className="mt-3 overflow-x-auto rounded-lg border">
                       <table className="w-full text-sm">
-                        <thead className="bg-secondary/60 text-left">
+                        <thead className="bg-primary/5 text-left">
                           <tr>
-                            {doc.table.head.map((h) => (
+                            {x.table.head.map((h) => (
                               <th key={h} className="px-3 py-2 font-medium">
                                 {h}
                               </th>
@@ -214,7 +469,7 @@ export function DocsPage({ slug }: { slug?: string }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {doc.table.rows.map((r) => (
+                          {x.table.rows.map((r) => (
                             <tr key={r[0]} className="border-t">
                               {r.map((c, i) => (
                                 <td
@@ -234,22 +489,30 @@ export function DocsPage({ slug }: { slug?: string }) {
                     </div>
                   </>
                 )}
-                {doc.steps && (
+                {x.steps && (
                   <>
-                    <Heading id="langkah">Langkah</Heading>
+                    <Heading id="langkah">{t("Steps", "Langkah")}</Heading>
                     <ol className="mt-3 list-decimal space-y-2 pl-5">
-                      {doc.steps.map((x) => (
-                        <li key={x}>{x}</li>
+                      {x.steps.map((s) => (
+                        <li key={s}>{s}</li>
                       ))}
                     </ol>
                   </>
                 )}
-                {doc.tips && (
+                {x.code && (
+                  <>
+                    <Heading id="contoh">{t("Examples", "Contoh")}</Heading>
+                    {x.code.map((c) => (
+                      <CodeBlock key={c.body} title={c.title} body={c.body} lang={c.lang} />
+                    ))}
+                  </>
+                )}
+                {x.tips && (
                   <>
                     <Heading id="tips">Tips</Heading>
-                    <ul className="mt-3 space-y-2 rounded-lg border border-border bg-secondary/40 p-4 text-sm">
-                      {doc.tips.map((x) => (
-                        <li key={x}>💡 {x}</li>
+                    <ul className="mt-3 space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-4 text-sm">
+                      {x.tips.map((s) => (
+                        <li key={s}>💡 {s}</li>
                       ))}
                     </ul>
                   </>
@@ -260,12 +523,12 @@ export function DocsPage({ slug }: { slug?: string }) {
                     <Link
                       to="/qalling/docs/$slug"
                       params={{ slug: prev.id }}
-                      className="rounded-lg border p-3 hover:bg-secondary"
+                      className="rounded-lg border p-3 hover:bg-primary/5"
                     >
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <ChevronLeft className="h-3 w-3" /> Sebelumnya
+                        <ChevronLeft className="h-3 w-3" /> {t("Previous", "Sebelumnya")}
                       </span>
-                      <span className="font-medium">{prev.title}</span>
+                      <span className="font-medium">{localize(prev, lang).title}</span>
                     </Link>
                   ) : (
                     <span />
@@ -274,22 +537,22 @@ export function DocsPage({ slug }: { slug?: string }) {
                     <Link
                       to="/qalling/docs/$slug"
                       params={{ slug: next.id }}
-                      className="rounded-lg border p-3 text-right hover:bg-secondary"
+                      className="rounded-lg border p-3 text-right hover:bg-primary/5"
                     >
                       <span className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                        Berikutnya <ChevronRight className="h-3 w-3" />
+                        {t("Next", "Berikutnya")} <ChevronRight className="h-3 w-3" />
                       </span>
-                      <span className="font-medium">{next.title}</span>
+                      <span className="font-medium">{localize(next, lang).title}</span>
                     </Link>
                   )}
                 </div>
                 <p className="mt-6 text-sm text-muted-foreground">
-                  Belum menemukan jawabannya?{" "}
+                  {t("Can't find the answer? ", "Belum menemukan jawabannya? ")}
                   <Link
                     to="/qalling/kontak"
-                    className="text-gold underline-offset-4 hover:underline"
+                    className="text-primary underline-offset-4 hover:underline"
                   >
-                    Hubungi kami
+                    {t("Contact us", "Hubungi kami")}
                   </Link>
                   .
                 </p>
@@ -298,19 +561,19 @@ export function DocsPage({ slug }: { slug?: string }) {
           </article>
 
           <aside
-            aria-label="Di halaman ini"
-            className="hidden lg:block lg:sticky lg:top-24 lg:self-start"
+            aria-label={t("On this page", "Di halaman ini")}
+            className="hidden lg:sticky lg:top-24 lg:block lg:self-start"
           >
             {toc.length > 0 && (
               <>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Di halaman ini
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary/70">
+                  {t("On this page", "Di halaman ini")}
                 </p>
                 <ul className="space-y-1 text-sm">
-                  {toc.map((t) => (
-                    <li key={t.id}>
-                      <a href={`#${t.id}`} className="text-muted-foreground hover:text-foreground">
-                        {t.label}
+                  {toc.map((i) => (
+                    <li key={i.id}>
+                      <a href={`#${i.id}`} className="text-muted-foreground hover:text-primary">
+                        {i.label}
                       </a>
                     </li>
                   ))}

@@ -1,10 +1,26 @@
 /** Konten dokumentasi publik Qalling. Teks umum (tanpa angka harga/kuota) agar tidak cepat usang; angka resmi ada di halaman Harga. */
-export type DocGroup = "Mulai" | "Fitur" | "Platform" | "Pakai dengan AI" | "Lainnya";
-export const DOC_GROUPS: DocGroup[] = ["Mulai", "Fitur", "Platform", "Pakai dengan AI", "Lainnya"];
+export type DocArea = "guide" | "developer" | "api";
+export type DocGroup =
+  "Mulai" | "Fitur" | "Platform" | "Pakai dengan AI" | "Lainnya" | "Developer" | "API Reference";
+/** Kelompok sidebar per area dokumentasi. */
+export const AREA_GROUPS: Record<DocArea, DocGroup[]> = {
+  guide: ["Mulai", "Fitur", "Platform", "Pakai dengan AI", "Lainnya"],
+  developer: ["Developer"],
+  api: ["API Reference"],
+};
+export const DOC_GROUPS: DocGroup[] = Object.values(AREA_GROUPS).flat();
+export interface DocCode {
+  title?: string;
+  lang: string;
+  body: string;
+}
 
 export interface DocSection {
   id: string;
+  /** Area dokumentasi; kosong = panduan pengguna. */
+  area?: DocArea;
   group: DocGroup;
+  code?: DocCode[];
   /** Tabel opsional (mis. perbandingan platform). */
   table?: { head: string[]; rows: string[][] };
   title: string;
@@ -126,7 +142,8 @@ export const QALLING_DOCS: DocSection[] = [
     title: "Lead, kontak, dan pipeline",
     summary: "Ubah percakapan menjadi lead, catat riwayat interaksi, dan pantau tahapan penjualan.",
     steps: [
-      "Dari Inbox, ubah percakapan menjadi lead dengan satu klik; nomor telepon dan catatan dapat ditambahkan.",
+      "Buka Penjualan → Kontak: orang yang mengirim DM otomatis menjadi kontak. Tambahkan kontak manual, beri tag dan catatan, dan lihat riwayat DM, prospek, dan follow-up dalam satu garis waktu.",
+      "Dari Inbox atau halaman Kontak, ubah percakapan/kontak menjadi prospek (lead) dengan satu klik; nomor telepon dan catatan dapat ditambahkan.",
       "Buka Penjualan → Pipeline untuk memindahkan lead antar tahap.",
       "Catat aktivitas (telepon, pesan, pertemuan) dan jadwalkan Follow-up agar tidak ada prospek terlewat.",
       "Beranda menampilkan follow-up yang terlambat dan yang jatuh tempo hari ini.",
@@ -303,6 +320,137 @@ export const QALLING_DOCS: DocSection[] = [
       "Teks hingga 2000 karakter dan hingga 10 berkas (maks 20 MB per berkas).",
       "Sebutan seperti @everyone tidak pernah memberi notifikasi ke siapa pun.",
     ],
+  },
+  {
+    id: "dev-intro",
+    area: "developer",
+    group: "Developer",
+    title: "Pengantar",
+    summary:
+      "Qalling menyediakan server MCP (Model Context Protocol) agar asisten AI atau skrip Anda dapat membaca dan mengelola akun Qalling: postingan, media, inbox, komentar, otomasi, analitik, lead, dan kontak.",
+    steps: [
+      "Endpoint: POST https://qalling.id/mcp (JSON-RPC 2.0 lewat HTTP, respons JSON).",
+      "Metode yang didukung: initialize, ping, tools/list, dan tools/call.",
+      "Setiap tool tunduk pada paket workspace (fitur mcp_api) dan hak akses pengguna yang memberi izin.",
+      "Daftar lengkap tool, parameter, dan contoh ada di tab API Reference.",
+    ],
+    tips: [
+      "Untuk ChatGPT atau Claude, cukup tambahkan Qalling sebagai konektor dan setujui akses; Anda tidak perlu menulis kode.",
+      "Teks dari pelanggan (komentar, DM, catatan) dikembalikan sebagai data tidak tepercaya; jangan jadikan instruksi.",
+    ],
+  },
+  {
+    id: "dev-auth",
+    area: "developer",
+    group: "Developer",
+    title: "Autentikasi",
+    summary: "Kirim token pada header Authorization: Bearer. Ada dua cara mendapatkan token.",
+    steps: [
+      "Token pribadi: buat di aplikasi pada menu Integrasi AI & MCP, beri nama, lalu salin. Token hanya tampil sekali; cabut kapan saja dari halaman yang sama.",
+      "OAuth: klien MCP yang mendukung OAuth (mis. ChatGPT dan Claude) otomatis menemukan metadata di /.well-known dan mengarahkan pengguna ke layar persetujuan Qalling.",
+      "Permintaan tanpa token menghasilkan HTTP 401 dengan header WWW-Authenticate yang menunjuk ke metadata OAuth.",
+    ],
+    code: [
+      {
+        title: "Header",
+        lang: "http",
+        body: "POST /mcp HTTP/1.1\nHost: qalling.id\nAuthorization: Bearer <token>\nContent-Type: application/json",
+      },
+    ],
+    tips: [
+      "Perlakukan token seperti kata sandi. Jangan menyimpannya di repositori atau skrip publik.",
+    ],
+  },
+  {
+    id: "dev-quickstart",
+    area: "developer",
+    group: "Developer",
+    title: "Mulai cepat",
+    summary: "Contoh memanggil server MCP dengan curl.",
+    steps: [
+      "Panggil initialize untuk memastikan token valid.",
+      "Panggil tools/list untuk melihat tool yang tersedia bagi akun Anda.",
+      "Panggil list_workspaces untuk mendapatkan workspace_id, lalu panggil tool lain dengan id tersebut.",
+    ],
+    code: [
+      {
+        title: "Initialize",
+        lang: "bash",
+        body: 'curl -s https://qalling.id/mcp \\\n  -H "Authorization: Bearer $QALLING_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"demo","version":"1"}}}\'',
+      },
+      {
+        title: "Memanggil tool",
+        lang: "bash",
+        body: 'curl -s https://qalling.id/mcp \\\n  -H "Authorization: Bearer $QALLING_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_workspaces","arguments":{}}}\'',
+      },
+    ],
+  },
+  {
+    id: "dev-posting",
+    area: "developer",
+    group: "Developer",
+    title: "Alur posting",
+    summary: "Urutan yang disarankan untuk membuat dan menerbitkan postingan lewat tool.",
+    steps: [
+      "Ambil akun tujuan dengan qalling_list_social_accounts dan aturan platform dengan qalling_get_platform_rules.",
+      "Unggah media dengan qalling_upload_media (url atau file_base64) atau pilih dari qalling_list_media.",
+      "Buat draf dengan qalling_create_post (publish_mode=draft). Untuk menjadwalkan, gunakan publish_mode=scheduled dan scheduled_at ISO 8601 berzona waktu di masa depan.",
+      "Opsi per platform (poll Threads, kolaborator Instagram, privasi TikTok/YouTube, dan sebagainya) dikirim lewat platform_options.",
+      "Untuk menerbitkan segera: panggil qalling_publish_post_now dengan confirm=false, tampilkan isi dan akun ke pengguna, lalu confirm=true setelah disetujui.",
+      "Pantau hasil lewat qalling_list_posts atau qalling_get_post; penerbitan berjalan pada siklus penjadwal berikutnya, bukan sinkron.",
+    ],
+    code: [
+      {
+        title: "Posting terjadwal dengan poll Threads",
+        lang: "json",
+        body: '{\n  "name": "qalling_create_post",\n  "arguments": {\n    "workspace_id": "<uuid>",\n    "account_ids": ["<uuid akun Threads>"],\n    "title": "Poll Jumat",\n    "caption": "Tim kopi atau teh?",\n    "publish_mode": "scheduled",\n    "scheduled_at": "2026-11-13T19:30:00+07:00",\n    "platform_options": { "threads": { "poll": { "options": ["Kopi", "Teh"] } } }\n  }\n}',
+      },
+    ],
+    tips: [
+      "Jangan mengirim ulang postingan berstatus tidak pasti (processing/unknown); baca statusnya dulu.",
+    ],
+  },
+  {
+    id: "dev-safety",
+    area: "developer",
+    group: "Developer",
+    title: "Aksi yang menjangkau pelanggan",
+    summary:
+      "Tool yang mengirim sesuatu ke pelanggan atau publik memakai pola konfirmasi dua langkah agar tidak ada pesan terkirim tanpa persetujuan.",
+    steps: [
+      "Panggil tool dengan confirm=false. Hasilnya berupa pratinjau persis isi dan penerima.",
+      "Tampilkan pratinjau kepada pengguna dan minta persetujuan eksplisit.",
+      "Panggil ulang dengan confirm=true. Server memakai perbandingan-dan-set agar tidak terkirim ganda.",
+    ],
+    tips: [
+      "Berlaku untuk qalling_publish_post_now, qalling_send_dm, qalling_reply_to_comment, dan qalling_retry_post.",
+      "Otomasi baru dibuat dalam keadaan nonaktif; aktifkan hanya setelah persetujuan.",
+      "Tool CRM (lead, aktivitas, kontak) tidak pernah menghubungi pelanggan.",
+    ],
+  },
+  {
+    id: "dev-errors",
+    area: "developer",
+    group: "Developer",
+    title: "Error dan batasan",
+    summary: "Cara membaca kegagalan dan batasan yang perlu diketahui.",
+    steps: [
+      "Kegagalan tool dikembalikan dengan isError=true dan pesan di content; kegagalan protokol memakai kode error JSON-RPC.",
+      "401: token hilang, salah, atau dicabut. 403/akses ditolak: peran Anda tidak boleh mengubah workspace atau fitur tidak ada di paket.",
+      "Kuota paket (jumlah akun, posting bulanan, penyimpanan media) ditegakkan juga pada tool.",
+      "Media dari media_urls hanya dari CDN yang diizinkan; untuk host lain unggah dulu lalu pakai media_ids.",
+    ],
+    tips: [
+      "Penerbitan terjadwal membutuhkan penjadwal yang berjalan; status akhir dibaca dari qalling_get_post.",
+    ],
+  },
+  {
+    id: "api-reference",
+    area: "api",
+    group: "API Reference",
+    title: "Daftar tool MCP",
+    summary:
+      "Seluruh tool yang tersedia beserta parameternya. Daftar ini dibuat langsung dari definisi server sehingga selalu sesuai versi terbaru.",
   },
   {
     id: "ai",

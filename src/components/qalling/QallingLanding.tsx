@@ -128,22 +128,22 @@ export function BenefitCards() {
 
 const TESTIMONIALS = [
   {
-    id: "Jadwal posting seminggu selesai dalam satu jam. Leads dari DM langsung masuk pipeline.",
+    id: "Jadwal posting seminggu beres dalam satu jam. Prospek dari DM langsung masuk ke pipeline.",
     en: "A week of posts scheduled in one hour. Leads from DMs go straight into the pipeline.",
     name: "Rina",
-    role: { id: "Pemilik UMKM Fashion", en: "Fashion SME owner" },
+    role: { id: "Pemilik UMKM fashion", en: "Fashion small-business owner" },
   },
   {
-    id: "Kelola banyak klien dalam satu dashboard, laporan bulanan tinggal unduh.",
-    en: "Manage many clients in one dashboard; monthly reports are one download away.",
+    id: "Banyak klien bisa dikelola dalam satu dasbor, dan laporan bulanan tinggal diunduh.",
+    en: "Many clients in one dashboard, and monthly reports are one download away.",
     name: "Dimas",
-    role: { id: "Social Media Agency", en: "Social Media Agency" },
+    role: { id: "Agensi media sosial", en: "Social media agency" },
   },
   {
-    id: "Rekomendasi jam emas bikin engagement saya naik. Posting cukup lewat chat AI.",
-    en: "Golden-hour suggestions boosted my engagement. I just post via AI chat.",
+    id: "Rekomendasi jam emas membuat engagement saya naik. Cukup posting lewat chat AI.",
+    en: "Golden-hour suggestions raised my engagement. I just post through AI chat.",
     name: "Sari",
-    role: { id: "Content Creator", en: "Content Creator" },
+    role: { id: "Kreator konten", en: "Content creator" },
   },
 ];
 
