@@ -99,9 +99,6 @@ function SpecPage({ workspaceId, d, id }: { workspaceId: string; d: Data; id: st
       </div>
       <div className="space-y-3">
         <h2 className="font-medium">Parameter uji</h2>
-        {editable && <ItemSearchAdd options={options} placeholder="Cari parameter (pH, viskositas, ALT…) lalu Enter — atau ketik bebas lalu Enter"
-          onAdd={(o) => { const c = COMMON.find((x) => x.id === o.id); if (c) setParams((ps) => [...ps, { param: c.code, ...c.p }]); }}
-          onFreeText={(t) => setParams((ps) => [...ps, { param: t, method: '', unit: '', min_value: null, max_value: null, is_critical: false }])} />}
         <div className="overflow-x-auto rounded-2xl border border-border bg-card"><Table>
           <TableHeader><TableRow>{['Parameter', 'Metode', 'Satuan', 'Min', 'Maks', 'Kritis', ''].map((h, i) => <TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader>
           <TableBody>
@@ -114,7 +111,11 @@ function SpecPage({ workspaceId, d, id }: { workspaceId: string; d: Data; id: st
               <TableCell><input type="checkbox" aria-label="Kritis" checked={p.is_critical} onChange={(e) => patch(i, { is_critical: e.target.checked })} /></TableCell>
               <TableCell><Button type="button" variant="ghost" size="icon" aria-label="Hapus parameter" onClick={() => setParams((ps) => ps.filter((_, j) => j !== i))}><Trash2 className="size-4" /></Button></TableCell>
             </TableRow>)}
-            {!params.length && <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Belum ada parameter — cari di kolom di atas lalu tekan Enter.</TableCell></TableRow>}
+            {editable && <TableRow><TableCell colSpan={7}>
+              <ItemSearchAdd className="md:w-full md:max-w-md md:min-w-0" options={options} placeholder="Tambah parameter: pH, viskositas, ALT… lalu Enter (atau ketik bebas)"
+                onAdd={(o) => { const c = COMMON.find((x) => x.id === o.id); if (c) setParams((ps) => [...ps, { param: c.code, ...c.p }]); }}
+                onFreeText={(t) => setParams((ps) => [...ps, { param: t, method: '', unit: '', min_value: null, max_value: null, is_critical: false }])} />
+            </TableCell></TableRow>}
           </TableBody></Table></div>
         <p className="text-xs text-muted-foreground">Hasil uji berupa angka. Untuk uji kualitatif (warna/bau/penampilan) pakai 1 = sesuai, 0 = tidak sesuai dengan min 1.</p>
         {editable && problem && <p className="text-sm text-destructive">{problem}</p>}

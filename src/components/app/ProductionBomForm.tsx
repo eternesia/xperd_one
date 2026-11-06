@@ -183,7 +183,7 @@ export function ProductionBomForm({ workspaceId, docId }: { workspaceId: string;
         <div className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:grid-cols-3">
           <AdminField label="Kode BOM"><Input value={h.code} disabled={!!version} onChange={(e) => setHead({ code: e.target.value })} /></AdminField>
           <AdminField label="Produk (barang jadi / bulk)">
-            <ItemSearchAdd options={d.items.map((i) => ({ id: i.id, code: i.code, name: i.name }))} placeholder={h.item_id ? `${itemOf.get(h.item_id)?.code} · ${itemOf.get(h.item_id)?.name}` : "Cari produk lalu Enter"}
+            <ItemSearchAdd className="md:w-full md:min-w-0" options={d.items.map((i) => ({ id: i.id, code: i.code, name: i.name }))} placeholder={h.item_id ? `${itemOf.get(h.item_id)?.code} · ${itemOf.get(h.item_id)?.name}` : "Cari produk lalu Enter"}
               disabled={!!version} onAdd={(o) => setHead({ item_id: o.id })} />
           </AdminField>
           <AdminField label="Level BOM">
@@ -218,23 +218,10 @@ export function ProductionBomForm({ workspaceId, docId }: { workspaceId: string;
               }} />
             </label>
           </div>
-          {editable && (
-            <div className="grid gap-2 sm:grid-cols-[8rem_1fr]">
-              <Input aria-label="Phase untuk bahan berikutnya" maxLength={20} placeholder="Phase" value={phase} onChange={(e) => setPhase(e.target.value.toUpperCase())} />
-              <ItemSearchAdd options={d.items.map((i) => ({ id: i.id, code: i.code, name: i.name }))}
-                placeholder="Cari bahan (kode / nama) lalu Enter — bahan masuk ke tabel di bawah dengan phase di samping"
-                onAdd={(o) => {
-                  if (lines.some((l) => l.item_id === o.id && l.phase === phase)) { toast.error(`${o.code} sudah ada di phase ${phase || "-"}.`); return; }
-                  setLines((ls) => [...ls, blankLine(h.base_uom, phase, o.id)]);
-                  setDirty(true);
-                }} />
-            </div>
-          )}
           <div className="overflow-x-auto rounded-xl border border-border">
             <Table>
               <TableHeader><TableRow>{["#", "Phase", "Bahan", "Qty", "Satuan", "Basis", "Jenis", "Toleransi %", "Catatan", ""].map((x, i) => <TableHead key={i}>{x}</TableHead>)}</TableRow></TableHeader>
               <TableBody>
-                {lines.length === 0 && <TableRow><TableCell colSpan={10} className="py-8 text-center text-muted-foreground">Belum ada bahan. Gunakan kolom cari di atas.</TableCell></TableRow>}
                 {lines.map((l, i) => (
                   <TableRow key={`${l.item_id}-${l.phase}-${i}`}>
                     <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
@@ -249,6 +236,21 @@ export function ProductionBomForm({ workspaceId, docId }: { workspaceId: string;
                     <TableCell><Button type="button" variant="ghost" size="icon" aria-label="Hapus bahan" onClick={() => { setLines((ls) => ls.filter((_, j) => j !== i)); setDirty(true); }}><Trash2 className="size-4" /></Button></TableCell>
                   </TableRow>
                 ))}
+                {editable && (
+                  <TableRow>
+                    <TableCell className="text-xs text-muted-foreground">+</TableCell>
+                    <TableCell><Input aria-label="Phase untuk bahan berikutnya" className="w-16" maxLength={20} placeholder="A" value={phase} onChange={(e) => setPhase(e.target.value.toUpperCase())} /></TableCell>
+                    <TableCell colSpan={8}>
+                      <ItemSearchAdd className="md:w-full md:max-w-md md:min-w-0" options={d.items.map((i) => ({ id: i.id, code: i.code, name: i.name }))}
+                        placeholder="Tambah bahan: ketik kode / nama lalu Enter"
+                        onAdd={(o) => {
+                          if (lines.some((l) => l.item_id === o.id && l.phase === phase)) { toast.error(`${o.code} sudah ada di phase ${phase || "-"}.`); return; }
+                          setLines((ls) => [...ls, blankLine(h.base_uom, phase, o.id)]);
+                          setDirty(true);
+                        }} />
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>

@@ -232,16 +232,9 @@ export function ProductionOrderForm({ workspaceId, docId }: { workspaceId: strin
           </TabsContent>
 
           <TabsContent value="alat" className="space-y-3 rounded-2xl border border-border bg-card p-4">
-            {editable && (
-              <ItemSearchAdd options={d.centers.map((c) => ({ id: c.id, code: c.code, name: c.name }))} exclude={new Set(f.equipment.map((e) => e.center_id ?? ""))}
-                placeholder="Cari peralatan / work center lalu Enter (atau ketik nama bebas lalu Enter)"
-                onAdd={(o) => set({ equipment: [...f.equipment, { center_id: o.id, name: `${o.code} · ${o.name ?? ""}`, note: "" }] })}
-                onFreeText={(text) => set({ equipment: [...f.equipment, { center_id: null, name: text, note: "" }] })} />
-            )}
             <Table>
               <TableHeader><TableRow><TableHead>Peralatan</TableHead><TableHead>Catatan penggunaan</TableHead><TableHead /></TableRow></TableHeader>
               <TableBody>
-                {f.equipment.length === 0 && <TableRow><TableCell colSpan={3} className="py-6 text-center text-muted-foreground">Belum ada peralatan.</TableCell></TableRow>}
                 {f.equipment.map((e, i) => (
                   <TableRow key={i}>
                     <TableCell>{e.name}</TableCell>
@@ -249,6 +242,16 @@ export function ProductionOrderForm({ workspaceId, docId }: { workspaceId: strin
                     <TableCell><Button type="button" variant="ghost" size="icon" aria-label="Hapus" onClick={() => set({ equipment: f.equipment.filter((_, j) => j !== i) })}><Trash2 className="size-4" /></Button></TableCell>
                   </TableRow>
                 ))}
+                {editable && (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <ItemSearchAdd className="md:w-full md:max-w-md md:min-w-0" options={d.centers.map((c) => ({ id: c.id, code: c.code, name: c.name }))} exclude={new Set(f.equipment.map((e) => e.center_id ?? ""))}
+                        placeholder="Tambah peralatan / work center lalu Enter (atau ketik nama bebas)"
+                        onAdd={(o) => set({ equipment: [...f.equipment, { center_id: o.id, name: `${o.code} · ${o.name ?? ""}`, note: "" }] })}
+                        onFreeText={(text) => set({ equipment: [...f.equipment, { center_id: null, name: text, note: "" }] })} />
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TabsContent>
