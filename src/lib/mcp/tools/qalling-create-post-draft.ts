@@ -23,6 +23,13 @@ export default defineTool({
       .max(5000)
       .default("")
       .describe("Post caption; may be empty when media is attached."),
+    first_comment: z
+      .string()
+      .max(2200)
+      .optional()
+      .describe(
+        "Optional first comment posted by the account right after publishing (e.g. hashtags or a link). Supported platforms only; limits differ per platform (TikTok 150 characters).",
+      ),
     scheduled_at: z
       .string()
       .datetime({ offset: true })
@@ -120,13 +127,14 @@ export default defineTool({
       const id = uuid();
       try {
         await execute(
-          `INSERT INTO crm_scheduled_posts (id, workspace_id, title, caption, account_ids, media_paths, scheduled_at, status, source)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'mcp')`,
+          `INSERT INTO crm_scheduled_posts (id, workspace_id, title, caption, first_comment, account_ids, media_paths, scheduled_at, status, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'mcp')`,
           [
             id,
             workspace_id,
             title,
             caption,
+            input.first_comment?.trim() || null,
             JSON.stringify(unique),
             JSON.stringify(media.map((m) => m.file_path)),
             when,

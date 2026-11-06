@@ -8,6 +8,7 @@ export const postInputSchema = z
     account_ids: z.array(z.string().uuid()).min(1).max(10),
     title: z.string().trim().min(1).max(150),
     caption: z.string().max(5000).default(""),
+    first_comment: z.string().trim().max(2200).optional(),
     scheduled_at: z.string().datetime({ offset: true }).optional(),
     publish_mode: z.enum(["draft", "scheduled"]).default("draft"),
     media_ids: z.array(z.string().uuid()).max(10).default([]),
@@ -55,7 +56,7 @@ export function validatePostTargets(accounts: Account[], types: string[], sendin
 }
 
 // Hanya CDN media yang dikenal (bukan host sembarang, IP literal, atau redirect) — mencegah SSRF/DNS-rebinding.
-const MEDIA_HOSTS = [
+export const MEDIA_HOSTS = [
   "oaidalleapiprodscus.blob.core.windows.net",
   "oaiusercontent.com",
   "storage.googleapis.com",
