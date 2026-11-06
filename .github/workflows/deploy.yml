@@ -40,6 +40,24 @@ jobs:
 
             docker compose -f docker-compose.yml pull
             docker compose -f docker-compose.yml up -d --force-recreate --remove-orphans
+
+            # Terapkan migrasi skema otomatis (idempoten; tiap file hanya sekali, tercatat di db_apply_log).
+            # Coba ulang sampai MySQL & container web siap; gagal migrasi = deploy ditandai gagal.
+            migrated=0
+            for i in $(seq 1 12); do
+              if docker compose -f docker-compose.yml exec -T web node scripts/migrate.mjs; then
+                migrated=1
+                break
+              fi
+              echo "migrate belum berhasil (percobaan $i/12), tunggu 10 detik..."
+              sleep 10
+            done
+            if [ "$migrated" -ne 1 ]; then
+              echo "::error::Migrasi database gagal setelah deploy"
+              docker compose -f docker-compose.yml ps
+              exit 1
+            fi
+
             docker compose -f docker-compose.yml ps
 
             docker logout ghcr.io || true
