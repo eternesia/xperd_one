@@ -49,6 +49,34 @@ import {
   Wrench,
   PackageCheck,
   Settings2,
+  Package,
+  Tags,
+  Ruler,
+  Warehouse,
+  Percent,
+  Coins,
+  ArrowLeftRight,
+  ListTree,
+  Undo2,
+  PackagePlus,
+  PackageMinus,
+  Scale,
+  ScanLine,
+  CreditCard,
+  Wallet,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  GitCompare,
+  BookText,
+  BookOpen,
+  TrendingUp,
+  Clock,
+  Lock,
+  FileSpreadsheet,
+  Network,
+  Layers,
+  UserCog,
+  CircleDot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -421,8 +449,44 @@ const MODULE_DEFS: AppModule[] = [
   },
 ];
 
+
+// Ikon sidebar default per submenu (kunci "modul/submenu", lalu "submenu"). Submenu yang sudah punya ikon sendiri tidak diubah.
+const SUB_ICONS: Record<string, LucideIcon> = {
+  items: Package, categories: Tags, uom: Ruler, customers: Users, suppliers: Truck, warehouses: Warehouse,
+  taxes: Percent, currencies: Coins, "exchange-rates": ArrowLeftRight, coa: ListTree,
+  "purchase-requests": ClipboardList, "purchase-orders": ShoppingCart, "goods-receipts": PackageCheck,
+  "ap-invoices": ReceiptText, payments: CreditCard, "purchase-returns": Undo2,
+  "stock-overview": Boxes, "stock-in": PackagePlus, "stock-out": PackageMinus, transfers: ArrowLeftRight,
+  "stock-opname": ClipboardCheck, valuation: Scale,
+  quotations: FileText, "sales-orders": ShoppingCart, "delivery-orders": Truck, "shipment-scan": ScanLine,
+  "ar-invoices": ReceiptText, receipts: Wallet, pos: Store, "sales-returns": Undo2,
+  accounts: Landmark, "cash-in": ArrowDownToLine, "cash-out": ArrowUpFromLine, reconciliation: GitCompare,
+  "cash-bank/reports": FileBarChart, reports: FileBarChart,
+  "opening-balance": BookOpen, journals: BookText, ledger: BookOpen, "trial-balance": Scale,
+  "balance-sheet": Landmark, "profit-loss": TrendingUp, "cash-flow": Banknote, "equity-changes": Layers,
+  "ar-card": Contact, "ap-card": Contact, "ar-aging": Clock, "ap-aging": Clock,
+  "ar-credit-memo": FileText, "ap-credit-memo": FileText, "period-closing": Lock, "fx-revaluation": Coins,
+  assets: Building, depreciation: TrendingUp, disposal: Undo2,
+  "vat-in": Receipt, "vat-out": Receipt, withholding: Percent, efaktur: FileSpreadsheet,
+  executive: LineChart, sales: HandCoins, purchasing: ShoppingCart, inventory: Boxes, financial: Landmark, exports: FileSpreadsheet,
+  employees: Users, departments: Network, positions: Briefcase, ptkp: UserCog, components: Layers,
+  payroll: Wallet, "tax-bpjs": Percent,
+  stores: Store, orders: ClipboardList, shipping: Truck, wallet: Wallet, settings: Settings2,
+  kanban: KanbanSquare, workload: UsersRound, projects: FolderOpen, milestones: Target, budget: Banknote, billing: ReceiptText,
+  profiles: PackageCheck, boms: FlaskConical, lots: PackageSearch, quality: ShieldCheck, accounting: Calculator,
+  "work-centers": Wrench,
+};
+
+const withIcons = (mod: AppModule): AppModule => ({
+  ...mod,
+  submodules: mod.submodules.map((sub) => ({
+    ...sub,
+    icon: sub.icon ?? SUB_ICONS[`${mod.id}/${sub.id}`] ?? SUB_ICONS[sub.id] ?? CircleDot,
+  })),
+});
+
 // Disabled (coming soon) modules always render last in the launcher.
-export const APP_MODULES: AppModule[] = [...MODULE_DEFS].sort(
+export const APP_MODULES: AppModule[] = MODULE_DEFS.map(withIcons).sort(
   (a, b) => Number(Boolean(a.disabled)) - Number(Boolean(b.disabled)),
 );
 
