@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AdminField, AdminSelect } from './admin-ui';
 import { PaginationBar, usePagination, searchRows } from './ui-states';
 import { TableSearch } from './ProductionPagedTable';
-import { searchTraceLots, traceProductionLot, getProductionReport, getWasteLogs, saveWasteLog, getProductionLetterhead, type WasteValues } from '@/lib/production-trace.functions';
+import { searchTraceLots, traceProductionLot, getProductionReport, getMaterialUsageReport, getWasteLogs, saveWasteLog, getProductionLetterhead, type WasteValues } from '@/lib/production-trace.functions';
 import { toCsv } from '@/lib/production-report';
 import { saveProductionPdf } from '@/lib/production-pdf';
 
@@ -30,7 +30,7 @@ function download(name: string, rows: Record<string, unknown>[]) {
 }
 
 export function ProductionTraceView({ workspaceId, section }: { workspaceId: string; section: string }) {
-  if (section === 'reports') return <Reports workspaceId={workspaceId} />;
+  if (section === 'reports' || section === 'traceability') return <Reports workspaceId={workspaceId} initial={section === 'traceability' ? 'trace' : 'summary'} />;
   if (section === 'waste') return <Waste workspaceId={workspaceId} />;
   return <Trace workspaceId={workspaceId} />;
 }
@@ -63,18 +63,44 @@ function TraceTable({ title, rows }: { title: string; rows: { lot_id: string; pa
   return <section className="space-y-3"><h2 className="text-lg font-medium">{title}</h2><TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-14 text-center">#</TableHead>{['Level', 'Lot', 'Item', 'QC', 'Kuantitas', 'Perintah produksi'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{p.items.map((r, i) => <TableRow key={`${r.lot_id}-${r.parent_id}-${i}`}><TableCell className="text-center text-xs text-muted-foreground">{p.start + i + 1}</TableCell><TableCell>{r.depth}</TableCell><TableCell>{r.lot_no}</TableCell><TableCell>{r.item_code} · {r.item_name}</TableCell><TableCell>{r.qc_status}</TableCell><TableCell>{num(Number(r.qty))} {r.uom}</TableCell><TableCell>{r.order_no ?? '—'}</TableCell></TableRow>)}{!rows.length && <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Tidak ada hubungan lot.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={p as never} /></div></section>;
 }
 
-function Reports({ workspaceId }: { workspaceId: string }) {
+type ReportTab = 'summary' | 'yield' | 'materials' | 'trace';
+function Reports({ workspaceId, initial = 'summary' }: { workspaceId: string; initial?: ReportTab }) {
   const today = new Date().toISOString().slice(0, 10);
+  const [tab, setTab] = useState<ReportTab>(initial);
   const [from, setFrom] = useState(new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10)), [to, setTo] = useState(today);
-  const get = useServerFn(getProductionReport);
+  const get = useServerFn(getProductionReport), getMat = useServerFn(getMaterialUsageReport);
   const q = useQuery({ queryKey: ['mfg-report', workspaceId, from, to], queryFn: () => get({ data: { workspaceId, from, to } }) });
-  const rows = q.data ?? []; const [s, setS] = useState(''); const p = usePagination(searchRows(rows, s), 25);
+  const mq = useQuery({ queryKey: ['mfg-report-mat', workspaceId, from, to], queryFn: () => getMat({ data: { workspaceId, from, to } }), enabled: tab === 'materials' });
+  const rows = q.data ?? []; const mats = mq.data ?? [];
+  const [s, setS] = useState(''); const p = usePagination(searchRows(rows, s), 25);
+  const yRows = rows.filter((r) => r.yield_pct != null); const yp = usePagination(searchRows(yRows, s), 25);
+  const mp = usePagination(searchRows(mats, s), 25);
   const tot = rows.reduce((a, r) => ({ planned: a.planned + r.planned_qty, output: a.output + r.output_qty, cost: a.cost + r.total_cost, variance: a.variance + r.variance }), { planned: 0, output: 0, cost: 0, variance: 0 });
-  return <div className="space-y-6"><div className="flex flex-wrap items-end justify-between gap-3"><h1 className="text-2xl font-semibold">Laporan Produksi</h1><div className="flex flex-wrap items-end gap-3 print:hidden"><AdminField label="Dari"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></AdminField><AdminField label="Sampai"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></AdminField><Button variant="outline" disabled={!rows.length} onClick={() => download(`laporan-produksi-${from}-${to}.csv`, rows.map(({ id: _id, ...r }) => r))}><Download className="size-4" />CSV</Button><Button variant="outline" disabled={!rows.length} onClick={() => void reportPdf(workspaceId, 'reports', `produksi-${from}-${to}`, "Laporan Produksi", [{title:`${from} — ${to}`,rows}])}><Download className="size-4" />PDF</Button><Button variant="outline" onClick={async () => { const { utils, writeFile } = await import("xlsx"); const book = utils.book_new(); utils.book_append_sheet(book, utils.json_to_sheet(rows), "Produksi"); writeFile(book, `produksi-${from}-${to}.xlsx`); }} disabled={!rows.length}><Download className="size-4" />Excel</Button></div></div>
-    {q.isPending ? <Loader2 className="m-8 animate-spin text-muted-foreground" /> : q.isError ? <p className="text-muted-foreground">{q.error.message}</p> : <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[['Jumlah order', String(rows.length)], ['Rencana vs hasil', `${num(tot.planned)} / ${num(tot.output)}`], ['Total biaya', rp(tot.cost)], ['Total selisih', rp(tot.variance)]].map(([k, v]) => <div key={k} className="rounded-2xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{k}</p><p className="mt-1 text-xl font-semibold">{v}</p></div>)}</div>
-      <TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-14 text-center">#</TableHead>{['Order', 'Tanggal', 'Item', 'Lot', 'Status', 'Rencana', 'Hasil', 'Yield', 'Biaya', 'Per unit', 'Selisih'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{p.items.map((r, i) => <TableRow key={r.id}><TableCell className="text-center text-xs text-muted-foreground">{p.start + i + 1}</TableCell><TableCell>{r.order_no}</TableCell><TableCell>{r.planned_start ?? '—'}</TableCell><TableCell>{r.item}</TableCell><TableCell>{r.batch_lot_no ?? '—'}</TableCell><TableCell>{r.status}</TableCell><TableCell>{num(r.planned_qty)} {r.uom}</TableCell><TableCell>{num(r.output_qty)}</TableCell><TableCell>{r.yield_pct != null ? `${num(r.yield_pct)}%` : '—'}</TableCell><TableCell>{rp(r.total_cost)}</TableCell><TableCell>{rp(r.unit_cost)}</TableCell><TableCell className={r.variance > 0 ? 'text-destructive' : ''}>{rp(r.variance)}</TableCell></TableRow>)}{!rows.length && <TableRow><TableCell colSpan={12} className="py-12 text-center text-muted-foreground">Belum ada perintah produksi di periode ini.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={p as never} /></div>
-    </>}</div>;
+  const current = tab === 'materials' ? mats : tab === 'yield' ? yRows : rows;
+  const tabName = tab === 'materials' ? 'pemakaian-bahan' : tab === 'yield' ? 'yield-deviasi' : 'produksi';
+  const exportRows = () => current.map((r) => { const { id: _id, ...rest } = r as Record<string, unknown>; return rest; });
+  const tabs: [ReportTab, string][] = [['summary', 'Ringkasan produksi'], ['yield', 'Yield & deviasi'], ['materials', 'Pemakaian bahan'], ['trace', 'Trace lot']];
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-end justify-between gap-3"><h1 className="text-2xl font-semibold">Laporan Produksi</h1>
+      {tab !== 'trace' && <div className="flex flex-wrap items-end gap-3 print:hidden"><AdminField label="Dari"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></AdminField><AdminField label="Sampai"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></AdminField>
+        <Button variant="outline" disabled={!current.length} onClick={() => download(`${tabName}-${from}-${to}.csv`, exportRows())}><Download className="size-4" />CSV</Button>
+        <Button variant="outline" disabled={!current.length} onClick={() => void reportPdf(workspaceId, 'reports', `${tabName}-${from}-${to}`, 'Laporan Produksi', [{ title: `${from} — ${to}`, rows: exportRows() }])}><Download className="size-4" />PDF</Button>
+        <Button variant="outline" disabled={!current.length} onClick={async () => { const { utils, writeFile } = await import('xlsx'); const book = utils.book_new(); utils.book_append_sheet(book, utils.json_to_sheet(exportRows()), 'Laporan'); writeFile(book, `${tabName}-${from}-${to}.xlsx`); }}><Download className="size-4" />Excel</Button></div>}
+    </div>
+    <div className="flex flex-wrap gap-2 print:hidden">{tabs.map(([k, l]) => <Button key={k} variant={tab === k ? 'default' : 'outline'} onClick={() => { setTab(k); setS(''); }}>{l}</Button>)}</div>
+    {tab === 'trace' ? <Trace workspaceId={workspaceId} /> : q.isPending ? <Loader2 className="m-8 animate-spin text-muted-foreground" /> : q.isError ? <p className="text-muted-foreground">{q.error.message}</p> : <>
+      {tab === 'summary' && <>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[['Jumlah order', String(rows.length)], ['Rencana vs hasil', `${num(tot.planned)} / ${num(tot.output)}`], ['Total biaya', rp(tot.cost)], ['Total selisih', rp(tot.variance)]].map(([k, v]) => <div key={k} className="rounded-2xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{k}</p><p className="mt-1 text-xl font-semibold">{v}</p></div>)}</div>
+        <TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Order', 'Tanggal', 'Item', 'Lot', 'Status', 'Rencana', 'Hasil', 'Biaya', 'Per unit'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{p.items.map((r) => <TableRow key={r.id}><TableCell>{r.order_no}</TableCell><TableCell>{r.planned_start ?? '—'}</TableCell><TableCell>{r.item}</TableCell><TableCell>{r.batch_lot_no ?? '—'}</TableCell><TableCell>{r.status}</TableCell><TableCell>{num(r.planned_qty)} {r.uom}</TableCell><TableCell>{num(r.output_qty)}</TableCell><TableCell>{rp(r.total_cost)}</TableCell><TableCell>{rp(r.unit_cost)}</TableCell></TableRow>)}{!rows.length && <TableRow><TableCell colSpan={9} className="py-12 text-center text-muted-foreground">Belum ada perintah produksi di periode ini.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={p as never} /></div>
+      </>}
+      {tab === 'yield' && <>
+        <TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Order', 'Item', 'Rencana', 'Hasil', 'Yield', 'Deviasi', 'Selisih biaya'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{yp.items.map((r) => <TableRow key={r.id}><TableCell>{r.order_no}</TableCell><TableCell>{r.item}</TableCell><TableCell>{num(r.planned_qty)} {r.uom}</TableCell><TableCell>{num(r.output_qty)}</TableCell><TableCell className={Math.abs((r.yield_pct ?? 100) - 100) > 2 ? 'text-destructive' : ''}>{num(r.yield_pct ?? 0)}%</TableCell><TableCell>{r.deviations || '—'}</TableCell><TableCell className={r.variance > 0 ? 'text-destructive' : ''}>{rp(r.variance)}</TableCell></TableRow>)}{!yRows.length && <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">Belum ada order dengan hasil produksi di periode ini.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={yp as never} /></div>
+      </>}
+      {tab === 'materials' && (mq.isPending ? <Loader2 className="m-8 animate-spin text-muted-foreground" /> : mq.isError ? <p className="text-muted-foreground">{mq.error.message}</p> : <>
+        <TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Kode', 'Bahan', 'Jumlah order', 'Kebutuhan', 'Sudah dikeluarkan', 'Sisa'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{mp.items.map((m) => <TableRow key={`${m.code}-${m.uom}`}><TableCell>{m.code}</TableCell><TableCell>{m.name}</TableCell><TableCell>{m.orders}</TableCell><TableCell>{num(m.planned_qty)} {m.uom}</TableCell><TableCell>{num(m.issued_qty)} {m.uom}</TableCell><TableCell>{num(m.planned_qty - m.issued_qty)} {m.uom}</TableCell></TableRow>)}{!mats.length && <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">Belum ada pemakaian bahan di periode ini.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={mp as never} /></div>
+      </>)}
+    </>}
+  </div>;
 }
 
 const freshWaste = (): WasteValues => ({ log_date: new Date().toISOString().slice(0, 10), waste_code: '', description: '', qty: 1, uom: 'KG', storage_location: null, handler_name: null, manifest_no: null, status: 'stored' });

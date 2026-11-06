@@ -195,11 +195,12 @@ export const getProductionReport = createServerFn({ method: "POST" })
     const rows = await execute<any>(
       `SELECT o.id, o.order_no, o.status, o.planned_qty, o.uom, o.yield_pct, o.planned_start, o.batch_lot_no,
               i.code AS item_code, i.name AS item_name,
-              c.output_qty, c.total_cost, c.unit_cost, c.variance
+              c.output_qty, c.total_cost, c.unit_cost, c.variance,
+              (SELECT COUNT(*) FROM mfg_deviations d WHERE d.workspace_id = o.workspace_id AND d.order_id = o.id) AS deviations
          FROM mfg_orders o JOIN md_items i ON i.id = o.item_id
          LEFT JOIN mfg_order_costs c ON c.order_id = o.id AND c.workspace_id = o.workspace_id
-        WHERE o.workspace_id = ? AND o.planned_start >= ? AND o.planned_start <= ?
-        ORDER BY o.planned_start DESC, o.order_no DESC LIMIT 2000`,
+        WHERE o.workspace_id = ? AND COALESCE(o.planned_start, DATE(o.created_at)) >= ? AND COALESCE(o.planned_start, DATE(o.created_at)) <= ?
+        ORDER BY COALESCE(o.planned_start, DATE(o.created_at)) DESC, o.order_no DESC LIMIT 2000`,
       [data.workspaceId, data.from, data.to],
     );
     return rows.map((x) => ({
@@ -216,6 +217,36 @@ export const getProductionReport = createServerFn({ method: "POST" })
       total_cost: Number(x.total_cost ?? 0),
       unit_cost: Number(x.unit_cost ?? 0),
       variance: Number(x.variance ?? 0),
+      deviations: Number(x.deviations ?? 0),
+    }));
+  });
+
+/** Pemakaian bahan per item pada order dalam rentang tanggal: rencana (terkoreksi) vs yang sudah dikeluarkan. */
+export const getMaterialUsageReport = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws.extend({ from: ymd, to: ymd }))
+  .handler(async ({ data, context }) => {
+    await gate(data.workspaceId, context.userId, "reports");
+    if (data.from > data.to) throw new Error("Rentang tanggal tidak valid.");
+    const { execute } = await import("@/integrations/mysql/pool");
+    const rows = await execute<any>(
+      `SELECT i.code, i.name, m.uom, COUNT(DISTINCT m.order_id) AS orders,
+              SUM(m.corrected_qty) AS planned_qty, SUM(m.issued_qty) AS issued_qty
+         FROM mfg_order_materials m
+         JOIN mfg_orders o ON o.id = m.order_id AND o.workspace_id = m.workspace_id
+         JOIN md_items i ON i.id = m.item_id
+        WHERE m.workspace_id = ? AND o.status <> 'cancelled'
+          AND COALESCE(o.planned_start, DATE(o.created_at)) >= ? AND COALESCE(o.planned_start, DATE(o.created_at)) <= ?
+        GROUP BY i.code, i.name, m.uom ORDER BY i.code LIMIT 2000`,
+      [data.workspaceId, data.from, data.to],
+    );
+    return rows.map((x) => ({
+      code: String(x.code),
+      name: String(x.name ?? ""),
+      uom: String(x.uom),
+      orders: Number(x.orders),
+      planned_qty: Number(x.planned_qty ?? 0),
+      issued_qty: Number(x.issued_qty ?? 0),
     }));
   });
 

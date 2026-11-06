@@ -1,34 +1,91 @@
-import {useState} from 'react';
-import {useQuery,useQueryClient} from '@tanstack/react-query';
-import {useServerFn} from '@tanstack/react-start';
-import {Plus,Save,Copy,GitCompare,Send,ShieldCheck,Trash2,Upload,Loader2,Eye} from 'lucide-react';
-import {ProductionPagedTable,RowNo} from './ProductionPagedTable';
-import {toast} from 'sonner';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
-import {Table,TableHeader,TableBody,TableRow,TableCell,TableHead} from '@/components/ui/table';
-import {AdminField,AdminSelect} from './admin-ui';
-import {bomValuesSchema,parseBomCsv,compareBomLines,type BomLine} from '@/lib/production-bom';
-import {getProductionBoms,getBomLines,saveProductionBom,transitionProductionBom,sendBomApprovalCode,verifyBomApprovalCode} from '@/lib/production-bom.functions';
-import type {z} from 'zod';
-type Values=z.infer<typeof bomValuesSchema>;type Data=Awaited<ReturnType<typeof getProductionBoms>>;type Version=Data['versions'][number];
-const fresh:Values={item_id:'',code:'',formulation_code:null,target_content:null,target_unit:null,base_batch_qty:100,base_uom:'',std_yield_pct:100,effective_from:'2026-11-02',effective_to:null,registration_id:null,dosage_form:null,source_document:null};
-const line:BomLine={item_id:'',line_type:'ingredient',phase:'',qty_per_base:1,uom:'',basis:'gross',ai_target_pct:null,potency_compensate:false,tolerance_pct:0,is_critical:false,sequence:1,add_step_note:''};
-export function ProductionBomView({workspaceId}:{workspaceId:string}){
- const [page,setPage]=useState(0);const get=useServerFn(getProductionBoms);const q=useQuery({queryKey:['production-boms',workspaceId,page],queryFn:()=>get({data:{workspaceId,page}})});
- if(q.isPending)return <Loader2 className="m-8 animate-spin text-muted-foreground"/>;if(q.isError)return <p className="py-12 text-muted-foreground">{q.error.message}</p>;
- return <div className="space-y-6"><h1 className="text-2xl font-semibold">Formulasi / BOM</h1><BomContent workspaceId={workspaceId} data={q.data}/><div className="flex items-center justify-end gap-3"><Button variant="outline" disabled={page===0} onClick={()=>setPage(p=>p-1)}>Sebelumnya</Button><span className="text-sm">{page+1} / {Math.max(1,Math.ceil(q.data.total/25))}</span><Button variant="outline" disabled={(page+1)*25>=q.data.total} onClick={()=>setPage(p=>p+1)}>Berikutnya</Button></div></div>;
-}
-function BomContent({workspaceId,data}:{workspaceId:string;data:Data}){
- const qc=useQueryClient();const read=useServerFn(getBomLines),save=useServerFn(saveProductionBom),transition=useServerFn(transitionProductionBom),sendCode=useServerFn(sendBomApprovalCode),verifyCode=useServerFn(verifyBomApprovalCode);
- const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[values,setValues]=useState(fresh),[lines,setLines]=useState<BomLine[]>([line]),[selected,setSelected]=useState<Version|null>(null),[revision,setRevision]=useState(false),[reason,setReason]=useState(''),[issues,setIssues]=useState<string[]>([]),[compare,setCompare]=useState<ReturnType<typeof compareBomLines>|null>(null),[challenge,setChallenge]=useState<string|null>(null),[code,setCode]=useState(''),[override,setOverride]=useState(false);
- const editable=data.canWrite&&(!selected||revision||selected.status==='draft');
- async function run(fn:()=>Promise<void>){setBusy(true);try{await fn();await qc.invalidateQueries({queryKey:['production-boms',workspaceId]});}catch(e){toast.error(e instanceof Error?e.message:'Perubahan ditolak');}finally{setBusy(false);}}
- async function edit(v:Version,rev=false){const b=data.boms.find(b=>b.id===v.bom_id);if(!b)return;await run(async()=>{const r=await read({data:{workspaceId,versionId:v.id}});setValues({item_id:b.item_id,code:b.code,formulation_code:b.formulation_code,target_content:b.target_content,target_unit:b.target_unit==='g/L'?'g/L':b.target_unit==='%w/w'?'%w/w':null,base_batch_qty:v.base_batch_qty,base_uom:v.base_uom,std_yield_pct:v.std_yield_pct,effective_from:v.effective_from,effective_to:v.effective_to,registration_id:v.registration_id,dosage_form:v.dosage_form??null,source_document:v.source_document??null});setLines(r.lines.map(l=>({...l,line_type:l.line_type as BomLine['line_type'],basis:l.basis as BomLine['basis'],add_step_note:l.add_step_note??'',phase:l.phase??''})));setIssues(Array.isArray(r.issues)?r.issues.filter((x):x is string=>typeof x==='string'):[]);setSelected(v);setRevision(rev);setReason('');setChallenge(null);setCode('');setOverride(false);setOpen(true);});}
- const patch=(i:number,p:Partial<BomLine>)=>setLines(ls=>ls.map((l,j)=>j===i?{...l,...p}:l));
- async function change(status:'draft'|'in_review'|'approved',signature:string|null=null){if(!selected)return;await transition({data:{workspaceId,versionId:selected.id,status,key:crypto.randomUUID(),reason,signature,override}});toast.success('Status tersimpan');setOpen(false);}
- return <><div className="flex justify-end"><Button disabled={!data.canWrite||busy} onClick={()=>{setValues({...fresh,effective_from:new Date().toLocaleDateString('en-CA'),base_uom:data.units[0]?.code??''});setLines([{...line,uom:data.units[0]?.code??''}]);setSelected(null);setRevision(false);setReason('');setIssues([]);setOpen(true);}}><Plus className="size-4"/>BOM baru</Button></div><ProductionPagedTable rows={data.versions} headers={['Kode / Produk','Versi','Status','Batch','Aksi']} empty="Belum ada formulasi." row={(v,no)=>{const b=data.boms.find(b=>b.id===v.bom_id);return <TableRow key={v.id}><RowNo no={no}/><TableCell>{b?.code}<div className="text-xs text-muted-foreground">{data.items.find(i=>i.id===b?.item_id)?.name}</div></TableCell><TableCell>v{v.version_no}</TableCell><TableCell>{v.status}</TableCell><TableCell>{v.base_batch_qty} {v.base_uom}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1"><Button variant="ghost" size="icon" aria-label="Lihat / edit" onClick={()=>void edit(v)}><Eye className="size-4"/></Button><Button variant="ghost" size="icon" aria-label="Buat revisi" disabled={!data.canWrite||busy} onClick={()=>void edit(v,true)}><Copy className="size-4"/></Button><Button variant="ghost" size="icon" aria-label="Bandingkan versi sebelumnya" disabled={busy||v.version_no===1} onClick={()=>void run(async()=>{const prev=data.versions.find(x=>x.bom_id===v.bom_id&&x.version_no===v.version_no-1);if(!prev)return;const [a,b]=await Promise.all([read({data:{workspaceId,versionId:prev.id}}),read({data:{workspaceId,versionId:v.id}})]);const normalize=(r:typeof a)=>r.lines.map(l=>({...l,line_type:l.line_type as BomLine['line_type'],basis:l.basis as BomLine['basis'],add_step_note:l.add_step_note??''}));setCompare(compareBomLines(normalize(a),normalize(b)));})}><GitCompare className="size-4"/></Button></div></TableCell></TableRow>;}}/>
- <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-5xl"><DialogHeader><DialogTitle>{revision?'Revisi baru':selected?`BOM v${selected.version_no} · ${selected.status}`:'BOM baru'}</DialogTitle></DialogHeader><form className="space-y-5" onSubmit={e=>{e.preventDefault();void run(async()=>{await save({data:{workspaceId,versionId:revision?null:selected?.id??null,bomId:revision?selected?.bom_id??null:null,values,lines:lines.map((l,i)=>({...l,sequence:i+1})),reason}});setOpen(false);toast.success('Draft BOM tersimpan');});}}><fieldset disabled={!editable||busy} className="space-y-4"><div className="grid gap-4 sm:grid-cols-3"><AdminField label="Kode"><Input required disabled={!!selected} value={values.code} onChange={e=>setValues({...values,code:e.target.value})}/></AdminField><AdminField label="Produk"><AdminSelect value={values.item_id} onChange={v=>{if(!selected)setValues({...values,item_id:v});}}><option value="">Pilih produk</option>{data.items.map(i=><option key={i.id} value={i.id}>{i.code} · {i.name}</option>)}</AdminSelect></AdminField><AdminField label="Formulasi"><AdminSelect value={values.formulation_code??''} onChange={v=>{if(!selected)setValues({...values,formulation_code:v||null});}}><option value="">—</option>{data.codes.map(c=><option key={c.code}>{c.code}</option>)}</AdminSelect></AdminField><AdminField label="Batch dasar"><Input type="number" min="0.0001" step="0.0001" value={values.base_batch_qty} onChange={e=>setValues({...values,base_batch_qty:Number(e.target.value)})}/></AdminField><AdminField label="Satuan batch"><AdminSelect value={values.base_uom} onChange={v=>setValues({...values,base_uom:v})}>{data.units.map(u=><option key={u.code}>{u.code}</option>)}</AdminSelect></AdminField><AdminField label="Yield standar (%)"><Input type="number" min="0.000001" max="100" step="0.000001" value={values.std_yield_pct} onChange={e=>setValues({...values,std_yield_pct:Number(e.target.value)})}/></AdminField><AdminField label="Berlaku mulai"><Input required type="date" value={values.effective_from} onChange={e=>setValues({...values,effective_from:e.target.value})}/></AdminField><AdminField label="Berlaku sampai"><Input type="date" value={values.effective_to??''} onChange={e=>setValues({...values,effective_to:e.target.value||null})}/></AdminField><AdminField label="Registrasi"><AdminSelect value={values.registration_id??''} onChange={v=>setValues({...values,registration_id:v||null})}><option value="">—</option>{data.registrations.filter(r=>r.item_id===values.item_id).map(r=><option key={r.id} value={r.id}>{r.registration_no}</option>)}</AdminSelect></AdminField><AdminField label="Bentuk sediaan"><Input maxLength={80} placeholder="mis. Setengah padat (krim)" value={values.dosage_form??''} onChange={e=>setValues({...values,dosage_form:e.target.value||null})}/></AdminField><AdminField label="Sumber dokumen formula"><Input maxLength={200} placeholder="mis. CPB REV 1 (21052026)" value={values.source_document??''} onChange={e=>setValues({...values,source_document:e.target.value||null})}/></AdminField></div><div className="flex flex-wrap justify-between gap-3"><h2 className="font-medium">Komposisi</h2><div className="flex gap-2"><Button type="button" variant="outline" onClick={()=>setLines(ls=>[...ls,{...line,uom:values.base_uom,sequence:ls.length+1}])}><Plus className="size-4"/>Bahan</Button><label className="inline-flex cursor-pointer items-center gap-2 text-sm"><Upload className="size-4"/>CSV<Input className="w-40" type="file" accept=".csv" onChange={e=>{const file=e.target.files?.[0];if(file)void run(async()=>{const XLSX=await import('xlsx');const book=XLSX.read(await file.text(),{type:'string'});const sheet=book.Sheets[book.SheetNames[0]??''];if(!sheet)throw Error('CSV kosong');const normalized=XLSX.utils.sheet_to_csv(sheet);setLines(parseBomCsv(normalized,data.items,data.units.map(u=>u.code)));});}}/></label></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Phase','Item','Qty','Satuan','Basis','Jenis','Toleransi %','Catatan',''].map((h,i)=><TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{lines.map((l,i)=><TableRow key={i}><TableCell><Input aria-label={`Phase bahan ${i+1}`} className="w-20" maxLength={20} placeholder="A" value={l.phase} onChange={e=>patch(i,{phase:e.target.value.toUpperCase()})}/></TableCell><TableCell><AdminSelect className="min-w-40" value={l.item_id} onChange={v=>patch(i,{item_id:v})}><option value="">Pilih bahan</option>{data.items.map(it=><option key={it.id} value={it.id}>{it.code}</option>)}</AdminSelect></TableCell><TableCell><Input aria-label={`Kuantitas bahan ${i+1}`} className="w-28" type="number" step="0.0001" min="0.0001" value={l.qty_per_base} onChange={e=>patch(i,{qty_per_base:Number(e.target.value)})}/></TableCell><TableCell><AdminSelect value={l.uom} onChange={v=>patch(i,{uom:v})}>{data.units.map(u=><option key={u.code}>{u.code}</option>)}</AdminSelect></TableCell><TableCell><AdminSelect value={l.basis} onChange={v=>patch(i,{basis:v==='gross'?'gross':'active_equivalent',potency_compensate:v==='active_equivalent'})}><option value="gross">Gross</option><option value="active_equivalent">AI ekuivalen</option></AdminSelect></TableCell><TableCell><AdminSelect value={l.line_type} onChange={v=>patch(i,{line_type:v as BomLine['line_type']})}>{['ingredient','packaging','co_product','by_product'].map(t=><option key={t}>{t}</option>)}</AdminSelect></TableCell><TableCell><Input className="w-24" type="number" step="0.000001" min="0" max="100" value={l.tolerance_pct} onChange={e=>patch(i,{tolerance_pct:Number(e.target.value)})}/></TableCell><TableCell><Input className="w-40" value={l.add_step_note} onChange={e=>patch(i,{add_step_note:e.target.value})}/></TableCell><TableCell><Button type="button" variant="ghost" size="icon" aria-label="Hapus bahan" onClick={()=>setLines(ls=>ls.filter((_,j)=>j!==i))}><Trash2 className="size-4"/></Button></TableCell></TableRow>)}</TableBody></Table></div></fieldset>{issues.length>0&&<ul className="list-inside list-disc text-sm text-destructive">{issues.map(i=><li key={i}>{i}</li>)}</ul>}<AdminField label="Alasan perubahan / persetujuan"><Input required maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></AdminField><div className="flex flex-wrap gap-3">{editable&&<Button disabled={busy||!reason.trim()} type="submit"><Save className="size-4"/>Simpan draft</Button>}{selected&&!revision&&selected.status==='draft'&&data.canWrite&&<Button type="button" disabled={busy||!reason.trim()} onClick={()=>void run(()=>change('in_review'))}><Send className="size-4"/>Ajukan tinjauan</Button>}{selected&&!revision&&selected.status==='in_review'&&data.canWrite&&<Button type="button" variant="outline" disabled={busy||!reason.trim()} onClick={()=>void run(()=>change('draft'))}>Kembalikan draft</Button>}{selected?.status==='in_review'&&!revision&&data.canApprove&&selected.created_by!==data.userId&&<><Button type="button" variant="outline" disabled={busy||!reason.trim()} onClick={()=>void run(async()=>{const r=await sendCode({data:{workspaceId,versionId:selected.id}});setChallenge(r.id);if(r.demoCode){setCode(r.demoCode);toast.success(`Mode uji: kode ${r.demoCode} terisi otomatis`);}else toast.success('Kode dikirim ke email akun');})}><ShieldCheck className="size-4"/>Kode persetujuan</Button>{challenge&&<><Input aria-label="Kode persetujuan" className="w-32" inputMode="numeric" maxLength={6} value={code} onChange={e=>setCode(e.target.value)}/><Button type="button" disabled={busy||code.length!==6||!reason.trim()} onClick={()=>void run(async()=>{const r=await verifyCode({data:{workspaceId,challengeId:challenge,code}});await change('approved',r.id);})}>Setujui</Button></>}{issues.length>0&&<label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={override} onChange={e=>setOverride(e.target.checked)}/>Pengecualian QA beralasan</label>}</>}</div></form></DialogContent></Dialog>
- <Dialog open={compare!==null} onOpenChange={()=>setCompare(null)}><DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Perbandingan komposisi</DialogTitle></DialogHeader><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Sebelum</TableHead><TableHead>Sesudah</TableHead><TableHead>Basis / toleransi</TableHead></TableRow></TableHeader><TableBody>{compare?.map(r=><TableRow key={r.item_id}><TableCell>{data.items.find(i=>i.id===r.item_id)?.code??r.item_id}</TableCell><TableCell>{r.before?.qty_per_base??'—'} {r.before?.uom}</TableCell><TableCell>{r.after?.qty_per_base??'—'} {r.after?.uom}</TableCell><TableCell>{r.before?.basis} → {r.after?.basis}<div>{r.before?.tolerance_pct} → {r.after?.tolerance_pct}</div></TableCell></TableRow>)}</TableBody></Table></DialogContent></Dialog></>;
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Copy, Eye, GitCompare, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ProductionPagedTable } from "./ProductionPagedTable";
+import { StatusPill, useProductionDocNav } from "./ProductionPageShell";
+import { compareBomLines, type BomLine } from "@/lib/production-bom";
+import { getBomLines, getProductionBoms } from "@/lib/production-bom.functions";
+
+const LEVEL: Record<number, string> = { 1: "Level 1 · FG", 2: "Level 2 · Bulk" };
+
+export function ProductionBomView({ workspaceId }: { workspaceId: string }) {
+  const go = useProductionDocNav(workspaceId, "boms");
+  const get = useServerFn(getProductionBoms);
+  const read = useServerFn(getBomLines);
+  const [page, setPage] = useState(0);
+  const [compare, setCompare] = useState<ReturnType<typeof compareBomLines> | null>(null);
+  const q = useQuery({ queryKey: ["production-boms", workspaceId, page], queryFn: () => get({ data: { workspaceId, page } }) });
+  if (q.isPending) return <Loader2 className="m-8 animate-spin text-muted-foreground" />;
+  if (q.isError) return <p className="py-12 text-muted-foreground">{q.error.message}</p>;
+  const data = q.data;
+  const itemName = (id?: string) => data.items.find((i) => i.id === id)?.name;
+  const norm = (r: Awaited<ReturnType<typeof read>>) => r.lines.map((l) => ({ ...l, line_type: l.line_type as BomLine["line_type"], basis: l.basis as BomLine["basis"], add_step_note: l.add_step_note ?? "" }));
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Formulasi / BOM</h1>
+        <Button disabled={!data.canWrite} onClick={() => void go("new")}><Plus className="size-4" />BOM baru</Button>
+      </div>
+      <ProductionPagedTable
+        rows={data.versions}
+        headers={["Kode / Produk", "Level", "Versi", "Status", "Batch", "Aksi"]}
+        empty="Belum ada formulasi."
+        row={(v) => {
+          const b = data.boms.find((x) => x.id === v.bom_id);
+          return (
+            <TableRow key={v.id} className="cursor-pointer" onClick={() => void go(v.id)}>
+              <TableCell className="text-center text-xs text-muted-foreground" />
+              <TableCell><strong>{b?.code}</strong><div className="text-xs text-muted-foreground">{itemName(b?.item_id)}</div></TableCell>
+              <TableCell>{LEVEL[Number((b as { bom_level?: number } | undefined)?.bom_level ?? 1)]}</TableCell>
+              <TableCell>v{v.version_no}</TableCell>
+              <TableCell><StatusPill status={v.status} /></TableCell>
+              <TableCell>{v.base_batch_qty} {v.base_uom}</TableCell>
+              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-end gap-1">
+                  <Button variant="ghost" size="icon" aria-label="Buka" onClick={() => void go(v.id)}><Eye className="size-4" /></Button>
+                  {v.status === "approved" && <Button variant="ghost" size="icon" aria-label="Buat revisi" disabled={!data.canWrite} onClick={() => void go(`rev-${v.id}`)}><Copy className="size-4" /></Button>}
+                  <Button variant="ghost" size="icon" aria-label="Bandingkan dengan versi sebelumnya" disabled={v.version_no === 1}
+                    onClick={async () => {
+                      const prev = data.versions.find((x) => x.bom_id === v.bom_id && x.version_no === v.version_no - 1);
+                      if (!prev) return;
+                      try { const [a, c] = await Promise.all([read({ data: { workspaceId, versionId: prev.id } }), read({ data: { workspaceId, versionId: v.id } })]); setCompare(compareBomLines(norm(a), norm(c))); }
+                      catch (e) { toast.error(e instanceof Error ? e.message : "Gagal membandingkan"); }
+                    }}><GitCompare className="size-4" /></Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        }}
+      />
+      <div className="flex items-center justify-end gap-3">
+        <Button variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Sebelumnya</Button>
+        <span className="text-sm">{page + 1} / {Math.max(1, Math.ceil(data.total / 25))}</span>
+        <Button variant="outline" disabled={(page + 1) * 25 >= data.total} onClick={() => setPage((p) => p + 1)}>Berikutnya</Button>
+      </div>
+      <Dialog open={compare !== null} onOpenChange={() => setCompare(null)}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader><DialogTitle>Perbandingan komposisi</DialogTitle></DialogHeader>
+          <Table>
+            <TableHeader><TableRow><TableHead>Phase</TableHead><TableHead>Item</TableHead><TableHead>Sebelum</TableHead><TableHead>Sesudah</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {compare?.map((r) => (
+                <TableRow key={`${r.item_id}|${r.phase}`}>
+                  <TableCell>{r.phase || "—"}</TableCell>
+                  <TableCell>{data.items.find((i) => i.id === r.item_id)?.code ?? r.item_id}</TableCell>
+                  <TableCell>{r.before ? `${r.before.qty_per_base} ${r.before.uom}` : "—"}</TableCell>
+                  <TableCell>{r.after ? `${r.after.qty_per_base} ${r.after.uom}` : "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }

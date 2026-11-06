@@ -33,6 +33,7 @@ export const bomValuesSchema = z.object({
   registration_id: zId.nullable(),
   dosage_form: z.string().trim().max(80).nullable(),
   source_document: z.string().trim().max(200).nullable(),
+  bom_level: z.number().int().min(1).max(2).default(1),
 });
 export const saveBomSchema = z.object({
   workspaceId: zId,

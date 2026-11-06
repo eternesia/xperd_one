@@ -21,13 +21,20 @@ import {
   type PrcLine,
 } from "@/lib/procurement";
 import { findSlsEntity } from "@/lib/sales";
+import { ProductionDocPage } from "@/components/app/ProductionDocPage";
 
 export const Route = createFileRoute("/app/w/$workspaceId/$moduleId/$submoduleId/$docId")({
   validateSearch: (search: Record<string, unknown>) => ({
     print: search.print ? 1 : undefined,
   }),
-  component: DocumentDetail,
+  component: DocumentRoute,
 });
+
+function DocumentRoute() {
+  const { workspaceId, moduleId, submoduleId, docId } = Route.useParams();
+  if (moduleId === "manufacturing") return <ProductionDocPage workspaceId={workspaceId} section={submoduleId} docId={docId} />;
+  return <DocumentDetail />;
+}
 
 function DocumentDetail() {
   const { workspaceId, moduleId, submoduleId, docId } = Route.useParams();
