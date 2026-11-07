@@ -21,6 +21,7 @@ export const CRM_FEATURES: Record<string, string> = {
   "follow-ups": "crm",
   targets: "crm",
   attribution: "crm",
+  funnel: "crm",
   broadcast: "whatsapp",
   "wa-gateway": "whatsapp",
   templates: "templates",

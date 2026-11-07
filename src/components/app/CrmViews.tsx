@@ -71,6 +71,7 @@ import { CalendarPage } from "@/components/qalling/pages/CalendarPage";
 import { ClientsPage } from "@/components/qalling/pages/ClientsPage";
 import { LeadPanel } from "@/components/app/CrmLeadPanel";
 import { getLeadHealth } from "@/lib/lead-followup.functions";
+import { FunnelPage } from "@/components/qalling/pages/FunnelPage";
 import { AttributionPage } from "@/components/qalling/pages/AttributionPage";
 import { AgencyPage } from "@/components/qalling/pages/AgencyPage";
 import { ReportsPage } from "@/components/qalling/pages/ReportsPage";
@@ -230,6 +231,7 @@ export function CrmView({
   if (submoduleId === "reports") return <ReportsPage />;
   if (submoduleId === "agency") return <AgencyPage />;
   if (submoduleId === "attribution") return <AttributionPage />;
+  if (submoduleId === "funnel") return <FunnelPage />;
   if (submoduleId === "ai") return <AiPage />;
   if (submoduleId === "team") return <TeamPage embedded />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;

@@ -298,6 +298,7 @@ function QallingShell() {
         "contacts",
         "follow-ups",
         "targets",
+        "funnel",
         "attribution",
       ])}
       {section("content", id ? "Konten" : "Content", [
