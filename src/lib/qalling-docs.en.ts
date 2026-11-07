@@ -124,6 +124,7 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
       "Click a card in the Pipeline to open the detail panel: timeline, log activities, add dated tasks, mark them done, or snooze the follow-up. Cards flagged Idle (7+ days without activity) or Late need attention; use the Needs follow-up button to filter.",
       "Every morning (from 08:00 WIB) each owner gets one digest email of leads that need follow-up. Manage it in Settings → Notifications (Follow-up digest).",
       "Closed leads can be invoiced right away (Pro and Agency plans): open the detail panel → Invoice → Create invoice. Fill in items, tax and due date; the customer name and contact come from the lead. Send it with the WhatsApp button (the message contains the invoice link), copy the link, or open the PDF, then mark it Paid once settled. Logo, address and bank details come from Settings → Company profile.",
+      "Open Sales → Funnel & Reports to see conversion per stage, lost reasons, performance by source and owner, the pipeline forecast (value × probability), and this month's target realization next to paid invoices. Record a reason when you move a lead to Lost so the report is useful.",
     ],
     tips: [
       "Assign one owner per lead so the follow-up list is clear.",

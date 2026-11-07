@@ -151,6 +151,7 @@ export const QALLING_DOCS: DocSection[] = [
       "Klik kartu di Pipeline untuk membuka panel detail: linimasa, catat aktivitas, tambah tugas bertenggat, tandai selesai, atau tunda follow-up. Kartu bertanda Diam (≥7 hari tanpa aktivitas) atau Telat butuh tindak lanjut; gunakan tombol Perlu tindak lanjut untuk memfilter.",
       "Setiap pagi (mulai 08.00 WIB) penanggung jawab menerima satu email ringkasan prospek yang perlu ditindaklanjuti. Atur di Pengaturan → Notifikasi (Ringkasan follow-up).",
       "Prospek yang closing bisa langsung ditagih (paket Pro dan Agency): buka panel detail → Invoice → Buat invoice. Isi item, pajak, dan jatuh tempo; nama dan kontak pelanggan terisi dari prospek. Kirim lewat tombol WhatsApp (pesan berisi link invoice), salin link, atau buka PDF-nya, lalu tandai Lunas setelah dibayar. Logo, alamat, dan info rekening diambil dari Pengaturan → Profil perusahaan.",
+      "Buka Penjualan → Corong & Laporan untuk melihat konversi tiap tahap, alasan batal, performa per sumber dan penanggung jawab, forecast pipeline (nilai × peluang), serta realisasi target bulan ini dibandingkan invoice yang sudah lunas. Isi alasan saat memindahkan prospek ke Batal agar laporannya berguna.",
     ],
     tips: [
       "Tentukan satu penanggung jawab untuk tiap lead supaya daftar follow-up jelas.",
