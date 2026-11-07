@@ -6,8 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { listAuditLogs, type AuditLogRow } from "@/lib/audit.functions";
 import { useI18n } from "@/lib/i18n";
 
@@ -37,6 +50,11 @@ const TABLES: Record<string, [string, string]> = {
   hr_payroll_runs: ["Payroll run", "Payroll"],
   workspace_members: ["Team member", "Anggota tim"],
   workspace_role_access: ["Role access", "Akses role"],
+  crm_scheduled_posts: ["Social post", "Postingan sosial"],
+  crm_leads: ["Lead", "Prospek"],
+  crm_post_approvals: ["Client approval", "Persetujuan klien"],
+  crm_report_links: ["Client report link", "Link laporan klien"],
+  crm_client_groups: ["Client / brand", "Klien / brand"],
 };
 
 const ACTIONS: Record<string, [string, string, "default" | "secondary" | "destructive"]> = {
@@ -83,7 +101,9 @@ export function AuditTrailView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-5" data-testid="audit-trail-view">
       <div>
-        <p className="text-xs font-semibold tracking-[0.28em] text-gold">{t("ACCOUNTING", "AKUNTANSI")}</p>
+        <p className="text-xs font-semibold tracking-[0.28em] text-gold">
+          {t("ACCOUNTING", "AKUNTANSI")}
+        </p>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-navy dark:text-primary-foreground">
           <ShieldCheck className="h-6 w-6 text-gold" /> Audit Trail
         </h1>
@@ -206,7 +226,9 @@ export function AuditTrailView({ workspaceId }: { workspaceId: string }) {
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setOpen(r)}>
                   <TableCell className="text-muted-foreground">{page * PAGE + i + 1}</TableCell>
                   <TableCell className="whitespace-nowrap">
-                    {new Date(r.created_at.replace(" ", "T")).toLocaleString(lang === "id" ? "id-ID" : "en-US")}
+                    {new Date(r.created_at.replace(" ", "T")).toLocaleString(
+                      lang === "id" ? "id-ID" : "en-US",
+                    )}
                   </TableCell>
                   <TableCell>{r.actor_email ?? t("System", "Sistem")}</TableCell>
                   <TableCell>
@@ -231,7 +253,12 @@ export function AuditTrailView({ workspaceId }: { workspaceId: string }) {
         <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
           ‹
         </Button>
-        <Button size="sm" variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page + 1 >= pages}
+          onClick={() => setPage(page + 1)}
+        >
           ›
         </Button>
       </div>
@@ -268,7 +295,9 @@ function Diff({ log, t }: { log: AuditLogRow; t: (en: string, id: string) => str
         {keys.map((k) => (
           <TableRow key={k}>
             <TableCell className="font-mono text-xs">{k}</TableCell>
-            <TableCell className="break-all text-xs text-muted-foreground">{show(log.old_data?.[k])}</TableCell>
+            <TableCell className="break-all text-xs text-muted-foreground">
+              {show(log.old_data?.[k])}
+            </TableCell>
             <TableCell className="break-all text-xs">{show(log.new_data?.[k])}</TableCell>
           </TableRow>
         ))}

@@ -207,6 +207,7 @@ test("MCP: token pribadi, tool, batas paket, OAuth PKCE, pencabutan", async ({ p
       "qalling_get_post",
       "qalling_update_post",
       "qalling_cancel_scheduled_post",
+      "qalling_request_client_approval",
       "qalling_retry_post",
       "qalling_list_ideas",
       "qalling_update_idea",

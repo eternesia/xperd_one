@@ -123,6 +123,22 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
     ],
     tips: ["Assign one owner per lead so the follow-up list is clear."],
   },
+  agency: {
+    title: "Agency plan: client approvals & white-label reports",
+    summary:
+      "Features for agencies: clients approve content through a link, reports carry your agency's brand, and every team change is recorded.",
+    steps: [
+      "Open Clients & Reports → Agency Studio → Approvals. Pick a draft or scheduled post, add the client's name and a short message, and create the approval link. The post is held as a draft.",
+      "Send the link to your client. They open a preview page without logging in and choose Approve or Request changes (a note is required). You get an email and the status appears in the list.",
+      "If approved and the schedule is still in the future, the post returns to its schedule automatically. If the schedule has passed, reschedule it manually.",
+      "In the Client reports tab, create a report link with your agency's name, logo and colour. Choose all accounts (including leads and closings) or a single client. The link always shows the latest numbers and can be revoked any time.",
+      "The Activity log tab shows who changed posts, leads, team members and approvals. Only owners and admins can open it.",
+    ],
+    tips: [
+      "Team member roles (admin, staff, view-only or custom) are managed in Team & Members.",
+      "These features are part of the Agency plan; on other plans the tabs show as locked.",
+    ],
+  },
   analitik: {
     title: "Analytics and best times",
     summary:

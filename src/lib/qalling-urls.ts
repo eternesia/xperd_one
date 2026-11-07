@@ -44,6 +44,7 @@ export function qallingInternalUrl(url: URL): URL {
     /^\/(login|solusi|fitur|kelebihan|harga|kontak|testimoni|docs(\/[\w-]+)?)(\/)?$/.test(path)
   )
     result.pathname = `/qalling${path}`;
+  else if (/^\/(approve|report)\/[a-f0-9]{48}\/?$/.test(path)) result.pathname = `/qalling${path}`;
   else if (
     (path === "/app" || path.startsWith("/app/")) &&
     !/^\/app\/(w|onboarding)(\/|$)/.test(path)
