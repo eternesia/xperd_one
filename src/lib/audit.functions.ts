@@ -37,6 +37,7 @@ export const AUDITED_TABLES = [
   "crm_leads",
   "crm_post_approvals",
   "crm_report_links",
+  "crm_invoices",
   "crm_client_groups",
 ] as const;
 
