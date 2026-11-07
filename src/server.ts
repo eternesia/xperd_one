@@ -54,6 +54,10 @@ export default {
     // aplikasi tidak berubah. Lihat docs/INTEROP-BOILERPLATE.md.
     // ---------------------------------------------------------------------
     const path = new URL(request.url).pathname;
+    // Scheduler internal (auto-publish & email): mulai sekali saat request pertama.
+    void import("./lib/scheduler.server")
+      .then((m) => m.ensureScheduler(request.url, request.headers))
+      .catch(() => {});
     if (path === "/api/public/leads") return handlePublicLeadRequest(request);
     if (path === "/api/cron/reminders") return handleReminderCronRequest(request);
 
