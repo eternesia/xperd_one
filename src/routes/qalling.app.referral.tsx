@@ -38,7 +38,7 @@ function ReferralPage() {
   const list = { data: overview.data?.rows ?? [] };
   const link =
     code.data && typeof window !== "undefined"
-      ? `${window.location.origin}${qallingPagePath(window.location.hostname, "/qalling/daftar")}?ref=${code.data}`
+      ? `${window.location.origin}${qallingPagePath(window.location.hostname, "/qalling")}?ref=${code.data}`
       : "";
   const promo = useQuery({ queryKey: ["referral-promo"], queryFn: () => getReferralPromo() });
   const fill = (t: string) => t.replaceAll("{link}", link).replaceAll("{code}", code.data ?? "");
