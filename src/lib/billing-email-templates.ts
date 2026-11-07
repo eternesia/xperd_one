@@ -245,3 +245,65 @@ export function postSummaryEmail(p: { name: string; data: PostSummaryData; url: 
   );
   return { subject, text: textParts.join("\n"), html };
 }
+
+/* ------------------------------ pengingat follow-up ------------------------------ */
+
+export interface FollowUpDigestData {
+  workspaceName: string;
+  overdueFollowUps: { name: string; detail: string }[];
+  overdueTasks: { name: string; detail: string }[];
+  dueToday: { name: string; detail: string }[];
+  stale: { name: string; detail: string }[];
+}
+
+export function followUpDigestEmail(p: {
+  name: string;
+  data: FollowUpDigestData;
+  url: string;
+}): Mail {
+  const d = p.data;
+  const sections: [string, { name: string; detail: string }[]][] = [
+    ["Follow-up terlambat", d.overdueFollowUps],
+    ["Tugas terlambat", d.overdueTasks],
+    ["Jatuh tempo hari ini", d.dueToday],
+    ["Prospek diam", d.stale],
+  ];
+  const total = sections.reduce((n, [, l]) => n + l.length, 0);
+  const subject = `${total} prospek perlu tindak lanjut · ${d.workspaceName}`;
+  const cap = (l: { name: string; detail: string }[]) => l.slice(0, 8);
+  const text = [
+    `Halo ${p.name},`,
+    "",
+    `Berikut prospek di ${d.workspaceName} yang perlu tindak lanjut hari ini:`,
+    ...sections.flatMap(([title, l]) =>
+      l.length
+        ? [
+            "",
+            `${title} (${l.length}):`,
+            ...cap(l).map((x) => `- ${x.name} — ${x.detail}`),
+            ...(l.length > 8 ? [`- dan ${l.length - 8} lainnya`] : []),
+          ]
+        : [],
+    ),
+    "",
+    `Buka pipeline: ${p.url}`,
+    "",
+    "Qalling",
+  ].join("\n");
+  const html = layout(
+    "Prospek perlu tindak lanjut",
+    `<p>Halo ${esc(p.name)}, berikut prospek di <b>${esc(d.workspaceName)}</b> yang perlu ditindaklanjuti.</p>${sections
+      .map(([title, l]) =>
+        l.length
+          ? `<h3 style="margin:16px 0 6px;font-size:15px">${esc(title)} (${l.length})</h3><ul style="color:#444">${cap(
+              l,
+            )
+              .map((x) => `<li><b>${esc(x.name)}</b> — ${esc(x.detail)}</li>`)
+              .join("")}${l.length > 8 ? `<li>dan ${l.length - 8} lainnya</li>` : ""}</ul>`
+          : "",
+      )
+      .join("")}`,
+    { label: "Buka pipeline", url: p.url },
+  );
+  return { subject, text, html };
+}

@@ -69,6 +69,8 @@ import { sqlDateTime } from "@/lib/datetime";
 import { QuickInvoice } from "@/components/app/QuickReplies";
 import { CalendarPage } from "@/components/qalling/pages/CalendarPage";
 import { ClientsPage } from "@/components/qalling/pages/ClientsPage";
+import { LeadPanel } from "@/components/app/CrmLeadPanel";
+import { getLeadHealth } from "@/lib/lead-followup.functions";
 import { AttributionPage } from "@/components/qalling/pages/AttributionPage";
 import { AgencyPage } from "@/components/qalling/pages/AgencyPage";
 import { ReportsPage } from "@/components/qalling/pages/ReportsPage";
@@ -766,6 +768,19 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const qc = useQueryClient();
   const { data: rows = [] } = useLeads(workspaceId);
+  const health = useQuery({
+    queryKey: ["lead-health", workspaceId],
+    queryFn: () => getLeadHealth({ data: { workspaceId } }),
+    refetchInterval: 120_000,
+  });
+  const healthById = new Map((health.data?.items ?? []).map((h) => [h.leadId, h]));
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [onlyAttention, setOnlyAttention] = useState(false);
+  const needsAttention = (id: string) => {
+    const h = healthById.get(id);
+    return !!h && (h.stale || h.followUpOverdueDays !== null || h.overdueTasks > 0);
+  };
+  const attentionCount = rows.filter((r) => r.status === "open" && needsAttention(r.id)).length;
 
   const move = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
@@ -803,16 +818,30 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title="Pipeline" />
-      <p className="text-xs text-muted-foreground">
-        {lang === "id"
-          ? "Seret kartu ke kolom lain untuk memindahkan tahap."
-          : "Drag a card to another column to change its stage."}
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-xs text-muted-foreground">
+          {lang === "id"
+            ? "Seret kartu ke kolom lain untuk memindahkan tahap. Klik kartu untuk melihat detail, linimasa, dan tugas."
+            : "Drag a card to another column to change its stage. Click a card for details, timeline and tasks."}
+        </p>
+        <Button
+          size="sm"
+          variant={onlyAttention ? "default" : "outline"}
+          onClick={() => setOnlyAttention((v) => !v)}
+        >
+          {lang === "id"
+            ? `Perlu tindak lanjut (${attentionCount})`
+            : `Needs follow-up (${attentionCount})`}
+        </Button>
+      </div>
+      <LeadPanel workspaceId={workspaceId} leadId={detailId} onClose={() => setDetailId(null)} />
       <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
         <div className="flex min-w-max gap-4">
           {CRM_STAGES.map((stage) => {
             const tone = STAGE_TONE[stage.id] ?? STAGE_TONE.new;
-            const items = rows.filter((r) => r.stage === stage.id);
+            const items = rows.filter(
+              (r) => r.stage === stage.id && (!onlyAttention || needsAttention(r.id)),
+            );
             const total = items.reduce((a, b) => a + Number(b.estimated_value || 0), 0);
             const isOver = overStage === stage.id;
             return (
@@ -865,6 +894,7 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                         setDragId(null);
                         setOverStage(null);
                       }}
+                      onClick={() => setDetailId(lead.id)}
                       className={cn(
                         "cursor-grab rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing",
                         dragId === lead.id && "opacity-50",
@@ -884,6 +914,34 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                       <p className="mt-2 text-sm font-semibold">
                         {fmtIDR(Number(lead.estimated_value))}
                       </p>
+                      {lead.status === "open" &&
+                        (() => {
+                          const h = healthById.get(lead.id);
+                          if (!h) return null;
+                          return (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {h.followUpOverdueDays !== null && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                  {lang === "id"
+                                    ? `Follow-up telat ${h.followUpOverdueDays} hr`
+                                    : `Follow-up ${h.followUpOverdueDays}d late`}
+                                </Badge>
+                              )}
+                              {h.overdueTasks > 0 && (
+                                <Badge variant="destructive" className="text-[10px]">
+                                  {lang === "id"
+                                    ? `${h.overdueTasks} tugas telat`
+                                    : `${h.overdueTasks} tasks late`}
+                                </Badge>
+                              )}
+                              {h.stale && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {lang === "id" ? `Diam ${h.idleDays} hr` : `Idle ${h.idleDays}d`}
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        })()}
                       <AdminSelect
                         className="mt-2 h-8 text-xs md:hidden"
                         value={lead.stage}
