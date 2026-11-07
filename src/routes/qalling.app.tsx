@@ -313,7 +313,7 @@ function QallingShell() {
         "wa-gateway",
         "templates",
       ])}
-      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", ["clients", "reports"])}
+      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", ["clients", "reports", "agency"])}
       {section("tender", "Tender", ["tenders", "doc-library"])}
     </nav>
   );

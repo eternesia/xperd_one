@@ -33,6 +33,11 @@ export const AUDITED_TABLES = [
   "hr_payroll_runs",
   "workspace_members",
   "workspace_role_access",
+  "crm_scheduled_posts",
+  "crm_leads",
+  "crm_post_approvals",
+  "crm_report_links",
+  "crm_client_groups",
 ] as const;
 
 export const AUDITED_TABLE_SET = new Set<string>(AUDITED_TABLES);
@@ -69,7 +74,16 @@ export interface AuditLogQuery {
 }
 
 /** Kolom `doc_ref` yang dicari berurutan, mengikuti trigger New 8/10. */
-const REF_COLUMNS = ["doc_number", "entry_no", "entry_number", "code", "number", "name", "trx_no"];
+const REF_COLUMNS = [
+  "doc_number",
+  "entry_no",
+  "entry_number",
+  "code",
+  "number",
+  "name",
+  "trx_no",
+  "title",
+];
 
 export function auditDocRef(row: Record<string, unknown> | null | undefined) {
   if (!row) return null;
@@ -156,9 +170,13 @@ export const listAuditLogs = createServerFn({ method: "POST" })
             ? (JSON.parse(r.changed_fields as unknown as string) as string[])
             : r.changed_fields,
         old_data:
-          typeof r.old_data === "string" ? (JSON.parse(r.old_data as unknown as string) as AuditJson) : r.old_data,
+          typeof r.old_data === "string"
+            ? (JSON.parse(r.old_data as unknown as string) as AuditJson)
+            : r.old_data,
         new_data:
-          typeof r.new_data === "string" ? (JSON.parse(r.new_data as unknown as string) as AuditJson) : r.new_data,
+          typeof r.new_data === "string"
+            ? (JSON.parse(r.new_data as unknown as string) as AuditJson)
+            : r.new_data,
         created_at: String(r.created_at),
       })),
       count: Number(countRow?.c ?? 0),

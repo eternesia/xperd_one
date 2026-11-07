@@ -37,6 +37,7 @@ export const CRM_FEATURES: Record<string, string> = {
   calendar: "publishing",
   clients: "publishing",
   reports: "insights",
+  agency: "publishing",
   ai: "mcp_api",
   team: "publishing",
 };

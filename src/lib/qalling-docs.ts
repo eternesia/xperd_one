@@ -151,6 +151,24 @@ export const QALLING_DOCS: DocSection[] = [
     tips: ["Tentukan satu penanggung jawab untuk tiap lead supaya daftar follow-up jelas."],
   },
   {
+    id: "agency",
+    group: "Fitur",
+    title: "Paket Agency: persetujuan klien & laporan white-label",
+    summary:
+      "Fitur untuk agensi: klien menyetujui konten lewat link, laporan memakai merek agensi Anda, dan semua perubahan tim tercatat.",
+    steps: [
+      "Buka Klien & Laporan → Studio Agency → Persetujuan. Pilih draft atau postingan terjadwal, isi nama klien dan pesan singkat, lalu buat link persetujuan. Postingan ditahan sebagai draft.",
+      "Kirim link ke klien. Klien membuka halaman pratinjau tanpa login, lalu memilih Setujui atau Minta revisi (catatan wajib). Anda menerima email dan statusnya tampil di daftar.",
+      "Bila disetujui dan jadwalnya masih di masa depan, postingan otomatis kembali terjadwal. Bila jadwalnya sudah lewat, jadwalkan ulang secara manual.",
+      "Di tab Laporan klien, buat link laporan dengan nama agensi, logo, dan warna Anda. Pilih seluruh akun (termasuk prospek dan closing) atau satu klien. Link selalu menampilkan angka terbaru dan bisa dicabut kapan saja.",
+      "Tab Log aktivitas menampilkan siapa mengubah postingan, prospek, anggota tim, dan persetujuan. Hanya owner dan admin yang dapat membukanya.",
+    ],
+    tips: [
+      "Peran anggota tim (admin, staf, hanya lihat, atau peran kustom) diatur di Tim & Anggota.",
+      "Fitur ini tersedia di paket Agency; di paket lain tab-nya tampil terkunci.",
+    ],
+  },
+  {
     id: "analitik",
     group: "Fitur",
     title: "Analitik dan jam terbaik",

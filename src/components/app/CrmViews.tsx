@@ -69,6 +69,7 @@ import { sqlDateTime } from "@/lib/datetime";
 import { QuickInvoice } from "@/components/app/QuickReplies";
 import { CalendarPage } from "@/components/qalling/pages/CalendarPage";
 import { ClientsPage } from "@/components/qalling/pages/ClientsPage";
+import { AgencyPage } from "@/components/qalling/pages/AgencyPage";
 import { ReportsPage } from "@/components/qalling/pages/ReportsPage";
 import { TeamPage } from "@/components/app/TeamPage";
 import { AiPage } from "@/components/qalling/pages/AiPage";
@@ -194,6 +195,7 @@ export function CrmView({
   if (submoduleId === "calendar") return <CalendarPage />;
   if (submoduleId === "clients") return <ClientsPage />;
   if (submoduleId === "reports") return <ReportsPage />;
+  if (submoduleId === "agency") return <AgencyPage />;
   if (submoduleId === "ai") return <AiPage />;
   if (submoduleId === "team") return <TeamPage embedded />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;
