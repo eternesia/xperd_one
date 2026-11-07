@@ -64,7 +64,7 @@ migrasi ikut naik saat deploy. Port aplikasi di-bind ke localhost
 (tempatkan `server_name qalling.id` → `/qalling` di sana; redirect klien di
 `__root.tsx` hanya jaring pengaman).
 
-**Penjadwalan.** Sejak scheduler internal (`src/lib/scheduler.server.ts`), auto-publish (tiap menit) dan email notifikasi (tiap jam) berjalan otomatis di dalam aplikasi; cron di bawah menjadi opsional (aman dipakai bersamaan). Matikan scheduler internal dengan `SCHEDULER_DISABLED=1`. Perpanjangan langganan tetap memakai cron.
+**Penjadwalan.** Sejak scheduler internal (`src/lib/scheduler.server.ts`), auto-publish (tiap menit) dan email notifikasi (tiap jam) berjalan otomatis di dalam aplikasi; cron di bawah menjadi opsional (aman dipakai bersamaan). Matikan scheduler internal dengan `SCHEDULER_DISABLED=1`. Perpanjangan langganan dari saldo juga berjalan tiap jam di scheduler internal.
 
 **Penjadwalan (cron) — opsional untuk auto-publish.** Aplikasi tidak punya scheduler internal; dua endpoint
 dipanggil cron eksternal di server (crontab host atau container cron). Rahasia dikirim lewat header

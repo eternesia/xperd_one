@@ -49,8 +49,25 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
     }
   };
 
+  let renewing = false;
+  const renewTick = async () => {
+    if (renewing) return;
+    renewing = true;
+    try {
+      const { renewDueTenants } = await import("./billing-wallet.server");
+      const r = await renewDueTenants(25);
+      if (r.processed) console.log("[scheduler] renewal", r);
+    } catch (e) {
+      console.error("[scheduler] renewal failed", e);
+    } finally {
+      renewing = false;
+    }
+  };
+
   setInterval(publishTick, PUBLISH_EVERY_MS).unref?.();
   setInterval(notifyTick, NOTIFY_EVERY_MS).unref?.();
+  setInterval(renewTick, NOTIFY_EVERY_MS).unref?.();
+  setTimeout(renewTick, 90_000).unref?.();
   setTimeout(publishTick, 5_000).unref?.();
   setTimeout(notifyTick, 60_000).unref?.();
 }
