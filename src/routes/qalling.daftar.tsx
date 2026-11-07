@@ -74,6 +74,14 @@ function QallingSignup() {
   const [agreed, setAgreed] = useState(false);
   const [policy, setPolicy] = useState<null | { title: string; body: string }>(null);
 
+  // Link referral lama (`/register?ref=KODE`): simpan kodenya lalu arahkan ke beranda agar calon pengguna membaca fitur dulu.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).get("ref")) return;
+    captureReferral();
+    navigate({ to: "/qalling", replace: true });
+  }, [navigate]);
+
   async function finishWithSession(tier: string) {
     setBusy(true);
     try {
