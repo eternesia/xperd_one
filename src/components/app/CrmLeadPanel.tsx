@@ -30,6 +30,7 @@ import {
   createLeadInvoice,
   listLeadInvoices,
   markLeadInvoiceSent,
+  sendLeadInvoiceWhatsApp,
   setLeadInvoiceStatus,
 } from "@/lib/lead-invoice.functions";
 
@@ -120,6 +121,15 @@ function InvoiceSection({
   });
   const link = (token: string) =>
     `${window.location.origin}${qallingPagePath(window.location.hostname, `/qalling/invoice/${token}`)}`;
+  const sendOfficial = useMutation({
+    mutationFn: (inv: { id: string; token: string }) =>
+      sendLeadInvoiceWhatsApp({ data: { workspaceId, invoiceId: inv.id, link: link(inv.token) } }),
+    onSuccess: () => {
+      toast.success(pick("Invoice sent via WhatsApp", "Invoice terkirim lewat WhatsApp"));
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const sendWa = (inv: NonNullable<typeof list.data>[number]) => {
     const digits = (leadPhone ?? inv.phone ?? "").replace(/\D/g, "");
     const phone = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
@@ -232,6 +242,13 @@ function InvoiceSection({
             )}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
+            <Button
+              size="sm"
+              disabled={sendOfficial.isPending}
+              onClick={() => sendOfficial.mutate(inv)}
+            >
+              {pick("Send via gateway", "Kirim via gateway")}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => sendWa(inv)}>
               WhatsApp
             </Button>

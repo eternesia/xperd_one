@@ -22,6 +22,9 @@ export interface WaSettingsRow {
   notes: string | null;
   last_checked_at: string | null;
   last_status: string | null;
+  phone_number_id: string | null;
+  invoice_template: string | null;
+  template_lang: string;
 }
 
 function docNumber(prefix: string, seq: number, date = new Date()) {
@@ -40,7 +43,8 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
     const { executeOne } = await import("@/integrations/mysql/pool");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) throw new Error("Forbidden");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"])))
+      throw new Error("Forbidden");
 
     const row = await executeOne<{
       id: string;
@@ -53,9 +57,12 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
       notes: string | null;
       last_checked_at: string | null;
       last_status: string | null;
+      phone_number_id: string | null;
+      invoice_template: string | null;
+      template_lang: string | null;
     }>(
       `SELECT id, workspace_id, provider, sender_number, endpoint_url, api_token,
-              is_active, notes, last_checked_at, last_status
+              is_active, notes, last_checked_at, last_status, phone_number_id, invoice_template, template_lang
          FROM crm_wa_settings
         WHERE workspace_id = ?
         LIMIT 1`,
@@ -73,6 +80,9 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
       notes: row.notes,
       last_checked_at: row.last_checked_at,
       last_status: row.last_status,
+      phone_number_id: row.phone_number_id,
+      invoice_template: row.invoice_template,
+      template_lang: row.template_lang ?? "id",
     } satisfies WaSettingsRow;
   });
 
@@ -84,6 +94,9 @@ export interface SaveWaSettingsInput {
   api_token?: string | null;
   is_active: boolean;
   notes?: string | null;
+  phone_number_id?: string | null;
+  invoice_template?: string | null;
+  template_lang?: string | null;
 }
 
 /** Upsert the workspace WhatsApp gateway settings (unique on workspace_id). */
@@ -91,25 +104,30 @@ export const saveCrmWaSettings = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((data: SaveWaSettingsInput) => {
     if (!data?.workspaceId) throw new Error("Workspace is required");
-    if (!["manual", "custom"].includes(data.provider)) throw new Error("Invalid provider");
+    if (!["manual", "custom", "kirimdev"].includes(data.provider))
+      throw new Error("Invalid provider");
     return data;
   })
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) throw new Error("Forbidden");
+    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"])))
+      throw new Error("Forbidden");
 
     await execute(
       `INSERT INTO crm_wa_settings
-         (id, workspace_id, provider, sender_number, endpoint_url, api_token, is_active, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         (id, workspace_id, provider, sender_number, endpoint_url, api_token, is_active, notes, phone_number_id, invoice_template, template_lang)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          provider = VALUES(provider),
          sender_number = VALUES(sender_number),
          endpoint_url = VALUES(endpoint_url),
          api_token = VALUES(api_token),
          is_active = VALUES(is_active),
-         notes = VALUES(notes)`,
+         notes = VALUES(notes),
+         phone_number_id = VALUES(phone_number_id),
+         invoice_template = VALUES(invoice_template),
+         template_lang = VALUES(template_lang)`,
       [
         uuid(),
         data.workspaceId,
@@ -119,6 +137,9 @@ export const saveCrmWaSettings = createServerFn({ method: "POST" })
         data.api_token?.trim() || null,
         data.is_active ? 1 : 0,
         data.notes?.trim() || null,
+        data.phone_number_id?.trim() || null,
+        data.invoice_template?.trim().toLowerCase() || null,
+        (data.template_lang ?? "id").trim() || "id",
       ],
     );
     return { ok: true };
@@ -137,10 +158,10 @@ export const deleteCrmBroadcast = createServerFn({ method: "POST" })
     if (!(await canWriteWorkspace(data.workspaceId, context.userId))) throw new Error("Forbidden");
 
     await transaction(async (conn) => {
-      await conn.execute("DELETE FROM crm_broadcast_recipients WHERE broadcast_id = ? AND workspace_id = ?", [
-        data.broadcastId,
-        data.workspaceId,
-      ]);
+      await conn.execute(
+        "DELETE FROM crm_broadcast_recipients WHERE broadcast_id = ? AND workspace_id = ?",
+        [data.broadcastId, data.workspaceId],
+      );
       await conn.execute("DELETE FROM crm_broadcasts WHERE id = ? AND workspace_id = ?", [
         data.broadcastId,
         data.workspaceId,
@@ -292,7 +313,14 @@ export const convertLeadToQuotation = createServerFn({ method: "POST" })
           `INSERT INTO sls_document_lines
              (id, workspace_id, document_id, line_no, description, qty, unit_price, discount, tax_rate, line_total)
            VALUES (?, ?, ?, 1, ?, 1, ?, 0, 0, ?)`,
-          [uuid(), data.workspaceId, documentId, `Estimated opportunity — ${lead.code}`, amount, amount],
+          [
+            uuid(),
+            data.workspaceId,
+            documentId,
+            `Estimated opportunity — ${lead.code}`,
+            amount,
+            amount,
+          ],
         );
       }
 

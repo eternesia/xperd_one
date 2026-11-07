@@ -152,6 +152,7 @@ export const QALLING_DOCS: DocSection[] = [
       "Setiap pagi (mulai 08.00 WIB) penanggung jawab menerima satu email ringkasan prospek yang perlu ditindaklanjuti. Atur di Pengaturan → Notifikasi (Ringkasan follow-up).",
       "Prospek yang closing bisa langsung ditagih (paket Pro dan Agency): buka panel detail → Invoice → Buat invoice. Isi item, pajak, dan jatuh tempo; nama dan kontak pelanggan terisi dari prospek. Kirim lewat tombol WhatsApp (pesan berisi link invoice), salin link, atau buka PDF-nya, lalu tandai Lunas setelah dibayar. Logo, alamat, dan info rekening diambil dari Pengaturan → Profil perusahaan.",
       "Buka Penjualan → Corong & Laporan untuk melihat konversi tiap tahap, alasan batal, performa per sumber dan penanggung jawab, forecast pipeline (nilai × peluang), serta realisasi target bulan ini dibandingkan invoice yang sudah lunas. Isi alasan saat memindahkan prospek ke Batal agar laporannya berguna.",
+      "Kirim invoice otomatis lewat WhatsApp resmi: buka Penjualan → WA Gateway, pilih provider Kirimdev, isi API key, Phone Number ID, dan nama template invoice (template disetujui Meta dengan 4 variabel: nama, nomor invoice, total, link). Klik Uji untuk memeriksa kunci tanpa mengirim pesan. Setelah aktif, tombol Kirim via gateway di invoice prospek mengirim template ke nomor pelanggan.",
     ],
     tips: [
       "Tentukan satu penanggung jawab untuk tiap lead supaya daftar follow-up jelas.",

@@ -17,13 +17,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AdminField, AdminSelect, fmtIDR } from "@/components/app/admin-ui";
-import { PaginationBar, SearchInput, usePagination, useSearchFilter } from "@/components/app/ui-states";
-import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow, upsertWorkspaceRows } from "@/lib/data.functions";
+import {
+  PaginationBar,
+  SearchInput,
+  usePagination,
+  useSearchFilter,
+} from "@/components/app/ui-states";
+import {
+  deleteWorkspaceRow,
+  listWorkspaceRows,
+  saveWorkspaceRow,
+  upsertWorkspaceRows,
+} from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -40,7 +63,15 @@ import {
 import { deleteCrmBroadcast, getCrmWaSettings, saveCrmWaSettings } from "@/lib/crm.functions";
 import { sendWaBroadcast, testWaGateway } from "@/lib/crm-broadcast.functions";
 
-function PageHeader({ title, kicker, children }: { title: string; kicker: string; children?: React.ReactNode }) {
+function PageHeader({
+  title,
+  kicker,
+  children,
+}: {
+  title: string;
+  kicker: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -98,7 +129,13 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-broadcasts", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_broadcasts", workspaceId, orderBy: "created_at", orderDir: "desc", limit: 500 },
+        data: {
+          table: "crm_broadcasts",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((row) => {
         return {
@@ -139,7 +176,12 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
 
   const save = useMutation({
     mutationFn: async () => {
-      let audience: { name: string; phone: string | null; email: string | null; lead_id?: string | null }[] = [];
+      let audience: {
+        name: string;
+        phone: string | null;
+        email: string | null;
+        lead_id?: string | null;
+      }[] = [];
 
       if (form.audience === "leads") {
         const data = (await listWorkspaceRows({
@@ -159,12 +201,28 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
           email: string | null;
           stage: string;
         }[];
-        audience = rows.map((l) => ({ name: l.name, phone: l.phone, email: l.email, lead_id: l.id }));
+        audience = rows.map((l) => ({
+          name: l.name,
+          phone: l.phone,
+          email: l.email,
+          lead_id: l.id,
+        }));
       } else if (form.audience === "customers") {
         const data = (await listWorkspaceRows({
-          data: { table: "md_customers", workspaceId, filters: { is_active: 1 }, orderBy: "name", orderDir: "asc", limit: 2000 },
+          data: {
+            table: "md_customers",
+            workspaceId,
+            filters: { is_active: 1 },
+            orderBy: "name",
+            orderDir: "asc",
+            limit: 2000,
+          },
         })) as { rows: Record<string, unknown>[] };
-        const rows = (data.rows ?? []) as unknown as { name: string; phone: string | null; email: string | null }[];
+        const rows = (data.rows ?? []) as unknown as {
+          name: string;
+          phone: string | null;
+          email: string | null;
+        }[];
         audience = rows.map((c) => ({ name: c.name, phone: c.phone, email: c.email }));
       } else {
         audience = form.manual
@@ -177,7 +235,8 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
           });
       }
 
-      if (audience.length === 0) throw new Error(t("No recipients found", "Tidak ada penerima ditemukan"));
+      if (audience.length === 0)
+        throw new Error(t("No recipients found", "Tidak ada penerima ditemukan"));
 
       const bc = (await saveWorkspaceRow({
         data: {
@@ -194,17 +253,19 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
         },
       })) as { id: string };
 
-      await upsertWorkspaceRows({ data: {
-        table: "crm_broadcast_recipients",
-        workspaceId,
-        rows: audience.map((a) => ({
-          broadcast_id: bc.id,
-          lead_id: a.lead_id ?? null,
-          name: a.name,
-          phone: a.phone,
-          email: a.email,
-        })),
-      } });
+      await upsertWorkspaceRows({
+        data: {
+          table: "crm_broadcast_recipients",
+          workspaceId,
+          rows: audience.map((a) => ({
+            broadcast_id: bc.id,
+            lead_id: a.lead_id ?? null,
+            name: a.name,
+            phone: a.phone,
+            email: a.email,
+          })),
+        },
+      });
       return bc.id as string;
     },
     onSuccess: (id) => {
@@ -231,7 +292,9 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
   const dispatch = useMutation({
     mutationFn: async (id: string) => send({ data: { workspaceId, broadcastId: id } }),
     onSuccess: (res) => {
-      toast.success(t(`Sent ${res.sent}, failed ${res.failed}`, `Terkirim ${res.sent}, gagal ${res.failed}`));
+      toast.success(
+        t(`Sent ${res.sent}, failed ${res.failed}`, `Terkirim ${res.sent}, gagal ${res.failed}`),
+      );
       qc.invalidateQueries({ queryKey: ["crm-broadcasts", workspaceId] });
       qc.invalidateQueries({ queryKey: ["crm-broadcast-recipients", activeId] });
     },
@@ -256,7 +319,11 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("Broadcast", "Broadcast Pesan")}>
-        <SearchInput value={term} onChange={setTerm} placeholder={t("Search broadcasts…", "Cari broadcast…")} />
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={t("Search broadcasts…", "Cari broadcast…")}
+        />
         <Button variant="navy" onClick={() => setOpen(true)}>
           <Plus /> {t("New broadcast", "Broadcast baru")}
         </Button>
@@ -280,7 +347,10 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || visibleRows.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={8}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {isLoading
                       ? t("Loading…", "Memuat…")
                       : term.trim()
@@ -295,13 +365,21 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
                   <TableCell className="font-medium">{r.name}</TableCell>
                   <TableCell className="capitalize">{r.channel}</TableCell>
                   <TableCell>
-                    <Badge variant={r.status === "sent" ? "secondary" : "outline"}>{r.status}</Badge>
+                    <Badge variant={r.status === "sent" ? "secondary" : "outline"}>
+                      {r.status}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">{r.total_recipients}</TableCell>
                   <TableCell className="text-right">{r.sent_count}</TableCell>
-                  <TableCell>{r.scheduled_at ? new Date(r.scheduled_at).toLocaleString() : "—"}</TableCell>
+                  <TableCell>
+                    {r.scheduled_at ? new Date(r.scheduled_at).toLocaleString() : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="ghost" onClick={() => setActiveId(r.id === activeId ? null : r.id)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setActiveId(r.id === activeId ? null : r.id)}
+                    >
                       {t("Open", "Buka")}
                     </Button>
                     <Button size="icon" variant="ghost" onClick={() => remove.mutate(r.id)}>
@@ -328,7 +406,10 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
               disabled={dispatch.isPending || active.channel !== "whatsapp"}
               onClick={() => dispatch.mutate(active.id)}
             >
-              <Send /> {dispatch.isPending ? t("Sending…", "Mengirim…") : t("Send via gateway", "Kirim via gateway")}
+              <Send />{" "}
+              {dispatch.isPending
+                ? t("Sending…", "Mengirim…")
+                : t("Send via gateway", "Kirim via gateway")}
             </Button>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -351,16 +432,29 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
                     <TableCell>{r.name ?? "—"}</TableCell>
                     <TableCell>{r.phone ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant={r.status === "sent" ? "secondary" : r.status === "failed" ? "destructive" : "outline"}>
+                      <Badge
+                        variant={
+                          r.status === "sent"
+                            ? "secondary"
+                            : r.status === "failed"
+                              ? "destructive"
+                              : "outline"
+                        }
+                      >
                         {r.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">{r.error ?? "—"}</TableCell>
+                    <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground">
+                      {r.error ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       {r.phone && (
                         <Button size="sm" variant="ghost" asChild>
                           <a
-                            href={waLink(r.phone, renderBroadcastMessage(active.message, r.name ?? ""))}
+                            href={waLink(
+                              r.phone,
+                              renderBroadcastMessage(active.message, r.name ?? ""),
+                            )}
                             target="_blank"
                             rel="noreferrer"
                           >
@@ -389,7 +483,10 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <AdminField label={t("Name", "Nama")}>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("Channel", "Kanal")}>
               <AdminSelect value={form.channel} onChange={(v) => setForm({ ...form, channel: v })}>
@@ -431,7 +528,12 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
             </AdminField>
             {form.audience === "manual" && (
               <div className="sm:col-span-2">
-                <AdminField label={t("Recipients (name, phone per line)", "Penerima (nama, telepon per baris)")}>
+                <AdminField
+                  label={t(
+                    "Recipients (name, phone per line)",
+                    "Penerima (nama, telepon per baris)",
+                  )}
+                >
                   <Textarea
                     rows={4}
                     value={form.manual}
@@ -442,8 +544,17 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
               </div>
             )}
             <div className="sm:col-span-2">
-              <AdminField label={t("Message — use {{name}} for personalisation", "Pesan — gunakan {{name}} untuk personalisasi")}>
-                <Textarea rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+              <AdminField
+                label={t(
+                  "Message — use {{name}} for personalisation",
+                  "Pesan — gunakan {{name}} untuk personalisasi",
+                )}
+              >
+                <Textarea
+                  rows={5}
+                  value={form.message}
+                  onChange={(e) => setForm({ ...form, message: e.target.value })}
+                />
               </AdminField>
             </div>
           </div>
@@ -478,6 +589,9 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
     api_token: string;
     is_active: boolean;
     notes: string;
+    phone_number_id: string;
+    invoice_template: string;
+    template_lang: string;
   }>(null);
 
   const { data, isLoading } = useQuery({
@@ -492,6 +606,9 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
     api_token: data?.api_token ?? "",
     is_active: data?.is_active ?? false,
     notes: data?.notes ?? "",
+    phone_number_id: data?.phone_number_id ?? "",
+    invoice_template: data?.invoice_template ?? "",
+    template_lang: data?.template_lang ?? "id",
   };
 
   const save = useMutation({
@@ -505,6 +622,9 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
           api_token: state.api_token || null,
           is_active: state.is_active,
           notes: state.notes || null,
+          phone_number_id: state.phone_number_id || null,
+          invoice_template: state.invoice_template || null,
+          template_lang: state.template_lang || "id",
         },
       });
     },
@@ -516,7 +636,10 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
   });
 
   const test = useMutation({
-    mutationFn: async () => runTest({ data: { workspaceId, testNumber } }),
+    mutationFn: async () =>
+      runTest({
+        data: { workspaceId, testNumber: state.provider === "kirimdev" ? "-" : testNumber },
+      }),
     onSuccess: (res) => {
       if (res.status === "ok") toast.success(t("Gateway reachable", "Gateway terhubung"));
       else toast.error(res.detail);
@@ -537,7 +660,10 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <AdminField label={t("Provider", "Provider")}>
-            <AdminSelect value={state.provider} onChange={(v) => setForm({ ...state, provider: v })}>
+            <AdminSelect
+              value={state.provider}
+              onChange={(v) => setForm({ ...state, provider: v })}
+            >
               {CRM_WA_PROVIDERS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {lang === "id" ? p.id_ : p.en}
@@ -545,14 +671,55 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
               ))}
             </AdminSelect>
           </AdminField>
-          <AdminField label={t("Sender number", "Nomor pengirim")}>
-            <Input
-              value={state.sender_number}
-              onChange={(e) => setForm({ ...state, sender_number: e.target.value })}
-              placeholder="628123456789"
-            />
-          </AdminField>
-          {state.provider !== "manual" && (
+          {state.provider !== "kirimdev" && (
+            <AdminField label={t("Sender number", "Nomor pengirim")}>
+              <Input
+                value={state.sender_number}
+                onChange={(e) => setForm({ ...state, sender_number: e.target.value })}
+                placeholder="628123456789"
+              />
+            </AdminField>
+          )}
+          {state.provider === "kirimdev" && (
+            <>
+              <AdminField label={t("Kirimdev API key", "API key Kirimdev")}>
+                <Input
+                  type="password"
+                  value={state.api_token}
+                  onChange={(e) => setForm({ ...state, api_token: e.target.value })}
+                  placeholder="kdv_live_…"
+                />
+              </AdminField>
+              <AdminField label="Phone Number ID">
+                <Input
+                  value={state.phone_number_id}
+                  onChange={(e) => setForm({ ...state, phone_number_id: e.target.value })}
+                  placeholder="106540352242922"
+                />
+              </AdminField>
+              <AdminField label={t("Invoice template name", "Nama template invoice")}>
+                <Input
+                  value={state.invoice_template}
+                  onChange={(e) => setForm({ ...state, invoice_template: e.target.value })}
+                  placeholder="invoice_baru"
+                />
+              </AdminField>
+              <AdminField label={t("Template language", "Bahasa template")}>
+                <Input
+                  value={state.template_lang}
+                  onChange={(e) => setForm({ ...state, template_lang: e.target.value })}
+                  placeholder="id"
+                />
+              </AdminField>
+              <p className="rounded-md bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">
+                {t(
+                  "Create the template in your Kirimdev dashboard and wait for Meta approval. Its body needs exactly 4 variables: {{1}} customer name, {{2}} invoice number, {{3}} total, {{4}} invoice link. Example: “Hello {{1}}, your invoice {{2}} totals {{3}}. View and download it here: {{4}}”. The key and Phone Number ID are in the Kirimdev dashboard (WhatsApp → Accounts). “Test” checks the key without sending any message.",
+                  "Buat template di dashboard Kirimdev lalu tunggu persetujuan Meta. Isi template harus memakai tepat 4 variabel: {{1}} nama pelanggan, {{2}} nomor invoice, {{3}} total, {{4}} link invoice. Contoh: “Halo {{1}}, invoice {{2}} sebesar {{3}}. Lihat dan unduh di sini: {{4}}”. API key dan Phone Number ID ada di dashboard Kirimdev (WhatsApp → Accounts). Tombol Uji hanya memeriksa kunci tanpa mengirim pesan.",
+                )}
+              </p>
+            </>
+          )}
+          {state.provider !== "manual" && state.provider !== "kirimdev" && (
             <>
               <AdminField label={t("Endpoint URL", "URL endpoint")}>
                 <Input
@@ -582,22 +749,33 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
           </div>
           <div className="sm:col-span-2">
             <AdminField label={t("Notes", "Catatan")}>
-              <Textarea value={state.notes} onChange={(e) => setForm({ ...state, notes: e.target.value })} />
+              <Textarea
+                value={state.notes}
+                onChange={(e) => setForm({ ...state, notes: e.target.value })}
+              />
             </AdminField>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-            <Button variant="navy" disabled={save.isPending || isLoading} onClick={() => save.mutate()}>
+            <Button
+              variant="navy"
+              disabled={save.isPending || isLoading}
+              onClick={() => save.mutate()}
+            >
               {t("Save", "Simpan")}
             </Button>
             <Input
-              className="w-48"
+              className={state.provider === "kirimdev" ? "hidden" : "w-48"}
               value={testNumber}
               onChange={(e) => setTestNumber(e.target.value)}
               placeholder={t("Test number", "Nomor uji")}
             />
             <Button
               variant="outline"
-              disabled={test.isPending || !testNumber.trim() || state.provider === "manual"}
+              disabled={
+                test.isPending ||
+                (state.provider !== "kirimdev" && !testNumber.trim()) ||
+                state.provider === "manual"
+              }
               onClick={() => test.mutate()}
             >
               <Send /> {t("Send test", "Kirim uji")}
@@ -605,7 +783,9 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
           </div>
           {data?.last_status && (
             <p className="sm:col-span-2 text-xs text-muted-foreground">
-              {t("Last check", "Cek terakhir")}: {data.last_checked_at ? new Date(data.last_checked_at).toLocaleString() : "—"} · {data.last_status}
+              {t("Last check", "Cek terakhir")}:{" "}
+              {data.last_checked_at ? new Date(data.last_checked_at).toLocaleString() : "—"} ·{" "}
+              {data.last_status}
             </p>
           )}
           <p className="sm:col-span-2 text-xs text-muted-foreground">
@@ -666,7 +846,13 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
     queryKey: ["crm-campaigns", workspaceId],
     queryFn: async () => {
       const data = (await listWorkspaceRows({
-        data: { table: "crm_campaigns", workspaceId, orderBy: "created_at", orderDir: "desc", limit: 500 },
+        data: {
+          table: "crm_campaigns",
+          workspaceId,
+          orderBy: "created_at",
+          orderDir: "desc",
+          limit: 500,
+        },
       })) as { rows: Record<string, unknown>[] };
       return (data.rows ?? []).map((row) => {
         return {
@@ -718,7 +904,9 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
         leads_generated: Number(v.leads_generated) || 0,
         owner_name: v.owner_name || null,
       };
-      await saveWorkspaceRow({ data: { table: "crm_campaigns", workspaceId, id: v.id || undefined, data: payload } });
+      await saveWorkspaceRow({
+        data: { table: "crm_campaigns", workspaceId, id: v.id || undefined, data: payload },
+      });
     },
     onSuccess: () => {
       toast.success(t("Campaign saved", "Kampanye tersimpan"));
@@ -739,13 +927,19 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
   const togglePlatform = (id: string) =>
     setForm((f) => ({
       ...f,
-      platforms: f.platforms.includes(id) ? f.platforms.filter((p) => p !== id) : [...f.platforms, id],
+      platforms: f.platforms.includes(id)
+        ? f.platforms.filter((p) => p !== id)
+        : [...f.platforms, id],
     }));
 
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("Social Campaigns", "Kampanye Sosial")}>
-        <SearchInput value={term} onChange={setTerm} placeholder={t("Search campaigns…", "Cari kampanye…")} />
+        <SearchInput
+          value={term}
+          onChange={setTerm}
+          placeholder={t("Search campaigns…", "Cari kampanye…")}
+        />
         <Button
           variant="navy"
           onClick={() => {
@@ -761,19 +955,27 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("Total budget", "Total anggaran")}</p>
-            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">{fmtIDR(totals.budget)}</p>
+            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">
+              {fmtIDR(totals.budget)}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">{t("Total reach", "Total jangkauan")}</p>
-            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">{totals.reach.toLocaleString()}</p>
+            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">
+              {totals.reach.toLocaleString()}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">{t("Leads generated", "Prospek dihasilkan")}</p>
-            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">{totals.leads}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("Leads generated", "Prospek dihasilkan")}
+            </p>
+            <p className="text-lg font-semibold text-navy dark:text-primary-foreground">
+              {totals.leads}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -796,7 +998,10 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
             <TableBody>
               {(isLoading || visibleRows.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={8}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     {isLoading
                       ? t("Loading…", "Memuat…")
                       : term.trim()
@@ -825,7 +1030,9 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
                     {r.start_date ?? "—"} → {r.end_date ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={r.status === "running" ? "secondary" : "outline"}>{r.status}</Badge>
+                    <Badge variant={r.status === "running" ? "secondary" : "outline"}>
+                      {r.status}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -868,10 +1075,16 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <AdminField label={t("Name", "Nama")}>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("Objective", "Tujuan")}>
-              <AdminSelect value={form.objective} onChange={(v) => setForm({ ...form, objective: v })}>
+              <AdminSelect
+                value={form.objective}
+                onChange={(v) => setForm({ ...form, objective: v })}
+              >
                 {CRM_CAMPAIGN_OBJECTIVES.map((o) => (
                   <option key={o.id} value={o.id}>
                     {lang === "id" ? o.id_ : o.en}
@@ -884,7 +1097,10 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
                 <div className="flex flex-wrap gap-3 pt-1">
                   {CRM_SOCIAL_PLATFORMS.map((p) => (
                     <label key={p.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox checked={form.platforms.includes(p.id)} onCheckedChange={() => togglePlatform(p.id)} />
+                      <Checkbox
+                        checked={form.platforms.includes(p.id)}
+                        onCheckedChange={() => togglePlatform(p.id)}
+                      />
                       {p.label}
                     </label>
                   ))}
@@ -892,7 +1108,11 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
               </AdminField>
             </div>
             <AdminField label={t("Budget", "Anggaran")}>
-              <Input type="number" value={form.budget} onChange={(e) => setForm({ ...form, budget: Number(e.target.value) })} />
+              <Input
+                type="number"
+                value={form.budget}
+                onChange={(e) => setForm({ ...form, budget: Number(e.target.value) })}
+              />
             </AdminField>
             <AdminField label="Status">
               <AdminSelect value={form.status} onChange={(v) => setForm({ ...form, status: v })}>
@@ -904,22 +1124,44 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
               </AdminSelect>
             </AdminField>
             <AdminField label={t("Start date", "Tanggal mulai")}>
-              <Input type="date" value={form.start_date ?? ""} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+              <Input
+                type="date"
+                value={form.start_date ?? ""}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("End date", "Tanggal selesai")}>
-              <Input type="date" value={form.end_date ?? ""} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
+              <Input
+                type="date"
+                value={form.end_date ?? ""}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("Media link", "Tautan media")}>
-              <Input value={form.media_url ?? ""} onChange={(e) => setForm({ ...form, media_url: e.target.value })} />
+              <Input
+                value={form.media_url ?? ""}
+                onChange={(e) => setForm({ ...form, media_url: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("Owner", "Penanggung jawab")}>
-              <Input value={form.owner_name ?? ""} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} />
+              <Input
+                value={form.owner_name ?? ""}
+                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+              />
             </AdminField>
             <AdminField label={t("Reach", "Jangkauan")}>
-              <Input type="number" value={form.reach} onChange={(e) => setForm({ ...form, reach: Number(e.target.value) })} />
+              <Input
+                type="number"
+                value={form.reach}
+                onChange={(e) => setForm({ ...form, reach: Number(e.target.value) })}
+              />
             </AdminField>
             <AdminField label={t("Clicks", "Klik")}>
-              <Input type="number" value={form.clicks} onChange={(e) => setForm({ ...form, clicks: Number(e.target.value) })} />
+              <Input
+                type="number"
+                value={form.clicks}
+                onChange={(e) => setForm({ ...form, clicks: Number(e.target.value) })}
+              />
             </AdminField>
             <AdminField label={t("Leads generated", "Prospek dihasilkan")}>
               <Input
@@ -930,7 +1172,11 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
             </AdminField>
             <div className="sm:col-span-2">
               <AdminField label={t("Content / caption", "Konten / caption")}>
-                <Textarea rows={4} value={form.content ?? ""} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+                <Textarea
+                  rows={4}
+                  value={form.content ?? ""}
+                  onChange={(e) => setForm({ ...form, content: e.target.value })}
+                />
               </AdminField>
             </div>
           </div>
@@ -938,7 +1184,11 @@ export function CampaignView({ workspaceId }: { workspaceId: string }) {
             <Button variant="outline" onClick={() => setOpen(false)}>
               {t("Cancel", "Batal")}
             </Button>
-            <Button variant="navy" disabled={!form.name.trim() || save.isPending} onClick={() => save.mutate(form)}>
+            <Button
+              variant="navy"
+              disabled={!form.name.trim() || save.isPending}
+              onClick={() => save.mutate(form)}
+            >
               {t("Save", "Simpan")}
             </Button>
           </DialogFooter>

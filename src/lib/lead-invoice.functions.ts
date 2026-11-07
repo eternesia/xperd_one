@@ -93,3 +93,14 @@ export const getInvoicePublic = createServerFn({ method: "POST" })
     const { getPublicInvoice } = await import("@/lib/lead-invoice.core.server");
     return getPublicInvoice(data.token);
   });
+
+export const sendLeadInvoiceWhatsApp = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    ws.extend({ invoiceId: z.string().uuid(), link: z.string().url().max(500) }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    await gate(data.workspaceId, context.userId, true);
+    const { sendInvoiceWaCore } = await import("@/lib/lead-invoice.core.server");
+    return sendInvoiceWaCore(data.workspaceId, data.invoiceId, data.link, actorOf(context));
+  });
