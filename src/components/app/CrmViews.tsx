@@ -69,6 +69,7 @@ import { sqlDateTime } from "@/lib/datetime";
 import { QuickInvoice } from "@/components/app/QuickReplies";
 import { CalendarPage } from "@/components/qalling/pages/CalendarPage";
 import { ClientsPage } from "@/components/qalling/pages/ClientsPage";
+import { AttributionPage } from "@/components/qalling/pages/AttributionPage";
 import { AgencyPage } from "@/components/qalling/pages/AgencyPage";
 import { ReportsPage } from "@/components/qalling/pages/ReportsPage";
 import { TeamPage } from "@/components/app/TeamPage";
@@ -106,6 +107,8 @@ interface LeadRow {
   lost_reason: string | null;
   stage_changed_at: string | null;
   quotation_id: string | null;
+  source_post_id?: string | null;
+  source_campaign_id?: string | null;
 }
 
 interface ActivityRow {
@@ -138,6 +141,8 @@ const EMPTY_LEAD: LeadForm = {
   lost_reason: "",
   stage_changed_at: null,
   quotation_id: null,
+  source_post_id: null,
+  source_campaign_id: null,
 };
 
 function useLeads(workspaceId: string) {
@@ -160,6 +165,32 @@ function useLeads(workspaceId: string) {
           probability: Number(row.probability) || 0,
         } as unknown as LeadRow;
       });
+    },
+  });
+}
+
+function useContentSources(workspaceId: string) {
+  return useQuery({
+    queryKey: ["lead-content-sources", workspaceId],
+    queryFn: async () => {
+      const list = async (table: string, orderBy: string) =>
+        (
+          (await listWorkspaceRows({
+            data: { table, workspaceId, orderBy, orderDir: "desc", limit: 100 },
+          })) as {
+            rows: Record<string, unknown>[];
+          }
+        ).rows ?? [];
+      const [posts, campaigns] = await Promise.all([
+        list("crm_scheduled_posts", "scheduled_at"),
+        list("crm_campaigns", "created_at"),
+      ]);
+      return {
+        posts: posts
+          .filter((p) => ["published", "scheduled"].includes(String(p.status)))
+          .map((p) => ({ id: String(p.id), title: String(p.title ?? "") })),
+        campaigns: campaigns.map((c) => ({ id: String(c.id), title: String(c.name ?? "") })),
+      };
     },
   });
 }
@@ -196,6 +227,7 @@ export function CrmView({
   if (submoduleId === "clients") return <ClientsPage />;
   if (submoduleId === "reports") return <ReportsPage />;
   if (submoduleId === "agency") return <AgencyPage />;
+  if (submoduleId === "attribution") return <AttributionPage />;
   if (submoduleId === "ai") return <AiPage />;
   if (submoduleId === "team") return <TeamPage embedded />;
   if (submoduleId === "leads") return <LeadsView workspaceId={workspaceId} />;
@@ -227,6 +259,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const qc = useQueryClient();
   const { data: rows = [], isLoading } = useLeads(workspaceId);
+  const sources = useContentSources(workspaceId);
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>(EMPTY_LEAD);
@@ -360,6 +393,8 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         email: v.email || null,
         phone: v.phone || null,
         source: v.source || null,
+        source_post_id: v.source_post_id || null,
+        source_campaign_id: v.source_campaign_id || null,
         stage: v.stage,
         status: v.stage === "won" ? "won" : v.stage === "lost" ? "lost" : "open",
         estimated_value: Number(v.estimated_value) || 0,
@@ -601,6 +636,46 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                     {s}
                   </option>
                 ))}
+              </AdminSelect>
+            </AdminField>
+            <AdminField
+              label={lang === "id" ? "Konten sumber (opsional)" : "Content source (optional)"}
+            >
+              <AdminSelect
+                value={
+                  form.source_post_id
+                    ? `p:${form.source_post_id}`
+                    : form.source_campaign_id
+                      ? `c:${form.source_campaign_id}`
+                      : ""
+                }
+                onChange={(v) =>
+                  setForm({
+                    ...form,
+                    source_post_id: v.startsWith("p:") ? v.slice(2) : null,
+                    source_campaign_id: v.startsWith("c:") ? v.slice(2) : null,
+                  })
+                }
+              >
+                <option value="">{lang === "id" ? "— tidak diketahui —" : "— unknown —"}</option>
+                {(sources.data?.posts ?? []).length > 0 && (
+                  <optgroup label={lang === "id" ? "Postingan" : "Posts"}>
+                    {sources.data!.posts.map((p) => (
+                      <option key={p.id} value={`p:${p.id}`}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {(sources.data?.campaigns ?? []).length > 0 && (
+                  <optgroup label={lang === "id" ? "Kampanye" : "Campaigns"}>
+                    {sources.data!.campaigns.map((c) => (
+                      <option key={c.id} value={`c:${c.id}`}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </AdminSelect>
             </AdminField>
             <AdminField label={lang === "id" ? "Tahap" : "Stage"}>

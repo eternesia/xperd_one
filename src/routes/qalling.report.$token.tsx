@@ -103,6 +103,31 @@ function ReportPage() {
             </tbody>
           </table>
         </section>
+        {r.topContent.length > 0 && (
+          <section className="overflow-x-auto rounded-xl border bg-background">
+            <h2 className="px-4 pt-4 font-semibold">Konten penghasil prospek</h2>
+            <table className="mt-2 w-full text-sm">
+              <thead className="bg-secondary/60 text-left">
+                <tr>
+                  <th className="px-3 py-2">Postingan</th>
+                  <th className="px-3 py-2 text-right">Prospek</th>
+                  <th className="px-3 py-2 text-right">Closing</th>
+                  <th className="px-3 py-2 text-right">Nilai</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.topContent.map((p) => (
+                  <tr key={p.title} className="border-t">
+                    <td className="max-w-xs truncate px-3 py-2 font-medium">{p.title}</td>
+                    <td className="px-3 py-2 text-right">{p.leads}</td>
+                    <td className="px-3 py-2 text-right">{p.won}</td>
+                    <td className="px-3 py-2 text-right">{rupiah(p.wonValue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
         {r.recent.length > 0 && (
           <section className="rounded-xl border bg-background p-4">
             <h2 className="mb-2 font-semibold">Postingan terbaru</h2>

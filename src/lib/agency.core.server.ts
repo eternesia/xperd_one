@@ -445,7 +445,16 @@ export async function getPublicReport(token: string) {
            FROM crm_leads WHERE workspace_id = ? AND created_at >= ?`,
         [l.workspace_id, since],
       );
+  const attribution = l.client_group_id
+    ? null
+    : await (
+        await import("./attribution.core.server")
+      ).contentAttributionCore(l.workspace_id, l.period_days);
   return {
+    topContent:
+      attribution?.posts
+        .slice(0, 5)
+        .map((p) => ({ title: p.title, leads: p.leads, won: p.won, wonValue: p.wonValue })) ?? [],
     title: l.title,
     brand: l.brand_name,
     color: l.brand_color,

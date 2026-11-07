@@ -34,6 +34,14 @@ export default defineTool({
       .describe("Next follow-up date, YYYY-MM-DD."),
     notes: z.string().max(2000).optional(),
     lost_reason: z.string().max(255).optional().describe("Why the lead was lost (stage lost)."),
+    source_post_id: z
+      .union([z.string().uuid(), z.literal("")])
+      .optional()
+      .describe("Post that brought this lead (content attribution). Empty string clears it."),
+    source_campaign_id: z
+      .union([z.string().uuid(), z.literal("")])
+      .optional()
+      .describe("Campaign that brought this lead. Empty string clears it."),
   },
   annotations: {
     readOnlyHint: false,
@@ -81,6 +89,19 @@ export default defineTool({
       if (a.stage !== "lost") put("lost_reason", null);
     }
     if (a.probability !== undefined) put("probability", a.probability);
+    if (a.source_post_id !== undefined || a.source_campaign_id !== undefined) {
+      const { validateLeadSource } = await import("@/lib/attribution.core.server");
+      await validateLeadSource(
+        a.workspace_id,
+        a.source_post_id || null,
+        a.source_campaign_id || null,
+      ).catch((e: Error) => {
+        throw new ToolError(e.message);
+      });
+      if (a.source_post_id !== undefined) put("source_post_id", a.source_post_id || null);
+      if (a.source_campaign_id !== undefined)
+        put("source_campaign_id", a.source_campaign_id || null);
+    }
     const stageNow = a.stage ?? cur.stage;
     if (a.lost_reason !== undefined && stageNow === "lost") put("lost_reason", text(a.lost_reason));
     if (!sets.length) throw new ToolError("Nothing to change: pass at least one field.");

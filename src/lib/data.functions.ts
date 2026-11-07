@@ -658,6 +658,8 @@ const COLS: Record<string, string[]> = {
     "lost_reason",
     "stage_changed_at",
     "notes",
+    "source_post_id",
+    "source_campaign_id",
     "created_by",
     "created_at",
     "updated_at",

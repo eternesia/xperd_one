@@ -147,8 +147,12 @@ export const QALLING_DOCS: DocSection[] = [
       "Buka Penjualan → Pipeline untuk memindahkan lead antar tahap.",
       "Catat aktivitas (telepon, pesan, pertemuan) dan jadwalkan Follow-up agar tidak ada prospek terlewat.",
       "Beranda menampilkan follow-up yang terlambat dan yang jatuh tempo hari ini.",
+      "Di form prospek, pilih Konten sumber (postingan atau kampanye yang membawa prospek itu). Buka Penjualan → Atribusi Konten untuk melihat konten mana yang menghasilkan prospek, closing, dan nilai penjualan.",
     ],
-    tips: ["Tentukan satu penanggung jawab untuk tiap lead supaya daftar follow-up jelas."],
+    tips: [
+      "Tentukan satu penanggung jawab untuk tiap lead supaya daftar follow-up jelas.",
+      "Isi Konten sumber sejak prospek dibuat; makin lengkap, makin akurat laporan atribusinya.",
+    ],
   },
   {
     id: "agency",
@@ -509,7 +513,8 @@ export const QALLING_DOCS: DocSection[] = [
     summary: "Ajak teman memakai Qalling dan dapatkan komisi dalam bentuk saldo.",
     steps: [
       "Buka menu Referral untuk melihat tautan undangan Anda.",
-      "Bagikan tautan itu; komisi masuk ke saldo setelah syarat program terpenuhi.",
+      "Bagikan tautan itu. Tautan membuka beranda Qalling, jadi teman Anda bisa membaca fitur dulu sebelum mendaftar. Kode referral tersimpan di perangkatnya selama 30 hari dan otomatis terpakai saat ia mendaftar.",
+      "Komisi masuk ke saldo setelah syarat program terpenuhi.",
     ],
   },
   {
