@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { captureReferral, getStoredReferral } from "@/lib/referral-capture";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, Loader2, Mail } from "lucide-react";
@@ -69,6 +70,7 @@ function QallingSignup() {
   const [regId, setRegId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refCode, setRefCode] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [policy, setPolicy] = useState<null | { title: string; body: string }>(null);
 
@@ -87,8 +89,8 @@ function QallingSignup() {
   }
 
   useEffect(() => {
-    const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref) localStorage.setItem("qalling_ref", ref.slice(0, 20));
+    captureReferral();
+    setRefCode(getStoredReferral());
   }, []);
 
   useEffect(() => {
@@ -196,28 +198,50 @@ function QallingSignup() {
           ) : (
             <>
               <div className="flex items-start gap-3 rounded-lg border bg-secondary/40 p-3">
-                <Checkbox id="agree" checked={agreed} onCheckedChange={(v) => setAgreed(v === true)} className="mt-0.5" />
+                <Checkbox
+                  id="agree"
+                  checked={agreed}
+                  onCheckedChange={(v) => setAgreed(v === true)}
+                  className="mt-0.5"
+                />
                 <div className="space-y-1 text-sm">
-                  <Label htmlFor="agree" className="font-normal leading-snug">{settings?.terms_label}</Label>
+                  <Label htmlFor="agree" className="font-normal leading-snug">
+                    {settings?.terms_label}
+                  </Label>
                   <div className="flex flex-wrap gap-x-3 text-xs">
                     {[
                       [pick("Terms of Service", "Syarat Layanan"), settings?.terms_of_service],
                       [pick("Privacy Policy", "Kebijakan Privasi"), settings?.privacy_policy],
-                      [pick("Acceptable Use Policy", "Kebijakan Penggunaan"), settings?.acceptable_use_policy],
-                    ].filter(([, b]) => b).map(([t, b]) => (
-                      <button key={t} type="button" className="text-gold hover:underline" onClick={() => setPolicy({ title: t as string, body: b as string })}>{t}</button>
-                    ))}
+                      [
+                        pick("Acceptable Use Policy", "Kebijakan Penggunaan"),
+                        settings?.acceptable_use_policy,
+                      ],
+                    ]
+                      .filter(([, b]) => b)
+                      .map(([t, b]) => (
+                        <button
+                          key={t}
+                          type="button"
+                          className="text-gold hover:underline"
+                          onClick={() => setPolicy({ title: t as string, body: b as string })}
+                        >
+                          {t}
+                        </button>
+                      ))}
                   </div>
                 </div>
               </div>
               {settings?.google_enabled !== false && (
                 <>
-                  <div className={agreed ? "" : "pointer-events-none opacity-50"} aria-disabled={!agreed}>
-                  <GoogleButton
-                    label={pick("Sign up with Google", "Daftar dengan Google")}
-                    beforeRedirect={() => sessionStorage.setItem(SIGNUP_TIER_KEY, plan.code)}
-                    onSignedIn={() => finishWithSession(plan.code)}
-                  />
+                  <div
+                    className={agreed ? "" : "pointer-events-none opacity-50"}
+                    aria-disabled={!agreed}
+                  >
+                    <GoogleButton
+                      label={pick("Sign up with Google", "Daftar dengan Google")}
+                      beforeRedirect={() => sessionStorage.setItem(SIGNUP_TIER_KEY, plan.code)}
+                      onSignedIn={() => finishWithSession(plan.code)}
+                    />
                   </div>
                   {settings?.email_otp_enabled !== false && (
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -230,6 +254,14 @@ function QallingSignup() {
               )}
               {settings?.email_otp_enabled !== false && (
                 <form className="space-y-4" onSubmit={submit}>
+                  {refCode && (
+                    <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+                      {pick(
+                        `Referral code ${refCode} will be applied to this account.`,
+                        `Kode referral ${refCode} akan dipakai untuk akun ini.`,
+                      )}
+                    </p>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="name">{pick("Full name", "Nama lengkap")}</Label>
                     <Input
@@ -252,7 +284,12 @@ function QallingSignup() {
                       required
                     />
                   </div>
-                  <Button type="submit" variant="gold" className="w-full" disabled={busy || !agreed}>
+                  <Button
+                    type="submit"
+                    variant="gold"
+                    className="w-full"
+                    disabled={busy || !agreed}
+                  >
                     {busy ? <Loader2 className="animate-spin" /> : <Mail />}
                     {pick("Email verification code", "Kirim kode ke email")}
                   </Button>
@@ -264,8 +301,12 @@ function QallingSignup() {
       </Card>
       <Dialog open={!!policy} onOpenChange={(o) => !o && setPolicy(null)}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>{policy?.title}</DialogTitle></DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">{policy?.body}</div>
+          <DialogHeader>
+            <DialogTitle>{policy?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">
+            {policy?.body}
+          </div>
         </DialogContent>
       </Dialog>
       <p className="text-center text-sm text-muted-foreground">

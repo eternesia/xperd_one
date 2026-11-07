@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { captureReferral } from "@/lib/referral-capture";
 import { useQuery } from "@tanstack/react-query";
 import { getWebsiteContacts } from "@/lib/xperd-contact.functions";
 import { Link } from "@tanstack/react-router";
@@ -72,6 +73,7 @@ const NAV = [
 
 export function QallingShell({ children }: { children: ReactNode }) {
   const QALLING_CONTACT = useQallingContact();
+  useEffect(() => captureReferral(), []);
   const { pick } = useI18n();
   const navLabel = (label: string) =>
     pick(

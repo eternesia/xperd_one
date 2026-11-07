@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { clearStoredReferral, getStoredReferral } from "@/lib/referral-capture";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   CalendarRange,
@@ -115,11 +116,11 @@ function QallingShell() {
   // Attach a referral code captured on the public site once the account has a workspace.
   useEffect(() => {
     if (!userId || workspaces.length === 0) return;
-    const ref = localStorage.getItem("qalling_ref");
+    const ref = getStoredReferral();
     if (!ref) return;
     void claimReferral({ data: { code: ref } })
       .catch(() => undefined)
-      .then(() => localStorage.removeItem("qalling_ref"));
+      .then(() => clearStoredReferral());
   }, [userId, workspaces.length]);
 
   // The plan is chosen once at signup; if the account still has no workspace, activate it automatically.
@@ -313,7 +314,11 @@ function QallingShell() {
         "wa-gateway",
         "templates",
       ])}
-      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", ["clients", "reports", "agency"])}
+      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", [
+        "clients",
+        "reports",
+        "agency",
+      ])}
       {section("tender", "Tender", ["tenders", "doc-library"])}
     </nav>
   );
@@ -346,7 +351,9 @@ function QallingShell() {
                 to="/qalling/app/billing"
                 data-testid="qalling-balance"
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-secondary"
-                aria-label={lang === "id" ? "Saldo, isi ulang di Tagihan" : "Balance, top up in Billing"}
+                aria-label={
+                  lang === "id" ? "Saldo, isi ulang di Tagihan" : "Balance, top up in Billing"
+                }
               >
                 <Wallet className="h-3.5 w-3.5 text-primary" />
                 <span>
