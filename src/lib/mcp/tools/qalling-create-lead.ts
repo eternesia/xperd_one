@@ -16,6 +16,16 @@ export default defineTool({
     source: z.string().max(60).optional().describe("Where the lead came from."),
     estimated_value: z.number().int().min(0).optional().describe("Estimated deal value in IDR."),
     notes: z.string().max(2000).optional().describe("Initial note."),
+    source_post_id: z
+      .string()
+      .uuid()
+      .optional()
+      .describe("Post (qalling_list_posts) that brought this lead, for content attribution."),
+    source_campaign_id: z
+      .string()
+      .uuid()
+      .optional()
+      .describe("Campaign that brought this lead, for content attribution."),
   },
   annotations: {
     readOnlyHint: false,
@@ -28,6 +38,12 @@ export default defineTool({
     const { userId } = await getTokenUser(ctx);
     await assertQallingAccess(workspace_id, userId, "crm", true);
     const { executeOne, transaction, uuid } = await import("@/integrations/mysql/pool");
+    const { validateLeadSource } = await import("@/lib/attribution.core.server");
+    await validateLeadSource(workspace_id, lead.source_post_id, lead.source_campaign_id).catch(
+      (e: Error) => {
+        throw new ToolError(e.message);
+      },
+    );
     const id = uuid();
     // Kode berikutnya dihitung di dalam transaksi (kunci baris workspace) agar tidak bentrok.
     const code = await transaction(async (conn) => {
@@ -37,8 +53,8 @@ export default defineTool({
       ]);
       const c = nextLeadCode((rows as { code: string }[]).map((r) => r.code));
       await conn.execute(
-        `INSERT INTO crm_leads (id, workspace_id, code, name, company_name, email, phone, source, estimated_value, notes, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO crm_leads (id, workspace_id, code, name, company_name, email, phone, source, estimated_value, notes, created_by, source_post_id, source_campaign_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           workspace_id,
@@ -51,6 +67,8 @@ export default defineTool({
           lead.estimated_value ?? 0,
           lead.notes ?? null,
           userId,
+          lead.source_post_id ?? null,
+          lead.source_campaign_id ?? null,
         ],
       );
       return c;

@@ -373,6 +373,7 @@ const MODULE_DEFS: AppModule[] = [
       g(SALES, Contact, "contacts", "Contacts", "Kontak"),
       g(SALES, CalendarCheck, "follow-ups", "Follow Ups", "Follow Up"),
       g(SALES, Target, "targets", "Sales Targets", "Target Sales"),
+      g(SALES, TrendingUp, "attribution", "Content Attribution", "Atribusi Konten"),
       g(CONTENT, CalendarRange, "calendar", "Calendar", "Kalender"),
       g(CONTENT, CalendarDays, "post-scheduler", "Posts", "Posts"),
       g(CONTENT, Lightbulb, "ideas", "Ideas", "Ide Konten"),

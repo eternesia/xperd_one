@@ -20,6 +20,7 @@ export const CRM_FEATURES: Record<string, string> = {
   contacts: "crm",
   "follow-ups": "crm",
   targets: "crm",
+  attribution: "crm",
   broadcast: "whatsapp",
   "wa-gateway": "whatsapp",
   templates: "templates",

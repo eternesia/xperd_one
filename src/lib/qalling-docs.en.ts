@@ -120,8 +120,12 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
       "Open Sales → Pipeline to move leads between stages.",
       "Log activities (calls, messages, meetings) and schedule Follow-ups so no prospect is missed.",
       "The Home page shows overdue follow-ups and those due today.",
+      "In the lead form, choose a Content source (the post or campaign that brought the lead). Open Sales → Content Attribution to see which content produces leads, closings and sales value.",
     ],
-    tips: ["Assign one owner per lead so the follow-up list is clear."],
+    tips: [
+      "Assign one owner per lead so the follow-up list is clear.",
+      "Fill in the Content source when the lead is created; the more complete it is, the more accurate the attribution report.",
+    ],
   },
   agency: {
     title: "Agency plan: client approvals & white-label reports",
@@ -317,7 +321,8 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
     summary: "Invite friends to Qalling and earn commission as balance.",
     steps: [
       "Open the Referral menu to see your invitation link.",
-      "Share the link; the commission is credited to your balance once the programme conditions are met.",
+      "Share the link. It opens the Qalling home page, so your friend can read about the features before signing up. The referral code is kept on their device for 30 days and applied automatically when they register.",
+      "The commission is credited to your balance once the programme conditions are met.",
     ],
   },
   tim: {
