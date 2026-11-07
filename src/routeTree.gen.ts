@@ -59,7 +59,10 @@ import { Route as QallingHargaRouteImport } from './routes/qalling.harga'
 import { Route as QallingKelebihanRouteImport } from './routes/qalling.kelebihan'
 import { Route as QallingKontakRouteImport } from './routes/qalling.kontak'
 import { Route as QallingLoginRouteImport } from './routes/qalling.login'
+import { Route as QallingPenggunaanRouteImport } from './routes/qalling.penggunaan'
+import { Route as QallingPrivasiRouteImport } from './routes/qalling.privasi'
 import { Route as QallingSolusiRouteImport } from './routes/qalling.solusi'
+import { Route as QallingSyaratRouteImport } from './routes/qalling.syarat'
 import { Route as QallingTestimoniRouteImport } from './routes/qalling.testimoni'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport } from './routes/[.well-known]/oauth-protected-resource/mcp'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
@@ -356,9 +359,24 @@ const QallingLoginRoute = QallingLoginRouteImport.update({
   path: '/qalling/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QallingPenggunaanRoute = QallingPenggunaanRouteImport.update({
+  id: '/qalling/penggunaan',
+  path: '/qalling/penggunaan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingPrivasiRoute = QallingPrivasiRouteImport.update({
+  id: '/qalling/privasi',
+  path: '/qalling/privasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QallingSolusiRoute = QallingSolusiRouteImport.update({
   id: '/qalling/solusi',
   path: '/qalling/solusi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QallingSyaratRoute = QallingSyaratRouteImport.update({
+  id: '/qalling/syarat',
+  path: '/qalling/syarat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QallingTestimoniRoute = QallingTestimoniRouteImport.update({
@@ -643,7 +661,10 @@ export interface FileRoutesByFullPath {
   '/qalling/kelebihan': typeof QallingKelebihanRoute
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
+  '/qalling/penggunaan': typeof QallingPenggunaanRoute
+  '/qalling/privasi': typeof QallingPrivasiRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/syarat': typeof QallingSyaratRoute
   '/qalling/testimoni': typeof QallingTestimoniRoute
   '/app-admin/': typeof AppAdminIndexRoute
   '/app/': typeof AppIndexRoute
@@ -735,7 +756,10 @@ export interface FileRoutesByTo {
   '/qalling/kelebihan': typeof QallingKelebihanRoute
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
+  '/qalling/penggunaan': typeof QallingPenggunaanRoute
+  '/qalling/privasi': typeof QallingPrivasiRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/syarat': typeof QallingSyaratRoute
   '/qalling/testimoni': typeof QallingTestimoniRoute
   '/': typeof SiteIndexRoute
   '/app-admin': typeof AppAdminIndexRoute
@@ -831,7 +855,10 @@ export interface FileRoutesById {
   '/qalling/kelebihan': typeof QallingKelebihanRoute
   '/qalling/kontak': typeof QallingKontakRoute
   '/qalling/login': typeof QallingLoginRoute
+  '/qalling/penggunaan': typeof QallingPenggunaanRoute
+  '/qalling/privasi': typeof QallingPrivasiRoute
   '/qalling/solusi': typeof QallingSolusiRoute
+  '/qalling/syarat': typeof QallingSyaratRoute
   '/qalling/testimoni': typeof QallingTestimoniRoute
   '/_site/': typeof SiteIndexRoute
   '/app-admin/': typeof AppAdminIndexRoute
@@ -930,7 +957,10 @@ export interface FileRouteTypes {
     | '/qalling/kelebihan'
     | '/qalling/kontak'
     | '/qalling/login'
+    | '/qalling/penggunaan'
+    | '/qalling/privasi'
     | '/qalling/solusi'
+    | '/qalling/syarat'
     | '/qalling/testimoni'
     | '/app-admin/'
     | '/app/'
@@ -1022,7 +1052,10 @@ export interface FileRouteTypes {
     | '/qalling/kelebihan'
     | '/qalling/kontak'
     | '/qalling/login'
+    | '/qalling/penggunaan'
+    | '/qalling/privasi'
     | '/qalling/solusi'
+    | '/qalling/syarat'
     | '/qalling/testimoni'
     | '/'
     | '/app-admin'
@@ -1117,7 +1150,10 @@ export interface FileRouteTypes {
     | '/qalling/kelebihan'
     | '/qalling/kontak'
     | '/qalling/login'
+    | '/qalling/penggunaan'
+    | '/qalling/privasi'
     | '/qalling/solusi'
+    | '/qalling/syarat'
     | '/qalling/testimoni'
     | '/_site/'
     | '/app-admin/'
@@ -1189,7 +1225,10 @@ export interface RootRouteChildren {
   QallingKelebihanRoute: typeof QallingKelebihanRoute
   QallingKontakRoute: typeof QallingKontakRoute
   QallingLoginRoute: typeof QallingLoginRoute
+  QallingPenggunaanRoute: typeof QallingPenggunaanRoute
+  QallingPrivasiRoute: typeof QallingPrivasiRoute
   QallingSolusiRoute: typeof QallingSolusiRoute
+  QallingSyaratRoute: typeof QallingSyaratRoute
   QallingTestimoniRoute: typeof QallingTestimoniRoute
   QallingIndexRoute: typeof QallingIndexRoute
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
@@ -1566,11 +1605,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/qalling/penggunaan': {
+      id: '/qalling/penggunaan'
+      path: '/qalling/penggunaan'
+      fullPath: '/qalling/penggunaan'
+      preLoaderRoute: typeof QallingPenggunaanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/privasi': {
+      id: '/qalling/privasi'
+      path: '/qalling/privasi'
+      fullPath: '/qalling/privasi'
+      preLoaderRoute: typeof QallingPrivasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qalling/solusi': {
       id: '/qalling/solusi'
       path: '/qalling/solusi'
       fullPath: '/qalling/solusi'
       preLoaderRoute: typeof QallingSolusiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qalling/syarat': {
+      id: '/qalling/syarat'
+      path: '/qalling/syarat'
+      fullPath: '/qalling/syarat'
+      preLoaderRoute: typeof QallingSyaratRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qalling/testimoni': {
@@ -2084,7 +2144,10 @@ const rootRouteChildren: RootRouteChildren = {
   QallingKelebihanRoute: QallingKelebihanRoute,
   QallingKontakRoute: QallingKontakRoute,
   QallingLoginRoute: QallingLoginRoute,
+  QallingPenggunaanRoute: QallingPenggunaanRoute,
+  QallingPrivasiRoute: QallingPrivasiRoute,
   QallingSolusiRoute: QallingSolusiRoute,
+  QallingSyaratRoute: QallingSyaratRoute,
   QallingTestimoniRoute: QallingTestimoniRoute,
   QallingIndexRoute: QallingIndexRoute,
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,

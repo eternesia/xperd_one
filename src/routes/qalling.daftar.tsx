@@ -24,9 +24,9 @@ import {
   onSessionIssued,
   useAuthSettings,
 } from "@/components/qalling/qalling-auth";
+import { qallingPagePath } from "@/lib/qalling-urls";
 import { useI18n } from "@/lib/i18n";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type Search = { paket?: string };
 
@@ -72,7 +72,6 @@ function QallingSignup() {
   const [busy, setBusy] = useState(false);
   const [refCode, setRefCode] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
-  const [policy, setPolicy] = useState<null | { title: string; body: string }>(null);
 
   // Link referral lama (`/register?ref=KODE`): simpan kodenya lalu arahkan ke beranda agar calon pengguna membaca fitur dulu.
   useEffect(() => {
@@ -212,32 +211,36 @@ function QallingSignup() {
                   onCheckedChange={(v) => setAgreed(v === true)}
                   className="mt-0.5"
                 />
-                <div className="space-y-1 text-sm">
-                  <Label htmlFor="agree" className="font-normal leading-snug">
-                    {settings?.terms_label}
-                  </Label>
-                  <div className="flex flex-wrap gap-x-3 text-xs">
-                    {[
-                      [pick("Terms of Service", "Syarat Layanan"), settings?.terms_of_service],
-                      [pick("Privacy Policy", "Kebijakan Privasi"), settings?.privacy_policy],
-                      [
-                        pick("Acceptable Use Policy", "Kebijakan Penggunaan"),
-                        settings?.acceptable_use_policy,
-                      ],
-                    ]
-                      .filter(([, b]) => b)
-                      .map(([t, b]) => (
-                        <button
-                          key={t}
-                          type="button"
-                          className="text-gold hover:underline"
-                          onClick={() => setPolicy({ title: t as string, body: b as string })}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                <p className="text-sm leading-snug">
+                  {pick("I have read and agree to the ", "Saya telah membaca dan menyetujui ")}
+                  <a
+                    href={qallingPagePath(window.location.hostname, "/qalling/syarat")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-gold underline-offset-2 hover:underline"
+                  >
+                    {pick("Terms of Service", "Syarat dan Ketentuan")}
+                  </a>
+                  {", "}
+                  <a
+                    href={qallingPagePath(window.location.hostname, "/qalling/privasi")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-gold underline-offset-2 hover:underline"
+                  >
+                    {pick("Privacy Policy", "Kebijakan Privasi")}
+                  </a>
+                  {pick(" and ", " dan ")}
+                  <a
+                    href={qallingPagePath(window.location.hostname, "/qalling/penggunaan")}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-gold underline-offset-2 hover:underline"
+                  >
+                    {pick("Acceptable Use Policy", "Kebijakan Penggunaan")}
+                  </a>
+                  {pick(" of Qalling.", " Qalling.")}
+                </p>
               </div>
               {settings?.google_enabled !== false && (
                 <>
@@ -307,16 +310,6 @@ function QallingSignup() {
           )}
         </CardContent>
       </Card>
-      <Dialog open={!!policy} onOpenChange={(o) => !o && setPolicy(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{policy?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-muted-foreground">
-            {policy?.body}
-          </div>
-        </DialogContent>
-      </Dialog>
       <p className="text-center text-sm text-muted-foreground">
         {pick("Already have an account?", "Sudah punya akun?")}{" "}
         <Link to="/qalling/login" className="text-gold hover:underline">
