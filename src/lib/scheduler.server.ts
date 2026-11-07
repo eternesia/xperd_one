@@ -14,9 +14,14 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
 
   let origin = process.env.APP_PUBLIC_URL?.replace(/\/$/, "");
   if (!origin) {
-    const host = headers?.get("x-forwarded-host") ?? new URL(requestUrl).host;
-    const proto =
-      headers?.get("x-forwarded-proto") ?? new URL(requestUrl).protocol.replace(":", "");
+    // Hanya terima host publik (bukan localhost/IP/host internal container), agar URL media bisa dibaca penyedia.
+    const host = (headers?.get("x-forwarded-host") ?? new URL(requestUrl).host)
+      .split(",")[0]
+      .trim();
+    const bare = host.replace(/:\d+$/, "");
+    const isPublic = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(bare) && !/^\d+(\.\d+){3}$/.test(bare);
+    if (!isPublic) return;
+    const proto = headers?.get("x-forwarded-proto")?.split(",")[0].trim() || "https";
     origin = `${proto}://${host}`;
   }
   g.__qallingScheduler = { origin };
