@@ -19,6 +19,11 @@ const ITEMS = [
     label: "Ringkasan postingan mingguan",
     desc: "Rekap posting minggu lalu setiap hari Senin.",
   },
+  {
+    kind: "followup_digest",
+    label: "Pengingat follow-up prospek",
+    desc: "Email harian (pukul 08.00 WIB) ke penanggung jawab tentang follow-up terlambat, tugas jatuh tempo, dan prospek diam.",
+  },
 ] as const;
 
 export function NotificationPrefsCard({ tenantId }: { tenantId: string }) {

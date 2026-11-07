@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 
-const KINDS = ["trial_reminder", "invoice_receipt", "post_summary"] as const;
+const KINDS = ["trial_reminder", "invoice_receipt", "post_summary", "followup_digest"] as const;
 const scope = z.object({ tenantId: z.string().uuid() });
 
 export const getNotificationPrefs = createServerFn({ method: "POST" })

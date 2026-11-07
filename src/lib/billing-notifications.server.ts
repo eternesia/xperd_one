@@ -22,6 +22,7 @@ import {
   invoiceReceiptEmail,
   lowBalanceEmail,
   postSummaryEmail,
+  followUpDigestEmail,
   renewalFailedEmail,
   trialEndingEmail,
   type Mail,
@@ -29,7 +30,12 @@ import {
 } from "./billing-email-templates";
 
 /** Jenis notifikasi yang boleh dimatikan pemilik tenant. Reminder saldo/gagal renewal selalu dikirim (memengaruhi layanan). */
-export const OPTIONAL_PREFS = ["trial_reminder", "invoice_receipt", "post_summary"] as const;
+export const OPTIONAL_PREFS = [
+  "trial_reminder",
+  "invoice_receipt",
+  "post_summary",
+  "followup_digest",
+] as const;
 export type OptionalPref = (typeof OPTIONAL_PREFS)[number];
 
 export interface Tally {
@@ -609,6 +615,61 @@ export async function runPostSummaries(g: GatewayRow): Promise<Tally> {
   return t;
 }
 
+/* ------------------------- pengingat follow-up harian ------------------------- */
+
+/** Satu email per penanggung jawab per hari, mulai pukul 08.00 WIB; tanpa email bila tidak ada yang perlu ditindaklanjuti. */
+export async function runFollowUpReminders(g: GatewayRow): Promise<Tally> {
+  const t = tally();
+  const nowJkt = new Date(Date.now() + 7 * 3600_000);
+  if (nowJkt.getUTCHours() < 8) return t;
+  const today = nowJkt.toISOString().slice(0, 10);
+  const { followUpDigestCore } = await import("./lead-followup.core.server");
+  const workspaces = await execute<{ id: string; name: string; tenant_id: string }>(
+    `SELECT DISTINCT w.id, w.name, w.tenant_id FROM workspaces w
+       JOIN crm_leads l ON l.workspace_id = w.id AND l.status = 'open'
+       JOIN tenant_addons ta ON ta.tenant_id = w.tenant_id AND ta.status IN ('active','trial')
+       JOIN addons a ON a.id = ta.addon_id AND a.code = 'qalling'
+      LIMIT 100`,
+  );
+  for (const w of workspaces) {
+    try {
+      if (!(await isEnabled(w.tenant_id, "followup_digest"))) continue;
+      const { workspaceHasFeature } = await import("./entitlements.server");
+      if (!(await workspaceHasFeature(w.id, "crm"))) continue;
+      const digests = await followUpDigestCore(w.id);
+      for (const d of digests) {
+        let to = d.email && EMAIL_RE.test(d.email) ? d.email : null;
+        let name = d.ownerName || "Tim sales";
+        if (!to) {
+          const rc = await recipient(w.tenant_id);
+          if (!rc) continue;
+          to = rc.to;
+          name = rc.name;
+        }
+        count(
+          t,
+          await deliver(g, {
+            tenantId: w.tenant_id,
+            workspaceId: w.id,
+            kind: "followup_digest",
+            dedupe: `fudigest:${w.id}:${to.toLowerCase()}:${today}`,
+            to,
+            mail: followUpDigestEmail({
+              name,
+              data: { workspaceName: w.name, ...d },
+              url: `${origin()}/qalling/app/pipeline`,
+            }),
+          }),
+        );
+      }
+    } catch (e) {
+      console.error("[notify] follow-up digest", w.id, (e as Error).message);
+      t.failed++;
+    }
+  }
+  return t;
+}
+
 /* ------------------------------ orkestrasi ------------------------------ */
 
 export async function runBillingNotifications() {
@@ -619,6 +680,7 @@ export async function runBillingNotifications() {
     balance: runBalanceReminders,
     invoices: runInvoiceReceipts,
     postSummaries: runPostSummaries,
+    followUps: runFollowUpReminders,
   };
   const out: Record<string, Tally | { error: string }> = {};
   for (const [name, fn] of Object.entries(steps)) {
