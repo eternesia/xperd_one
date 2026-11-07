@@ -17,6 +17,10 @@ export const QALLING_FEATURE_LABELS: Record<string, { id: string; en: string }> 
   tender: { id: "Tender & dokumen", en: "Tenders & documents" },
   client_approval: { id: "Persetujuan konten oleh klien", en: "Client content approval" },
   white_label_reports: { id: "Laporan klien white-label", en: "White-label client reports" },
+  lead_invoice: {
+    id: "Invoice dari prospek closing (link, PDF, WhatsApp)",
+    en: "Invoices from closed leads (link, PDF, WhatsApp)",
+  },
   activity_log: { id: "Log aktivitas tim", en: "Team activity log" },
   whatsapp: { id: "WhatsApp & broadcast", en: "WhatsApp & broadcasts" },
 };

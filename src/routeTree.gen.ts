@@ -80,6 +80,7 @@ import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.repo
 import { Route as QallingApproveTokenRouteImport } from './routes/qalling.approve.$token'
 import { Route as QallingDocsIndexRouteImport } from './routes/qalling.docs.index'
 import { Route as QallingDocsSlugRouteImport } from './routes/qalling.docs.$slug'
+import { Route as QallingInvoiceTokenRouteImport } from './routes/qalling.invoice.$token'
 import { Route as QallingReportTokenRouteImport } from './routes/qalling.report.$token'
 import { Route as ApiPublicDocsMcpToolsRouteImport } from './routes/api/public/docs/mcp-tools'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
@@ -462,6 +463,11 @@ const QallingDocsSlugRoute = QallingDocsSlugRouteImport.update({
   path: '/qalling/docs/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QallingInvoiceTokenRoute = QallingInvoiceTokenRouteImport.update({
+  id: '/qalling/invoice/$token',
+  path: '/qalling/invoice/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QallingReportTokenRoute = QallingReportTokenRouteImport.update({
   id: '/qalling/report/$token',
   path: '/qalling/report/$token',
@@ -658,6 +664,7 @@ export interface FileRoutesByFullPath {
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
+  '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
   '/qalling/report/$token': typeof QallingReportTokenRoute
   '/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
@@ -749,6 +756,7 @@ export interface FileRoutesByTo {
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
+  '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
   '/qalling/report/$token': typeof QallingReportTokenRoute
   '/products': typeof SiteProductsIndexRoute
   '/qalling/app': typeof QallingAppIndexRoute
@@ -845,6 +853,7 @@ export interface FileRoutesById {
   '/qalling/app/reports': typeof QallingAppReportsRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
+  '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
   '/qalling/report/$token': typeof QallingReportTokenRoute
   '/_site/products/': typeof SiteProductsIndexRoute
   '/qalling/app/': typeof QallingAppIndexRoute
@@ -942,6 +951,7 @@ export interface FileRouteTypes {
     | '/qalling/app/reports'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
+    | '/qalling/invoice/$token'
     | '/qalling/report/$token'
     | '/products/'
     | '/qalling/app/'
@@ -1033,6 +1043,7 @@ export interface FileRouteTypes {
     | '/qalling/app/reports'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
+    | '/qalling/invoice/$token'
     | '/qalling/report/$token'
     | '/products'
     | '/qalling/app'
@@ -1128,6 +1139,7 @@ export interface FileRouteTypes {
     | '/qalling/app/reports'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
+    | '/qalling/invoice/$token'
     | '/qalling/report/$token'
     | '/_site/products/'
     | '/qalling/app/'
@@ -1185,6 +1197,7 @@ export interface RootRouteChildren {
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   QallingApproveTokenRoute: typeof QallingApproveTokenRoute
   QallingDocsSlugRoute: typeof QallingDocsSlugRoute
+  QallingInvoiceTokenRoute: typeof QallingInvoiceTokenRoute
   QallingReportTokenRoute: typeof QallingReportTokenRoute
   QallingDocsIndexRoute: typeof QallingDocsIndexRoute
   ApiPublicDocsMcpToolsRoute: typeof ApiPublicDocsMcpToolsRoute
@@ -1700,6 +1713,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingDocsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/qalling/invoice/$token': {
+      id: '/qalling/invoice/$token'
+      path: '/qalling/invoice/$token'
+      fullPath: '/qalling/invoice/$token'
+      preLoaderRoute: typeof QallingInvoiceTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/qalling/report/$token': {
       id: '/qalling/report/$token'
       path: '/qalling/report/$token'
@@ -2072,6 +2092,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   QallingApproveTokenRoute: QallingApproveTokenRoute,
   QallingDocsSlugRoute: QallingDocsSlugRoute,
+  QallingInvoiceTokenRoute: QallingInvoiceTokenRoute,
   QallingReportTokenRoute: QallingReportTokenRoute,
   QallingDocsIndexRoute: QallingDocsIndexRoute,
   ApiPublicDocsMcpToolsRoute: ApiPublicDocsMcpToolsRoute,

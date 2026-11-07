@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
+  Receipt,
   CheckCircle2,
   MessageSquare,
   Phone,
@@ -23,6 +24,14 @@ import {
   snoozeLeadFollowUp,
 } from "@/lib/lead-followup.functions";
 import { useI18n } from "@/lib/i18n";
+import { useApp } from "@/lib/app-context";
+import { qallingPagePath } from "@/lib/qalling-urls";
+import {
+  createLeadInvoice,
+  listLeadInvoices,
+  markLeadInvoiceSent,
+  setLeadInvoiceStatus,
+} from "@/lib/lead-invoice.functions";
 
 const TYPES = ["note", "call", "message", "meeting", "task"] as const;
 const ICON: Record<string, typeof StickyNote> = {
@@ -46,6 +55,231 @@ const when = (v: string) =>
 const plusDays = (n: number) =>
   new Date(Date.now() + 7 * 3600_000 + n * 86_400_000).toISOString().slice(0, 10);
 
+type Row = { description: string; qty: string; price: string };
+
+function InvoiceSection({
+  workspaceId,
+  leadId,
+  leadName,
+  leadPhone,
+  leadValue,
+}: {
+  workspaceId: string;
+  leadId: string;
+  leadName: string;
+  leadPhone: string | null;
+  leadValue: number;
+}) {
+  const { pick } = useI18n();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<Row[]>([
+    { description: "", qty: "1", price: leadValue ? String(Math.round(leadValue)) : "" },
+  ]);
+  const [tax, setTax] = useState("0");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const key = ["lead-invoices", workspaceId, leadId];
+  const list = useQuery({
+    queryKey: key,
+    queryFn: () => listLeadInvoices({ data: { workspaceId, leadId } }),
+  });
+  const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const total = rows.reduce((t, r) => t + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
+  const create = useMutation({
+    mutationFn: () =>
+      createLeadInvoice({
+        data: {
+          workspaceId,
+          leadId,
+          dueDate: dueDate || null,
+          taxRate: Number(tax) || 0,
+          notes: notes.trim() || null,
+          items: rows
+            .filter((r) => r.description.trim())
+            .map((r) => ({
+              description: r.description.trim(),
+              qty: Number(r.qty) || 0,
+              price: Number(r.price) || 0,
+            })),
+        },
+      }),
+    onSuccess: () => {
+      toast.success(pick("Invoice created", "Invoice dibuat"));
+      setOpen(false);
+      setRows([{ description: "", qty: "1", price: "" }]);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const status = useMutation({
+    mutationFn: (v: { id: string; s: "unpaid" | "paid" | "cancelled" }) =>
+      setLeadInvoiceStatus({ data: { workspaceId, invoiceId: v.id, status: v.s } }),
+    onSuccess: refresh,
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const link = (token: string) =>
+    `${window.location.origin}${qallingPagePath(window.location.hostname, `/qalling/invoice/${token}`)}`;
+  const sendWa = (inv: NonNullable<typeof list.data>[number]) => {
+    const digits = (leadPhone ?? inv.phone ?? "").replace(/\D/g, "");
+    const phone = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+    const text = pick(
+      `Hello ${leadName}, here is your invoice ${inv.number} (${idr(inv.total)}): ${link(inv.token)}`,
+      `Halo ${leadName}, berikut invoice ${inv.number} sebesar ${idr(inv.total)}: ${link(inv.token)}`,
+    );
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    void markLeadInvoiceSent({ data: { workspaceId, invoiceId: inv.id } }).then(refresh);
+  };
+  const set = (i: number, patch: Partial<Row>) =>
+    setRows((r) => r.map((x, n) => (n === i ? { ...x, ...patch } : x)));
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-2 font-medium">
+          <Receipt className="h-4 w-4" /> Invoice
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+          {open ? pick("Cancel", "Batal") : pick("Create invoice", "Buat invoice")}
+        </Button>
+      </div>
+      {open && (
+        <div className="space-y-2">
+          {rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-[1fr_56px_110px] gap-1">
+              <Input
+                value={r.description}
+                onChange={(e) => set(i, { description: e.target.value })}
+                placeholder={pick("Item", "Item")}
+                maxLength={300}
+              />
+              <Input
+                value={r.qty}
+                onChange={(e) => set(i, { qty: e.target.value })}
+                inputMode="decimal"
+                aria-label="Qty"
+              />
+              <Input
+                value={r.price}
+                onChange={(e) => set(i, { price: e.target.value })}
+                inputMode="numeric"
+                placeholder={pick("Price", "Harga")}
+              />
+            </div>
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setRows((r) => [...r, { description: "", qty: "1", price: "" }])}
+          >
+            + {pick("Add item", "Tambah item")}
+          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-muted-foreground">{pick("Tax %", "Pajak %")}</label>
+            <Input
+              className="w-16"
+              value={tax}
+              onChange={(e) => setTax(e.target.value)}
+              inputMode="decimal"
+            />
+            <label className="text-xs text-muted-foreground">{pick("Due", "Jatuh tempo")}</label>
+            <Input
+              type="date"
+              className="w-auto"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder={pick("Notes (optional)", "Catatan (opsional)")}
+            maxLength={2000}
+          />
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">
+              Total: {idr(total * (1 + (Number(tax) || 0) / 100))}
+            </span>
+            <Button
+              disabled={create.isPending || total <= 0 || !rows.some((r) => r.description.trim())}
+              onClick={() => create.mutate()}
+            >
+              {pick("Save invoice", "Simpan invoice")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {list.data?.map((inv) => (
+        <div key={inv.id} className="rounded-md bg-secondary/40 p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{inv.number}</span>
+            <span>{idr(inv.total)}</span>
+            <Badge
+              variant={
+                inv.status === "paid" ? "secondary" : inv.overdue ? "destructive" : "outline"
+              }
+            >
+              {inv.status === "paid"
+                ? pick("Paid", "Lunas")
+                : inv.status === "cancelled"
+                  ? pick("Cancelled", "Batal")
+                  : inv.overdue
+                    ? pick("Overdue", "Jatuh tempo")
+                    : pick("Unpaid", "Belum bayar")}
+            </Badge>
+            {inv.sentAt && (
+              <span className="text-xs text-muted-foreground">{pick("sent", "terkirim")}</span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <Button size="sm" variant="outline" onClick={() => sendWa(inv)}>
+              WhatsApp
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                void navigator.clipboard.writeText(link(inv.token));
+                toast.success(pick("Link copied", "Link disalin"));
+              }}
+            >
+              {pick("Copy link", "Salin link")}
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href={link(inv.token)} target="_blank" rel="noreferrer">
+                PDF
+              </a>
+            </Button>
+            {inv.status === "unpaid" && (
+              <Button size="sm" onClick={() => status.mutate({ id: inv.id, s: "paid" })}>
+                {pick("Mark paid", "Tandai lunas")}
+              </Button>
+            )}
+            {inv.status === "paid" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => status.mutate({ id: inv.id, s: "unpaid" })}
+              >
+                {pick("Undo paid", "Batalkan lunas")}
+              </Button>
+            )}
+            {inv.status === "unpaid" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => status.mutate({ id: inv.id, s: "cancelled" })}
+              >
+                {pick("Cancel", "Batalkan")}
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function LeadPanel({
   workspaceId,
   leadId,
@@ -56,6 +290,8 @@ export function LeadPanel({
   onClose: () => void;
 }) {
   const { pick } = useI18n();
+  const { entitlements } = useApp();
+  const canInvoice = entitlements.qalling?.features?.lead_invoice === true;
   const qc = useQueryClient();
   const [type, setType] = useState<(typeof TYPES)[number]>("note");
   const [subject, setSubject] = useState("");
