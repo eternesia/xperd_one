@@ -378,7 +378,8 @@ export function AgencyPage() {
   const ws = activeWorkspace?.id;
   if (!ws) return null;
   const feats =
-    (entitlements as Record<string, { features?: Record<string, boolean> }>).crm?.features ?? {};
+    (entitlements as Record<string, { features?: Record<string, boolean> }>).qalling?.features ??
+    {};
   const locked = (k: string) => feats[k] !== true && feats.legacy !== true;
   const Locked = (
     <p className="rounded-lg border bg-secondary/40 p-6 text-sm text-muted-foreground">
