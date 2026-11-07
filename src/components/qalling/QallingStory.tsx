@@ -109,10 +109,7 @@ export function QallingStory() {
           {pick("A day with Qalling", "Sehari bersama Qalling")}
         </span>
         <h2 className="mt-2 text-2xl font-medium text-foreground sm:text-3xl">
-          {pick(
-            "From one AI chat to closed deals",
-            "Dari satu chat AI sampai pelanggan closing",
-          )}
+          {pick("From one AI chat to closed deals", "Dari satu chat AI sampai pelanggan closing")}
         </h2>
         <p className="mt-3 text-muted-foreground">
           {pick(

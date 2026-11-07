@@ -244,6 +244,17 @@ export function QallingShell({ children }: { children: ReactNode }) {
                 </a>
               </span>
             )}
+            <span className="flex flex-wrap gap-x-3">
+              <Link to="/qalling/syarat" className="hover:text-foreground">
+                {pick("Terms", "Syarat")}
+              </Link>
+              <Link to="/qalling/privasi" className="hover:text-foreground">
+                {pick("Privacy", "Privasi")}
+              </Link>
+              <Link to="/qalling/penggunaan" className="hover:text-foreground">
+                {pick("Acceptable use", "Penggunaan")}
+              </Link>
+            </span>
             <span>© {new Date().getFullYear()} Qalling — by XPERD</span>
           </div>
         </div>
