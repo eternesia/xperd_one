@@ -66,6 +66,7 @@ export const CRM_BROADCAST_CHANNELS = [
 
 export const CRM_WA_PROVIDERS = [
   { id: "manual", en: "Manual (wa.me links)", id_: "Manual (tautan wa.me)" },
+  { id: "kirimdev", en: "Kirimdev (official WhatsApp API)", id_: "Kirimdev (WhatsApp API resmi)" },
   { id: "custom", en: "Custom HTTP gateway", id_: "Gateway HTTP kustom" },
 ];
 

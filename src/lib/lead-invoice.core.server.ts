@@ -256,3 +256,45 @@ export async function getPublicInvoice(token: string) {
     },
   };
 }
+
+/** Kirim invoice ke pelanggan lewat WhatsApp resmi (template Kirimdev): {{1}} nama, {{2}} nomor invoice, {{3}} total, {{4}} link. */
+export async function sendInvoiceWaCore(ws: string, id: string, link: string, actor: Actor) {
+  const { loadWaSettings, sendWaTemplate } = await import("./wa-send.server");
+  const s = await loadWaSettings(ws);
+  if (!s || !s.is_active || s.provider !== "kirimdev")
+    throw new Error("WhatsApp Kirimdev belum aktif. Atur di Penjualan → WA Gateway.");
+  if (!s.invoice_template)
+    throw new Error("Nama template invoice belum diisi di pengaturan WA Gateway.");
+  const inv = await executeOne<{
+    invoice_number: string;
+    customer_name: string;
+    customer_phone: string | null;
+    total: number;
+    status: string;
+  }>(
+    "SELECT invoice_number, customer_name, customer_phone, total, status FROM crm_invoices WHERE id = ? AND workspace_id = ?",
+    [id, ws],
+  );
+  if (!inv) throw new Error("Invoice tidak ditemukan.");
+  if (inv.status === "cancelled") throw new Error("Invoice sudah dibatalkan.");
+  if (!inv.customer_phone) throw new Error("Nomor WhatsApp pelanggan belum diisi pada prospek.");
+  const total = new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(Number(inv.total));
+  const messageId = await sendWaTemplate(
+    s,
+    inv.customer_phone,
+    s.invoice_template,
+    s.template_lang,
+    [inv.customer_name, inv.invoice_number, total, link],
+  );
+  await execute("UPDATE crm_invoices SET sent_at = ? WHERE id = ? AND workspace_id = ?", [
+    sqlDateTime(new Date()),
+    id,
+    ws,
+  ]);
+  await audit(ws, id, "UPDATE", inv.invoice_number, { sentVia: "whatsapp", messageId }, actor);
+  return { ok: true, messageId };
+}

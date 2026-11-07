@@ -56,6 +56,10 @@ export const sendWaBroadcast = createServerFn({ method: "POST" })
     if (settings.provider === "manual") {
       throw new Error("Manual provider cannot send automatically. Use the WhatsApp links instead.");
     }
+    if (settings.provider === "kirimdev")
+      throw new Error(
+        "Broadcast lewat Kirimdev memerlukan template yang disetujui Meta dan belum didukung di menu ini. Gunakan tautan WhatsApp, atau kirim invoice lewat panel prospek.",
+      );
     if (!settings.endpoint_url) throw new Error("Gateway endpoint URL is not configured");
 
     const broadcast = await executeOne<{ id: string; message: string; status: string }>(
@@ -78,10 +82,10 @@ export const sendWaBroadcast = createServerFn({ method: "POST" })
       const to = r.phone ? normalizeWaNumber(r.phone) : "";
       if (!to) {
         failed += 1;
-        await execute("UPDATE crm_broadcast_recipients SET status = 'failed', error = ? WHERE id = ?", [
-          "Missing phone number",
-          r.id,
-        ]);
+        await execute(
+          "UPDATE crm_broadcast_recipients SET status = 'failed', error = ? WHERE id = ?",
+          ["Missing phone number", r.id],
+        );
         continue;
       }
       try {
@@ -108,10 +112,10 @@ export const sendWaBroadcast = createServerFn({ method: "POST" })
         );
       } catch (err) {
         failed += 1;
-        await execute("UPDATE crm_broadcast_recipients SET status = 'failed', error = ? WHERE id = ?", [
-          err instanceof Error ? err.message : "Unknown error",
-          r.id,
-        ]);
+        await execute(
+          "UPDATE crm_broadcast_recipients SET status = 'failed', error = ? WHERE id = ?",
+          [err instanceof Error ? err.message : "Unknown error", r.id],
+        );
       }
     }
 
@@ -151,6 +155,20 @@ export const testWaGateway = createServerFn({ method: "POST" })
         LIMIT 1`,
       [data.workspaceId],
     );
+    if (settings?.provider === "kirimdev") {
+      const { loadWaSettings, testKirimdev, recordWaStatus } = await import("@/lib/wa-send.server");
+      const full = await loadWaSettings(data.workspaceId);
+      let st = "ok";
+      let det = "";
+      try {
+        det = await testKirimdev(full!);
+      } catch (err) {
+        st = "failed";
+        det = err instanceof Error ? err.message : "Unknown error";
+      }
+      await recordWaStatus(data.workspaceId, `${st}: ${det}`);
+      return { status: st, detail: det };
+    }
     if (!settings?.endpoint_url) throw new Error("Gateway endpoint URL is not configured");
 
     let status = "ok";
