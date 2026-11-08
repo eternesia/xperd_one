@@ -236,7 +236,7 @@ export function ReportsPage() {
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {kpis.map(([l, v]) => (
-          <Card key={l}>
+          <Card key={l} className="rounded-2xl">
             <CardContent className="pt-5">
               <p className="text-xs text-muted-foreground">{l}</p>
               <p className="text-2xl font-semibold">{v}</p>
@@ -244,7 +244,38 @@ export function ReportsPage() {
           </Card>
         ))}
       </div>
-      <Card>
+      <div className="space-y-2 md:hidden">
+        <p className="text-sm font-semibold">{pick("Per account", "Per akun")}</p>
+        {isLoading && <p className="py-4 text-center text-sm text-muted-foreground">…</p>}
+        {!isLoading && rows.length === 0 && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {pick("No data.", "Belum ada data.")}
+          </p>
+        )}
+        {rows.map((r, i) => (
+          <div key={i} className="rounded-2xl border bg-card p-3.5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <SocialIcon platform={r.platform} className="h-4 w-4 shrink-0" />
+              <p className="min-w-0 flex-1 truncate font-semibold">{r.account}</p>
+            </div>
+            {r.client && <p className="truncate text-xs text-muted-foreground">{r.client}</p>}
+            <div className="mt-2 grid grid-cols-4 gap-1 text-center text-xs">
+              {[
+                [pick("Published", "Tayang"), r.published],
+                [pick("Scheduled", "Terjadwal"), r.scheduled],
+                [pick("Failed", "Gagal"), r.failed],
+                [pick("Comments", "Komentar"), r.comments],
+              ].map(([l, v]) => (
+                <div key={String(l)} className="rounded-xl bg-muted/50 py-1.5">
+                  <p className="text-base font-semibold">{v}</p>
+                  <p className="text-[10px] text-muted-foreground">{l}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <Card className="max-md:hidden">
         <CardHeader>
           <CardTitle className="text-base">{pick("Per account", "Per akun")}</CardTitle>
         </CardHeader>
