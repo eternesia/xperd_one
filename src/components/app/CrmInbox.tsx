@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   CheckCheck,
   Clock,
+  ArrowLeft,
   Inbox,
   Lock,
   RefreshCw,
@@ -179,8 +180,8 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           <RefreshCw className="size-4" />
         </Button>
       </header>
-      <div className="flex flex-wrap gap-3">
-        <label className="block w-48 text-sm text-muted-foreground">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+        <label className="block min-w-0 text-sm text-muted-foreground sm:w-48">
           {id ? "Platform" : "Platform"}
           <select
             className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
@@ -198,7 +199,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
             ))}
           </select>
         </label>
-        <label className="block w-64 text-sm text-muted-foreground">
+        <label className="block min-w-0 text-sm text-muted-foreground sm:w-64">
           {id ? "Akun" : "Account"}
           <select
             className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
@@ -222,7 +223,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           : "DMs available through Tebar: Instagram. Facebook (Messenger) DMs arrive through the native Meta connection."}
       </p>
       <div className="grid min-w-0 border-t md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="min-w-0 md:border-r">
+        <aside className={cn("min-w-0 md:block md:border-r", selected ? "hidden" : "block")}>
           <div className="space-y-3 py-4 md:pr-4">
             <Input
               aria-label={id ? "Cari percakapan" : "Search conversations"}
@@ -258,7 +259,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
               <p className="text-sm">{id ? "Belum ada percakapan." : "No conversations."}</p>
             </div>
           ) : (
-            <div className="max-h-[520px] overflow-y-auto">
+            <div className="md:max-h-[520px] md:overflow-y-auto">
               {rows.map((c) => (
                 <Button
                   key={c.id}
@@ -296,7 +297,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
             </div>
           )}
         </aside>
-        <section className="min-w-0 md:pl-6">
+        <section className={cn("min-w-0 md:block md:pl-6", selected ? "block" : "hidden")}>
           {!active ? (
             <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
               {id ? "Pilih percakapan" : "Select a conversation"}
@@ -304,7 +305,16 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b py-4">
-                <div className="min-w-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2 md:hidden"
+                  onClick={() => setSelected(null)}
+                >
+                  <ArrowLeft className="size-4" />
+                  {id ? "Kembali" : "Back"}
+                </Button>
+                <div className="min-w-0 basis-full md:basis-auto">
                   <h2 className="break-words font-semibold">{active.participant_name}</h2>
                   <p className="flex items-center gap-1 text-xs text-muted-foreground">
                     <SocialIcon

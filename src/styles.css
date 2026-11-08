@@ -367,3 +367,15 @@
 .social-discord { color: var(--social-discord); }
 .social-tiktok, .social-x, .social-twitter, .social-threads { color: var(--foreground); }
 .qalling-theme .recharts-default-tooltip { background: var(--card) !important; border-color: var(--border) !important; color: var(--foreground) !important; border-radius: var(--radius); }
+
+/* Mobile: cegah zoom otomatis iOS saat fokus ke kolom isian (<16px), dan ketukan lebih bersih. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

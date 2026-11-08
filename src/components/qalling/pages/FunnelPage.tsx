@@ -143,7 +143,7 @@ export function FunnelPage() {
               {d.stages.map((s, i) => (
                 <div
                   key={s.id}
-                  className="grid grid-cols-[130px_1fr_150px] items-center gap-3 text-sm"
+                  className="grid grid-cols-[88px_1fr_auto] items-center gap-2 text-sm sm:grid-cols-[130px_1fr_150px] sm:gap-3"
                 >
                   <span>{stageName(s.id)}</span>
                   <div className="h-6 rounded bg-secondary/60">
