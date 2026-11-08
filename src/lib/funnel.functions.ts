@@ -18,7 +18,7 @@ export const getFunnelReport = createServerFn({ method: "POST" })
     if (!(await isWorkspaceMember(data.workspaceId, context.userId)))
       throw new Error("Anda tidak memiliki akses ke workspace ini.");
     if (!(await workspaceHasFeature(data.workspaceId, "crm")))
-      throw new Error("Corong penjualan tersedia mulai paket Pro.");
+      throw new Error("Funnel penjualan tersedia mulai paket Pro.");
     const { funnelReportCore } = await import("@/lib/funnel.core.server");
     return funnelReportCore(data.workspaceId, data.days);
   });

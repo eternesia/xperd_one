@@ -96,7 +96,7 @@ export function FunnelPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-navy dark:text-foreground">
-            {pick("Sales funnel & reports", "Corong penjualan & laporan")}
+            {pick("Sales funnel", "Funnel penjualan")}
           </h1>
           <p className="text-sm text-muted-foreground">
             {pick(
@@ -137,7 +137,7 @@ export function FunnelPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{pick("Funnel", "Corong")}</CardTitle>
+              <CardTitle className="text-base">{pick("Stages", "Tahapan")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {d.stages.map((s, i) => (

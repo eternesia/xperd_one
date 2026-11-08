@@ -1,4 +1,4 @@
-/** Corong penjualan & laporan: konversi antar tahap, alasan kalah, sumber, penanggung jawab, forecast, realisasi target. */
+/** Funnel penjualan: konversi antar tahap, alasan kalah, sumber, penanggung jawab, forecast, realisasi target. */
 import { execute } from "@/integrations/mysql/pool";
 import { sqlDateTime } from "./datetime";
 import { jakartaToday } from "./billing-wallet.server";

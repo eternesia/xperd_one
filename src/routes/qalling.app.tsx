@@ -1,3 +1,4 @@
+import { QallingTrialAlert } from "@/components/qalling/QallingTrialAlert";
 import { useEffect, useState } from "react";
 import { clearStoredReferral, getStoredReferral } from "@/lib/referral-capture";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
@@ -21,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Share2,
+  Sparkles,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -195,7 +197,7 @@ function QallingShell() {
   );
   const item = (active: boolean) =>
     cn(
-      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
+      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sky-100 hover:text-foreground dark:hover:bg-secondary",
       active && "bg-navy text-primary-foreground hover:bg-navy hover:text-primary-foreground",
     );
   const subLink = (id: string) => {
@@ -226,7 +228,7 @@ function QallingShell() {
     // Grup utama terbuka; grup lain terbuka bila berisi halaman yang sedang dibuka (BS New 14).
     const isOpen =
       openGroups[key] ??
-      (["sales", "content", "chat"].includes(key) ||
+      (["chat", "content", "sales"].includes(key) ||
         links.some((l) => {
           const k = (l as { key?: string }).key;
           return !!k && pathname.endsWith(`/${k}`);
@@ -266,6 +268,15 @@ function QallingShell() {
           },
         ]
       : []),
+    ...(subs.has("ai")
+      ? [
+          {
+            to: "/qalling/app/ai",
+            icon: Sparkles,
+            label: id ? "Integrasi AI & MCP" : "AI & MCP Integration",
+          },
+        ]
+      : []),
     {
       to: "/qalling/app/profile",
       icon: UserCog,
@@ -290,36 +301,32 @@ function QallingShell() {
         <LayoutDashboard className="h-4 w-4 shrink-0" />
         <span className="qs-label">{id ? "Beranda" : "Home"}</span>
       </Link>
-      {subLink("social-dashboard")}
-      {subLink("leads")}
-      {subLink("ai")}
-      {section("sales", id ? "Penjualan" : "Sales", [
-        "pipeline",
-        "contacts",
-        "follow-ups",
-        "targets",
-        "funnel",
-        "attribution",
-      ])}
+      {section("chat", id ? "Percakapan" : "Conversations", ["inbox", "comments"])}
       {section("content", id ? "Konten" : "Content", [
         "calendar",
         "post-scheduler",
-        "ideas",
         "media",
-        "campaigns",
+        "ideas",
       ])}
-      {section("chat", id ? "Percakapan" : "Conversations", [
-        "inbox",
-        "comments",
+      {section("sales", id ? "Penjualan" : "Sales", [
+        "leads",
+        "pipeline",
+        "contacts",
+        "follow-ups",
+      ])}
+      {section("reports", id ? "Analitik" : "Analytics", [
+        "social-dashboard",
+        "funnel",
+        "attribution",
+        "targets",
+      ])}
+      {section("clients", "Agency", ["clients", "reports", "agency"])}
+      {section("tools", id ? "Otomasi & Pesan" : "Automation & Messaging", [
         "automations",
         "broadcast",
-        "wa-gateway",
         "templates",
-      ])}
-      {section("clients", id ? "Klien & Laporan" : "Clients & Reports", [
-        "clients",
-        "reports",
-        "agency",
+        "campaigns",
+        "wa-gateway",
       ])}
       {section("tender", "Tender", ["tenders", "doc-library"])}
     </nav>
@@ -392,7 +399,7 @@ function QallingShell() {
       <div className="flex">
         <aside
           className={cn(
-            "sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-border bg-card transition-[width] md:flex",
+            "sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-sky-100 bg-sky-50/80 transition-[width] md:flex dark:border-border dark:bg-card",
             collapsed ? "w-16 [&_.qs-label]:hidden [&_a]:justify-center" : "w-64",
           )}
         >
@@ -464,6 +471,7 @@ function QallingShell() {
           )}
         </aside>
         <main className="min-w-0 flex-1 p-4 pb-28 sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
+          <QallingTrialAlert />
           <Outlet />
         </main>
       </div>

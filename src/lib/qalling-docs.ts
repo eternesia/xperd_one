@@ -40,7 +40,7 @@ export const QALLING_DOCS: DocSection[] = [
       "Daftar atau masuk di halaman Masuk memakai Google atau kode yang dikirim ke email Anda (tanpa kata sandi).",
       "Pilih atau buat workspace. Satu workspace biasanya mewakili satu bisnis atau satu klien agensi.",
       "Hubungkan akun media sosial (lihat bagian Menghubungkan akun).",
-      "Buat postingan pertama dari menu Konten → Penjadwal Posting.",
+      "Buat postingan pertama dari menu Konten → Posts.",
     ],
     tips: [
       "Mulai dari satu akun dan satu postingan uji agar alurnya terasa dulu sebelum menjadwalkan banyak konten.",
@@ -85,7 +85,7 @@ export const QALLING_DOCS: DocSection[] = [
     summary:
       "Tulis caption, pilih akun tujuan, lampirkan media, lalu simpan sebagai draf, jadwalkan, atau terbitkan sekarang.",
     steps: [
-      "Buka Konten → Penjadwal Posting dan pilih Buat posting.",
+      "Buka Konten → Posts dan pilih Buat posting.",
       "Pilih satu atau beberapa akun tujuan, isi judul internal dan caption.",
       "Lampirkan media dari pustaka. Beberapa gambar membentuk carousel; satu video menjadi reel/video sesuai platform.",
       "Pilih waktu terbit. Zona waktu yang dipakai adalah WIB (Asia/Jakarta).",
@@ -147,12 +147,12 @@ export const QALLING_DOCS: DocSection[] = [
       "Buka Penjualan → Pipeline untuk memindahkan lead antar tahap.",
       "Catat aktivitas (telepon, pesan, pertemuan) dan jadwalkan Follow-up agar tidak ada prospek terlewat.",
       "Beranda menampilkan follow-up yang terlambat dan yang jatuh tempo hari ini.",
-      "Di form prospek, pilih Konten sumber (postingan atau kampanye yang membawa prospek itu). Buka Penjualan → Atribusi Konten untuk melihat konten mana yang menghasilkan prospek, closing, dan nilai penjualan.",
+      "Di form prospek, pilih Konten sumber (postingan atau kampanye yang membawa prospek itu). Buka Analitik → Atribusi Konten untuk melihat konten mana yang menghasilkan prospek, closing, dan nilai penjualan.",
       "Klik kartu di Pipeline untuk membuka panel detail: linimasa, catat aktivitas, tambah tugas bertenggat, tandai selesai, atau tunda follow-up. Kartu bertanda Diam (≥7 hari tanpa aktivitas) atau Telat butuh tindak lanjut; gunakan tombol Perlu tindak lanjut untuk memfilter.",
       "Setiap pagi (mulai 08.00 WIB) penanggung jawab menerima satu email ringkasan prospek yang perlu ditindaklanjuti. Atur di Pengaturan → Notifikasi (Ringkasan follow-up).",
       "Prospek yang closing bisa langsung ditagih (paket Pro dan Agency): buka panel detail → Invoice → Buat invoice. Isi item, pajak, dan jatuh tempo; nama dan kontak pelanggan terisi dari prospek. Kirim lewat tombol WhatsApp (pesan berisi link invoice), salin link, atau buka PDF-nya, lalu tandai Lunas setelah dibayar. Logo, alamat, dan info rekening diambil dari Pengaturan → Profil perusahaan.",
-      "Buka Penjualan → Corong & Laporan untuk melihat konversi tiap tahap, alasan batal, performa per sumber dan penanggung jawab, forecast pipeline (nilai × peluang), serta realisasi target bulan ini dibandingkan invoice yang sudah lunas. Isi alasan saat memindahkan prospek ke Batal agar laporannya berguna.",
-      "Kirim invoice lewat WhatsApp resmi dari nomor Anda sendiri: buka Percakapan → WhatsApp Gateway lalu klik Hubungkan nomor WhatsApp. Anda masuk ke Meta, memilih bisnis dan nomor (nomor yang sudah dipakai di aplikasi WhatsApp Business tetap bisa dipakai), lalu kembali ke Qalling; tanpa API key. Qalling membuatkan template invoice yang perlu disetujui Meta (menit hingga 48 jam). Setelah disetujui, tombol Kirim via gateway di invoice prospek mengirim invoice ke pelanggan. Biaya pesan ditagih Meta langsung ke metode pembayaran di akun WhatsApp Business Anda. Pengguna lanjutan bisa memakai API key Kirimdev sendiri.",
+      "Buka Analitik → Funnel Penjualan untuk melihat konversi tiap tahap, alasan batal, performa per sumber dan penanggung jawab, forecast pipeline (nilai × peluang), serta realisasi target bulan ini dibandingkan invoice yang sudah lunas. Isi alasan saat memindahkan prospek ke Batal agar laporannya berguna.",
+      "Kirim invoice lewat WhatsApp resmi dari nomor Anda sendiri: buka Otomasi & Pesan → WhatsApp Gateway lalu klik Hubungkan nomor WhatsApp. Anda masuk ke Meta, memilih bisnis dan nomor (nomor yang sudah dipakai di aplikasi WhatsApp Business tetap bisa dipakai), lalu kembali ke Qalling; tanpa API key. Qalling membuatkan template invoice yang perlu disetujui Meta (menit hingga 48 jam). Setelah disetujui, tombol Kirim via gateway di invoice prospek mengirim invoice ke pelanggan. Biaya pesan ditagih Meta langsung ke metode pembayaran di akun WhatsApp Business Anda. Pengguna lanjutan bisa memakai API key Kirimdev sendiri.",
       "Biaya WhatsApp terdiri dari dua tagihan terpisah: (1) langganan add-on WhatsApp channel yang dibayar ke Qalling setiap bulan, dan (2) tarif pesan Meta yang ditagih Meta langsung ke kartu di akun WhatsApp Business Anda tanpa markup. Perkiraan tarif Meta Indonesia per Oktober 2026: utility (invoice, pengingat) Rp356,65/pesan, marketing (promo, broadcast) Rp586,33/pesan, dan 1.000 balasan pertama dalam jendela 24 jam gratis per nomor per bulan; belum termasuk PPN. Rincian juga ada di halaman Harga.",
     ],
     tips: [
