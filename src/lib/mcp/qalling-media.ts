@@ -37,18 +37,64 @@ export function sniffMediaType(b: Buffer): string | null {
   return null;
 }
 
+/** Host unduhan berkas ChatGPT (lampiran & gambar hasil generate). Hanya milik OpenAI. */
+const CHAT_FILE_HOSTS = ["oaiusercontent.com", "openai.com", "chatgpt.com", "oaistatic.com"];
+export function chatFileUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ToolError(
+      "files[].download_url must be the temporary download URL ChatGPT provides for an attached file, not a file id.",
+    );
+  }
+  const h = url.hostname.toLowerCase();
+  const ok =
+    url.protocol === "https:" &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "443") &&
+    (CHAT_FILE_HOSTS.some((d) => h === d || h.endsWith(`.${d}`)) ||
+      /^oai[a-z0-9-]*\.blob\.core\.windows\.net$/.test(h));
+  if (!ok) {
+    console.warn("[mcp] chat file host rejected:", h);
+    throw new ToolError(
+      `ChatGPT file host not accepted (${h}). Please report this host to Qalling support.`,
+    );
+  }
+  return url.href;
+}
+
+/** Unduh dengan mengikuti maks. 3 redirect; setiap hop diperiksa ulang host-nya. */
+async function fetchChecked(url: string, check: (u: string) => string) {
+  let current = check(url);
+  for (let hop = 0; hop < 4; hop++) {
+    const res = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(20_000) });
+    if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
+      await res.body?.cancel().catch(() => undefined);
+      current = check(new URL(res.headers.get("location")!, current).href);
+      continue;
+    }
+    return res;
+  }
+  throw new ToolError("Too many redirects while downloading media.");
+}
+
 export async function downloadMedia(
   url: string,
   policy: MediaUploadPolicy,
-  opts: { sniff?: boolean } = {},
+  opts: { sniff?: boolean; chatFile?: boolean } = {},
 ) {
   let response: Response;
   try {
-    response = await fetch(remoteMediaUrl(url), {
-      redirect: "error",
-      signal: AbortSignal.timeout(15_000),
-    });
+    response = opts.chatFile
+      ? await fetchChecked(url, chatFileUrl)
+      : await fetch(remoteMediaUrl(url), {
+          redirect: "error",
+          signal: AbortSignal.timeout(15_000),
+        });
   } catch (e) {
+    if (e instanceof ToolError) throw e;
     throw new ToolError(
       e instanceof Error && /^Use a supported/.test(e.message)
         ? e.message
@@ -217,13 +263,13 @@ export async function importChatFiles(
   const items: { media_id: string; mime_type: string; size_bytes: number; name?: string }[] = [];
   for (const f of files) {
     try {
-      remoteMediaUrl(f.download_url);
+      chatFileUrl(f.download_url);
     } catch (e) {
       throw new ToolError(
         `${(e as Error).message}${items.length ? ` (${items.length} file(s) were already saved: ${items.map((i) => i.media_id).join(", ")})` : ""}`,
       );
     }
-    const dl = await downloadMedia(f.download_url, policy, { sniff: true });
+    const dl = await downloadMedia(f.download_url, policy, { sniff: true, chatFile: true });
     const row = await storeMedia(workspaceId, userId, dl.bytes, dl.type, f.name ?? name);
     items.push({
       media_id: row.id,
