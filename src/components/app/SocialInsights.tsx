@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { SocialIcon } from "@/components/qalling/SocialIcon";
 import { listWorkspaceRows } from "@/lib/data.functions";
+import { AccountAvatar } from "@/components/app/CrmSocial";
 import { getSocialInsights } from "@/lib/social-insights.functions";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
         platform: string;
         account_name: string;
         handle: string | null;
+        avatar_url?: string | null;
         source: string;
         status: string;
       }[];
@@ -188,8 +190,12 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
     <div className="min-w-0 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <label className="relative flex min-w-0 items-center gap-3">
-          <span className="relative grid size-12 shrink-0 place-items-center rounded-full bg-secondary text-lg font-semibold">
-            {(current?.account_name ?? "?").charAt(0).toUpperCase()}
+          <span className="relative grid size-12 shrink-0 place-items-center rounded-full text-lg font-semibold">
+            <AccountAvatar
+              src={current?.avatar_url}
+              name={current?.account_name ?? "?"}
+              className="size-12 text-lg"
+            />
             {current && (
               <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-background">
                 <SocialIcon platform={current.platform} className="size-3.5" />

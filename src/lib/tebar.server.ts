@@ -16,6 +16,23 @@ export type TebarAccount = {
   name: string;
   handle: string | null;
   profile_url: string | null;
+  avatar_url?: string | null;
+};
+
+const avatarOf = (r: any): string | null => {
+  const v =
+    r.avatar_url ??
+    r.avatar ??
+    r.profile_picture_url ??
+    r.profile_picture ??
+    r.profile_image_url ??
+    r.picture ??
+    r.image_url ??
+    r.image ??
+    r.photo_url ??
+    null;
+  const u = typeof v === "string" ? v : (v?.url ?? null);
+  return typeof u === "string" && /^https?:\/\//.test(u) ? u.slice(0, 600) : null;
 };
 
 export async function tebarFetch(apiKey: string, path: string, init: RequestInit = {}) {
@@ -311,5 +328,6 @@ export async function listProfileAccounts(
       name: String(r.name ?? r.display_name ?? r.username ?? r.id),
       handle: r.username ?? r.handle ?? null,
       profile_url: r.profile_url ?? r.url ?? null,
+      avatar_url: avatarOf(r),
     }));
 }

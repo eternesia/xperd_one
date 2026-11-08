@@ -12,7 +12,13 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n";
 import { exportTablePdf, exportTableXlsx, type TableExport } from "@/lib/report-export";
@@ -78,7 +84,15 @@ export function TableSkeletonRows({ columns, rows = 6 }: { columns: number; rows
 }
 
 /** Placeholder satu halaman penuh: judul, kartu statistik, dan kerangka tabel. */
-export function PageSkeleton({ stats = 3, columns = 6, rows = 6 }: { stats?: number; columns?: number; rows?: number }) {
+export function PageSkeleton({
+  stats = 3,
+  columns = 6,
+  rows = 6,
+}: {
+  stats?: number;
+  columns?: number;
+  rows?: number;
+}) {
   return (
     <div className="space-y-5" aria-busy="true">
       <div className="space-y-2">
@@ -224,11 +238,21 @@ export function PaginationBar({ p }: { p: ReturnType<typeof usePagination<unknow
 /* --------------------------------- search --------------------------------- */
 
 /** Pencarian teks sisi klien pada field baris yang diberikan. */
-export function useSearchFilter<T>(rows: T[], term: string, fields: (row: T) => (string | number | null | undefined)[]) {
+export function useSearchFilter<T>(
+  rows: T[],
+  term: string,
+  fields: (row: T) => (string | number | null | undefined)[],
+) {
   return useMemo(() => {
     const q = term.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((r) => fields(r).some((v) => String(v ?? "").toLowerCase().includes(q)));
+    return rows.filter((r) =>
+      fields(r).some((v) =>
+        String(v ?? "")
+          .toLowerCase()
+          .includes(q),
+      ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, term]);
 }
@@ -244,10 +268,10 @@ export function SearchInput({
 }) {
   const { lang } = useI18n();
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        className="w-56 pl-9"
+        className="w-full rounded-full pl-9 sm:w-56 sm:rounded-md"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? (lang === "id" ? "Cari…" : "Search…")}
