@@ -1120,7 +1120,59 @@ function ContactsView({ workspaceId }: { workspaceId: string }) {
           placeholder={lang === "id" ? "Cari kontak…" : "Search contacts…"}
         />
       </PageHeader>
-      <Card>
+      <div className="space-y-2 md:hidden">
+        {(isLoading || visibleContacts.length === 0) && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {isLoading
+              ? lang === "id"
+                ? "Memuat…"
+                : "Loading…"
+              : term.trim()
+                ? lang === "id"
+                  ? "Tidak ada kontak yang cocok."
+                  : "No contact matches your search."
+                : lang === "id"
+                  ? "Belum ada pelanggan."
+                  : "No customers yet."}
+          </p>
+        )}
+        {pager.items.map((r) => (
+          <div
+            key={r.id}
+            className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 shadow-sm"
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-base font-semibold">
+              {(r.name ?? "?").charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold">{r.name}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {[r.code, r.contact_name, r.city].filter(Boolean).join(" · ")}
+              </p>
+              {(r.phone || r.email) && (
+                <p className="truncate text-xs text-muted-foreground">
+                  {[r.phone, r.email].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </div>
+            {r.phone && (
+              <Button asChild size="icon" variant="outline" className="shrink-0 rounded-full">
+                <a
+                  href={waLink(r.phone, lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="WhatsApp"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
+          </div>
+        ))}
+        <PaginationBar p={pager} />
+      </div>
+
+      <Card className="max-md:hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -1283,7 +1335,59 @@ function FollowUpView({ workspaceId }: { workspaceId: string }) {
         </Button>
       </PageHeader>
 
-      <Card>
+      <div className="space-y-2 md:hidden">
+        {(isLoading || rows.length === 0) && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {isLoading
+              ? lang === "id"
+                ? "Memuat…"
+                : "Loading…"
+              : lang === "id"
+                ? "Belum ada follow-up."
+                : "No follow-ups yet."}
+          </p>
+        )}
+        {pager.items.map((r) => (
+          <div key={r.id} className="rounded-2xl border bg-card p-3.5 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{r.subject}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  <span className="capitalize">{r.activity_type}</span> · {leadName(r.lead_id)}
+                </p>
+              </div>
+              <Badge variant={r.done_at ? "secondary" : "outline"} className="shrink-0">
+                {r.done_at
+                  ? lang === "id"
+                    ? "Selesai"
+                    : "Done"
+                  : lang === "id"
+                    ? "Terjadwal"
+                    : "Open"}
+              </Badge>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="truncate text-xs text-muted-foreground">
+                {r.due_at ? new Date(r.due_at).toLocaleString() : "—"}
+                {r.owner_name ? ` · ${r.owner_name}` : ""}
+              </span>
+              {!r.done_at && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 rounded-full"
+                  onClick={() => complete.mutate(r.id)}
+                >
+                  <Check className="h-4 w-4" /> {lang === "id" ? "Selesai" : "Done"}
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+        <PaginationBar p={pager} />
+      </div>
+
+      <Card className="max-md:hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
