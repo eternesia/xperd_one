@@ -210,6 +210,7 @@ test("MCP: token pribadi, tool, batas paket, OAuth PKCE, pencabutan", async ({ p
       "qalling_request_client_approval",
       "qalling_get_content_attribution",
       "qalling_get_sales_funnel",
+      "qalling_create_upload_link",
       "qalling_retry_post",
       "qalling_list_ideas",
       "qalling_update_idea",

@@ -69,6 +69,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport }
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
 import { Route as ApiPublicCrmMediaRouteImport } from './routes/api/public/crm-media'
+import { Route as ApiPublicMcpUploadRouteImport } from './routes/api/public/mcp-upload'
 import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
 import { Route as ProductionWorkspaceIdSectionRouteImport } from './routes/production.$workspaceId.$section'
@@ -411,6 +412,11 @@ const ApiPublicCrmMediaRoute = ApiPublicCrmMediaRouteImport.update({
   path: '/api/public/crm-media',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicMcpUploadRoute = ApiPublicMcpUploadRouteImport.update({
+  id: '/api/public/mcp-upload',
+  path: '/api/public/mcp-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVisitRoute = ApiPublicVisitRouteImport.update({
   id: '/api/public/visit',
   path: '/api/public/visit',
@@ -679,6 +685,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
+  '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
@@ -776,6 +783,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
+  '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
@@ -876,6 +884,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
+  '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
@@ -978,6 +987,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
     | '/api/public/crm-media'
+    | '/api/public/mcp-upload'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/production/$workspaceId/$section'
@@ -1075,6 +1085,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
     | '/api/public/crm-media'
+    | '/api/public/mcp-upload'
     | '/api/public/visit'
     | '/production/$workspaceId/$section'
     | '/qalling/app/$submoduleId'
@@ -1174,6 +1185,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/mcp'
     | '/_site/products/$slug'
     | '/api/public/crm-media'
+    | '/api/public/mcp-upload'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/production/$workspaceId/$section'
@@ -1244,6 +1256,7 @@ export interface RootRouteChildren {
   QallingTestimoniRoute: typeof QallingTestimoniRoute
   QallingIndexRoute: typeof QallingIndexRoute
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
+  ApiPublicMcpUploadRoute: typeof ApiPublicMcpUploadRoute
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   QallingApproveTokenRoute: typeof QallingApproveTokenRoute
@@ -1685,6 +1698,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/crm-media'
       fullPath: '/api/public/crm-media'
       preLoaderRoute: typeof ApiPublicCrmMediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/mcp-upload': {
+      id: '/api/public/mcp-upload'
+      path: '/api/public/mcp-upload'
+      fullPath: '/api/public/mcp-upload'
+      preLoaderRoute: typeof ApiPublicMcpUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/visit': {
@@ -2172,6 +2192,7 @@ const rootRouteChildren: RootRouteChildren = {
   QallingTestimoniRoute: QallingTestimoniRoute,
   QallingIndexRoute: QallingIndexRoute,
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,
+  ApiPublicMcpUploadRoute: ApiPublicMcpUploadRoute,
   ApiPublicVisitRoute: ApiPublicVisitRoute,
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   QallingApproveTokenRoute: QallingApproveTokenRoute,

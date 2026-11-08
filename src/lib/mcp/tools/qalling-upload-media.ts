@@ -9,7 +9,7 @@ export default defineTool({
   name: "qalling_upload_media",
   title: "Upload media to library",
   description:
-    "Upload one image/video into the private Qalling workspace media library and return its media_id for qalling_create_post media_ids. Provide either url (HTTPS on supported OpenAI/Google Storage/Cloudinary/Unsplash/Replicate/Fal CDNs) or file_base64 with mime_type (use this for generated files that have no public URL). Call once per carousel slide; configured size limits and plan quotas apply.",
+    "Upload images/videos attached in ChatGPT with files (each item has download_url), or one image/video into the private Qalling workspace media library and return its media_id for qalling_create_post media_ids. Provide either url (HTTPS on supported OpenAI/Google Storage/Cloudinary/Unsplash/Replicate/Fal CDNs) or file_base64 with mime_type (use this for generated files that have no public URL). Call once per carousel slide; configured size limits and plan quotas apply.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace ID from list_workspaces."),
     url: z
@@ -27,16 +27,66 @@ export default defineTool({
       .optional()
       .describe("Required with file_base64."),
     name: z.string().max(120).optional().describe("Optional file name shown in the library."),
+    files: z
+      .array(
+        z.object({
+          download_url: z.string().url().describe("Temporary download URL of the attached file."),
+          file_id: z.string().optional(),
+          name: z.string().max(120).optional(),
+        }),
+      )
+      .max(10)
+      .optional()
+      .describe(
+        "Files attached in ChatGPT (up to 10, e.g. carousel slides). Returns media_ids in order.",
+      ),
   },
+  meta: { "openai/fileParams": ["files"] },
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async ({ workspace_id, url, file_base64, mime_type, name }, ctx) => {
+  handler: async ({ workspace_id, url, file_base64, mime_type, name, files }, ctx) => {
     requireAuth(ctx);
-    if (!!url === !!file_base64) throw new ToolError("Provide exactly one of url or file_base64.");
+    if (files?.length) {
+      if (url || file_base64) throw new ToolError("Use files alone, without url or file_base64.");
+      const { userId } = await getTokenUser(ctx);
+      await assertQallingSection(workspace_id, userId, "media", true);
+      const { loadMediaPolicy } = await import("@/lib/media-policy.server");
+      const policy = await loadMediaPolicy();
+      const items: { media_id: string; mime_type: string; size_bytes: number; name?: string }[] =
+        [];
+      for (const f of files) {
+        try {
+          remoteMediaUrl(f.download_url);
+        } catch (e) {
+          throw new ToolError(
+            `${(e as Error).message}${items.length ? ` (${items.length} file(s) were already saved: ${items.map((i) => i.media_id).join(", ")})` : ""}`,
+          );
+        }
+        const dl = await downloadMedia(f.download_url, policy, { sniff: true });
+        const row = await storeMedia(workspace_id, userId, dl.bytes, dl.type, f.name ?? name);
+        items.push({
+          media_id: row.id,
+          mime_type: row.mime_type,
+          size_bytes: row.size_bytes,
+          name: f.name,
+        });
+      }
+      const result = {
+        media_ids: items.map((i) => i.media_id),
+        items,
+        message: "Uploaded to Qalling media library; pass media_ids in qalling_create_post.",
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        structuredContent: result,
+      };
+    }
+    if (!!url === !!file_base64)
+      throw new ToolError("Provide exactly one of files, url or file_base64.");
     const { userId } = await getTokenUser(ctx);
     await assertQallingSection(workspace_id, userId, "media", true);
     const { loadMediaPolicy } = await import("@/lib/media-policy.server");
