@@ -1,3 +1,4 @@
+import { WhatsAppCostInfo } from "@/components/qalling/WhatsAppCostInfo";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -39,12 +40,19 @@ export function AddonTierChoices() {
     queryFn: () => listAddonOptions({ data: { activeOnly: true } }),
   });
   // Urutan tampil seperti live (tabel opsi tak punya kolom urut): WhatsApp, user, storage, lalu paket akun tambahan.
-  const OPTION_ORDER = ["qalling_whatsapp", "qalling_extra_user", "qalling_extra_storage", "qalling_extra_accounts_5"];
+  const OPTION_ORDER = [
+    "qalling_whatsapp",
+    "qalling_extra_user",
+    "qalling_extra_storage",
+    "qalling_extra_accounts_5",
+  ];
   const rank = (code: string) => {
     const i = OPTION_ORDER.indexOf(code);
     return i === -1 ? OPTION_ORDER.length : i;
   };
-  const sortedOptions = [...options].sort((x, y) => rank(x.code) - rank(y.code) || x.code.localeCompare(y.code));
+  const sortedOptions = [...options].sort(
+    (x, y) => rank(x.code) - rank(y.code) || x.code.localeCompare(y.code),
+  );
   return (
     <section className="space-y-4 rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
       <h2 className="text-base font-semibold">Qalling · Pilihan paket</h2>
@@ -122,6 +130,11 @@ export function AddonTierChoices() {
           >
             <span>{o.name}</span>
             <span>{money(o.monthly_price)} /unit/bulan</span>
+            {o.code === "qalling_whatsapp" && (
+              <div className="w-full">
+                <WhatsAppCostInfo />
+              </div>
+            )}
             {tenant && workspaceRole === "owner" && (
               <div className="flex items-center gap-3">
                 <Input
