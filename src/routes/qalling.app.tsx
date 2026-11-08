@@ -338,31 +338,56 @@ function QallingShell() {
   return (
     <div className="min-h-screen bg-secondary/30">
       <header className="sticky top-0 z-50 border-b border-border/70 bg-background/85 backdrop-blur-xl">
-        <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetContent side="left" className="w-[86vw] max-w-sm overflow-y-auto p-4">
-                <SheetHeader className="pr-10 text-left">
+              <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col gap-0 p-0">
+                <SheetHeader className="border-b px-4 py-3 pr-12 text-left">
                   <SheetTitle className="flex items-center gap-2">
-                    <QallingLogo className="w-40" />
+                    <QallingLogo className="w-32" />
                   </SheetTitle>
                 </SheetHeader>
-                <div className="mt-6" onClick={() => setMobileMenuOpen(false)}>
+                <div className="flex items-center gap-3 border-b bg-sky-50/80 px-4 py-3 dark:bg-card">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
+                    {(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">
+                      {activeWorkspace?.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {userEmail}
+                    </span>
+                  </span>
+                </div>
+                <div
+                  className="flex-1 overflow-y-auto px-3 py-3 [&_a]:min-h-11 [&_a]:text-[15px] [&_button]:min-h-10"
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("a")) setMobileMenuOpen(false);
+                  }}
+                >
                   {nav}
                   <div className="mt-4 border-t border-border pt-3">{settingsLinks}</div>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                  <QallingPreferences />
+                  <Button variant="ghost" size="sm" onClick={signOut}>
+                    <LogOut className="h-4 w-4" />
+                    {id ? "Keluar" : "Sign out"}
+                  </Button>
                 </div>
               </SheetContent>
             </Sheet>
             <Link to="/qalling/app" className="flex items-center gap-2">
-              <QallingLogo className="w-28 sm:w-36" />
+              <QallingLogo className="w-24 sm:w-36" />
             </Link>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1 sm:gap-3">
             {tenant?.id && (
               <Link
                 to="/qalling/app/billing"
                 data-testid="qalling-balance"
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-secondary"
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium hover:bg-secondary sm:px-2.5"
                 aria-label={
                   lang === "id" ? "Saldo, isi ulang di Tagihan" : "Balance, top up in Billing"
                 }
@@ -377,14 +402,16 @@ function QallingShell() {
                         maximumFractionDigits: 0,
                       }).format(balance)}
                 </span>
-                <span className="flex items-center gap-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">
+                <span className="hidden items-center gap-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground sm:flex">
                   <Plus className="h-3 w-3" />
                   <span className="hidden sm:inline">Top up</span>
                 </span>
               </Link>
             )}
             <AnnouncementBell />
-            <QallingPreferences />
+            <span className="hidden md:block">
+              <QallingPreferences />
+            </span>
             <span className="hidden max-w-[200px] truncate text-sm text-muted-foreground sm:block">
               {activeWorkspace?.name}
             </span>
@@ -392,10 +419,19 @@ function QallingShell() {
               variant="ghost"
               size="icon"
               onClick={signOut}
+              className="hidden md:inline-flex"
               aria-label={lang === "id" ? "Keluar" : "Sign out"}
             >
               <LogOut className="h-4 w-4" />
             </Button>
+            <button
+              type="button"
+              className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary md:hidden"
+              aria-label={id ? "Buka menu akun" : "Open account menu"}
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              {(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}
+            </button>
           </div>
         </div>
       </header>
@@ -474,7 +510,7 @@ function QallingShell() {
             </Button>
           )}
         </aside>
-        <main className="min-w-0 flex-1 p-4 pb-28 sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 pb-28 sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
           <QallingTrialAlert />
           <Outlet />
         </main>
@@ -486,7 +522,11 @@ function QallingShell() {
         <div className="grid h-16 grid-cols-5 items-center">
           {[
             { to: "/qalling/app", icon: LayoutDashboard, label: id ? "Beranda" : "Home" },
-            { to: "/qalling/app/calendar", icon: CalendarDays, label: id ? "Jadwal" : "Schedule" },
+            {
+              to: "/qalling/app/calendar",
+              icon: CalendarDays,
+              label: id ? "Kalender" : "Calendar",
+            },
             {
               to: "/qalling/app/post-scheduler",
               icon: Plus,
@@ -495,7 +535,10 @@ function QallingShell() {
             },
             { to: "/qalling/app/inbox", icon: MessageSquare, label: id ? "Pesan" : "Inbox" },
           ].map((b) => {
-            const active = pathname === b.to;
+            const active =
+              b.to === "/qalling/app"
+                ? pathname === "/qalling/app" || pathname === "/qalling/app/"
+                : pathname.startsWith(b.to);
             return b.primary ? (
               <Link
                 key={b.to}
@@ -512,11 +555,18 @@ function QallingShell() {
                 key={b.to}
                 to={b.to as "/qalling/app"}
                 className={cn(
-                  "flex flex-col items-center gap-1 text-[11px] text-muted-foreground",
+                  "flex h-full flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground",
                   active && "font-medium text-primary",
                 )}
               >
-                <b.icon className="h-5 w-5" />
+                <span
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full",
+                    active && "bg-primary/10",
+                  )}
+                >
+                  <b.icon className="h-5 w-5" />
+                </span>
                 {b.label}
               </Link>
             );
@@ -525,9 +575,11 @@ function QallingShell() {
             type="button"
             aria-label="Menu"
             onClick={() => setMobileMenuOpen(true)}
-            className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground"
+            className="flex h-full flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground"
           >
-            <Menu className="h-5 w-5" />
+            <span className="flex h-7 w-12 items-center justify-center rounded-full">
+              <Menu className="h-5 w-5" />
+            </span>
             Menu
           </button>
         </div>
