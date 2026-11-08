@@ -25,6 +25,8 @@ export interface WaSettingsRow {
   phone_number_id: string | null;
   invoice_template: string | null;
   template_lang: string;
+  managed: boolean;
+  number_display: string | null;
 }
 
 function docNumber(prefix: string, seq: number, date = new Date()) {
@@ -60,6 +62,8 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
       phone_number_id: string | null;
       invoice_template: string | null;
       template_lang: string | null;
+      managed: number;
+      number_display: string | null;
     }>(
       `SELECT id, workspace_id, provider, sender_number, endpoint_url, api_token,
               is_active, notes, last_checked_at, last_status, phone_number_id, invoice_template, template_lang
@@ -83,6 +87,8 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
       phone_number_id: row.phone_number_id,
       invoice_template: row.invoice_template,
       template_lang: row.template_lang ?? "id",
+      managed: Boolean(row.managed),
+      number_display: row.number_display,
     } satisfies WaSettingsRow;
   });
 
@@ -119,13 +125,13 @@ export const saveCrmWaSettings = createServerFn({ method: "POST" })
          (id, workspace_id, provider, sender_number, endpoint_url, api_token, is_active, notes, phone_number_id, invoice_template, template_lang)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         provider = VALUES(provider),
+         provider = IF(managed = 1, provider, VALUES(provider)),
          sender_number = VALUES(sender_number),
-         endpoint_url = VALUES(endpoint_url),
-         api_token = VALUES(api_token),
+         endpoint_url = IF(managed = 1, endpoint_url, VALUES(endpoint_url)),
+         api_token = IF(managed = 1, api_token, VALUES(api_token)),
          is_active = VALUES(is_active),
          notes = VALUES(notes),
-         phone_number_id = VALUES(phone_number_id),
+         phone_number_id = IF(managed = 1, phone_number_id, VALUES(phone_number_id)),
          invoice_template = VALUES(invoice_template),
          template_lang = VALUES(template_lang)`,
       [
