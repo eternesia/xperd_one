@@ -1,3 +1,4 @@
+import { useDevtoolsDeterrent } from "@/lib/use-devtools-deterrent";
 import { AnnouncementBell } from "@/components/qalling/AnnouncementBell";
 import { QallingTrialAlert } from "@/components/qalling/QallingTrialAlert";
 import { useEffect, useState } from "react";
@@ -6,6 +7,7 @@ import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tan
 import {
   CalendarRange,
   ChevronDown,
+  ChevronRight,
   FileBarChart,
   BookOpen,
   Gift,
@@ -75,6 +77,7 @@ export const Route = createFileRoute("/qalling/app")({
 const CRM = findModule("crm");
 
 function QallingShell() {
+  useDevtoolsDeterrent();
   const {
     loading,
     userId,
@@ -294,6 +297,50 @@ function QallingShell() {
     { to: "/qalling/docs", icon: BookOpen, label: id ? "Dokumentasi" : "Documentation" },
   ];
   const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
+  const navGroups = [
+    { key: "chat", label: id ? "Percakapan" : "Conversations", ids: ["inbox", "comments"] },
+    {
+      key: "content",
+      label: id ? "Konten" : "Content",
+      ids: ["calendar", "post-scheduler", "media", "ideas"],
+    },
+    {
+      key: "sales",
+      label: id ? "Penjualan" : "Sales",
+      ids: ["leads", "pipeline", "contacts", "follow-ups"],
+    },
+    {
+      key: "reports",
+      label: id ? "Analitik" : "Analytics",
+      ids: ["social-dashboard", "funnel", "attribution", "targets"],
+    },
+    { key: "clients", label: "Agency", ids: ["clients", "reports", "agency"] },
+    {
+      key: "tools",
+      label: id ? "Otomasi & Pesan" : "Automation & Messaging",
+      ids: ["automations", "broadcast", "templates", "campaigns", "wa-gateway"],
+    },
+    { key: "tender", label: "Tender", ids: ["tenders", "doc-library"] },
+  ];
+  /** Baris menu mobile (sheet "Lainnya"): ikon, label, panah. */
+  const sheetRow = (
+    to: string,
+    Icon: typeof Users | undefined,
+    label: string,
+    extra?: { params?: { submoduleId: string } },
+  ) => (
+    <Link
+      key={to + (extra?.params?.submoduleId ?? "")}
+      to={to as "/qalling/app"}
+      params={extra?.params as never}
+      onClick={() => setMobileMenuOpen(false)}
+      className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-[15px] active:bg-muted"
+    >
+      {Icon && <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />}
+      <span className="flex-1 truncate">{label}</span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
+    </Link>
+  );
   const nav = (
     <nav className="flex flex-col gap-0.5">
       <Link
@@ -304,34 +351,7 @@ function QallingShell() {
         <LayoutDashboard className="h-4 w-4 shrink-0" />
         <span className="qs-label">{id ? "Beranda" : "Home"}</span>
       </Link>
-      {section("chat", id ? "Percakapan" : "Conversations", ["inbox", "comments"])}
-      {section("content", id ? "Konten" : "Content", [
-        "calendar",
-        "post-scheduler",
-        "media",
-        "ideas",
-      ])}
-      {section("sales", id ? "Penjualan" : "Sales", [
-        "leads",
-        "pipeline",
-        "contacts",
-        "follow-ups",
-      ])}
-      {section("reports", id ? "Analitik" : "Analytics", [
-        "social-dashboard",
-        "funnel",
-        "attribution",
-        "targets",
-      ])}
-      {section("clients", "Agency", ["clients", "reports", "agency"])}
-      {section("tools", id ? "Otomasi & Pesan" : "Automation & Messaging", [
-        "automations",
-        "broadcast",
-        "templates",
-        "campaigns",
-        "wa-gateway",
-      ])}
-      {section("tender", "Tender", ["tenders", "doc-library"])}
+      {navGroups.map((g) => section(g.key, g.label, g.ids))}
     </nav>
   );
 
@@ -341,35 +361,58 @@ function QallingShell() {
         <div className="flex h-14 items-center justify-between gap-2 px-3 sm:h-16 sm:gap-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col gap-0 p-0">
-                <SheetHeader className="border-b px-4 py-3 pr-12 text-left">
-                  <SheetTitle className="flex items-center gap-2">
-                    <QallingLogo className="w-32" />
-                  </SheetTitle>
+              <SheetContent
+                side="bottom"
+                className="flex max-h-[88vh] flex-col gap-0 rounded-t-3xl p-0 [&>button]:hidden"
+              >
+                <SheetHeader className="sr-only">
+                  <SheetTitle>{id ? "Menu lainnya" : "More"}</SheetTitle>
                 </SheetHeader>
-                <div className="flex items-center gap-3 border-b bg-sky-50/80 px-4 py-3 dark:bg-card">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
+                <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+                <div className="flex items-center gap-3 border-b px-5 py-4">
+                  <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary">
                     {(activeWorkspace?.name ?? "Q").charAt(0).toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">
-                      {activeWorkspace?.name}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate font-semibold">{activeWorkspace?.name}</span>
+                    <span className="block truncate text-sm text-muted-foreground">
                       {userEmail}
                     </span>
                   </span>
                 </div>
-                <div
-                  className="flex-1 overflow-y-auto px-3 py-3 [&_a]:min-h-11 [&_a]:text-[15px] [&_button]:min-h-10"
-                  onClick={(e) => {
-                    if ((e.target as HTMLElement).closest("a")) setMobileMenuOpen(false);
-                  }}
-                >
-                  {nav}
-                  <div className="mt-4 border-t border-border pt-3">{settingsLinks}</div>
+                <div className="flex-1 overflow-y-auto px-3 pb-2">
+                  {navGroups.map((g) => {
+                    const rows = g.ids
+                      .filter((x) => subs.has(x) && !["calendar", "comments"].includes(x))
+                      .map((x) => {
+                        const sub = subs.get(x)!;
+                        return sheetRow(
+                          "/qalling/app/$submoduleId",
+                          sub.icon,
+                          lang === "id" ? sub.id_ : sub.en,
+                          {
+                            params: { submoduleId: x },
+                          },
+                        );
+                      });
+                    if (!rows.length) return null;
+                    return (
+                      <div key={g.key} className="pt-3">
+                        <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                          {g.label}
+                        </p>
+                        {rows}
+                      </div>
+                    );
+                  })}
+                  <div className="pt-3">
+                    <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                      {id ? "Akun & pengaturan" : "Account & settings"}
+                    </p>
+                    {settingsItems.map((x) => sheetRow(x.to, x.icon, x.label))}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                <div className="flex items-center justify-between gap-2 border-t px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                   <QallingPreferences />
                   <Button variant="ghost" size="sm" onClick={signOut}>
                     <LogOut className="h-4 w-4" />
@@ -573,14 +616,14 @@ function QallingShell() {
           })}
           <button
             type="button"
-            aria-label="Menu"
+            aria-label={id ? "Lainnya" : "More"}
             onClick={() => setMobileMenuOpen(true)}
             className="flex h-full flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground"
           >
             <span className="flex h-7 w-12 items-center justify-center rounded-full">
               <Menu className="h-5 w-5" />
             </span>
-            Menu
+            {id ? "Lainnya" : "More"}
           </button>
         </div>
       </nav>
