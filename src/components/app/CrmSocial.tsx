@@ -340,14 +340,14 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
           <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
             {id ? "Akun Media Sosial" : "Social Accounts"}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-sm:hidden">
             {id
               ? "Hubungkan lebih dari satu akun per platform."
               : "Connect multiple accounts per platform."}
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-1 sm:w-auto sm:items-end">
+          <div className="flex items-center gap-2 max-sm:[&>button:last-child]:flex-1">
             <Button
               variant="ghost"
               size="sm"
@@ -355,7 +355,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
               disabled={sync.isPending || !tebarSt?.ready}
             >
               <RefreshCw className={cn("h-4 w-4", sync.isPending && "animate-spin")} />{" "}
-              {id ? "Sinkronkan" : "Sync"}
+              <span className="max-sm:hidden">{id ? "Sinkronkan" : "Sync"}</span>
             </Button>
             <Button
               onClick={() =>
@@ -405,7 +405,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="rounded-2xl">
           <CardContent className="p-0">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
               <p className="text-sm font-medium">
@@ -421,15 +421,15 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                     setAccPage(0);
                   }}
                   placeholder={id ? "Cari akun atau platform…" : "Search accounts or platforms…"}
-                  className="h-8 max-w-64"
+                  className="h-9 w-full rounded-full sm:max-w-64"
                   aria-label={id ? "Cari akun" : "Search accounts"}
                 />
               )}
             </div>
             <ul className="divide-y">
               {pageRows.map((a) => (
-                <li key={a.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <li key={a.id} className="flex items-center gap-3 px-3 py-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
                     <SocialIcon platform={a.platform} className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">

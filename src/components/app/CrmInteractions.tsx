@@ -113,7 +113,7 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : (
         [...groups].map(([key, comments]) => (
-          <section key={key} className="border-t pt-4">
+          <section key={key} className="rounded-2xl border bg-card p-3 shadow-sm sm:p-4">
             {(() => {
               const c0 = comments[0];
               return (
@@ -123,11 +123,11 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
                       src={c0.post_thumbnail_url}
                       alt=""
                       loading="lazy"
-                      className="size-16 shrink-0 rounded-md border object-cover"
+                      className="size-14 shrink-0 rounded-xl border object-cover sm:size-16"
                       onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
                     />
                   ) : (
-                    <span className="flex size-16 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-xl border bg-muted text-muted-foreground sm:size-16">
                       <MessageSquare className="size-5" />
                     </span>
                   )}
@@ -153,15 +153,19 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
                       </a>
                     )}
                   </div>
-                  <Badge variant="outline" className="shrink-0">
-                    {comments.length} komentar
+                  <Badge variant="outline" className="shrink-0 rounded-full">
+                    {comments.length}
+                    <span className="max-sm:hidden">&nbsp;komentar</span>
                   </Badge>
                 </div>
               );
             })()}
             {comments.map((c) => (
-              <article key={c.id} className="mt-3 rounded-md border p-4">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+              <article key={c.id} className="mt-3 rounded-2xl bg-muted/50 p-3 sm:p-4">
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
+                  <span className="grid size-9 place-items-center rounded-full bg-secondary text-sm font-semibold">
+                    {(c.author_name ?? "?").charAt(0).toUpperCase()}
+                  </span>
                   <div className="min-w-0">
                     <p className="font-medium text-sm">{c.author_name}</p>
                     <p className="mt-2 whitespace-pre-wrap break-words text-sm">{c.body}</p>
@@ -170,17 +174,18 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
                       {new Date(c.created_at).toLocaleString("id-ID")}
                     </p>
                   </div>
-                  <Badge variant="secondary" className="h-fit">
+                  <Badge variant="secondary" className="h-fit rounded-full">
                     {c.status}
                   </Badge>
                 </div>
                 {c.reply && (
-                  <p className="mt-3 border-l-2 pl-3 text-sm text-muted-foreground">{c.reply}</p>
+                  <p className="ml-12 mt-3 rounded-xl bg-primary/10 px-3 py-2 text-sm">{c.reply}</p>
                 )}
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex gap-2 pl-12">
                   <Button
                     size="sm"
                     variant="outline"
+                    className="rounded-full"
                     disabled={c.status !== "open"}
                     onClick={() => {
                       setSelected(c.id);
@@ -348,7 +353,8 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
           </Button>
           <Button disabled={!query.data?.accounts.length} onClick={() => setPicker(true)}>
             <Plus className="size-4" />
-            Buat automation
+            <span className="max-sm:hidden">Buat automation</span>
+            <span className="sm:hidden">Buat</span>
           </Button>
         </div>
       </header>
@@ -360,19 +366,23 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
         </p>
       )}
       <Tabs defaultValue="rules">
-        <TabsList>
-          <TabsTrigger value="rules">Aturan</TabsTrigger>
-          <TabsTrigger value="history">Riwayat eksekusi</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 rounded-full sm:inline-flex sm:w-auto">
+          <TabsTrigger value="rules" className="rounded-full">
+            Aturan
+          </TabsTrigger>
+          <TabsTrigger value="history" className="rounded-full">
+            Riwayat eksekusi
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="rules" className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap [&>*:first-child]:col-span-2">
             <TableSearch
               value={pages.query}
               onChange={pages.setQuery}
               placeholder="Cari nama, kata kunci, atau isi balasan…"
             />
             <select
-              className="h-9 rounded-md border bg-background px-3 text-sm"
+              className="h-10 min-w-0 rounded-xl border bg-background px-3 text-sm sm:h-9 sm:rounded-md"
               value={ruleAccount}
               onChange={(e) => setRuleAccount(e.target.value)}
               aria-label="Filter akun"
@@ -385,7 +395,7 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
               ))}
             </select>
             <select
-              className="h-9 rounded-md border bg-background px-3 text-sm"
+              className="h-10 min-w-0 rounded-xl border bg-background px-3 text-sm sm:h-9 sm:rounded-md"
               value={ruleState}
               onChange={(e) => setRuleState(e.target.value)}
               aria-label="Filter status"
@@ -395,7 +405,7 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
               <option value="off">Nonaktif</option>
             </select>
           </div>
-          <div className="overflow-hidden rounded-md border">
+          <div className="overflow-hidden rounded-2xl border bg-card">
             <ul className="divide-y">
               {pages.rows.map((r) => {
                 const acc = query.data?.accounts.find((a) => a.id === r.account_id);
