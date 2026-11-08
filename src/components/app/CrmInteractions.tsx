@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { QuickReplies } from "@/components/app/QuickReplies";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -113,9 +114,51 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
       ) : (
         [...groups].map(([key, comments]) => (
           <section key={key} className="border-t pt-4">
-            <h2 className="break-all text-sm font-medium">
-              {comments[0]?.crm_social_accounts?.account_name} · Post {comments[0]?.post_id}
-            </h2>
+            {(() => {
+              const c0 = comments[0];
+              return (
+                <div className="flex items-start gap-3">
+                  {c0?.post_thumbnail_url ? (
+                    <img
+                      src={c0.post_thumbnail_url}
+                      alt=""
+                      loading="lazy"
+                      className="size-16 shrink-0 rounded-md border object-cover"
+                      onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                    />
+                  ) : (
+                    <span className="flex size-16 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+                      <MessageSquare className="size-5" />
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {c0?.crm_social_accounts?.account_name}
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        · {c0?.crm_social_accounts?.platform}
+                      </span>
+                    </p>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {c0?.post_caption || "Postingan tanpa caption"}
+                    </p>
+                    {c0?.post_permalink && (
+                      <a
+                        href={c0.post_permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Lihat postingan
+                      </a>
+                    )}
+                  </div>
+                  <Badge variant="outline" className="shrink-0">
+                    {comments.length} komentar
+                  </Badge>
+                </div>
+              );
+            })()}
             {comments.map((c) => (
               <article key={c.id} className="mt-3 rounded-md border p-4">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
@@ -227,17 +270,37 @@ const EMPTY: Omit<Form, "accountId"> = {
   autoLike: false,
   enabled: true,
 };
+const KIND_LABEL: Record<string, string> = {
+  comment_to_dm: "Komentar → DM",
+  comment_reply: "Balas komentar publik",
+  dm_keyword: "DM kata kunci",
+  default_reply: "Balasan DM default",
+  story_reply: "Balasan story",
+  story_mention: "Mention di story",
+};
+
 export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<Form | null>(null);
   const [picker, setPicker] = useState(false);
   const manage = useServerFn(manageAutomation);
   const boardFn = useServerFn(getAutomationBoard);
+  const syncAll = useServerFn(syncTebarSocial);
   const query = useQuery({
     queryKey: ["crm-automations", workspaceId],
-    queryFn: () => boardFn({ data: { workspaceId } }),
+    queryFn: async () => {
+      await syncAll({ data: { workspaceId } }).catch(() => null); // tarik otomasi & statistik dari Tebar
+      return boardFn({ data: { workspaceId } });
+    },
   });
-  const pages = usePaged(query.data?.rules ?? [], (r) => `${r.name} ${r.keyword} ${r.reply_body}`);
+  const [ruleAccount, setRuleAccount] = useState("all");
+  const [ruleState, setRuleState] = useState("all");
+  const filteredRules = (query.data?.rules ?? []).filter(
+    (r) =>
+      (ruleAccount === "all" || r.account_id === ruleAccount) &&
+      (ruleState === "all" || (ruleState === "on" ? r.enabled : !r.enabled)),
+  );
+  const pages = usePaged(filteredRules, (r) => `${r.name} ${r.keyword} ${r.reply_body}`, 15);
   const history = usePaged(
     query.data?.runs ?? [],
     (r) => `${r.crm_automation_rules?.name} ${r.status}`,
@@ -273,10 +336,21 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
     <div className="min-w-0 space-y-5">
       <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <h1 className="text-2xl font-medium">Automation</h1>
-        <Button disabled={!query.data?.accounts.length} onClick={() => setPicker(true)}>
-          <Plus className="size-4" />
-          Buat automation
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label="Sinkron dari Tebar"
+            disabled={query.isFetching}
+            onClick={() => query.refetch()}
+          >
+            <RefreshCw className={cn("size-4", query.isFetching && "animate-spin")} />
+          </Button>
+          <Button disabled={!query.data?.accounts.length} onClick={() => setPicker(true)}>
+            <Plus className="size-4" />
+            Buat automation
+          </Button>
+        </div>
       </header>
       {query.error && <p className="text-destructive">{query.error.message}</p>}
       {!query.isLoading && !query.data?.accounts.length && (
@@ -291,60 +365,120 @@ export function CrmAutomationsView({ workspaceId }: { workspaceId: string }) {
           <TabsTrigger value="history">Riwayat eksekusi</TabsTrigger>
         </TabsList>
         <TabsContent value="rules" className="space-y-4">
-          <TableSearch value={pages.query} onChange={pages.setQuery} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {pages.rows.map((r) => (
-              <article key={r.id} className="rounded-md border p-5">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-                  <div className="min-w-0">
-                    <h2 className="break-words font-medium">{r.name}</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {r.trigger_type === "dm"
-                        ? "DM masuk"
-                        : r.action_kind === "comment_to_dm"
-                          ? "Komentar → DM"
-                          : "Komentar baru"}{" "}
-                      · {query.data?.accounts.find((a) => a.id === r.account_id)?.account_name} ·{" "}
-                      {r.keyword || "Semua pesan"}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {r.link_url && <Badge variant="secondary">Link · {r.click_count} klik</Badge>}
-                      {r.follow_gate && <Badge variant="secondary">Wajib follow</Badge>}
-                      {r.auto_like && <Badge variant="secondary">Auto-like</Badge>}
+          <div className="flex flex-wrap items-center gap-2">
+            <TableSearch
+              value={pages.query}
+              onChange={pages.setQuery}
+              placeholder="Cari nama, kata kunci, atau isi balasan…"
+            />
+            <select
+              className="h-9 rounded-md border bg-background px-3 text-sm"
+              value={ruleAccount}
+              onChange={(e) => setRuleAccount(e.target.value)}
+              aria-label="Filter akun"
+            >
+              <option value="all">Semua akun</option>
+              {query.data?.accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.account_name} ({a.platform})
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-9 rounded-md border bg-background px-3 text-sm"
+              value={ruleState}
+              onChange={(e) => setRuleState(e.target.value)}
+              aria-label="Filter status"
+            >
+              <option value="all">Semua status</option>
+              <option value="on">Aktif</option>
+              <option value="off">Nonaktif</option>
+            </select>
+          </div>
+          <div className="overflow-hidden rounded-md border">
+            <ul className="divide-y">
+              {pages.rows.map((r) => {
+                const acc = query.data?.accounts.find((a) => a.id === r.account_id);
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <Switch
+                      aria-label={`Aktifkan ${r.name}`}
+                      checked={r.enabled}
+                      disabled={save.isPending}
+                      onCheckedChange={(enabled) => save.mutate({ ...fromRow(r), enabled })}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{r.name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {r.tebar_kind
+                            ? (KIND_LABEL[r.tebar_kind] ?? r.tebar_kind)
+                            : r.trigger_type === "dm"
+                              ? "DM masuk"
+                              : r.action_kind === "comment_to_dm"
+                                ? "Komentar → DM"
+                                : "Komentar baru"}
+                        </Badge>
+                        {r.follow_gate && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Wajib follow
+                          </Badge>
+                        )}
+                        {r.auto_like && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Auto-like
+                          </Badge>
+                        )}
+                        {r.synced_at && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Tebar
+                          </Badge>
+                        )}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {acc ? `${acc.account_name} · ` : ""}
+                        {r.keyword ? `Kata kunci: ${r.keyword}` : "Semua pesan"} ·{" "}
+                        {r.reply_body || "—"}
+                      </p>
                     </div>
-                  </div>
-                  <Switch
-                    aria-label={`Aktifkan ${r.name}`}
-                    checked={r.enabled}
-                    disabled={save.isPending}
-                    onCheckedChange={(enabled) => save.mutate({ ...fromRow(r), enabled })}
-                  />
-                </div>
-                <p className="mt-4 whitespace-pre-wrap break-words text-sm">{r.reply_body}</p>
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Ubah ${r.name}`}
-                    onClick={() => setForm(fromRow(r))}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Hapus ${r.name}`}
-                    disabled={save.isPending}
-                    onClick={() => {
-                      if (window.confirm("Hapus aturan ini?"))
-                        save.mutate({ ...fromRow(r), remove: true });
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              </article>
-            ))}
+                    <div className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
+                      <p>
+                        <span className="font-semibold text-foreground">{r.run_count}</span>{" "}
+                        berjalan
+                        {r.link_url ? ` · ${r.click_count} klik` : ""}
+                      </p>
+                      <p>
+                        {r.last_run_at
+                          ? `Terakhir ${new Date(r.last_run_at).toLocaleDateString("id-ID", { dateStyle: "medium" })}`
+                          : "Belum pernah berjalan"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Ubah ${r.name}`}
+                        onClick={() => setForm(fromRow(r))}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Hapus ${r.name}`}
+                        disabled={save.isPending}
+                        onClick={() => {
+                          if (window.confirm("Hapus aturan ini?"))
+                            save.mutate({ ...fromRow(r), remove: true });
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
           {!pages.total && (
             <div className="py-10 text-center text-muted-foreground">
