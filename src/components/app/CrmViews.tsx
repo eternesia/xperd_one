@@ -213,7 +213,7 @@ function PageHeader({
         <p className="text-xs font-semibold tracking-[0.28em] text-gold">{kicker}</p>
         <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">{title}</h1>
       </div>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{children}</div>
     </div>
   );
 }
@@ -429,10 +429,61 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const renderActions = (r: LeadRow) => (
+    <>
+      {r.phone && (
+        <Button asChild size="icon" variant="ghost" title="WhatsApp">
+          <a
+            href={waLink(r.phone, lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </a>
+        </Button>
+      )}
+      <QuickInvoice workspaceId={workspaceId} customer={r.name} phone={r.phone} />
+      {r.status === "open" && !r.quotation_id && (
+        <Button
+          size="icon"
+          variant="ghost"
+          title={lang === "id" ? "Konversi ke penawaran" : "Convert to quotation"}
+          disabled={converting === r.id}
+          onClick={() => void convertLead(r.id)}
+        >
+          <FileOutput className="h-4 w-4" />
+        </Button>
+      )}
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={() => {
+          setForm({
+            ...r,
+            company_name: r.company_name ?? "",
+            email: r.email ?? "",
+            phone: r.phone ?? "",
+            source: r.source ?? "",
+            owner_name: r.owner_name ?? "",
+            next_follow_up_at: r.next_follow_up_at ?? "",
+            notes: r.notes ?? "",
+            lost_reason: r.lost_reason ?? "",
+          });
+          setOpen(true);
+        }}
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button size="icon" variant="ghost" onClick={() => remove.mutate(r.id)}>
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={lang === "id" ? "Prospek" : "Leads"}>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="w-56 pl-9"
@@ -458,10 +509,11 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
           onClick={() => document.getElementById("crm-lead-import")?.click()}
         >
           {importing ? <Loader2 className="animate-spin" /> : <Upload />}{" "}
-          {lang === "id" ? "Impor Excel" : "Import Excel"}
+          <span className="max-sm:hidden">{lang === "id" ? "Impor Excel" : "Import Excel"}</span>
         </Button>
         <Button variant={mineOnly ? "navy" : "outline"} onClick={() => setMineOnly((v) => !v)}>
-          <UserRound /> {lang === "id" ? "Prospek saya" : "My leads"}
+          <UserRound />{" "}
+          <span className="max-sm:hidden">{lang === "id" ? "Prospek saya" : "My leads"}</span>
         </Button>
         <Button
           variant="navy"
@@ -478,7 +530,47 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
         </Button>
       </PageHeader>
 
-      <Card>
+      <div className="space-y-2 md:hidden">
+        {isLoading && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {lang === "id" ? "Memuat…" : "Loading…"}
+          </p>
+        )}
+        {!isLoading && filtered.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {lang === "id" ? "Belum ada prospek." : "No leads yet."}
+          </p>
+        )}
+        {pager.items.map((r) => (
+          <div key={r.id} className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{r.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {r.code}
+                  {r.company_name ? ` · ${r.company_name}` : ""}
+                </p>
+              </div>
+              <Badge variant="secondary" className="shrink-0">
+                {stageLabel(r.stage, lang)}
+              </Badge>
+            </div>
+            <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium">{fmtIDR(Number(r.estimated_value))}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {r.owner_name ?? "—"}
+                {r.next_follow_up_at ? ` · FU ${r.next_follow_up_at}` : ""}
+              </span>
+            </div>
+            <div className="mt-1 flex justify-end border-t border-border pt-1">
+              {renderActions(r)}
+            </div>
+          </div>
+        ))}
+        <PaginationBar p={pager} />
+      </div>
+
+      <Card className="max-md:hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -527,57 +619,7 @@ function LeadsView({ workspaceId }: { workspaceId: string }) {
                   <TableCell className="text-right">{fmtIDR(Number(r.estimated_value))}</TableCell>
                   <TableCell>{r.owner_name ?? "—"}</TableCell>
                   <TableCell>{r.next_follow_up_at ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    {r.phone && (
-                      <Button asChild size="icon" variant="ghost" title="WhatsApp">
-                        <a
-                          href={waLink(
-                            r.phone,
-                            lang === "id" ? `Halo ${r.name}, ` : `Hi ${r.name}, `,
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    )}
-                    <QuickInvoice workspaceId={workspaceId} customer={r.name} phone={r.phone} />
-                    {r.status === "open" && !r.quotation_id && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        title={lang === "id" ? "Konversi ke penawaran" : "Convert to quotation"}
-                        disabled={converting === r.id}
-                        onClick={() => void convertLead(r.id)}
-                      >
-                        <FileOutput className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        setForm({
-                          ...r,
-                          company_name: r.company_name ?? "",
-                          email: r.email ?? "",
-                          phone: r.phone ?? "",
-                          source: r.source ?? "",
-                          owner_name: r.owner_name ?? "",
-                          next_follow_up_at: r.next_follow_up_at ?? "",
-                          notes: r.notes ?? "",
-                          lost_reason: r.lost_reason ?? "",
-                        });
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => remove.mutate(r.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+                  <TableCell className="text-right">{renderActions(r)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -816,12 +858,13 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
   };
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<string | null>(null);
+  const [mobileStage, setMobileStage] = useState<string>(CRM_STAGES[0].id);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <PageHeader kicker="QALLING CRM" title="Pipeline" />
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground max-md:hidden">
           {lang === "id"
             ? "Seret kartu ke kolom lain untuk memindahkan tahap. Klik kartu untuk melihat detail, linimasa, dan tugas."
             : "Drag a card to another column to change its stage. Click a card for details, timeline and tasks."}
@@ -837,8 +880,30 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
         </Button>
       </div>
       <LeadPanel workspaceId={workspaceId} leadId={detailId} onClose={() => setDetailId(null)} />
-      <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
-        <div className="flex min-w-max gap-4">
+      <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 md:hidden">
+        {CRM_STAGES.map((st) => {
+          const n = rows.filter(
+            (r) => r.stage === st.id && (!onlyAttention || needsAttention(r.id)),
+          ).length;
+          return (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => setMobileStage(st.id)}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                mobileStage === st.id
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground",
+              )}
+            >
+              {lang === "id" ? st.id_ : st.en} · {n}
+            </button>
+          );
+        })}
+      </div>
+      <div className="-mx-3 overflow-x-auto px-3 pb-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-4 md:min-w-max xl:min-w-full">
           {CRM_STAGES.map((stage) => {
             const tone = STAGE_TONE[stage.id] ?? STAGE_TONE.new;
             const items = rows.filter(
@@ -864,7 +929,8 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                     move.mutate({ id: lead.id, stage: stage.id });
                 }}
                 className={cn(
-                  "flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-border transition-all",
+                  "flex flex-col overflow-hidden rounded-2xl border border-border transition-all max-md:w-full md:w-80 md:shrink-0 xl:min-w-72 xl:flex-1",
+                  mobileStage !== stage.id && "max-md:hidden",
                   tone.bg,
                   isOver && "ring-2 ring-gold",
                 )}
@@ -882,7 +948,7 @@ function PipelineView({ workspaceId }: { workspaceId: string }) {
                 <p className="px-4 text-xs font-medium text-muted-foreground">
                   {fmtIDR(total)} · {stage.probability}%
                 </p>
-                <div className="mt-3 min-h-[60vh] flex-1 space-y-2.5 px-3 pb-3">
+                <div className="mt-3 flex-1 space-y-2.5 px-3 pb-3 md:min-h-[60vh]">
                   {items.map((lead) => (
                     <div
                       key={lead.id}

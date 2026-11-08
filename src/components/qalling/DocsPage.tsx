@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Copy, Link2, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Copy, Link2, Menu, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { QallingShell } from "@/components/qalling/QallingSite";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useI18n } from "@/lib/i18n";
 import { AREA_GROUPS, QALLING_DOCS, type DocArea, type DocSection } from "@/lib/qalling-docs";
 import { GROUP_EN, QALLING_DOCS_EN } from "@/lib/qalling-docs.en";
@@ -275,6 +276,7 @@ export function DocsPage({ slug }: { slug?: string }) {
   const doc = QALLING_DOCS.find((d) => d.id === (slug ?? QALLING_DOCS[0].id));
   const area = doc ? areaOf(doc) : "guide";
   const [q, setQ] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [focus, setFocus] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const t = (en: string, id: string) => (lang === "en" ? en : id);
@@ -316,18 +318,50 @@ export function DocsPage({ slug }: { slug?: string }) {
       ]
     : [];
 
+  const navList = (
+    <>
+      {AREA_GROUPS[area].map((g) => (
+        <div key={g} className="mb-4 last:mb-0">
+          <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-primary/70">
+            {groupLabel(g, lang)}
+          </p>
+          <ul className="space-y-0.5 text-sm">
+            {inArea
+              .filter((d) => d.group === g)
+              .map((d) => (
+                <li key={d.id}>
+                  <Link
+                    to="/qalling/docs/$slug"
+                    params={{ slug: d.id }}
+                    className={
+                      "block rounded-md px-2 py-1.5 transition-colors " +
+                      (d.id === doc?.id
+                        ? "bg-primary/15 font-medium text-primary"
+                        : "text-foreground/70 hover:bg-primary/10 hover:text-primary")
+                    }
+                  >
+                    {localize(d, lang).title}
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </div>
+      ))}
+    </>
+  );
+
   return (
     <QallingShell>
-      <section className="container-x py-6">
+      <section className="container-x py-4 sm:py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b">
-          <div className="flex gap-1">
+          <div className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1">
             {AREA_TABS.map((tab) => (
               <Link
                 key={tab.area}
                 to="/qalling/docs/$slug"
                 params={{ slug: tab.first }}
                 className={
-                  "-mb-px border-b-2 px-3 py-2 text-sm " +
+                  "-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm " +
                   (tab.area === area
                     ? "border-primary font-semibold text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground")
@@ -379,38 +413,34 @@ export function DocsPage({ slug }: { slug?: string }) {
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          className="sticky top-16 z-10 mb-4 flex w-full items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-left shadow-sm backdrop-blur lg:hidden"
+        >
+          <Menu className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {x?.title ?? t("Browse topics", "Pilih topik")}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        </button>
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto rounded-t-3xl">
+            <SheetHeader>
+              <SheetTitle>{t("Documentation", "Dokumentasi")}</SheetTitle>
+            </SheetHeader>
+            <div className="mt-3" onClick={() => setMenuOpen(false)}>
+              {navList}
+            </div>
+          </SheetContent>
+        </Sheet>
+
         <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)_180px]">
           <nav
             aria-label={t("Documentation", "Dokumentasi")}
-            className="rounded-xl border border-primary/15 bg-primary/5 p-3 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"
+            className="hidden rounded-xl border border-primary/15 bg-primary/5 p-3 lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-7rem)] lg:self-start lg:overflow-y-auto"
           >
-            {AREA_GROUPS[area].map((g) => (
-              <div key={g} className="mb-4 last:mb-0">
-                <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wider text-primary/70">
-                  {groupLabel(g, lang)}
-                </p>
-                <ul className="space-y-0.5 text-sm">
-                  {inArea
-                    .filter((d) => d.group === g)
-                    .map((d) => (
-                      <li key={d.id}>
-                        <Link
-                          to="/qalling/docs/$slug"
-                          params={{ slug: d.id }}
-                          className={
-                            "block rounded-md px-2 py-1.5 transition-colors " +
-                            (d.id === doc?.id
-                              ? "bg-primary/15 font-medium text-primary"
-                              : "text-foreground/70 hover:bg-primary/10 hover:text-primary")
-                          }
-                        >
-                          {localize(d, lang).title}
-                        </Link>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
+            {navList}
           </nav>
 
           <article className="min-w-0">
