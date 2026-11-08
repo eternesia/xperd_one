@@ -2,7 +2,7 @@ import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
 import { assertQallingSection, getTokenUser, requireAuth } from "../db";
 import { postInputSchema, postTime, validatePostTargets } from "../qalling-rules";
-import { resolveMedia } from "../qalling-media";
+import { CHAT_FILE_META, chatFilesSchema, importChatFiles, resolveMedia } from "../qalling-media";
 import { platformOptionsSchema, validatePlatformOptions } from "../../platform-options";
 
 // BS New 17: `qalling_create_post` menggantikan `qalling_create_post_draft` — draft, carousel (hingga 10 lampiran) atau terjadwal.
@@ -61,15 +61,30 @@ export default defineTool({
       .describe(
         "Ordered HTTPS image/video URLs on supported OpenAI/Google Storage/Cloudinary/Unsplash/Replicate/Fal CDNs, imported into private workspace storage after media_ids. Multiple images form a carousel; maximum 10 attachments total. For other hosts upload in Qalling and use media_ids.",
       ),
+    files: chatFilesSchema
+      .optional()
+      .describe(
+        "Images/videos attached or generated in the ChatGPT conversation (up to 10, in carousel order). They are saved to the workspace media library and attached after media_ids.",
+      ),
   },
+  meta: CHAT_FILE_META,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: true,
   },
-  handler: async (args, ctx) => {
+  handler: async (rawArgs, ctx) => {
     requireAuth(ctx);
+    let args: Omit<typeof rawArgs, "files"> = rawArgs;
+    if (rawArgs.files?.length) {
+      const { userId: uid } = await getTokenUser(ctx);
+      await assertQallingSection(rawArgs.workspace_id, uid, "media", true);
+      if (rawArgs.media_ids.length + rawArgs.media_urls.length + rawArgs.files.length > 10)
+        throw new ToolError("Maximum 10 media attachments in total.");
+      const items = await importChatFiles(rawArgs.workspace_id, uid, rawArgs.files);
+      args = { ...rawArgs, media_ids: [...rawArgs.media_ids, ...items.map((i) => i.media_id)] };
+    }
     const parsed = postInputSchema.safeParse(args);
     if (!parsed.success) throw new ToolError(parsed.error.issues.map((i) => i.message).join("; "));
     const input = parsed.data;

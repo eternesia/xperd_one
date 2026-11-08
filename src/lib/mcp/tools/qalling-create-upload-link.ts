@@ -6,7 +6,7 @@ export default defineTool({
   name: "qalling_create_upload_link",
   title: "Create media upload link",
   description:
-    "Create a 30-minute upload link for files that live on your own computer (Claude Code or any agent with a terminal). Run the returned curl command once per file; each call responds with a media_id for qalling_create_post media_ids. The file bytes never pass through the model, so this suits large images and videos. In ChatGPT, attach files and use qalling_upload_media with files instead.",
+    "Create a 30-minute upload link for files that live on your own computer (Claude Code or any agent with a terminal). Run the returned curl command once per file; each call responds with a media_id for qalling_create_post media_ids. The file bytes never pass through the model, so this suits large images and videos. NOT for ChatGPT: its sandbox has no internet access, so curl to this link always fails. In ChatGPT use the files parameter of qalling_create_post or qalling_upload_media instead.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace ID from list_workspaces."),
   },

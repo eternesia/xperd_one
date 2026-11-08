@@ -1,5 +1,6 @@
 // Media untuk tool posting Qalling (BS New 17): media_ids dari pustaka workspace + impor media_urls dari CDN yang diizinkan.
 // Berkas masuk ke pustaka privat workspace (crm_media) dengan kebijakan unggah & kuota; kegagalan membersihkan impor.
+import { z } from "zod/v4";
 import { ToolError } from "./framework";
 import { validateMediaFile, type MediaUploadPolicy } from "../media-upload-policy";
 import { remoteMediaUrl } from "./qalling-rules";
@@ -190,4 +191,46 @@ export async function resolveMedia(
     await cleanup();
     throw e;
   }
+}
+
+/** Parameter `files` untuk ChatGPT: berkas yang dilampirkan/dihasilkan di percakapan dikirim sebagai tautan unduhan sementara. */
+export const chatFilesSchema = z
+  .array(
+    z.object({
+      download_url: z.string().url().describe("Temporary download URL of the attached file."),
+      file_id: z.string().optional(),
+      name: z.string().max(120).optional(),
+    }),
+  )
+  .max(10);
+export const CHAT_FILE_META = { "openai/fileParams": ["files"] };
+
+/** Unduh berkas ChatGPT satu per satu ke pustaka workspace; mengembalikan id media berurutan. */
+export async function importChatFiles(
+  workspaceId: string,
+  userId: string,
+  files: z.infer<typeof chatFilesSchema>,
+  name?: string,
+) {
+  const { loadMediaPolicy } = await import("@/lib/media-policy.server");
+  const policy = await loadMediaPolicy();
+  const items: { media_id: string; mime_type: string; size_bytes: number; name?: string }[] = [];
+  for (const f of files) {
+    try {
+      remoteMediaUrl(f.download_url);
+    } catch (e) {
+      throw new ToolError(
+        `${(e as Error).message}${items.length ? ` (${items.length} file(s) were already saved: ${items.map((i) => i.media_id).join(", ")})` : ""}`,
+      );
+    }
+    const dl = await downloadMedia(f.download_url, policy, { sniff: true });
+    const row = await storeMedia(workspaceId, userId, dl.bytes, dl.type, f.name ?? name);
+    items.push({
+      media_id: row.id,
+      mime_type: row.mime_type,
+      size_bytes: row.size_bytes,
+      name: f.name,
+    });
+  }
+  return items;
 }

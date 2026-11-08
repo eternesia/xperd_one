@@ -1,7 +1,14 @@
 import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
 import { assertQallingSection, getTokenUser, requireAuth } from "../db";
-import { MEDIA_TYPES, downloadMedia, storeMedia } from "../qalling-media";
+import {
+  CHAT_FILE_META,
+  MEDIA_TYPES,
+  chatFilesSchema,
+  downloadMedia,
+  importChatFiles,
+  storeMedia,
+} from "../qalling-media";
 import { remoteMediaUrl } from "../qalling-rules";
 import { validateMediaFile } from "../../media-upload-policy";
 
@@ -27,21 +34,13 @@ export default defineTool({
       .optional()
       .describe("Required with file_base64."),
     name: z.string().max(120).optional().describe("Optional file name shown in the library."),
-    files: z
-      .array(
-        z.object({
-          download_url: z.string().url().describe("Temporary download URL of the attached file."),
-          file_id: z.string().optional(),
-          name: z.string().max(120).optional(),
-        }),
-      )
-      .max(10)
+    files: chatFilesSchema
       .optional()
       .describe(
-        "Files attached in ChatGPT (up to 10, e.g. carousel slides). Returns media_ids in order.",
+        "Files attached or generated in the ChatGPT conversation (up to 10, e.g. carousel slides). Returns media_ids in order.",
       ),
   },
-  meta: { "openai/fileParams": ["files"] },
+  meta: CHAT_FILE_META,
   annotations: {
     readOnlyHint: false,
     destructiveHint: false,
@@ -54,27 +53,7 @@ export default defineTool({
       if (url || file_base64) throw new ToolError("Use files alone, without url or file_base64.");
       const { userId } = await getTokenUser(ctx);
       await assertQallingSection(workspace_id, userId, "media", true);
-      const { loadMediaPolicy } = await import("@/lib/media-policy.server");
-      const policy = await loadMediaPolicy();
-      const items: { media_id: string; mime_type: string; size_bytes: number; name?: string }[] =
-        [];
-      for (const f of files) {
-        try {
-          remoteMediaUrl(f.download_url);
-        } catch (e) {
-          throw new ToolError(
-            `${(e as Error).message}${items.length ? ` (${items.length} file(s) were already saved: ${items.map((i) => i.media_id).join(", ")})` : ""}`,
-          );
-        }
-        const dl = await downloadMedia(f.download_url, policy, { sniff: true });
-        const row = await storeMedia(workspace_id, userId, dl.bytes, dl.type, f.name ?? name);
-        items.push({
-          media_id: row.id,
-          mime_type: row.mime_type,
-          size_bytes: row.size_bytes,
-          name: f.name,
-        });
-      }
+      const items = await importChatFiles(workspace_id, userId, files, name);
       const result = {
         media_ids: items.map((i) => i.media_id),
         items,
