@@ -553,7 +553,7 @@ function QallingShell() {
             </Button>
           )}
         </aside>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-3 pb-28 sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 pb-28 max-md:[&_h1]:text-xl max-md:[&_h1]:leading-tight sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
           <QallingTrialAlert />
           <Outlet />
         </main>
@@ -583,16 +583,27 @@ function QallingShell() {
                 ? pathname === "/qalling/app" || pathname === "/qalling/app/"
                 : pathname.startsWith(b.to);
             return b.primary ? (
-              <Link
+              <button
                 key={b.to}
-                to={b.to as "/qalling/app"}
+                type="button"
+                onClick={() => {
+                  if (pathname.startsWith("/qalling/app/post-scheduler"))
+                    window.dispatchEvent(new Event("qalling:new-post"));
+                  else
+                    navigate({
+                      to: "/qalling/app/$submoduleId",
+                      params: { submoduleId: "post-scheduler" },
+                      search: { new: 1 } as never,
+                    });
+                }}
                 className="flex flex-col items-center gap-0.5 text-[11px] font-medium text-primary"
+                aria-label={id ? "Buat post" : "Create post"}
               >
-                <span className="-mt-7 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background">
+                <span className="-mt-7 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg ring-4 ring-background">
                   <b.icon className="h-6 w-6" />
                 </span>
                 {b.label}
-              </Link>
+              </button>
             ) : (
               <Link
                 key={b.to}

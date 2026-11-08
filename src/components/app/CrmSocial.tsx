@@ -13,6 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRouter } from "@tanstack/react-router";
 import {
   CalendarDays,
+  Clock,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -677,6 +678,278 @@ function useGoSub() {
   };
 }
 
+/** Composer layar penuh untuk HP: akun berupa avatar, caption memenuhi layar, aksi di bawah. */
+function MobileComposer({
+  id,
+  editing,
+  setEditing,
+  accounts,
+  mediaUrl,
+  onPickMedia,
+  onNewAccount,
+  showFirstComment,
+  commentLimit,
+  saving,
+  publishing,
+  onDraft,
+  onSchedule,
+  onPublishNow,
+  onDelete,
+}: {
+  id: boolean;
+  editing: Draft;
+  setEditing: (d: Draft) => void;
+  accounts: Account[];
+  mediaUrl: Map<string, Parameters<typeof MediaThumb>[0]["m"]>;
+  onPickMedia: () => void;
+  onNewAccount: () => void;
+  showFirstComment: boolean;
+  commentLimit: number;
+  saving: boolean;
+  publishing: boolean;
+  onDraft: () => void;
+  onSchedule: () => void;
+  onPublishNow: () => void;
+  onDelete?: () => void;
+}) {
+  const [more, setMore] = useState(false);
+  const [when, setWhen] = useState<"now" | "later">(
+    editing.id && editing.status === "scheduled" ? "later" : "now",
+  );
+  const editable = ["draft", "scheduled"].includes(editing.status) && editing.source !== "tebar";
+  const toggle = (accId: string) =>
+    setEditing({
+      ...editing,
+      account_ids: editing.account_ids.includes(accId)
+        ? editing.account_ids.filter((x) => x !== accId)
+        : [...editing.account_ids, accId],
+    });
+  return (
+    <div className="flex h-full min-h-0 flex-col sm:hidden">
+      <div className="flex h-14 shrink-0 items-center border-b px-4 pr-12">
+        <DialogTitle className="text-lg">
+          {editing.id ? (id ? "Ubah post" : "Edit post") : id ? "Buat post" : "Create post"}
+        </DialogTitle>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
+        {editing.source === "tebar" && (
+          <p className="mb-2 rounded border border-gold/40 bg-gold/10 p-2 text-xs">
+            {id
+              ? "Postingan tersinkron ini hanya dapat dilihat."
+              : "This synced post is read-only."}
+          </p>
+        )}
+        {editing.last_error && editing.status === "failed" && (
+          <p className="mb-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
+            {editing.last_error}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-x-3 gap-y-2">
+          {accounts.map((a) => {
+            const on = editing.account_ids.includes(a.id);
+            const name = a.handle ? a.handle.replace(/^@/, "") : a.account_name;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => toggle(a.id)}
+                className="flex w-16 flex-col items-center gap-1"
+                aria-pressed={on}
+                aria-label={`${platformLabel(a.platform)} ${name}`}
+              >
+                <span
+                  className={cn(
+                    "relative grid size-14 place-items-center rounded-full bg-secondary text-lg font-semibold transition",
+                    on
+                      ? "ring-[3px] ring-primary ring-offset-2 ring-offset-background"
+                      : "opacity-45",
+                  )}
+                >
+                  {(name || "?").charAt(0).toUpperCase()}
+                  <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-background">
+                    <SocialIcon platform={a.platform} className="size-3.5" />
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "w-full truncate text-center text-[11px]",
+                    !on && "text-muted-foreground",
+                  )}
+                >
+                  {name}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={onNewAccount}
+            className="flex w-16 flex-col items-center gap-1"
+            aria-label={id ? "Akun baru" : "New account"}
+          >
+            <span className="grid size-14 place-items-center rounded-full border-2 border-dashed border-border text-muted-foreground">
+              <Plus className="size-5" />
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-3 flex min-h-[220px] flex-1 flex-col rounded-2xl border bg-card">
+          <Textarea
+            value={editing.caption}
+            onChange={(e) => setEditing({ ...editing, caption: e.target.value })}
+            placeholder={id ? "Apa yang ingin kamu bagikan?" : "What do you want to share?"}
+            className="min-h-0 flex-1 resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0"
+            disabled={!editable}
+          />
+          {editing.media_paths.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto px-3 pb-2">
+              {editing.media_paths.map((path) => {
+                const m = mediaUrl.get(path);
+                return (
+                  <div
+                    key={path}
+                    className="relative size-16 shrink-0 overflow-hidden rounded-lg border bg-secondary"
+                  >
+                    {m && <MediaThumb m={m} className="h-full w-full" />}
+                    {editable && (
+                      <button
+                        type="button"
+                        aria-label="Remove"
+                        onClick={() =>
+                          setEditing({
+                            ...editing,
+                            media_paths: editing.media_paths.filter((x) => x !== path),
+                          })
+                        }
+                        className="absolute right-0.5 top-0.5 rounded-full bg-background/90 p-0.5"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-1 border-t px-2 py-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onPickMedia}
+              disabled={!editable}
+              aria-label={id ? "Tambah media" : "Add media"}
+            >
+              <ImageIcon className="size-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setMore((v) => !v)}
+              className="text-muted-foreground"
+            >
+              {id ? "Opsi lainnya" : "More options"}
+            </Button>
+            <span className="ml-auto pr-2 text-xs text-muted-foreground">
+              {editing.caption.length}
+            </span>
+          </div>
+        </div>
+
+        {more && (
+          <div className="mt-3 space-y-3 rounded-2xl border p-3">
+            {showFirstComment && (
+              <AdminField label={id ? "Komentar pertama otomatis" : "Automatic first comment"}>
+                <Textarea
+                  rows={2}
+                  value={editing.first_comment}
+                  maxLength={commentLimit}
+                  onChange={(e) => setEditing({ ...editing, first_comment: e.target.value })}
+                />
+              </AdminField>
+            )}
+            <AdminField label={id ? "Link gambar/video (opsional)" : "Image/video link (optional)"}>
+              <Input
+                value={editing.media_url}
+                onChange={(e) => setEditing({ ...editing, media_url: e.target.value })}
+              />
+            </AdminField>
+            <AdminField label={id ? "Judul internal (opsional)" : "Internal title (optional)"}>
+              <Input
+                value={editing.title}
+                onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+              />
+            </AdminField>
+            {onDelete && (
+              <Button variant="ghost" className="text-destructive" onClick={onDelete}>
+                <Trash2 className="size-4" /> {id ? "Hapus postingan" : "Delete post"}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editable && (
+        <div className="shrink-0 space-y-2 border-t bg-background px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+          {when === "later" && (
+            <div className="space-y-1.5">
+              <Input
+                type="datetime-local"
+                value={editing.when}
+                onChange={(e) => setEditing({ ...editing, when: e.target.value })}
+              />
+              <div className="flex gap-1 overflow-x-auto">
+                {GOLDEN_HOURS.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground"
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        when: toLocalInputValue(nextGoldenSlot(new Date(), g.id)),
+                      })
+                    }
+                  >
+                    ⭐ {id ? g.label : g.en} {g.start}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onDraft} disabled={saving} className="px-2">
+              {id ? "Draf" : "Draft"}
+            </Button>
+            <Button
+              variant="outline"
+              className="ml-auto"
+              onClick={() => setWhen(when === "now" ? "later" : "now")}
+            >
+              <Clock className="size-4" />
+              {when === "now" ? (id ? "Sekarang" : "Now") : id ? "Terjadwal" : "Scheduled"}
+            </Button>
+            <Button
+              disabled={saving || publishing || editing.account_ids.length === 0}
+              onClick={() => (when === "now" ? onPublishNow() : onSchedule())}
+            >
+              {publishing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : when === "now" ? (
+                <Send className="size-4" />
+              ) : (
+                <CalendarDays className="size-4" />
+              )}
+              {when === "now" ? (id ? "Posting" : "Post") : id ? "Jadwalkan" : "Schedule"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const id = lang === "id";
@@ -910,6 +1183,21 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
     else d.setMonth(d.getMonth() + dir);
     setAnchor(d);
   };
+  // Tombol + di navigasi bawah membuka composer langsung (?new=1).
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("new") !== "1") return;
+    u.searchParams.delete("new");
+    window.history.replaceState(null, "", u.pathname + u.search);
+    openNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const h = () => openNew();
+    window.addEventListener("qalling:new-post", h);
+    return () => window.removeEventListener("qalling:new-post", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const openNew = (d?: Date) => {
     const base = d
       ? new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0)
@@ -1240,8 +1528,27 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
+        <DialogContent className="max-sm:left-0 max-sm:top-0 max-sm:flex max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:gap-0 max-sm:overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:p-0 max-sm:data-[state=open]:slide-in-from-bottom sm:max-w-4xl">
+          {editing && (
+            <MobileComposer
+              id={id}
+              editing={editing}
+              setEditing={setEditing}
+              accounts={accounts}
+              mediaUrl={mediaUrl}
+              onPickMedia={() => setPicker(true)}
+              onNewAccount={() => goSub("social-accounts")}
+              showFirstComment={commentAccounts.length > 0 || !!editing.first_comment}
+              commentLimit={commentLimit}
+              saving={save.isPending}
+              publishing={publishNow.isPending}
+              onDraft={() => save.mutate({ status: "draft" })}
+              onSchedule={() => save.mutate({ status: "scheduled" })}
+              onPublishNow={() => publishNow.mutate()}
+              onDelete={editing.id ? () => remove.mutate(editing.id!) : undefined}
+            />
+          )}
+          <DialogHeader className="max-sm:hidden">
             <DialogTitle>
               {editing?.id
                 ? id
@@ -1253,7 +1560,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
             </DialogTitle>
           </DialogHeader>
           {editing && (
-            <div className="grid gap-5 md:grid-cols-[1fr_280px]">
+            <div className="grid gap-5 max-sm:hidden md:grid-cols-[1fr_280px]">
               <div className="min-w-0 space-y-4">
                 {editing.source === "tebar" && (
                   <p className="rounded border border-gold/40 bg-gold/10 p-2 text-xs">
@@ -1521,7 +1828,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
               </div>
             </div>
           )}
-          <DialogFooter className="flex-wrap gap-2">
+          <DialogFooter className="flex-wrap gap-2 max-sm:hidden">
             {editing?.id && (
               <Button
                 variant="ghost"
