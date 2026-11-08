@@ -18,6 +18,7 @@ import {
   saveWorkspaceRow,
   upsertWorkspaceRows,
 } from "@/lib/data.functions";
+import { cn } from "@/lib/utils";
 import { IDEA_DEFAULT_COLUMNS } from "@/lib/social-interaction-rules";
 
 /**
@@ -34,6 +35,7 @@ const rowsOf = (r: unknown) => ((r as { rows?: any[] } | undefined)?.rows ?? [])
 export function CrmIdeasView({ workspaceId }: { workspaceId: string }) {
   const qc = useQueryClient();
   const [term, setTerm] = useState("");
+  const [mobileCol, setMobileCol] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [card, setCard] = useState<{
     id?: string;
@@ -135,112 +137,137 @@ export function CrmIdeasView({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
       ) : (
-        <div className="flex max-w-full gap-4 overflow-x-auto pb-5">
-          {cols.map((c) => (
-            <section
-              key={c.id}
-              className="w-72 shrink-0 rounded-md bg-muted/50"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                const id = e.dataTransfer.getData("text/plain");
-                if (cards.some((i) => i.id === id))
-                  void action(() => save("crm_ideas", id, { column_id: c.id }));
-              }}
-            >
-              <div className="flex items-center justify-between gap-2 border-b p-3">
-                <h2 className="truncate text-sm font-medium">
-                  {c.name}{" "}
-                  <span className="text-muted-foreground">
-                    {cards.filter((i) => i.column_id === c.id).length}
-                  </span>
-                </h2>
-                <div className="flex">
+        <>
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3 md:hidden">
+            {cols.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setMobileCol(c.id)}
+                className={cn(
+                  "shrink-0 rounded-full border px-4 py-1.5 text-sm",
+                  (mobileCol ?? cols[0]?.id) === c.id
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground",
+                )}
+              >
+                {c.name}{" "}
+                <span className="opacity-70">
+                  {cards.filter((i) => i.column_id === c.id).length}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="flex max-w-full gap-4 overflow-x-auto pb-5">
+            {cols.map((c) => (
+              <section
+                key={c.id}
+                className={cn(
+                  "w-full shrink-0 rounded-2xl bg-muted/50 md:w-72 md:rounded-md",
+                  (mobileCol ?? cols[0]?.id) !== c.id && "max-md:hidden",
+                )}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const id = e.dataTransfer.getData("text/plain");
+                  if (cards.some((i) => i.id === id))
+                    void action(() => save("crm_ideas", id, { column_id: c.id }));
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 border-b p-3">
+                  <h2 className="truncate text-sm font-medium">
+                    {c.name}{" "}
+                    <span className="text-muted-foreground">
+                      {cards.filter((i) => i.column_id === c.id).length}
+                    </span>
+                  </h2>
+                  <div className="flex">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`Ubah kolom ${c.name}`}
+                      onClick={() => setColumn({ id: c.id, name: c.name })}
+                    >
+                      <Pencil className="size-3" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      disabled={cards.some((i) => i.column_id === c.id) || busy}
+                      aria-label={`Hapus kolom ${c.name}`}
+                      onClick={() =>
+                        action(() =>
+                          deleteWorkspaceRow({
+                            data: { table: "crm_idea_columns", workspaceId, id: c.id },
+                          }),
+                        )
+                      }
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-h-48 space-y-3 p-3">
+                  {cards
+                    .filter(
+                      (i) =>
+                        i.column_id === c.id &&
+                        `${i.title} ${i.body}`.toLowerCase().includes(term.toLowerCase()),
+                    )
+                    .map((i) => (
+                      <article
+                        key={i.id}
+                        draggable={!busy}
+                        onDragStart={(e) => e.dataTransfer.setData("text/plain", i.id)}
+                        className="rounded-md border bg-background p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="min-w-0 break-words text-sm font-medium">{i.title}</h3>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-6 shrink-0"
+                            aria-label={`Ubah ide ${i.title}`}
+                            onClick={() => setCard(i)}
+                          >
+                            <Pencil className="size-3" />
+                          </Button>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                          {i.body}
+                        </p>
+                        <label className="mt-4 block text-xs text-muted-foreground">
+                          Pindah ke
+                          <select
+                            aria-label={`Pindah ide ${i.title}`}
+                            className="mt-1 w-full rounded border bg-background p-1 text-foreground"
+                            value={i.column_id}
+                            disabled={busy}
+                            onChange={(e) =>
+                              action(() => save("crm_ideas", i.id, { column_id: e.target.value }))
+                            }
+                          >
+                            {cols.map((x) => (
+                              <option key={x.id} value={x.id}>
+                                {x.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </article>
+                    ))}
                   <Button
-                    size="icon"
                     variant="ghost"
-                    aria-label={`Ubah kolom ${c.name}`}
-                    onClick={() => setColumn({ id: c.id, name: c.name })}
+                    className="w-full"
+                    onClick={() => setCard({ title: "", body: "", column_id: c.id })}
                   >
-                    <Pencil className="size-3" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={cards.some((i) => i.column_id === c.id) || busy}
-                    aria-label={`Hapus kolom ${c.name}`}
-                    onClick={() =>
-                      action(() =>
-                        deleteWorkspaceRow({
-                          data: { table: "crm_idea_columns", workspaceId, id: c.id },
-                        }),
-                      )
-                    }
-                  >
-                    <Trash2 className="size-3" />
+                    <Plus className="size-4" />
+                    Tambah ide
                   </Button>
                 </div>
-              </div>
-              <div className="min-h-48 space-y-3 p-3">
-                {cards
-                  .filter(
-                    (i) =>
-                      i.column_id === c.id &&
-                      `${i.title} ${i.body}`.toLowerCase().includes(term.toLowerCase()),
-                  )
-                  .map((i) => (
-                    <article
-                      key={i.id}
-                      draggable={!busy}
-                      onDragStart={(e) => e.dataTransfer.setData("text/plain", i.id)}
-                      className="rounded-md border bg-background p-3"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="min-w-0 break-words text-sm font-medium">{i.title}</h3>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="size-6 shrink-0"
-                          aria-label={`Ubah ide ${i.title}`}
-                          onClick={() => setCard(i)}
-                        >
-                          <Pencil className="size-3" />
-                        </Button>
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                        {i.body}
-                      </p>
-                      <label className="mt-4 block text-xs text-muted-foreground">
-                        Pindah ke
-                        <select
-                          aria-label={`Pindah ide ${i.title}`}
-                          className="mt-1 w-full rounded border bg-background p-1 text-foreground"
-                          value={i.column_id}
-                          disabled={busy}
-                          onChange={(e) =>
-                            action(() => save("crm_ideas", i.id, { column_id: e.target.value }))
-                          }
-                        >
-                          {cols.map((x) => (
-                            <option key={x.id} value={x.id}>
-                              {x.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </article>
-                  ))}
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setCard({ title: "", body: "", column_id: c.id })}
-                >
-                  <Plus className="size-4" />
-                  Tambah ide
-                </Button>
-              </div>
-            </section>
-          ))}
-        </div>
+              </section>
+            ))}
+          </div>
+        </>
       )}
       <Dialog open={!!column} onOpenChange={(v) => !v && setColumn(null)}>
         <DialogContent>
