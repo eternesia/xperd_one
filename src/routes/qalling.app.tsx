@@ -553,7 +553,7 @@ function QallingShell() {
             </Button>
           )}
         </aside>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-3 pb-28 max-md:[&_h1]:text-xl max-md:[&_h1]:leading-tight sm:p-6 sm:pb-28 md:pb-6 lg:p-10">
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 pb-28 max-md:[&_h1]:text-xl max-md:[&_h1]:leading-tight sm:p-6 sm:pb-28 md:pb-6 lg:p-10 [&>*]:mx-auto [&>*]:max-w-6xl">
           <QallingTrialAlert />
           <Outlet />
         </main>

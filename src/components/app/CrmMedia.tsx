@@ -380,7 +380,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
         </div>
         <label
           className={cn(
-            "flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm md:hidden",
+            "flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm",
             upload.isPending && "opacity-60",
           )}
           aria-label={id ? "Unggah media" : "Upload media"}
@@ -435,9 +435,6 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
         </div>
       )}
 
-      <div className="hidden md:block">
-        <DropZone onFiles={onFiles} busy={upload.isPending} />
-      </div>
       <div className="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {[
           ["__all", id ? "Semua folder" : "All folders"],
@@ -623,9 +620,10 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
                   className="group w-full overflow-hidden rounded-lg border border-border bg-card text-left sm:rounded-xl"
                 >
                   <div className="relative">
+                    <span className="block pt-[100%]" />
                     <Thumb
                       m={m}
-                      className="aspect-square w-full transition-transform group-hover:scale-105"
+                      className="absolute inset-0 transition-transform group-hover:scale-105"
                     />
                     {isVideo(m) && (
                       <Badge className="absolute left-2 top-2 gap-1">
@@ -767,32 +765,36 @@ export function MediaPickerDialog({
             {id ? "Belum ada media." : "No media yet."}
           </p>
         ) : (
-          <div className="grid min-h-0 grid-cols-3 content-start gap-1.5 overflow-y-auto max-sm:flex-1 sm:max-h-[45vh] sm:grid-cols-5 sm:gap-2">
-            {items
-              .filter((m) => !imagesOnly || m.mime_type?.startsWith("image/"))
-              .map((m) => {
-                const idx = pick.indexOf(m.file_path);
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggle(m.file_path)}
-                    className={cn(
-                      "relative block aspect-square overflow-hidden rounded-lg border-2",
-                      idx >= 0 ? "border-gold" : "border-transparent",
-                    )}
-                  >
-                    <Thumb m={m} className="h-full w-full" />
-                    {idx >= 0 && (
-                      <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-semibold text-navy">
-                        {idx + 1}
-                      </span>
-                    )}
-                    {isVideo(m) && (
-                      <Film className="absolute bottom-1 left-1 h-4 w-4 text-primary-foreground drop-shadow" />
-                    )}
-                  </button>
-                );
-              })}
+          <div className="min-h-0 overflow-y-auto max-sm:flex-1 sm:max-h-[50vh]">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-5">
+              {items
+                .filter((m) => !imagesOnly || m.mime_type?.startsWith("image/"))
+                .map((m) => {
+                  const idx = pick.indexOf(m.file_path);
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => toggle(m.file_path)}
+                      className={cn(
+                        "relative block w-full overflow-hidden rounded-xl border-2",
+                        idx >= 0 ? "border-gold" : "border-transparent",
+                      )}
+                    >
+                      {/* trik padding 100%: tinggi kotak selalu = lebar, tidak bisa "kempis" di grid */}
+                      <span className="block pt-[100%]" />
+                      <Thumb m={m} className="absolute inset-0" />
+                      {idx >= 0 && (
+                        <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-semibold text-navy">
+                          {idx + 1}
+                        </span>
+                      )}
+                      {isVideo(m) && (
+                        <Film className="absolute bottom-1 left-1 h-4 w-4 text-primary-foreground drop-shadow" />
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         )}
         <DialogFooter className="items-center gap-2">

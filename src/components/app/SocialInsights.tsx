@@ -186,7 +186,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="min-w-0 space-y-5">
-      <div className="flex items-center justify-between gap-3 sm:hidden">
+      <div className="flex items-center justify-between gap-3">
         <label className="relative flex min-w-0 items-center gap-3">
           <span className="relative grid size-12 shrink-0 place-items-center rounded-full bg-secondary text-lg font-semibold">
             {(current?.account_name ?? "?").charAt(0).toUpperCase()}
@@ -226,7 +226,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
         </Button>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="max-sm:hidden">
+        <div className="hidden">
           <p className="text-xs uppercase tracking-widest text-gold">Insight</p>
           <h1 className="text-2xl font-semibold">
             {id ? "Insight Media Sosial" : "Social Insights"}
@@ -252,7 +252,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
           <Button
             variant="outline"
             size="icon"
-            className="max-sm:hidden"
+            className="hidden"
             aria-label={id ? "Perbarui" : "Refresh"}
             onClick={() => q.refetch()}
             disabled={q.isFetching}
@@ -262,7 +262,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
         </div>
       </div>
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 max-sm:hidden">
+      <div className="-mx-1 hidden gap-2 overflow-x-auto px-1 pb-1">
         {accounts.data.map((a) => (
           <button
             key={a.id}
