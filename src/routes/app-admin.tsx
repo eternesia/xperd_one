@@ -13,6 +13,7 @@ import {
   Blocks,
   Megaphone,
   LifeBuoy,
+  MessageSquareQuote,
   ClipboardCheck,
   Users,
   Share2,
@@ -134,6 +135,9 @@ function AdminLayout() {
         </NavItem>
         <NavItem to="/app-admin/announcements" icon={<Megaphone className="h-4 w-4" />}>
           Pengumuman
+        </NavItem>
+        <NavItem to="/app-admin/testimonials" icon={<MessageSquareQuote className="h-4 w-4" />}>
+          Testimoni
         </NavItem>
         <NavItem to="/app-admin/tickets" icon={<LifeBuoy className="h-4 w-4" />}>
           Help Desk

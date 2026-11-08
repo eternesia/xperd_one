@@ -42,6 +42,7 @@ import { Route as AppAdminRegistrationsRouteImport } from './routes/app-admin/re
 import { Route as AppAdminStorageRouteImport } from './routes/app-admin/storage'
 import { Route as AppAdminTebarRouteImport } from './routes/app-admin/tebar'
 import { Route as AppAdminTenancyRouteImport } from './routes/app-admin/tenancy'
+import { Route as AppAdminTestimonialsRouteImport } from './routes/app-admin/testimonials'
 import { Route as AppAdminTicketsRouteImport } from './routes/app-admin/tickets'
 import { Route as AppAdminUsersRouteImport } from './routes/app-admin/users'
 import { Route as AppAdminVisitorsRouteImport } from './routes/app-admin/visitors'
@@ -82,6 +83,7 @@ import { Route as QallingAppClientsRouteImport } from './routes/qalling.app.clie
 import { Route as QallingAppProfileRouteImport } from './routes/qalling.app.profile'
 import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.referral'
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
+import { Route as QallingAppSupportRouteImport } from './routes/qalling.app.support'
 import { Route as QallingApproveTokenRouteImport } from './routes/qalling.approve.$token'
 import { Route as QallingDocsIndexRouteImport } from './routes/qalling.docs.index'
 import { Route as QallingDocsSlugRouteImport } from './routes/qalling.docs.$slug'
@@ -274,6 +276,11 @@ const AppAdminTebarRoute = AppAdminTebarRouteImport.update({
 const AppAdminTenancyRoute = AppAdminTenancyRouteImport.update({
   id: '/tenancy',
   path: '/tenancy',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminTestimonialsRoute = AppAdminTestimonialsRouteImport.update({
+  id: '/testimonials',
+  path: '/testimonials',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminTicketsRoute = AppAdminTicketsRouteImport.update({
@@ -478,6 +485,11 @@ const QallingAppReportsRoute = QallingAppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => QallingAppRoute,
 } as any)
+const QallingAppSupportRoute = QallingAppSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => QallingAppRoute,
+} as any)
 const QallingApproveTokenRoute = QallingApproveTokenRouteImport.update({
   id: '/qalling/approve/$token',
   path: '/qalling/approve/$token',
@@ -658,6 +670,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
+  '/app-admin/testimonials': typeof AppAdminTestimonialsRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app-admin/visitors': typeof AppAdminVisitorsRoute
@@ -697,6 +710,7 @@ export interface FileRoutesByFullPath {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
@@ -756,6 +770,7 @@ export interface FileRoutesByTo {
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
+  '/app-admin/testimonials': typeof AppAdminTestimonialsRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app-admin/visitors': typeof AppAdminVisitorsRoute
@@ -794,6 +809,7 @@ export interface FileRoutesByTo {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
@@ -856,6 +872,7 @@ export interface FileRoutesById {
   '/app-admin/storage': typeof AppAdminStorageRoute
   '/app-admin/tebar': typeof AppAdminTebarRoute
   '/app-admin/tenancy': typeof AppAdminTenancyRoute
+  '/app-admin/testimonials': typeof AppAdminTestimonialsRoute
   '/app-admin/tickets': typeof AppAdminTicketsRoute
   '/app-admin/users': typeof AppAdminUsersRoute
   '/app-admin/visitors': typeof AppAdminVisitorsRoute
@@ -896,6 +913,7 @@ export interface FileRoutesById {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
   '/qalling/invoice/$token': typeof QallingInvoiceTokenRoute
@@ -960,6 +978,7 @@ export interface FileRouteTypes {
     | '/app-admin/storage'
     | '/app-admin/tebar'
     | '/app-admin/tenancy'
+    | '/app-admin/testimonials'
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app-admin/visitors'
@@ -999,6 +1018,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
     | '/qalling/invoice/$token'
@@ -1058,6 +1078,7 @@ export interface FileRouteTypes {
     | '/app-admin/storage'
     | '/app-admin/tebar'
     | '/app-admin/tenancy'
+    | '/app-admin/testimonials'
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app-admin/visitors'
@@ -1096,6 +1117,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
     | '/qalling/invoice/$token'
@@ -1157,6 +1179,7 @@ export interface FileRouteTypes {
     | '/app-admin/storage'
     | '/app-admin/tebar'
     | '/app-admin/tenancy'
+    | '/app-admin/testimonials'
     | '/app-admin/tickets'
     | '/app-admin/users'
     | '/app-admin/visitors'
@@ -1197,6 +1220,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
     | '/qalling/invoice/$token'
@@ -1511,6 +1535,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminTenancyRouteImport
       parentRoute: typeof AppAdminRoute
     }
+    '/app-admin/testimonials': {
+      id: '/app-admin/testimonials'
+      path: '/testimonials'
+      fullPath: '/app-admin/testimonials'
+      preLoaderRoute: typeof AppAdminTestimonialsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
     '/app-admin/tickets': {
       id: '/app-admin/tickets'
       path: '/tickets'
@@ -1789,6 +1820,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/qalling/app/reports'
       preLoaderRoute: typeof QallingAppReportsRouteImport
+      parentRoute: typeof QallingAppRoute
+    }
+    '/qalling/app/support': {
+      id: '/qalling/app/support'
+      path: '/support'
+      fullPath: '/qalling/app/support'
+      preLoaderRoute: typeof QallingAppSupportRouteImport
       parentRoute: typeof QallingAppRoute
     }
     '/qalling/approve/$token': {
@@ -2086,6 +2124,7 @@ interface AppAdminRouteChildren {
   AppAdminStorageRoute: typeof AppAdminStorageRoute
   AppAdminTebarRoute: typeof AppAdminTebarRoute
   AppAdminTenancyRoute: typeof AppAdminTenancyRoute
+  AppAdminTestimonialsRoute: typeof AppAdminTestimonialsRoute
   AppAdminTicketsRoute: typeof AppAdminTicketsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminVisitorsRoute: typeof AppAdminVisitorsRoute
@@ -2108,6 +2147,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminStorageRoute: AppAdminStorageRoute,
   AppAdminTebarRoute: AppAdminTebarRoute,
   AppAdminTenancyRoute: AppAdminTenancyRoute,
+  AppAdminTestimonialsRoute: AppAdminTestimonialsRoute,
   AppAdminTicketsRoute: AppAdminTicketsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminVisitorsRoute: AppAdminVisitorsRoute,
@@ -2143,6 +2183,7 @@ interface QallingAppRouteChildren {
   QallingAppProfileRoute: typeof QallingAppProfileRoute
   QallingAppReferralRoute: typeof QallingAppReferralRoute
   QallingAppReportsRoute: typeof QallingAppReportsRoute
+  QallingAppSupportRoute: typeof QallingAppSupportRoute
   QallingAppIndexRoute: typeof QallingAppIndexRoute
 }
 
@@ -2155,6 +2196,7 @@ const QallingAppRouteChildren: QallingAppRouteChildren = {
   QallingAppProfileRoute: QallingAppProfileRoute,
   QallingAppReferralRoute: QallingAppReferralRoute,
   QallingAppReportsRoute: QallingAppReportsRoute,
+  QallingAppSupportRoute: QallingAppSupportRoute,
   QallingAppIndexRoute: QallingAppIndexRoute,
 }
 
