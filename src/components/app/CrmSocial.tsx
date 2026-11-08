@@ -1967,23 +1967,27 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
           <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
             {id ? "Dasbor Media Sosial" : "Social Dashboard"}
           </h1>
         </div>
-        <Badge variant={connected ? "default" : "secondary"} className="gap-1">
+        <Badge
+          variant={connected ? "default" : "secondary"}
+          className="shrink-0 gap-1 rounded-full"
+        >
           {connected > 0 && <CheckCircle2 className="h-3 w-3" />}
-          {connected} {id ? "akun terhubung" : "accounts connected"}
+          {connected}{" "}
+          <span className="max-sm:hidden">{id ? "akun terhubung" : "accounts connected"}</span>
         </Badge>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
+          <Card key={s.label} className="rounded-2xl">
+            <CardContent className="p-3.5 sm:p-4">
               <p className="text-xs text-muted-foreground">{s.label}</p>
               <p className="mt-1 text-2xl font-semibold">{s.v}</p>
             </CardContent>
@@ -1991,12 +1995,12 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardContent className="p-5">
+        <Card className="rounded-2xl">
+          <CardContent className="p-4 sm:p-5">
             <p className="mb-4 font-semibold">
               {id ? "Postingan per minggu (8 minggu)" : "Posts per week (8 weeks)"}
             </p>
-            <div className="flex h-40 items-end gap-2">
+            <div className="flex h-32 items-end gap-1 sm:h-40 sm:gap-2">
               {weeks.map((w) => (
                 <div key={w.label} className="flex flex-1 flex-col items-center gap-1">
                   <span className="text-xs">{w.n}</span>
@@ -2004,14 +2008,16 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
                     className="w-full rounded-t bg-gold"
                     style={{ height: `${(w.n / maxW) * 100}%`, minHeight: 2 }}
                   />
-                  <span className="text-[10px] text-muted-foreground">{w.label}</span>
+                  <span className="max-w-full truncate text-[9px] text-muted-foreground sm:text-[10px]">
+                    {w.label}
+                  </span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-3 p-5">
+        <Card className="rounded-2xl">
+          <CardContent className="space-y-3 p-4 sm:p-5">
             <p className="font-semibold">
               {id ? "Postingan per akun" : "Posts per account"} ({accounts.length}{" "}
               {id ? "akun" : "accounts"})
@@ -2039,8 +2045,8 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
             ))}
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-2 p-5">
+        <Card className="rounded-2xl">
+          <CardContent className="space-y-2 p-4 sm:p-5">
             <p className="font-semibold">{id ? "Jadwal berikutnya" : "Upcoming"}</p>
             {upcoming.length === 0 && (
               <p className="text-sm text-muted-foreground">
@@ -2048,15 +2054,18 @@ export function SocialDashboardView({ workspaceId }: { workspaceId: string }) {
               </p>
             )}
             {upcoming.map((p) => (
-              <div key={p.id} className="flex justify-between gap-3 text-sm">
+              <div
+                key={p.id}
+                className="flex flex-col justify-between gap-0.5 text-sm sm:flex-row sm:gap-3"
+              >
                 <span className="truncate">{p.title}</span>
                 <span className="shrink-0 text-muted-foreground">{fmt(p.scheduled_at)}</span>
               </div>
             ))}
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-2 p-5">
+        <Card className="rounded-2xl">
+          <CardContent className="space-y-2 p-4 sm:p-5">
             <p className="font-semibold">{id ? "Gagal terbaru" : "Recent failures"}</p>
             {failed.length === 0 && (
               <p className="text-sm text-muted-foreground">

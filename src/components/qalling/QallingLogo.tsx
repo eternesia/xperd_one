@@ -19,8 +19,8 @@ export function QallingLogo({ className }: { className?: string }) {
       <img
         src={logoWhite}
         alt="Qalling — Precision in relationships"
-        width={1024}
-        height={500}
+        width={798}
+        height={254}
         aria-hidden="true"
         className={cn(
           "qalling-logo qalling-logo-dark h-auto w-36 shrink-0 object-contain",

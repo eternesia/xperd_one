@@ -383,7 +383,7 @@ function QallingShell() {
                 <div className="flex-1 overflow-y-auto px-3 pb-2">
                   {navGroups.map((g) => {
                     const rows = g.ids
-                      .filter((x) => subs.has(x) && !["calendar", "comments"].includes(x))
+                      .filter((x) => subs.has(x) && x !== "calendar")
                       .map((x) => {
                         const sub = subs.get(x)!;
                         return sheetRow(
