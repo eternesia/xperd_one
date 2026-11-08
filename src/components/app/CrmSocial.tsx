@@ -1528,7 +1528,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-sm:left-0 max-sm:top-0 max-sm:flex max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:gap-0 max-sm:overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:p-0 max-sm:data-[state=open]:slide-in-from-bottom sm:max-w-4xl">
+        <DialogContent className="dialog-sheet max-sm:flex max-sm:flex-col max-sm:gap-0 max-sm:border-0 max-sm:p-0 max-sm:data-[state=open]:slide-in-from-bottom sm:max-w-4xl">
           {editing && (
             <MobileComposer
               id={id}

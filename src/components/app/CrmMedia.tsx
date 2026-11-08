@@ -735,7 +735,7 @@ export function MediaPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-sm:left-0 max-sm:top-0 max-sm:flex max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:rounded-none max-sm:border-0 sm:max-w-3xl">
+      <DialogContent className="dialog-sheet max-sm:flex max-sm:flex-col max-sm:border-0 max-sm:p-4 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{id ? "Pilih dari Media" : "Choose from Media"}</DialogTitle>
         </DialogHeader>
