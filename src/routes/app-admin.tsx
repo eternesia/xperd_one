@@ -236,6 +236,7 @@ const SETTINGS = [
   ["/app-admin/email", "Email / SMTP"],
   ["/app-admin/payments", "Payment Gateway"],
   ["/app-admin/tebar", "API Tebar & Sosial"],
+  ["/app-admin/kirimdev", "WhatsApp (Kirimdev)"],
   ["/app-admin/storage", "Object Storage"],
   ["/app-admin/referral", "Referral"],
 ] as const;

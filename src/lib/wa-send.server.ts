@@ -13,25 +13,49 @@ export type WaSettings = {
   phone_number_id: string | null;
   invoice_template: string | null;
   template_lang: string;
+  managed: number;
+  kirimdev_customer_id: string | null;
+  number_display: string | null;
 };
 
+/** API key induk Kirimdev yang diatur Super Admin (null bila belum terverifikasi). */
+export async function platformKirimdevKey() {
+  const r = await executeOne<{ api_key: string | null; status: string }>(
+    "SELECT api_key, status FROM kirimdev_settings WHERE id = 'platform'",
+  );
+  return r?.api_key && r.status === "verified" ? r.api_key : null;
+}
+
 export async function loadWaSettings(ws: string) {
-  return executeOne<WaSettings>(
-    `SELECT provider, endpoint_url, api_token, sender_number, is_active, phone_number_id, invoice_template, template_lang
+  const row = await executeOne<WaSettings>(
+    `SELECT provider, endpoint_url, api_token, sender_number, is_active, phone_number_id, invoice_template, template_lang,
+            managed, kirimdev_customer_id, number_display
        FROM crm_wa_settings WHERE workspace_id = ? LIMIT 1`,
     [ws],
   );
+  if (!row) return row;
+  // Mode dikelola: selalu pakai kunci induk dan alamat resmi; nilai dari pengguna diabaikan.
+  if (row.provider === "kirimdev" && row.managed) {
+    return { ...row, api_token: await platformKirimdevKey(), endpoint_url: null } as WaSettings;
+  }
+  return row;
 }
 
-const base = (s: WaSettings) => (s.endpoint_url?.trim() || KIRIMDEV_BASE).replace(/\/+$/, "");
+export const kirimdevBase = (s: Pick<WaSettings, "endpoint_url">) =>
+  (s.endpoint_url?.trim() || KIRIMDEV_BASE).replace(/\/+$/, "");
 const intl = (raw: string) => {
   const n = normalizeWaNumber(raw);
   return n ? `+${n}` : "";
 };
 
-async function kirimdev(s: WaSettings, method: "GET" | "POST", path: string, body?: unknown) {
+export async function kirimdev(
+  s: Pick<WaSettings, "api_token" | "endpoint_url">,
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+) {
   if (!s.api_token) throw new Error("API key Kirimdev belum diisi.");
-  const res = await fetch(`${base(s)}${path}`, {
+  const res = await fetch(`${kirimdevBase(s)}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${s.api_token}`,
