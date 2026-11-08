@@ -52,12 +52,78 @@ export const listCrmComments = createServerFn({ method: "POST" })
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute<Record<string, unknown>>(
       `SELECT c.id, c.account_id, c.post_id, c.author_name, c.body, c.reply, c.status, c.created_at, c.liked_at,
-              a.account_name, a.platform, a.source
+              c.post_thumbnail_url, c.post_permalink, c.post_caption,
+              a.account_name, a.platform, a.source, a.handle
          FROM crm_social_comments c LEFT JOIN crm_social_accounts a ON a.id = c.account_id
         WHERE c.workspace_id = ? ORDER BY c.created_at DESC LIMIT 1000`,
       [data.workspaceId],
     );
+    // Cadangan: postingan yang dibuat di Qalling (external_id = id postingan Tebar) memberi gambar & caption.
+    const missing = [
+      ...new Set(rows.filter((r) => !r.post_thumbnail_url).map((r) => String(r.post_id))),
+    ].filter((x) => x && x !== "-");
+    const own = new Map<
+      string,
+      { media: string | null; caption: string | null; link: string | null }
+    >();
+    if (missing.length) {
+      const posts = await execute<{
+        external_id: string;
+        media_paths: unknown;
+        media_url: string | null;
+        caption: string | null;
+        permalinks: unknown;
+      }>(
+        `SELECT external_id, media_paths, media_url, caption, permalinks FROM crm_scheduled_posts
+          WHERE workspace_id = ? AND external_id IN (${missing.map(() => "?").join(",")})`,
+        [data.workspaceId, ...missing],
+      ).catch(() => []);
+      const { signMediaUrl, publicOrigin } = await import("@/lib/crm-media.server");
+      const { getRequest } = await import("@tanstack/react-start/server");
+      let origin = "";
+      try {
+        origin = publicOrigin(getRequest().url);
+      } catch {
+        /* tanpa origin: lewati */
+      }
+      const parse = (v: unknown) => {
+        try {
+          return typeof v === "string" ? JSON.parse(v) : v;
+        } catch {
+          return null;
+        }
+      };
+      for (const p of posts) {
+        const paths = parse(p.media_paths);
+        const path = Array.isArray(paths)
+          ? (paths.find((x: unknown) => typeof x === "string" && !/\.(mp4|mov|webm)$/i.test(x)) as
+              string | undefined)
+          : undefined;
+        const links = parse(p.permalinks);
+        const link = Array.isArray(links)
+          ? (links.find(
+              (x: unknown) => typeof x === "string" || Boolean((x as { url?: string } | null)?.url),
+            ) as string | { url?: string } | undefined)
+          : links && typeof links === "object"
+            ? Object.values(links as Record<string, unknown>).find((x) => typeof x === "string")
+            : null;
+        own.set(p.external_id, {
+          media: path && origin ? signMediaUrl(origin, path, 3 * 86_400) : p.media_url,
+          caption: p.caption,
+          link:
+            typeof link === "string" ? link : ((link as { url?: string } | undefined)?.url ?? null),
+        });
+      }
+    }
     return rows.map((r) => ({
+      post_thumbnail_url:
+        (r.post_thumbnail_url as string | null) ?? own.get(String(r.post_id))?.media ?? null,
+      post_permalink:
+        (r.post_permalink as string | null) ?? own.get(String(r.post_id))?.link ?? null,
+      post_caption:
+        (r.post_caption as string | null) ??
+        own.get(String(r.post_id))?.caption?.slice(0, 300) ??
+        null,
       id: String(r.id),
       account_id: String(r.account_id),
       post_id: String(r.post_id),
@@ -71,6 +137,7 @@ export const listCrmComments = createServerFn({ method: "POST" })
         account_name: String(r.account_name ?? ""),
         platform: String(r.platform ?? ""),
         source: String(r.source ?? ""),
+        handle: (r.handle as string | null) ?? null,
       },
     }));
   });
@@ -171,6 +238,11 @@ export const getAutomationBoard = createServerFn({ method: "POST" })
         follow_retry: (r.follow_retry as string | null) ?? null,
         auto_like: bool(r.auto_like),
         click_count: Number(r.click_count) || 0,
+        tebar_kind: (r.tebar_kind as string | null) ?? null,
+        run_count: Number(r.run_count) || 0,
+        last_run_at: iso(r.last_run_at),
+        synced_at: iso(r.synced_at),
+        external_id: (r.external_id as string | null) ?? null,
       })),
       accounts: accounts.map((a) => ({
         id: String(a.id),

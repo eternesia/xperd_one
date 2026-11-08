@@ -105,6 +105,8 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
     steps: [
       "Open Conversations → Inbox to read and reply to DMs; mark a conversation as open, snoozed or done.",
       "Open Conversations → Comments to reply to or like comments on your posts.",
+      "Comments are grouped per post, with the post image and caption. In the Inbox, pick a Platform and Account to see one account's DMs; through Tebar, DMs are available for Instagram.",
+      "Automations created in Tebar also appear in Automation & Messaging → Automations with run and link-click counts. Use search and the account or status filters when you have many rules.",
       "In Automations, create a rule: when a comment contains a keyword, send an automatic comment reply and/or DM.",
       "Use Templates for replies you send often.",
     ],

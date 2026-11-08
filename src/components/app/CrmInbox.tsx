@@ -1,7 +1,17 @@
+import { SocialIcon } from "@/components/qalling/SocialIcon";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCheck, Clock, Inbox, Lock, RefreshCw, Send, StickyNote, UserPlus } from "lucide-react";
+import {
+  CheckCheck,
+  Clock,
+  Inbox,
+  Lock,
+  RefreshCw,
+  Send,
+  StickyNote,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +43,16 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
   const [term, setTerm] = useState("");
   const [filter, setFilter] = useState("open");
   const [platform, setPlatform] = useState("all");
+  const [account, setAccount] = useState("all");
   const [body, setBody] = useState("");
   const [note, setNote] = useState(false);
   const [now, setNow] = useState(Date.now());
   const { entitlements } = useApp();
   const crmAccess = {
-    data: Boolean(entitlements.qalling && (entitlements.qalling.features.legacy || entitlements.qalling.features.crm)),
+    data: Boolean(
+      entitlements.qalling &&
+      (entitlements.qalling.features.legacy || entitlements.qalling.features.crm),
+    ),
   };
   const leadFn = useServerFn(convertConversationToLead);
   const sendFn = useServerFn(sendInboxMessage);
@@ -116,8 +130,12 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
     onSuccess: (r) => {
       toast.success(
         r.existing
-          ? id ? "Sudah tersimpan di Leads." : "Already in Leads."
-          : id ? "Prospek baru masuk ke Leads." : "Lead created.",
+          ? id
+            ? "Sudah tersimpan di Leads."
+            : "Already in Leads."
+          : id
+            ? "Prospek baru masuk ke Leads."
+            : "Lead created.",
       );
       refresh();
     },
@@ -126,11 +144,27 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
   const rows = (list.data ?? []).filter(
     (c) =>
       (platform === "all" || c.crm_social_accounts?.platform === platform) &&
+      (account === "all" || c.account_id === account) &&
       (filter === "all" || (filter === "unread" ? c.unread_count > 0 : c.status === filter)) &&
       `${c.participant_name} ${c.last_message} ${c.crm_social_accounts?.account_name ?? ""}`
         .toLowerCase()
         .includes(term.toLowerCase()),
   );
+  const accountsInList = [
+    ...new Map(
+      (list.data ?? []).map((c) => [
+        c.account_id,
+        {
+          id: c.account_id,
+          name: c.crm_social_accounts?.account_name || "—",
+          platform: c.crm_social_accounts?.platform ?? "",
+        },
+      ]),
+    ).values(),
+  ];
+  const platformsInList = [
+    ...new Set(accountsInList.map((a) => a.platform).filter(Boolean)),
+  ].sort();
   const open = replyWindowOpen(active?.reply_window_expires_at ?? null, now);
   return (
     <div className="space-y-5 min-w-0">
@@ -145,18 +179,48 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           <RefreshCw className="size-4" />
         </Button>
       </header>
-      <label className="block max-w-72 text-sm text-muted-foreground">
-        {id ? "Media sosial" : "Social platform"}
-        <select
-          className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-        >
-          <option value="all">{id ? "Semua akun" : "All accounts"}</option>
-          <option value="facebook">Facebook</option>
-          <option value="instagram">Instagram</option>
-        </select>
-      </label>
+      <div className="flex flex-wrap gap-3">
+        <label className="block w-48 text-sm text-muted-foreground">
+          {id ? "Platform" : "Platform"}
+          <select
+            className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
+            value={platform}
+            onChange={(e) => {
+              setPlatform(e.target.value);
+              setAccount("all");
+            }}
+          >
+            <option value="all">{id ? "Semua platform" : "All platforms"}</option>
+            {platformsInList.map((p) => (
+              <option key={p} value={p}>
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block w-64 text-sm text-muted-foreground">
+          {id ? "Akun" : "Account"}
+          <select
+            className="mt-1 w-full rounded-md border bg-background p-2 text-foreground"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+          >
+            <option value="all">{id ? "Semua akun" : "All accounts"}</option>
+            {accountsInList
+              .filter((a) => platform === "all" || a.platform === platform)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.platform})
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {id
+          ? "DM yang tersedia lewat Tebar: Instagram. DM Facebook (Messenger) masuk lewat koneksi Meta native."
+          : "DMs available through Tebar: Instagram. Facebook (Messenger) DMs arrive through the native Meta connection."}
+      </p>
       <div className="grid min-w-0 border-t md:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="min-w-0 md:border-r">
           <div className="space-y-3 py-4 md:pr-4">
@@ -214,8 +278,14 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
                       <span className="truncate font-semibold">{c.participant_name}</span>
                       {c.unread_count > 0 && <Badge>{c.unread_count}</Badge>}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {c.crm_social_accounts?.platform} · {c.crm_social_accounts?.account_name}
+                    <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                      <SocialIcon
+                        platform={c.crm_social_accounts?.platform ?? ""}
+                        className="size-3 shrink-0"
+                      />
+                      <span className="truncate">
+                        {id ? "ke" : "to"} {c.crm_social_accounts?.account_name || "—"}
+                      </span>
                     </span>
                     <span className="block truncate text-sm font-normal">
                       {c.last_message || (id ? "Lampiran" : "Attachment")}
@@ -236,8 +306,13 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b py-4">
                 <div className="min-w-0">
                   <h2 className="break-words font-semibold">{active.participant_name}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {active.crm_social_accounts?.account_name}
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <SocialIcon
+                      platform={active.crm_social_accounts?.platform ?? ""}
+                      className="size-3"
+                    />
+                    {id ? "Masuk ke akun" : "Received on"}{" "}
+                    {active.crm_social_accounts?.account_name || "—"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -247,7 +322,12 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
                       {id ? "Tersimpan di Leads" : "In Leads"}
                     </Badge>
                   ) : crmAccess.data ? (
-                    <Button variant="outline" size="sm" disabled={toLead.isPending} onClick={() => toLead.mutate(active.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={toLead.isPending}
+                      onClick={() => toLead.mutate(active.id)}
+                    >
                       <UserPlus className="size-4" />
                       {id ? "Simpan ke Leads" : "Save to Leads"}
                     </Button>
@@ -281,8 +361,12 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
                   >
                     <CheckCheck className="size-4" />
                     {active.status === "open"
-                      ? id ? "Selesaikan" : "Resolve"
-                      : id ? "Buka kembali" : "Reopen"}
+                      ? id
+                        ? "Selesaikan"
+                        : "Resolve"
+                      : id
+                        ? "Buka kembali"
+                        : "Reopen"}
                   </Button>
                 </div>
               </div>
