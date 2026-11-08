@@ -262,7 +262,7 @@ export async function sendInvoiceWaCore(ws: string, id: string, link: string, ac
   const { loadWaSettings, sendWaTemplate } = await import("./wa-send.server");
   const s = await loadWaSettings(ws);
   if (!s || !s.is_active || s.provider !== "kirimdev")
-    throw new Error("WhatsApp Kirimdev belum aktif. Atur di Penjualan → WA Gateway.");
+    throw new Error("WhatsApp Kirimdev belum aktif. Atur di Otomasi & Pesan → WhatsApp Gateway.");
   if (!s.invoice_template)
     throw new Error("Nama template invoice belum diisi di pengaturan WA Gateway.");
   const inv = await executeOne<{
