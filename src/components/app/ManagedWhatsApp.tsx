@@ -14,6 +14,7 @@ import {
   switchToOwnKirimdevKey,
 } from "@/lib/kirimdev.functions";
 import { useI18n } from "@/lib/i18n";
+import { WhatsAppCostInfo } from "@/components/qalling/WhatsAppCostInfo";
 
 /** Pasang nomor WhatsApp sendiri lewat Qalling (Kirimdev + Embedded Signup Meta), tanpa mengisi API key. */
 export function ManagedWhatsApp({ workspaceId }: { workspaceId: string }) {
@@ -126,12 +127,7 @@ export function ManagedWhatsApp({ workspaceId }: { workspaceId: string }) {
                 "Hubungkan nomor WhatsApp Business milik Anda dalam beberapa klik. Anda masuk ke Meta, memilih bisnis dan nomor, lalu kembali ke sini. Tanpa API key. Nomor tetap bisa dipakai di aplikasi WhatsApp Business (coexistence) atau daftarkan nomor baru.",
               )}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {pick(
-                "Meta bills message fees directly to the payment method in your own WhatsApp Business Account; Qalling adds no markup.",
-                "Biaya pesan Meta ditagih Meta langsung ke metode pembayaran di WhatsApp Business Account Anda; Qalling tidak menambah markup.",
-              )}
-            </p>
+            <WhatsAppCostInfo />
             <div className="flex flex-wrap gap-2">
               <Button disabled={connect.isPending} onClick={() => connect.mutate()}>
                 {d.managed

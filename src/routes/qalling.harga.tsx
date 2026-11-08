@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { WhatsAppCostInfo } from "@/components/qalling/WhatsAppCostInfo";
 import { QallingShell, PageHero, seo, PricingGrid } from "@/components/qalling/QallingSite";
 
 export const Route = createFileRoute("/qalling/harga")({
@@ -16,6 +17,9 @@ export const Route = createFileRoute("/qalling/harga")({
       />
       <section className="container-x pb-16">
         <PricingGrid />
+        <div className="mx-auto mt-10 max-w-3xl">
+          <WhatsAppCostInfo heading />
+        </div>
       </section>
     </QallingShell>
   ),
