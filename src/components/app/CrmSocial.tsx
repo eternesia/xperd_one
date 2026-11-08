@@ -120,6 +120,7 @@ type Account = {
   account_name: string;
   handle: string | null;
   profile_url: string | null;
+  avatar_url?: string | null;
   status: string;
   source?: string;
 };
@@ -429,8 +430,15 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
             <ul className="divide-y">
               {pageRows.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 px-3 py-3">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <SocialIcon platform={a.platform} className="h-4 w-4" />
+                  <span className="relative shrink-0">
+                    <AccountAvatar
+                      src={a.avatar_url}
+                      name={a.account_name}
+                      className="size-11 text-base"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full border-2 border-background bg-background">
+                      <SocialIcon platform={a.platform} className="size-3" />
+                    </span>
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{a.account_name}</p>
@@ -679,6 +687,40 @@ function useGoSub() {
 }
 
 /** Composer layar penuh untuk HP: akun berupa avatar, caption memenuhi layar, aksi di bawah. */
+/** Foto profil akun; jatuh kembali ke inisial bila belum ada atau gagal dimuat. */
+export function AccountAvatar({
+  src,
+  name,
+  className,
+}: {
+  src?: string | null;
+  name: string;
+  className?: string;
+}) {
+  const [bad, setBad] = useState(false);
+  return (
+    <span
+      className={cn(
+        "relative grid place-items-center overflow-hidden rounded-full bg-secondary font-semibold",
+        className,
+      )}
+    >
+      {src && !bad ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setBad(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        (name || "?").charAt(0).toUpperCase()
+      )}
+    </span>
+  );
+}
+
 function MobileComposer({
   id,
   editing,
@@ -759,13 +801,13 @@ function MobileComposer({
               >
                 <span
                   className={cn(
-                    "relative grid size-14 place-items-center rounded-full bg-secondary text-lg font-semibold transition",
+                    "relative grid size-14 place-items-center rounded-full text-lg font-semibold transition",
                     on
                       ? "ring-[3px] ring-primary ring-offset-2 ring-offset-background"
                       : "opacity-45",
                   )}
                 >
-                  {(name || "?").charAt(0).toUpperCase()}
+                  <AccountAvatar src={a.avatar_url} name={name} className="size-14 text-lg" />
                   <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-background">
                     <SocialIcon platform={a.platform} className="size-3.5" />
                   </span>
@@ -1282,51 +1324,61 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
     [...new Set(list.map((a) => platformLabel(a.platform)))].join(" · ");
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-3 sm:items-end">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-widest text-gold max-sm:hidden">Qalling CRM</p>
           <h1 className="text-2xl font-semibold text-navy dark:text-foreground">Posts</h1>
-          <p className="text-sm text-muted-foreground">
-            {accounts.length} {id ? "akun terhubung" : "connected accounts"} ·{" "}
-            {counts.scheduled ?? 0} {id ? "terjadwal" : "scheduled"}
+          <p className="truncate text-sm text-muted-foreground">
+            {accounts.length} {id ? "akun" : "accounts"} · {counts.scheduled ?? 0}{" "}
+            {id ? "terjadwal" : "scheduled"}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {hasTebar && (
             <Button
               variant="outline"
+              className="max-sm:size-11 max-sm:rounded-2xl max-sm:p-0"
+              aria-label={id ? "Sinkronkan" : "Sync"}
               onClick={() => syncPosts.mutate({})}
               disabled={syncPosts.isPending}
             >
-              <RefreshCw className={cn("h-4 w-4", syncPosts.isPending && "animate-spin")} />{" "}
-              {syncPosts.isPending
-                ? id
-                  ? "Menyinkronkan..."
-                  : "Syncing..."
-                : id
-                  ? "Sinkronkan"
-                  : "Sync"}
+              <RefreshCw className={cn("h-4 w-4", syncPosts.isPending && "animate-spin")} />
+              <span className="max-sm:hidden">
+                {syncPosts.isPending
+                  ? id
+                    ? "Menyinkronkan..."
+                    : "Syncing..."
+                  : id
+                    ? "Sinkronkan"
+                    : "Sync"}
+              </span>
             </Button>
           )}
-          <Button variant="outline" onClick={() => goSub("social-accounts")}>
+          <Button
+            variant="outline"
+            className="max-sm:hidden"
+            onClick={() => goSub("social-accounts")}
+          >
             <Plus className="h-4 w-4" /> {id ? "Tambah akun" : "Add account"}
           </Button>
-          <Button onClick={() => openNew()}>
+          <Button className="max-sm:hidden" onClick={() => openNew()}>
             <Send className="h-4 w-4" /> {id ? "Buat postingan" : "Create post"}
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex rounded-md border border-border p-0.5">
+      <div className="space-y-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-2 sm:space-y-0">
+        <div className="grid grid-cols-3 gap-1 rounded-full bg-muted p-1 sm:flex sm:gap-0 sm:border sm:border-border sm:bg-transparent sm:p-0.5">
           {(["list", "week", "month"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={cn(
-                "flex items-center gap-1 rounded px-3 py-1 text-sm",
-                mode === m && "bg-navy text-primary-foreground",
+                "flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors sm:py-1",
+                mode === m
+                  ? "bg-background text-foreground shadow-sm sm:bg-navy sm:text-primary-foreground"
+                  : "text-muted-foreground",
               )}
             >
               {m === "list" ? (
@@ -1355,12 +1407,24 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
             placeholder={id ? "Cari caption…" : "Search caption…"}
           />
         ) : (
-          <div className="flex items-center gap-2">
-            <Button size="icon" variant="outline" onClick={() => shift(-1)} aria-label="Prev">
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <Button
+              size="icon"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => shift(-1)}
+              aria-label="Prev"
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="min-w-32 text-center text-sm font-medium">{title}</span>
-            <Button size="icon" variant="outline" onClick={() => shift(1)} aria-label="Next">
+            <Button
+              size="icon"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => shift(1)}
+              aria-label="Next"
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -1370,13 +1434,13 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
       {mode === "list" ? (
         <Card>
           <CardContent className="space-y-3 p-4">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
               {["all", "draft", "scheduled", "published", "failed"].map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatusTab(s)}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs",
+                    "shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs sm:py-1",
                     statusTab === s
                       ? "border-gold bg-gold/15 font-medium"
                       : "border-border text-muted-foreground",
@@ -1787,9 +1851,11 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                 </p>
                 <div className="overflow-hidden rounded-xl border border-border bg-card">
                   <div className="flex items-center gap-2 p-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/20 text-xs font-semibold">
-                      {(previewAcc?.account_name ?? "Q").slice(0, 1).toUpperCase()}
-                    </span>
+                    <AccountAvatar
+                      src={previewAcc?.avatar_url}
+                      name={previewAcc?.account_name ?? "Q"}
+                      className="h-8 w-8 text-xs"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold">
                         {previewAcc?.account_name ?? (id ? "Pilih akun" : "Pick an account")}

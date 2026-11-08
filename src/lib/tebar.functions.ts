@@ -224,15 +224,32 @@ export const syncTebarAccounts = createServerFn({ method: "POST" })
     for (const a of accounts) {
       if (have.has(a.id)) {
         await execute(
-          "UPDATE crm_social_accounts SET platform = ?, account_name = ?, handle = ?, profile_url = ?, status = 'connected' WHERE workspace_id = ? AND external_id = ? AND source = 'tebar'",
-          [a.platform, a.name, a.handle, a.profile_url, data.workspaceId, a.id],
+          "UPDATE crm_social_accounts SET platform = ?, account_name = ?, handle = ?, profile_url = ?, avatar_url = COALESCE(?, avatar_url), status = 'connected' WHERE workspace_id = ? AND external_id = ? AND source = 'tebar'",
+          [
+            a.platform,
+            a.name,
+            a.handle,
+            a.profile_url,
+            a.avatar_url ?? null,
+            data.workspaceId,
+            a.id,
+          ],
         );
       } else {
         const { assertAccountQuota } = await import("@/lib/qalling-quota.server");
         await assertAccountQuota(data.workspaceId);
         await execute(
-          "INSERT INTO crm_social_accounts (id, workspace_id, platform, account_name, handle, profile_url, external_id, source, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'tebar', 'connected')",
-          [uuid(), data.workspaceId, a.platform, a.name, a.handle, a.profile_url, a.id],
+          "INSERT INTO crm_social_accounts (id, workspace_id, platform, account_name, handle, profile_url, avatar_url, external_id, source, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'tebar', 'connected')",
+          [
+            uuid(),
+            data.workspaceId,
+            a.platform,
+            a.name,
+            a.handle,
+            a.profile_url,
+            a.avatar_url ?? null,
+            a.id,
+          ],
         );
       }
     }
