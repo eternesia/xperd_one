@@ -14,7 +14,33 @@ export const MEDIA_TYPES = [
   "video/webm",
 ];
 
-export async function downloadMedia(url: string, policy: MediaUploadPolicy) {
+/** Kenali tipe dari byte awal (unduhan berkas ChatGPT sering bertipe application/octet-stream). */
+export function sniffMediaType(b: Buffer): string | null {
+  if (b.length > 12 && b[0] === 0xff && b[1] === 0xd8) return "image/jpeg";
+  if (
+    b.length > 8 &&
+    b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  )
+    return "image/png";
+  if (
+    b.length > 12 &&
+    b.subarray(0, 4).toString() === "RIFF" &&
+    b.subarray(8, 12).toString() === "WEBP"
+  )
+    return "image/webp";
+  if (b.length > 6 && b.subarray(0, 3).toString() === "GIF") return "image/gif";
+  if (b.length > 12 && b.subarray(4, 8).toString() === "ftyp")
+    return b.subarray(8, 12).toString() === "qt  " ? "video/quicktime" : "video/mp4";
+  if (b.length > 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3)
+    return "video/webm";
+  return null;
+}
+
+export async function downloadMedia(
+  url: string,
+  policy: MediaUploadPolicy,
+  opts: { sniff?: boolean } = {},
+) {
   let response: Response;
   try {
     response = await fetch(remoteMediaUrl(url), {
@@ -29,8 +55,11 @@ export async function downloadMedia(url: string, policy: MediaUploadPolicy) {
     );
   }
   if (!response.ok || !response.body) throw new ToolError("Media could not be downloaded.");
-  const type = (response.headers.get("content-type") ?? "").split(";")[0].trim();
-  if (!MEDIA_TYPES.includes(type)) throw new ToolError("Unsupported media format.");
+  let type = (response.headers.get("content-type") ?? "").split(";")[0].trim();
+  if (!MEDIA_TYPES.includes(type)) {
+    if (!opts.sniff) throw new ToolError("Unsupported media format.");
+    type = ""; // ditentukan dari isi berkas setelah diunduh
+  }
   const max = (type.startsWith("image/") ? policy.photo_mb : policy.video_mb) * 1048576;
   const length = Number(response.headers.get("content-length"));
   if (length > max) {
@@ -52,12 +81,20 @@ export async function downloadMedia(url: string, policy: MediaUploadPolicy) {
     await reader.cancel().catch(() => undefined);
   }
   if (!size) throw new ToolError("Media file is empty.");
+  const bytes = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+  if (!type) {
+    const sniffed = sniffMediaType(bytes);
+    if (!sniffed) throw new ToolError("Unsupported media format.");
+    type = sniffed;
+    if (size > (type.startsWith("image/") ? policy.photo_mb : policy.video_mb) * 1048576)
+      throw new ToolError("Media exceeds the configured upload limit.");
+  }
   try {
     validateMediaFile({ type, size }, policy);
   } catch (e) {
     throw new ToolError((e as Error).message);
   }
-  return { bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))), type, size };
+  return { bytes, type, size };
 }
 
 export interface ResolvedMedia {

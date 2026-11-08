@@ -22,6 +22,7 @@ export interface ToolDef {
   description: string;
   shape: Record<string, z.ZodType>;
   annotations?: Record<string, boolean>;
+  meta?: Record<string, unknown>;
   run: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 }
 
@@ -31,6 +32,7 @@ export function defineTool<S extends Record<string, z.ZodType>>(def: {
   description: string;
   inputSchema: S;
   annotations?: Record<string, boolean>;
+  meta?: Record<string, unknown>;
   handler: (args: z.infer<z.ZodObject<S>>, ctx: ToolContext) => Promise<ToolResult>;
 }): ToolDef {
   return {
@@ -39,6 +41,7 @@ export function defineTool<S extends Record<string, z.ZodType>>(def: {
     description: def.description,
     shape: def.inputSchema,
     annotations: def.annotations,
+    meta: def.meta,
     run: (args, ctx) => def.handler(args as z.infer<z.ZodObject<S>>, ctx),
   };
 }
@@ -66,8 +69,9 @@ type Rpc = {
   jsonrpc?: string;
   id?: string | number | null;
   method?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params?: Record<string, any>;
-}; // eslint-disable-line @typescript-eslint/no-explicit-any
+};
 
 const err = (id: Rpc["id"], code: number, message: string) => ({
   jsonrpc: "2.0",
@@ -105,6 +109,7 @@ async function dispatch(server: McpServerDef, msg: Rpc, ctx: ToolContext) {
             description: t.description,
             inputSchema: inputJsonSchema(t.shape),
             ...(t.annotations ? { annotations: t.annotations } : {}),
+            ...(t.meta ? { _meta: t.meta } : {}),
           })),
         },
       };
