@@ -1,3 +1,4 @@
+import { useDevtoolsDeterrent } from "@/lib/use-devtools-deterrent";
 import { useEffect, useState, type ReactNode } from "react";
 import { captureReferral } from "@/lib/referral-capture";
 import { useQuery } from "@tanstack/react-query";
@@ -74,6 +75,7 @@ const NAV = [
 export function QallingShell({ children }: { children: ReactNode }) {
   const QALLING_CONTACT = useQallingContact();
   useEffect(() => captureReferral(), []);
+  useDevtoolsDeterrent();
   const { pick } = useI18n();
   const navLabel = (label: string) =>
     pick(

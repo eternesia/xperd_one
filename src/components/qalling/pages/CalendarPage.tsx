@@ -201,7 +201,7 @@ export function CalendarPage() {
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-36 text-center text-sm font-medium">
+          <span className="min-w-32 text-center text-sm font-medium sm:min-w-36">
             {cursor.toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
               month: "long",
               year: "numeric",
@@ -215,7 +215,7 @@ export function CalendarPage() {
           >
             <ChevronRight />
           </Button>
-          <Button asChild variant="gold" size="sm">
+          <Button asChild variant="gold" size="sm" className="hidden md:inline-flex">
             <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "post-scheduler" }}>
               <Plus />
               Post
@@ -223,7 +223,22 @@ export function CalendarPage() {
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <MobileMonth
+        cells={cells}
+        byDay={byDay}
+        accounts={accounts}
+        today={today}
+        lang={lang}
+        onOpen={(d, id) => {
+          setSelectedId(id);
+          setOpenDay(d);
+        }}
+        onToday={() => {
+          const d = new Date();
+          setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+        }}
+      />
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
         <div className="grid min-w-[640px] grid-cols-7">
           {(lang === "id" ? DAYS : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (
             <div
@@ -323,6 +338,172 @@ export function CalendarPage() {
         onClose={() => setOpenDay(null)}
         lang={lang}
       />
+    </div>
+  );
+}
+
+const dot: Record<string, string> = {
+  published: "bg-primary",
+  scheduled: "bg-amber-500",
+  publishing: "bg-amber-500",
+  draft: "bg-muted-foreground/50",
+  failed: "bg-destructive",
+};
+
+/** Kalender ringkas khusus HP: titik per tanggal, ketuk tanggal untuk melihat daftar postingan di bawahnya. */
+function MobileMonth({
+  cells,
+  byDay,
+  accounts,
+  today,
+  lang,
+  onOpen,
+  onToday,
+}: {
+  cells: (Date | null)[];
+  byDay: Map<string, CalPost[]>;
+  accounts: { id: string; platform: string; account_name?: string | null }[];
+  today: string;
+  lang: string;
+  onOpen: (d: Date, id: string) => void;
+  onToday: () => void;
+}) {
+  const locale = lang === "id" ? "id-ID" : "en-US";
+  const days = cells.filter((d): d is Date => !!d);
+  const [picked, setPicked] = useState<string | null>(null);
+  const fallback =
+    days.find((d) => key(d) === today) ??
+    days.find((d) => (byDay.get(key(d))?.length ?? 0) > 0) ??
+    days[0];
+  const sel = days.find((d) => key(d) === picked) ?? fallback;
+  const list = sel
+    ? [...(byDay.get(key(sel)) ?? [])].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+    : [];
+  const thumb = (p: CalPost) => {
+    const m = parseJson(p.media_paths);
+    const first = Array.isArray(m)
+      ? m.map(String).find((x) => !/\.(mp4|mov|webm)$/i.test(x))
+      : undefined;
+    return first ? `/api/workspace-files?path=${encodeURIComponent(first)}` : p.media_url || null;
+  };
+  return (
+    <div className="space-y-4 md:hidden">
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <div className="grid grid-cols-7 text-center text-xs text-muted-foreground">
+          {(lang === "id" ? DAYS : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (
+            <div key={d} className="py-1.5">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} className="h-12" />;
+            const items = byDay.get(key(d)) ?? [];
+            const isSel = sel && key(d) === key(sel);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPicked(key(d))}
+                className="flex h-12 flex-col items-center justify-start gap-1 pt-1"
+                aria-label={`${d.getDate()}: ${items.length} postingan`}
+                aria-pressed={!!isSel}
+              >
+                <span
+                  className={cn(
+                    "grid size-8 place-items-center rounded-full text-sm",
+                    isSel
+                      ? "bg-foreground font-semibold text-background"
+                      : key(d) === today
+                        ? "font-semibold text-primary"
+                        : "",
+                  )}
+                >
+                  {d.getDate()}
+                </span>
+                <span className="flex h-1.5 gap-0.5">
+                  {items.slice(0, 3).map((p) => (
+                    <span
+                      key={p.id}
+                      className={cn("size-1.5 rounded-full", dot[p.status] ?? dot.draft)}
+                    />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="font-semibold">
+          {sel?.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={onToday}>
+            {lang === "id" ? "Hari ini" : "Today"}
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "post-scheduler" }}>
+              <Plus className="size-4" />
+              {lang === "id" ? "Buat post" : "New post"}
+            </Link>
+          </Button>
+        </div>
+      </div>
+      {list.length === 0 ? (
+        <p className="rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+          {lang === "id" ? "Tidak ada postingan di tanggal ini." : "No posts on this day."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((p) => {
+            const t = thumb(p);
+            const accs = accounts.filter((a) => p.account_ids.includes(a.id));
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  onClick={() => sel && onOpen(sel, p.id)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left active:bg-muted/50"
+                >
+                  {t ? (
+                    <img
+                      src={t}
+                      alt=""
+                      loading="lazy"
+                      className="size-14 shrink-0 rounded-lg border object-cover"
+                    />
+                  ) : (
+                    <span className="grid size-14 shrink-0 place-items-center rounded-lg bg-muted text-xs text-muted-foreground">
+                      Teks
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 text-sm font-medium">
+                      {p.caption || p.title || (lang === "id" ? "(tanpa judul)" : "(untitled)")}
+                    </span>
+                    <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      {new Date(p.scheduled_at).toLocaleTimeString("id-ID", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      <span className={cn("rounded px-1.5 py-0.5", tone[p.status] ?? tone.draft)}>
+                        {lang === "id" ? (STATUS_ID[p.status] ?? p.status) : p.status}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 gap-1">
+                    {accs.slice(0, 3).map((a) => (
+                      <SocialIcon key={a.id} platform={a.platform} className="size-4" />
+                    ))}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
