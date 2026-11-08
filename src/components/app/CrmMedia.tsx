@@ -7,6 +7,7 @@ import {
   FolderPlus,
   ImageIcon,
   Loader2,
+  Upload,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -220,10 +221,26 @@ function Thumb({ m, className }: { m: MediaItem; className?: string }) {
         <ImageIcon className="h-6 w-6 text-muted-foreground" />
       </div>
     );
-  return isVideo(m) ? (
-    <video src={m.url} muted preload="metadata" className={cn("object-cover", className)} />
-  ) : (
-    <img src={m.url} alt={m.name} loading="lazy" className={cn("object-cover", className)} />
+  // Bungkus + elemen absolut: mencegah baris grid "kempis" di Safari saat gambar dalam tombol/aspect-ratio.
+  return (
+    <div className={cn("relative overflow-hidden bg-secondary", className)}>
+      {isVideo(m) ? (
+        <video
+          src={m.url}
+          muted
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <img
+          src={m.url}
+          alt={m.name}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+    </div>
   );
 }
 
@@ -237,6 +254,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
   const [kind, setKind] = useState<"all" | "image" | "video">("all");
   const [preview, setPreview] = useState<MediaItem | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
 
   const [folder, setFolder] = useState<string>("__all");
   const [extraFolders, setExtraFolders] = useState<string[]>([]);
@@ -331,19 +349,60 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
   const pageIds = p.items.map((m) => m.id);
   const allPicked = pageIds.length > 0 && pageIds.every((x) => picked.includes(x));
 
+  const onFiles = (f: File[]) => {
+    const incoming = f.reduce((s, x) => s + x.size, 0);
+    if (quota.remainingBytes != null && incoming > quota.remainingBytes) {
+      toast.error(
+        id
+          ? `Penyimpanan tidak cukup. Sisa ${fmtBytes(quota.remainingBytes)}, file ${fmtBytes(incoming)}. Hapus file atau upgrade paket.`
+          : `Not enough storage left (${fmtBytes(quota.remainingBytes)}).`,
+      );
+      return;
+    }
+    upload.mutate({ files: f, folder: targetFolder });
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-gold">Qalling CRM</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="hidden text-xs uppercase tracking-widest text-gold sm:block">Qalling CRM</p>
           <h1 className="text-2xl font-semibold text-navy dark:text-foreground">
             {id ? "Media" : "Media Library"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {items.length} file · {fmtSize(total)} ·{" "}
-            {id ? "dipakai saat membuat postingan" : "reused when composing posts"}
+            {items.length} file · {fmtSize(total)}
+            <span className="hidden sm:inline">
+              {" "}
+              · {id ? "dipakai saat membuat postingan" : "reused when composing posts"}
+            </span>
           </p>
         </div>
+        <label
+          className={cn(
+            "flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm md:hidden",
+            upload.isPending && "opacity-60",
+          )}
+          aria-label={id ? "Unggah media" : "Upload media"}
+        >
+          {upload.isPending ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Upload className="h-5 w-5" />
+          )}
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            className="hidden"
+            disabled={upload.isPending}
+            onChange={(e) => {
+              const f = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (f.length) onFiles(f);
+            }}
+          />
+        </label>
       </div>
 
       {quota.capBytes != null && (
@@ -376,22 +435,10 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
         </div>
       )}
 
-      <DropZone
-        onFiles={(f) => {
-          const incoming = f.reduce((s, x) => s + x.size, 0);
-          if (quota.remainingBytes != null && incoming > quota.remainingBytes) {
-            toast.error(
-              id
-                ? `Penyimpanan tidak cukup. Sisa ${fmtBytes(quota.remainingBytes)}, file ${fmtBytes(incoming)}. Hapus file atau upgrade paket.`
-                : `Not enough storage left (${fmtBytes(quota.remainingBytes)}).`,
-            );
-            return;
-          }
-          upload.mutate({ files: f, folder: targetFolder });
-        }}
-        busy={upload.isPending}
-      />
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="hidden md:block">
+        <DropZone onFiles={onFiles} busy={upload.isPending} />
+      </div>
+      <div className="-mx-3 flex items-center gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         {[
           ["__all", id ? "Semua folder" : "All folders"],
           ["__none", id ? "Tanpa folder" : "Unfiled"],
@@ -401,7 +448,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             key={k}
             onClick={() => setFolder(k)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm",
+              "flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm",
               folder === k
                 ? "border-primary bg-primary text-primary-foreground"
                 : "bg-card hover:bg-secondary",
@@ -416,7 +463,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             </span>
           </button>
         ))}
-        <Button size="sm" variant="ghost" onClick={newFolder}>
+        <Button size="sm" variant="ghost" className="shrink-0" onClick={newFolder}>
           <FolderPlus className="h-4 w-4" />
           {id ? "Folder baru" : "New folder"}
         </Button>
@@ -430,14 +477,14 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex rounded-md border border-border p-0.5">
+        <div className="flex rounded-full bg-secondary p-1">
           {(["all", "image", "video"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setKind(k)}
               className={cn(
-                "rounded px-3 py-1 text-sm",
-                kind === k && "bg-navy text-primary-foreground",
+                "rounded-full px-4 py-1.5 text-sm text-muted-foreground",
+                kind === k && "bg-background font-medium text-foreground shadow-sm",
               )}
             >
               {k === "all"
@@ -452,7 +499,18 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={selectMode ? "default" : "outline"}
+          className="rounded-full sm:hidden"
+          onClick={() => {
+            setSelectMode((v) => !v);
+            setPicked([]);
+          }}
+        >
+          {selectMode ? (id ? "Selesai" : "Done") : id ? "Pilih" : "Select"}
+        </Button>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
             aria-label={id ? "Urutkan" : "Sort"}
             value={sort}
@@ -492,7 +550,12 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
         </Card>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div
+            className={cn(
+              "flex-wrap items-center gap-3 text-sm",
+              selectMode || picked.length ? "flex" : "hidden sm:flex",
+            )}
+          >
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -536,7 +599,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
               </>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-3 lg:grid-cols-5">
             {p.items.map((m) => (
               <div
                 key={m.id}
@@ -550,11 +613,14 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
                   aria-label={m.name}
                   checked={picked.includes(m.id)}
                   onChange={() => togglePick(m.id)}
-                  className="absolute right-2 top-2 z-10 size-5 accent-primary"
+                  className={cn(
+                    "absolute right-2 top-2 z-10 size-5 accent-primary",
+                    !selectMode && !picked.length && "max-sm:hidden",
+                  )}
                 />
                 <button
-                  onClick={() => (picked.length ? togglePick(m.id) : setPreview(m))}
-                  className="group w-full overflow-hidden rounded-xl border border-border bg-card text-left"
+                  onClick={() => (picked.length || selectMode ? togglePick(m.id) : setPreview(m))}
+                  className="group w-full overflow-hidden rounded-lg border border-border bg-card text-left sm:rounded-xl"
                 >
                   <div className="relative">
                     <Thumb
@@ -567,7 +633,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
                       </Badge>
                     )}
                   </div>
-                  <div className="p-2">
+                  <div className="hidden p-2 sm:block">
                     <p className="truncate text-xs font-medium">{m.name}</p>
                     <p className="text-[11px] text-muted-foreground">{fmtSize(m.size_bytes)}</p>
                   </div>
@@ -671,7 +737,7 @@ export function MediaPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="max-sm:left-0 max-sm:top-0 max-sm:flex max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:rounded-none max-sm:border-0 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{id ? "Pilih dari Media" : "Choose from Media"}</DialogTitle>
         </DialogHeader>
@@ -701,7 +767,7 @@ export function MediaPickerDialog({
             {id ? "Belum ada media." : "No media yet."}
           </p>
         ) : (
-          <div className="grid max-h-[45vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">
+          <div className="grid min-h-0 grid-cols-3 content-start gap-1.5 overflow-y-auto max-sm:flex-1 sm:max-h-[45vh] sm:grid-cols-5 sm:gap-2">
             {items
               .filter((m) => !imagesOnly || m.mime_type?.startsWith("image/"))
               .map((m) => {
@@ -711,11 +777,11 @@ export function MediaPickerDialog({
                     key={m.id}
                     onClick={() => toggle(m.file_path)}
                     className={cn(
-                      "relative overflow-hidden rounded-lg border-2",
+                      "relative block aspect-square overflow-hidden rounded-lg border-2",
                       idx >= 0 ? "border-gold" : "border-transparent",
                     )}
                   >
-                    <Thumb m={m} className="aspect-square w-full" />
+                    <Thumb m={m} className="h-full w-full" />
                     {idx >= 0 && (
                       <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-semibold text-navy">
                         {idx + 1}

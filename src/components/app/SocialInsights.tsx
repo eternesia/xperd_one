@@ -2,7 +2,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowDownRight, ArrowUpRight, ExternalLink, RefreshCw, Star } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronDown,
+  ExternalLink,
+  RefreshCw,
+  Star,
+} from "lucide-react";
 import {
   Bar,
   CartesianGrid,
@@ -179,23 +186,62 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="min-w-0 space-y-5">
+      <div className="flex items-center justify-between gap-3 sm:hidden">
+        <label className="relative flex min-w-0 items-center gap-3">
+          <span className="relative grid size-12 shrink-0 place-items-center rounded-full bg-secondary text-lg font-semibold">
+            {(current?.account_name ?? "?").charAt(0).toUpperCase()}
+            {current && (
+              <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-background">
+                <SocialIcon platform={current.platform} className="size-3.5" />
+              </span>
+            )}
+          </span>
+          <span className="truncate text-xl font-semibold">{current?.account_name ?? "—"}</span>
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          <select
+            aria-label={id ? "Pilih akun" : "Choose account"}
+            className="absolute inset-0 opacity-0"
+            value={accountId ?? ""}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              setFocus(null);
+            }}
+          >
+            {accounts.data.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.account_name} ({a.platform})
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          variant="outline"
+          size="icon"
+          className="size-11 shrink-0 rounded-2xl"
+          aria-label={id ? "Perbarui" : "Refresh"}
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+        >
+          <RefreshCw className={cn("size-4", q.isFetching && "animate-spin")} />
+        </Button>
+      </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+        <div className="max-sm:hidden">
           <p className="text-xs uppercase tracking-widest text-gold">Insight</p>
           <h1 className="text-2xl font-semibold">
             {id ? "Insight Media Sosial" : "Social Insights"}
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border bg-background p-1">
+          <div className="inline-flex rounded-full bg-secondary p-1">
             {([7, 30, 90] as const).map((d) => (
               <button
                 key={d}
                 onClick={() => setDays(d)}
                 className={cn(
-                  "rounded-md px-3 py-1 text-sm",
+                  "rounded-full px-4 py-1.5 text-sm",
                   days === d
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-background font-medium text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -206,6 +252,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
           <Button
             variant="outline"
             size="icon"
+            className="max-sm:hidden"
             aria-label={id ? "Perbarui" : "Refresh"}
             onClick={() => q.refetch()}
             disabled={q.isFetching}
@@ -215,7 +262,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
         </div>
       </div>
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 max-sm:hidden">
         {accounts.data.map((a) => (
           <button
             key={a.id}
@@ -320,13 +367,13 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 overflow-hidden rounded-2xl border bg-card sm:gap-3 sm:overflow-visible sm:rounded-none sm:border-0 sm:bg-transparent lg:grid-cols-4">
             {primary.map((m) => (
               <button
                 key={m.key}
                 onClick={() => setFocus(m.key)}
                 className={cn(
-                  "rounded-xl border bg-card p-4 text-left transition-shadow hover:shadow-md",
+                  "border-b p-4 text-left transition-shadow odd:border-r sm:rounded-xl sm:border sm:bg-card sm:odd:border-r hover:sm:shadow-md",
                   focusKey === m.key && "ring-2 ring-primary",
                 )}
               >
@@ -335,7 +382,7 @@ export function SocialInsightsView({ workspaceId }: { workspaceId: string }) {
                 <Delta cur={m.total} prev={m.prev} />
               </button>
             ))}
-            <div className="rounded-xl border bg-card p-4">
+            <div className="border-b p-4 sm:rounded-xl sm:border sm:bg-card">
               <p className="text-xs text-muted-foreground">Engagement rate</p>
               <p className="mt-1 text-2xl font-semibold">
                 {er === null ? "–" : `${er.toFixed(2).replace(".", ",")}%`}

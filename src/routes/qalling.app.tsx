@@ -559,10 +559,10 @@ function QallingShell() {
         </main>
       </div>
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_24px_rgba(0,0,0,0.08)] backdrop-blur-xl md:hidden"
         aria-label={id ? "Navigasi bawah" : "Bottom navigation"}
       >
-        <div className="grid h-16 grid-cols-5 items-center">
+        <div className="grid h-[68px] grid-cols-5 items-center px-1">
           {[
             { to: "/qalling/app", icon: LayoutDashboard, label: id ? "Beranda" : "Home" },
             {

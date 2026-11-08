@@ -186,21 +186,23 @@ export function QallingHome() {
   const isTop = q?.tier === "qalling_agency";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">Qalling</p>
+          <p className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-gold sm:block">
+            Qalling
+          </p>
           <h1 className="text-2xl font-bold text-navy dark:text-foreground">
             {pick("Hello", "Halo")}, {activeWorkspace?.name}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="hidden text-sm text-muted-foreground sm:block">
             {pick(
               "Your content and social performance at a glance.",
               "Ringkasan konten dan performa akun sosial Anda.",
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="hidden flex-wrap gap-2 md:flex">
           {canViewSubmodule("crm", "post-scheduler") && (
             <Button asChild variant="gold">
               <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "post-scheduler" }}>
@@ -221,7 +223,7 @@ export function QallingHome() {
       </div>
 
       <div className="space-y-4">
-        <section className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
+        <section className="rounded-2xl border bg-card p-4 shadow-sm sm:rounded-xl sm:p-5 lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-muted-foreground">
@@ -245,7 +247,7 @@ export function QallingHome() {
               </Link>
             </Button>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5 sm:grid-cols-4 sm:gap-3">
             <Kpi
               icon={Share2}
               label={pick("Connected accounts", "Akun terhubung")}
@@ -270,7 +272,7 @@ export function QallingHome() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <select
           aria-label={pick("Filter social account", "Filter akun sosial")}
-          className="h-10 max-w-full rounded-md border bg-background px-3 text-sm"
+          className="h-10 w-full rounded-full border bg-background px-4 text-sm sm:w-auto sm:rounded-md"
           value={account}
           onChange={(e) => setAccount(e.target.value)}
         >
@@ -281,21 +283,25 @@ export function QallingHome() {
             </option>
           ))}
         </select>
-        <div className="flex gap-1">
+        <div className="inline-flex rounded-full bg-secondary p-1">
           {[7, 14, 30].map((n) => (
-            <Button
+            <button
               key={n}
-              size="sm"
-              variant={period === n ? "gold" : "outline"}
+              type="button"
               onClick={() => setPeriod(n)}
+              className={
+                period === n
+                  ? "rounded-full bg-background px-4 py-1.5 text-sm font-medium shadow-sm"
+                  : "rounded-full px-4 py-1.5 text-sm text-muted-foreground"
+              }
             >
               {n} {pick("days", "hari")}
-            </Button>
+            </button>
           ))}
         </div>
       </div>
       {hasCrm && (
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           {[
             ["leads", pick("Leads", "Prospek"), crm?.leads],
             [
@@ -311,7 +317,7 @@ export function QallingHome() {
               key={`${String(key)}-${i}`}
               to="/qalling/app/$submoduleId"
               params={{ submoduleId: String(key) }}
-              className="rounded-lg border bg-card p-4"
+              className="rounded-2xl border bg-card p-4 active:bg-muted/50 sm:rounded-lg"
             >
               <p className="text-sm text-muted-foreground">{label}</p>
               <p
@@ -326,11 +332,11 @@ export function QallingHome() {
         </div>
       )}
       <div className="grid gap-4 lg:grid-cols-3">
-        <section className="rounded-xl border bg-card p-5 shadow-sm lg:col-span-2">
+        <section className="rounded-2xl border bg-card p-4 shadow-sm sm:rounded-xl sm:p-5 lg:col-span-2">
           <h2 className="font-semibold">
             {pick("Publishing activity", "Aktivitas publikasi")} · {period} {pick("days", "hari")}
           </h2>
-          <div className="mt-4 h-64">
+          <div className="mt-4 h-48 sm:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={stats.days} margin={{ left: -20, right: 8 }}>
                 <defs>
@@ -364,7 +370,7 @@ export function QallingHome() {
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <section className="rounded-2xl border bg-card p-4 shadow-sm sm:rounded-xl sm:p-5">
           <h2 className="font-semibold">{pick("Accounts by platform", "Akun per platform")}</h2>
           {stats.platform.length ? (
             <div className="mt-4 h-64">
@@ -415,7 +421,7 @@ export function QallingHome() {
         </section>
       </div>
 
-      <section className="rounded-xl border bg-card p-5 shadow-sm">
+      <section className="rounded-2xl border bg-card p-4 shadow-sm sm:rounded-xl sm:p-5">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">{pick("Upcoming posts", "Jadwal tayang terdekat")}</h2>
           {canViewSubmodule("crm", "post-scheduler") && (
