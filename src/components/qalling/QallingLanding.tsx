@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { listPublicTestimonials } from "@/lib/support.functions";
 import { Bot, Clock, Gift, Quote } from "lucide-react";
 import {
   SiClaude,
@@ -149,9 +151,24 @@ const TESTIMONIALS = [
 
 export function TestimonialGrid() {
   const { pick, lang } = useI18n();
+  const q = useQuery({
+    queryKey: ["public-testimonials"],
+    queryFn: () => listPublicTestimonials(),
+    staleTime: 300_000,
+  });
+  const list = q.data?.length
+    ? q.data.map((t) => ({
+        name: t.name,
+        id: t.quote_id,
+        en: t.quote_en || t.quote_id,
+        role: { id: t.role_id ?? "", en: t.role_en || t.role_id || "" },
+      }))
+    : q.isLoading
+      ? []
+      : TESTIMONIALS;
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {TESTIMONIALS.map((t) => (
+      {list.map((t) => (
         <article key={t.name} className="rounded-lg border bg-card p-5">
           <Quote className="h-5 w-5 text-gold" />
           <p className="mt-3 text-sm text-foreground">{pick(t.en, t.id)}</p>

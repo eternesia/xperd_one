@@ -27,10 +27,12 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
       "Sign up or sign in on the login page with Google or a code sent to your email (no password).",
       "Pick or create a workspace. A workspace usually represents one business or one agency client.",
       "Connect your social accounts (see Connecting accounts).",
-      "Create your first post from Content → Post Scheduler.",
+      "Create your first post from Content → Posts.",
     ],
     tips: [
       "Start with one account and one test post to get a feel for the flow before scheduling a lot of content.",
+      "The bell icon at the top right shows update and promo announcements from the Qalling team; a red dot means something is unread.",
+      "Need help? Open Support at the bottom of the sidebar to send a ticket and follow the Qalling team's replies.",
     ],
   },
   akun: {

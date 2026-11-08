@@ -58,6 +58,7 @@ import { useApp } from "@/lib/app-context";
 import { accountsFull } from "@/lib/qalling-quota";
 import { CRM_SOCIAL_PLATFORMS } from "@/lib/crm";
 import { cn } from "@/lib/utils";
+import { TablePager } from "@/components/app/admin-table";
 import { getMetaSettings, publishPostNow, startMetaConnect } from "@/lib/meta-social.functions";
 import {
   disconnectTebarAccount,
@@ -230,6 +231,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [accPage, setAccPage] = useState(0);
   const sync = useTebarSync(workspaceId);
   const { data: nativeMeta } = useMetaSettings(workspaceId);
   const nativeFn = useServerFn(startMetaConnect);
@@ -324,6 +326,11 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
     );
   })();
 
+  const PAGE = 10;
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE));
+  const pg = Math.min(accPage, pages - 1);
+  const pageRows = shown.slice(pg * PAGE, pg * PAGE + PAGE);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -408,7 +415,10 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
               {accounts.length > 6 && (
                 <Input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setAccPage(0);
+                  }}
                   placeholder={id ? "Cari akun atau platform…" : "Search accounts or platforms…"}
                   className="h-8 max-w-64"
                   aria-label={id ? "Cari akun" : "Search accounts"}
@@ -416,7 +426,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
               )}
             </div>
             <ul className="divide-y">
-              {shown.map((a) => (
+              {pageRows.map((a) => (
                 <li key={a.id} className="flex items-center gap-3 px-3 py-2.5">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <SocialIcon platform={a.platform} className="h-4 w-4" />
@@ -466,6 +476,15 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                 </li>
               )}
             </ul>
+            {shown.length > PAGE && (
+              <TablePager
+                page={pg}
+                pages={pages}
+                total={shown.length}
+                pageSize={PAGE}
+                setPage={setAccPage}
+              />
+            )}
           </CardContent>
         </Card>
       )}

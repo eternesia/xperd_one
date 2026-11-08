@@ -217,13 +217,6 @@ export function QallingHome() {
               </Link>
             </Button>
           )}
-          {hasCrm && (
-            <Button asChild variant="outline">
-              <Link to="/qalling/app/$submoduleId" params={{ submoduleId: "dashboard" }}>
-                {pick("Sales dashboard", "Dasbor penjualan")}
-              </Link>
-            </Button>
-          )}
         </div>
       </div>
 

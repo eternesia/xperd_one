@@ -1,3 +1,4 @@
+import { AnnouncementBell } from "@/components/qalling/AnnouncementBell";
 import { QallingTrialAlert } from "@/components/qalling/QallingTrialAlert";
 import { useEffect, useState } from "react";
 import { clearStoredReferral, getStoredReferral } from "@/lib/referral-capture";
@@ -23,6 +24,7 @@ import {
   PanelLeftOpen,
   Share2,
   Sparkles,
+  LifeBuoy,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -288,6 +290,7 @@ function QallingShell() {
       label: id ? "Tagihan & Saldo" : "Billing & Balance",
     },
     { to: "/qalling/app/referral", icon: Gift, label: "Referral" },
+    { to: "/qalling/app/support", icon: LifeBuoy, label: id ? "Bantuan & Support" : "Support" },
     { to: "/qalling/docs", icon: BookOpen, label: id ? "Dokumentasi" : "Documentation" },
   ];
   const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
@@ -380,6 +383,7 @@ function QallingShell() {
                 </span>
               </Link>
             )}
+            <AnnouncementBell />
             <QallingPreferences />
             <span className="hidden max-w-[200px] truncate text-sm text-muted-foreground sm:block">
               {activeWorkspace?.name}

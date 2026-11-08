@@ -44,6 +44,8 @@ export const QALLING_DOCS: DocSection[] = [
     ],
     tips: [
       "Mulai dari satu akun dan satu postingan uji agar alurnya terasa dulu sebelum menjadwalkan banyak konten.",
+      "Ikon lonceng di kanan atas menampilkan pengumuman update dan promo dari tim Qalling; titik merah berarti ada yang belum dibaca.",
+      "Butuh bantuan? Buka Bantuan & Support di bagian bawah sidebar untuk mengirim tiket dan memantau balasan tim Qalling.",
     ],
   },
   {
