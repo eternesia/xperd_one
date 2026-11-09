@@ -247,7 +247,7 @@ function AssetRegisterView({ workspaceId }: { workspaceId: string }) {
         <StatCard label={t("Book value", "Nilai buku")} value={money(totalCost - totalAccum)} highlight />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="q-filters flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -591,8 +591,8 @@ function DepreciationView({ workspaceId }: { workspaceId: string }) {
         kicker={t("Fixed Assets", "Aset Tetap")}
         title={t("Depreciation", "Penyusutan")}
         action={
-          <div className="flex items-center gap-2">
-            <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-40" />
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="min-w-0 flex-1 sm:w-40 sm:flex-none" />
             <Button variant="navy" onClick={() => run.mutate()} disabled={run.isPending}>
               {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play />}{" "}
               {t("Run depreciation", "Jalankan penyusutan")}

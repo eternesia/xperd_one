@@ -507,6 +507,13 @@
   }
 }
 
+/* Di HP, anak grid boleh menyempit (cegah kartu melebar keluar layar karena teks panjang). */
+@media (max-width: 767px) {
+  .q-cards .grid > * {
+    min-width: 0;
+  }
+}
+
 /* Bar filter ERP di HP: grid dua kolom; kolom cari/pilihan penuh lebar, tanggal berdampingan. */
 @media (max-width: 767px) {
   .q-filters {

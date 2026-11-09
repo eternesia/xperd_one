@@ -273,7 +273,7 @@ function TaxLedgerView({ entity, workspaceId }: { entity: TaxEntity; workspaceId
         <StatCard label={lang === "id" ? TAX_TYPE_LABEL[type].id_ : TAX_TYPE_LABEL[type].en} value={money(totalTax)} highlight />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="q-filters flex flex-wrap items-center gap-3">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input

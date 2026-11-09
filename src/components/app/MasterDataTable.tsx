@@ -342,18 +342,18 @@ export function MasterDataTable({ entity, workspaceId }: { entity: MDEntity; wor
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-[0.28em] text-gold">MASTER DATA</p>
-          <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
+          <h1 className="text-xl font-semibold text-navy sm:text-2xl dark:text-primary-foreground">
             {lang === "id" ? entity.id_ : entity.en}
           </h1>
           <p className="text-sm text-muted-foreground">
             {total} {t("records", "data")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="w-56 pl-9"
+              className="w-full pl-9 sm:w-56"
               placeholder={t("Search code or name…", "Cari kode atau nama…")}
               value={search}
               onChange={(e) => {
