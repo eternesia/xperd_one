@@ -99,7 +99,7 @@ function ReferralPage() {
           </Button>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 max-sm:[&_.pt-5]:px-3 max-sm:[&_.pt-5]:pt-3 max-sm:[&_.text-2xl]:text-lg">
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">{pick("Sign-ups", "Pendaftar")}</p>
