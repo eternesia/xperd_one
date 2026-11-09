@@ -435,6 +435,7 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
                       src={a.avatar_url}
                       name={a.account_name}
                       className="size-11 text-base"
+                      fallback={<SocialIcon platform={a.platform} className="size-6" />}
                     />
                     <span className="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full border-2 border-background bg-background">
                       <SocialIcon platform={a.platform} className="size-3" />
@@ -692,10 +693,12 @@ export function AccountAvatar({
   src,
   name,
   className,
+  fallback,
 }: {
   src?: string | null;
   name: string;
   className?: string;
+  fallback?: React.ReactNode;
 }) {
   const [bad, setBad] = useState(false);
   return (
@@ -715,7 +718,7 @@ export function AccountAvatar({
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
-        (name || "?").charAt(0).toUpperCase()
+        (fallback ?? (name || "?").charAt(0).toUpperCase())
       )}
     </span>
   );
