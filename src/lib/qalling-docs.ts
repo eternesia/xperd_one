@@ -131,7 +131,7 @@ export const QALLING_DOCS: DocSection[] = [
       "Buka Percakapan → Inbox untuk membaca dan membalas DM; tandai percakapan sebagai terbuka, ditunda, atau selesai.",
       "Buka Percakapan → Komentar untuk membalas atau menyukai komentar pada postingan Anda.",
       "Komentar dikelompokkan per postingan, lengkap dengan gambar dan caption postingannya. Di Inbox, pilih Platform dan Akun untuk melihat DM akun tertentu; lewat Tebar, DM tersedia untuk Instagram.",
-      "Otomasi yang dibuat di Tebar ikut tampil di Otomasi & Pesan → Otomasi beserta jumlah eksekusi dan klik link. Gunakan pencarian dan filter akun atau status bila aturannya banyak.",
+      "Otomasi yang dibuat di Tebar ikut tampil di Percakapan → Otomasi beserta jumlah eksekusi dan klik link. Gunakan pencarian dan filter akun atau status bila aturannya banyak.",
       "Di Otomasi, buat aturan: bila komentar mengandung kata kunci tertentu, kirim balasan komentar dan/atau DM otomatis.",
       "Saat membuat otomasi, pilih platform dulu: Instagram (komentar → DM, balas komentar, balas DM), atau Threads, Facebook Page dan TikTok yang hanya mendukung balasan komentar otomatis (maks. 500 karakter, TikTok 150; maks. 30 balasan per jam per akun).",
       "Gunakan Template untuk balasan yang sering dipakai.",

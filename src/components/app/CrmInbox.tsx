@@ -180,7 +180,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           <RefreshCw className="size-4" />
         </Button>
       </header>
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3 md:rounded-2xl md:border md:bg-card md:p-4 md:shadow-sm">
         <label className="block min-w-0 text-sm text-muted-foreground sm:w-48">
           {id ? "Platform" : "Platform"}
           <select
@@ -222,9 +222,14 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
           ? "DM yang tersedia lewat Tebar: Instagram. DM Facebook (Messenger) masuk lewat koneksi Meta native."
           : "DMs available through Tebar: Instagram. Facebook (Messenger) DMs arrive through the native Meta connection."}
       </p>
-      <div className="grid min-w-0 border-t md:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className={cn("min-w-0 md:block md:border-r", selected ? "hidden" : "block")}>
-          <div className="space-y-3 py-4 md:pr-4">
+      <div className="grid min-w-0 border-t md:grid-cols-[320px_minmax(0,1fr)] md:overflow-hidden md:rounded-2xl md:border md:bg-card md:shadow-md">
+        <aside
+          className={cn(
+            "min-w-0 md:block md:border-r md:bg-muted/30",
+            selected ? "hidden" : "block",
+          )}
+        >
+          <div className="space-y-3 py-4 md:p-4">
             <Input
               aria-label={id ? "Cari percakapan" : "Search conversations"}
               placeholder={id ? "Cari percakapan…" : "Search conversations…"}
@@ -259,7 +264,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
               <p className="text-sm">{id ? "Belum ada percakapan." : "No conversations."}</p>
             </div>
           ) : (
-            <div className="md:max-h-[520px] md:overflow-y-auto">
+            <div className="md:max-h-[560px] md:overflow-y-auto">
               {rows.map((c) => (
                 <Button
                   key={c.id}
@@ -297,7 +302,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
             </div>
           )}
         </aside>
-        <section className={cn("min-w-0 md:block md:pl-6", selected ? "block" : "hidden")}>
+        <section className={cn("min-w-0 md:block md:p-6", selected ? "block" : "hidden")}>
           {!active ? (
             <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
               {id ? "Pilih percakapan" : "Select a conversation"}

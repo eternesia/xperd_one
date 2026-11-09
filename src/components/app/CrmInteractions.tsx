@@ -98,22 +98,27 @@ export function CrmCommentsView({ workspaceId }: { workspaceId: string }) {
           <RefreshCw className="size-4" />
         </Button>
       </header>
-      <TableSearch
-        value={pages.query}
-        onChange={pages.setQuery}
-        placeholder="Cari postingan atau komentar…"
-      />
+      <div className="md:rounded-2xl md:border md:bg-card md:p-4 md:shadow-sm">
+        <TableSearch
+          value={pages.query}
+          onChange={pages.setQuery}
+          placeholder="Cari postingan atau komentar…"
+        />
+      </div>
       {query.error && <p className="text-destructive">Komentar tidak dapat dimuat.</p>}
       {query.isLoading ? (
         <p>Memuat komentar…</p>
       ) : pages.total === 0 ? (
-        <div className="border-y py-14 text-center text-muted-foreground">
+        <div className="rounded-2xl border bg-card py-14 text-center text-muted-foreground shadow-sm">
           <MessageSquare className="mx-auto mb-3 size-7" />
           Belum ada komentar masuk dari akun Meta atau Tebar.
         </div>
       ) : (
         [...groups].map(([key, comments]) => (
-          <section key={key} className="rounded-2xl border bg-card p-3 shadow-sm sm:p-4">
+          <section
+            key={key}
+            className="rounded-2xl border bg-card p-3 shadow-sm sm:p-5 md:shadow-md"
+          >
             {(() => {
               const c0 = comments[0];
               return (
