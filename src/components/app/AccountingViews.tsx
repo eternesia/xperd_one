@@ -305,7 +305,7 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
         />
       </div>
 
-      <div className="flex flex-wrap items-end gap-2 no-print">
+      <div className="q-filters flex flex-wrap items-end gap-2 no-print">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -463,10 +463,10 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
 
           <div className="space-y-2">
             {form.lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-12 items-end gap-2">
-                <div className="col-span-4">
-                  {i === 0 && (
-                    <Label className="text-xs text-muted-foreground">{t("Account", "Akun")}</Label>
+              <div key={i} className="grid grid-cols-2 items-end gap-2 rounded-xl border border-border p-2.5 sm:grid-cols-12 sm:rounded-none sm:border-0 sm:p-0">
+                <div className="col-span-2 sm:col-span-4">
+                  {(
+                    <Label className={cn("text-xs text-muted-foreground", i > 0 && "sm:hidden")}>{t("Account", "Akun")}</Label>
                   )}
                   <Select
                     value={l.account_code}
@@ -487,9 +487,9 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="col-span-3">
-                  {i === 0 && (
-                    <Label className="text-xs text-muted-foreground">
+                <div className="col-span-2 sm:col-span-3">
+                  {(
+                    <Label className={cn("text-xs text-muted-foreground", i > 0 && "sm:hidden")}>
                       {t("Description", "Keterangan")}
                     </Label>
                   )}
@@ -499,9 +499,9 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                     onChange={(e) => setLine(i, { description: e.target.value })}
                   />
                 </div>
-                <div className="col-span-2">
-                  {i === 0 && (
-                    <Label className="text-xs text-muted-foreground">{t("Debit", "Debit")}</Label>
+                <div className="col-span-1 sm:col-span-2">
+                  {(
+                    <Label className={cn("text-xs text-muted-foreground", i > 0 && "sm:hidden")}>{t("Debit", "Debit")}</Label>
                   )}
                   <Input
                     type="number"
@@ -510,9 +510,9 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                     onChange={(e) => setLine(i, { debit: Number(e.target.value), credit: 0 })}
                   />
                 </div>
-                <div className="col-span-2">
-                  {i === 0 && (
-                    <Label className="text-xs text-muted-foreground">{t("Credit", "Kredit")}</Label>
+                <div className="col-span-1 sm:col-span-2">
+                  {(
+                    <Label className={cn("text-xs text-muted-foreground", i > 0 && "sm:hidden")}>{t("Credit", "Kredit")}</Label>
                   )}
                   <Input
                     type="number"
@@ -521,7 +521,7 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
                     onChange={(e) => setLine(i, { credit: Number(e.target.value), debit: 0 })}
                   />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2 flex justify-end sm:col-span-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -545,7 +545,7 @@ function JournalsView({ workspaceId }: { workspaceId: string }) {
             </Button>
           </div>
 
-          <div className="flex justify-end gap-6 rounded-xl bg-muted/50 px-4 py-3 text-sm">
+          <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 rounded-xl bg-muted/50 px-4 py-3 text-sm">
             <span>
               {t("Debit", "Debit")}: <strong>{formatMoney(formDebit, lang)}</strong>
             </span>
@@ -721,7 +721,7 @@ function LedgerView({ workspaceId }: { workspaceId: string }) {
         }
       />
 
-      <div className="flex flex-wrap items-end gap-2 no-print">
+      <div className="q-filters flex flex-wrap items-end gap-2 no-print">
         <div>
           <Label className="text-xs text-muted-foreground">{t("Account", "Akun")}</Label>
           <Select value={activeAccount} onValueChange={setAccount}>
@@ -1262,7 +1262,7 @@ function BalanceSheetView({ workspaceId }: { workspaceId: string }) {
         title={t("Balance Sheet", "Neraca")}
         action={<StatementActions build={buildStatement} />}
       />
-      <div className="flex flex-wrap items-end gap-2 no-print">
+      <div className="q-filters flex flex-wrap items-end gap-2 no-print">
         <div>
           <Label className="text-xs text-muted-foreground">{t("As of", "Per tanggal")}</Label>
           <Input
@@ -1686,7 +1686,7 @@ function VatClosingPanel({ workspaceId }: { workspaceId: string }) {
           "Mengkompensasi PPN Keluaran dengan PPN Masukan di akhir bulan. Selisih masuk ke Hutang PPN (kurang bayar) atau PPN Lebih Bayar (dikompensasi ke bulan berikutnya).",
         )}
       </p>
-      <div className="mt-3 flex flex-wrap items-end gap-3">
+      <div className="q-filters mt-3 flex flex-wrap items-end gap-3">
         <div className="grid gap-1">
           <Label className="text-xs">{t("Period", "Periode")}</Label>
           <Input
@@ -1910,7 +1910,7 @@ function PeriodClosingView({ workspaceId }: { workspaceId: string }) {
             {t(`Period ${periodOfDate(to)} is locked.`, `Periode ${periodOfDate(to)} terkunci.`)}
           </p>
         )}
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="q-filters flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <Label className="text-xs">{t("Month", "Bulan")}</Label>
             <Input
@@ -2159,7 +2159,7 @@ function OpeningBalanceView({ workspaceId }: { workspaceId: string }) {
         )}
       </p>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-3">
+      <div className="q-filters flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-3">
         <div>
           <Label className="text-xs text-muted-foreground">{t("As of date", "Per tanggal")}</Label>
           <Input
