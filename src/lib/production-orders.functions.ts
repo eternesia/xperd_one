@@ -102,6 +102,15 @@ export const getProductionOrderDetail = createServerFn({ method: "POST" })
       execute<R>("SELECT id, lot_no, qc_status FROM mfg_lots WHERE workspace_id = ? LIMIT 1000", [w]),
     ]);
     const cost = costs[0];
+    // Stok tersedia per bahan (semua batch released di gudang asal) + penanda bahan bulk/intermediate dari BoM Level 2.
+    const stockRows = await execute<R>(
+      `SELECT m.id, COALESCE((SELECT SUM(v.qty) FROM inv_movements v JOIN mfg_lots l ON l.id = v.mfg_lot_id
+                WHERE v.workspace_id = m.workspace_id AND l.item_id = m.item_id AND v.warehouse_code = o.warehouse_from AND l.qc_status = 'released'),0) AS avail,
+              (SELECT p.item_class FROM mfg_item_profiles p WHERE p.workspace_id = m.workspace_id AND p.item_id = m.item_id LIMIT 1) AS item_class
+         FROM mfg_order_materials m JOIN mfg_orders o ON o.id = m.order_id WHERE m.workspace_id = ? AND m.order_id = ?`,
+      [w, o],
+    );
+    const stockOf = new Map(stockRows.map((r) => [String(r.id), { avail: num0(r.avail), bulk: r.item_class === "intermediate" }]));
     const [ord] = await execute<R>("SELECT * FROM mfg_orders WHERE workspace_id = ? AND id = ?", [w, o]);
     return {
       order: ord
@@ -117,6 +126,8 @@ export const getProductionOrderDetail = createServerFn({ method: "POST" })
         : null,
       materials: materials.map((m) => ({
         ...m,
+        available_qty: stockOf.get(String(m.id))?.avail ?? 0,
+        is_bulk: stockOf.get(String(m.id))?.bulk ?? false,
         planned_qty: num0(m.planned_qty),
         corrected_qty: num0(m.corrected_qty),
         issued_qty: num0(m.issued_qty),
