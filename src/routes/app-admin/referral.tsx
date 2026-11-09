@@ -71,7 +71,7 @@ function ReferralSettingsPage() {
             Komisi saldo untuk pengundang saat teman melakukan top up pertama yang terverifikasi.
           </p>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Label htmlFor="ref-on">Program aktif</Label>
           <Switch
             id="ref-on"
@@ -182,7 +182,7 @@ function PromoSection() {
   return (
     <div className="space-y-5">
       <h2 className="text-lg font-semibold">Materi Promosi Referral</h2>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Label htmlFor="promo-on">Tampilkan materi ke pengguna</Label>
         <Switch
           id="promo-on"
