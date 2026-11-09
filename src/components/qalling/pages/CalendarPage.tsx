@@ -238,7 +238,7 @@ export function CalendarPage() {
           setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
         }}
       />
-      <div className="hidden">
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
         <div className="grid min-w-[640px] grid-cols-7">
           {(lang === "id" ? DAYS : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (
             <div
@@ -387,7 +387,7 @@ function MobileMonth({
     return first ? `/api/workspace-files?path=${encodeURIComponent(first)}` : p.media_url || null;
   };
   return (
-    <div className="space-y-4 mx-auto max-w-2xl">
+    <div className="space-y-4 md:hidden">
       <div className="rounded-2xl border border-border bg-card p-3">
         <div className="grid grid-cols-7 text-center text-xs text-muted-foreground">
           {(lang === "id" ? DAYS : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (

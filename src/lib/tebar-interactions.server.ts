@@ -131,7 +131,7 @@ export async function syncTebarInteractions(workspaceId: string) {
     } catch (e) {
       console.error("tebar comments sync", (e as Error).message);
     }
-    if (["instagram", "threads"].includes(a.platform)) {
+    if (["instagram", "threads", "facebook", "tiktok"].includes(a.platform)) {
       try {
         await importTebarAutomations(key, workspaceId, a.id, a.external_id);
       } catch (e) {

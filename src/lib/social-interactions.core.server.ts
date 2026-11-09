@@ -133,15 +133,23 @@ export async function manageAutomationCore(data: ManageData) {
   const account = await executeOne<{
     source: string;
     status: string;
+    platform: string;
     external_id: string | null;
   }>(
-    "SELECT source, status, external_id FROM crm_social_accounts WHERE workspace_id = ? AND id = ?",
+    "SELECT source, status, platform, external_id FROM crm_social_accounts WHERE workspace_id = ? AND id = ?",
     [data.workspaceId, data.accountId],
   );
   if (!account || account.status !== "connected" || !["meta", "tebar"].includes(account.source))
     throw new Error("Otomatisasi memerlukan akun Meta atau Tebar yang terhubung.");
 
   const action = data.trigger === "dm" ? "reply" : data.action;
+  if (!data.remove && account.source === "tebar" && account.platform !== "instagram") {
+    if (data.trigger === "dm" || action === "comment_to_dm")
+      throw new Error("Threads, Facebook dan TikTok hanya mendukung balasan komentar otomatis.");
+    const max = account.platform === "tiktok" ? 150 : 500;
+    if (data.reply.length > max)
+      throw new Error(`Balasan maksimal ${max} karakter untuk ${account.platform}.`);
+  }
   let externalId: string | null = null;
   if (account.source === "tebar") {
     const prior = data.id
