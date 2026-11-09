@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 import { ItemSearchAdd } from "@/components/app/ItemSearchAdd";
+import { LineImportButton } from "@/components/app/LineImportButton";
 // Ronde 29 (BS New 8): mata uang dokumen + kurs.
 import { CurrencyFields } from "@/components/app/CurrencyFields";
 import { CashBankPicker, PartyPicker, WarehousePicker } from "@/components/app/Pickers";
@@ -1084,6 +1085,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                     })}
                                       <tr className="border-t border-border">
                       <td className="p-1" colSpan={8}>
+                        <div className="flex flex-wrap items-center gap-2">
                         <ItemSearchAdd
                           className="md:w-full md:max-w-md md:min-w-0"
                           options={itemOptions}
@@ -1103,6 +1105,28 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                           }}
                           onFreeText={(text) => setLines((ls) => [...ls, { ...emptyLine(), description: text }])}
                         />
+                        <LineImportButton
+                          templateName={entity.submoduleId}
+                          knownCodes={new Set(itemByCode.keys())}
+                          onImport={(rows) =>
+                            setLines((ls) => [
+                              ...ls.filter((l) => l.item_code || l.description),
+                              ...rows.map((r) => {
+                                const it = itemByCode.get(r.code);
+                                return {
+                                  ...emptyLine(),
+                                  item_code: r.code,
+                                  description: it?.name ?? "",
+                                  uom_code: it?.uom_code ?? "",
+                                  qty: String(r.qty),
+                                  unit_price: String(r.price ?? (it?.cost_price ?? 0)),
+                                  discount: String(r.discount),
+                                };
+                              }),
+                            ])
+                          }
+                        />
+                        </div>
                       </td>
                     </tr>
                   </tbody>
