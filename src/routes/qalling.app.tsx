@@ -84,6 +84,7 @@ function QallingShell() {
     workspaces,
     activeWorkspace,
     canViewSubmodule,
+    entitlements,
     accessLoading,
     tenant,
     email: userEmail,
@@ -221,8 +222,14 @@ function QallingShell() {
     );
   };
   const id = lang === "id";
-  const link = (to: string, Icon: typeof Users, label: string) => (
-    <Link key={to} to={to as "/qalling/app"} className={item(pathname === to)} title={label}>
+  const link = (to: string, Icon: typeof Users, label: string, search?: Record<string, string>) => (
+    <Link
+      key={to + (search ? "?" : "")}
+      to={to as "/qalling/app"}
+      search={search as never}
+      className={item(pathname === to)}
+      title={label}
+    >
       <Icon className="h-4 w-4 shrink-0" />
       <span className="truncate qs-label">{label}</span>
     </Link>
@@ -282,6 +289,25 @@ function QallingShell() {
           },
         ]
       : []),
+    ...(entitlements.qalling &&
+    entitlements.qalling.tier !== "qalling_agency" &&
+    !entitlements.qalling.features.legacy
+      ? [
+          {
+            to: "/qalling/app/billing",
+            search: { tab: "paket" },
+            icon: Sparkles,
+            label:
+              entitlements.qalling.tier === "qalling_pro"
+                ? id
+                  ? "Buka fitur Agency"
+                  : "Unlock Agency features"
+                : id
+                  ? "Buka fitur Pro & Agency"
+                  : "Unlock Pro & Agency features",
+          },
+        ]
+      : []),
     {
       to: "/qalling/app/profile",
       icon: UserCog,
@@ -296,7 +322,9 @@ function QallingShell() {
     { to: "/qalling/app/support", icon: LifeBuoy, label: id ? "Bantuan & Support" : "Support" },
     { to: "/qalling/docs", icon: BookOpen, label: id ? "Dokumentasi" : "Documentation" },
   ];
-  const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
+  const settingsLinks = settingsItems.map((s) =>
+    link(s.to, s.icon, s.label, (s as { search?: Record<string, string> }).search),
+  );
   const navGroups = [
     {
       key: "chat",
@@ -331,12 +359,13 @@ function QallingShell() {
     to: string,
     Icon: typeof Users | undefined,
     label: string,
-    extra?: { params?: { submoduleId: string } },
+    extra?: { params?: { submoduleId: string }; search?: Record<string, string> },
   ) => (
     <Link
-      key={to + (extra?.params?.submoduleId ?? "")}
+      key={to + (extra?.params?.submoduleId ?? "") + (extra?.search ? "?" : "")}
       to={to as "/qalling/app"}
       params={extra?.params as never}
+      search={extra?.search as never}
       onClick={() => setMobileMenuOpen(false)}
       className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-[15px] active:bg-muted"
     >
@@ -413,7 +442,11 @@ function QallingShell() {
                     <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
                       {id ? "Akun & pengaturan" : "Account & settings"}
                     </p>
-                    {settingsItems.map((x) => sheetRow(x.to, x.icon, x.label))}
+                    {settingsItems.map((x) =>
+                      sheetRow(x.to, x.icon, x.label, {
+                        search: (x as { search?: Record<string, string> }).search,
+                      }),
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 border-t px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -520,7 +553,12 @@ function QallingShell() {
                 {settingsItems.map((s) => (
                   <DropdownMenuItem
                     key={s.to}
-                    onSelect={() => navigate({ to: s.to as "/qalling/app" })}
+                    onSelect={() =>
+                      navigate({
+                        to: s.to as "/qalling/app",
+                        search: (s as { search?: Record<string, string> }).search as never,
+                      })
+                    }
                   >
                     <s.icon className="h-4 w-4" />
                     {s.label}
