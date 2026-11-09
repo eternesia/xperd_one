@@ -318,6 +318,7 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
     summary:
       "Top up your balance, renew your subscription from the balance and download payment receipts in Billing & Balance.",
     steps: [
+      "Want to buy a plan right away? Pick it in the Plans tab; if your balance is short, click Pay (QRIS / card). The plan activates automatically once the payment is confirmed, no separate top-up needed.",
       "Click Top up on the balance at the top to add funds.",
       "Turn on auto-renewal so the subscription is deducted from the balance when due.",
       "Download PDF receipts from the Invoice history tab.",

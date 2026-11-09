@@ -8,6 +8,8 @@ export const requestTopupSchema = z.object({
   idempotencyKey: z.string().uuid(),
   note: z.string().trim().max(1000).default(""),
   returnPath: z.string().min(1).max(200).optional(),
+  /** Bayar paket langsung: setelah top-up ini lunas, paket dibeli otomatis. */
+  purchase: z.object({ kind: z.literal("tier"), itemId: z.string().uuid() }).optional(),
 });
 export const reviewTopupSchema = z
   .object({
