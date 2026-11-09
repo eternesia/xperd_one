@@ -229,7 +229,7 @@ function ProcurementDashboard({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
             {t("Top suppliers", "Pemasok teratas")}
           </p>
@@ -244,7 +244,7 @@ function ProcurementDashboard({ workspaceId }: { workspaceId: string }) {
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
             {t("Recent documents", "Dokumen terbaru")}
           </p>
@@ -457,7 +457,7 @@ function InventoryDashboard({ workspaceId }: { workspaceId: string }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
             {t("Top items by value", "Item bernilai tertinggi")}
           </p>
@@ -472,7 +472,7 @@ function InventoryDashboard({ workspaceId }: { workspaceId: string }) {
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
             {t("Recent movements", "Mutasi terbaru")}
           </p>
@@ -600,7 +600,7 @@ function SalesDashboard({ workspaceId }: { workspaceId: string }) {
         </Panel>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
         <p className="text-sm font-semibold text-navy dark:text-primary-foreground">
           {t("Top customers", "Pelanggan teratas")}
         </p>
@@ -753,7 +753,7 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
 
       {/* #49 (BS New 3): akun beban terbesar + aktivitas jurnal terbaru. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-foreground">
             {t("Largest expense accounts", "Akun beban terbesar")}
           </p>
@@ -782,7 +782,7 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-foreground">
             {t("Recent journal activity", "Aktivitas jurnal terbaru")}
           </p>
@@ -1112,7 +1112,7 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
 
       {/* #49 (BS New 3): saldo kas/bank per rekening + mutasi terbaru. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-foreground">
             {t("Account balances", "Saldo kas & bank")}
           </p>
@@ -1136,7 +1136,7 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <p className="text-sm font-semibold text-navy dark:text-foreground">
             {t("Recent movements", "Mutasi terbaru")}
           </p>
