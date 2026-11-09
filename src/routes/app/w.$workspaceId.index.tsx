@@ -38,7 +38,7 @@ function Launcher() {
       <div className="pointer-events-none absolute -left-24 top-10 h-72 w-72 rounded-full bg-sky-300/30 blur-3xl dark:bg-sky-500/10" />
       <div className="pointer-events-none absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-gold/20 blur-3xl" />
 
-      <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col justify-center px-5 py-8">
+      <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col px-3 py-5 sm:justify-center sm:px-5 sm:py-8">
         <div className="mb-4 space-y-3">
           <TrialBanner workspaceId={workspaceId} />
           {isManager && <GettingStartedChecklist workspaceId={workspaceId} />}
@@ -52,7 +52,7 @@ function Launcher() {
           </h1>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:grid-cols-3 lg:grid-cols-5">
           {APP_MODULES.filter((m) => canViewModule(m.id)).map((m) => {
             const addonLocked = Boolean(m.addon) && !addonsLoading && !hasAddon(m.addon);
             const locked = m.disabled || addonLocked;
@@ -75,10 +75,10 @@ function Launcher() {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-3 text-sm font-semibold text-navy dark:text-foreground">
+                <p className="mt-3 text-sm font-semibold leading-tight text-navy dark:text-foreground">
                   {lang === "id" ? m.id_ : m.en}
                 </p>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                <p className="mt-1 line-clamp-2 hidden text-xs text-muted-foreground sm:block">
                   {lang === "id" ? m.descId : m.descEn}
                 </p>
                 <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-muted-foreground group-hover:text-gold">
@@ -88,7 +88,7 @@ function Launcher() {
               </>
             );
             const base =
-              "group relative overflow-hidden rounded-2xl border border-border bg-card/90 p-4 shadow-sm backdrop-blur transition-all";
+              "group relative overflow-hidden rounded-2xl border border-border bg-card/90 p-3.5 shadow-sm backdrop-blur transition-all sm:p-4";
             if (m.disabled) {
               return (
                 <div key={m.id} className={cn(base, "cursor-not-allowed opacity-50")} aria-disabled>
@@ -130,7 +130,7 @@ function Launcher() {
           })}
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4">
           {LAUNCHER_UTILITIES.filter(() => isManager).map((u) => (
             <Link
               key={u.id}

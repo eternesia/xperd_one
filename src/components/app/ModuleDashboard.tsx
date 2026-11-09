@@ -96,12 +96,14 @@ function Stat({
   icon: typeof FileText;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-start justify-between">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <Icon className="h-4 w-4 text-gold" />
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-3.5 sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground sm:text-xs">{label}</p>
+        <Icon className="h-4 w-4 shrink-0 text-gold" />
       </div>
-      <p className="mt-2 text-2xl font-semibold text-navy dark:text-foreground">{value}</p>
+      <p className="mt-2 break-words text-lg font-semibold leading-tight text-navy sm:text-2xl dark:text-foreground">
+        {value}
+      </p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -109,9 +111,9 @@ function Stat({
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
       <p className="text-sm font-semibold text-navy dark:text-foreground">{title}</p>
-      <div className="mt-4 h-64">{children}</div>
+      <div className="mt-4 h-56 sm:h-64">{children}</div>
     </div>
   );
 }
@@ -178,7 +180,7 @@ function ProcurementDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label={t("Open documents", "Dokumen terbuka")} value={String(stats.openCount)} icon={FileText} />
         <Stat label={t("PO value", "Nilai PO")} value={formatMoney(stats.poValue, lang)} icon={Receipt} />
         <Stat label={t("Goods receipts", "Penerimaan barang")} value={String(stats.grCount)} icon={PackageCheck} />
@@ -297,7 +299,7 @@ function MasterDataDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label={t("Total master records", "Total data master")} value={String(totalRecords)} icon={FileText} />
         <Stat
           label={t("Configured masters", "Master terisi")}
@@ -409,7 +411,7 @@ function InventoryDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label={t("Items in stock", "Item dalam stok")} value={String(stats.itemCount)} icon={FileText} />
         <Stat label={t("Total quantity", "Total kuantitas")} value={String(stats.totalQty)} icon={PackageCheck} />
         <Stat label={t("Inventory value", "Nilai persediaan")} value={formatMoney(stats.value, lang)} icon={Wallet} />
@@ -550,7 +552,7 @@ function SalesDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label={t("Open documents", "Dokumen terbuka")} value={String(stats.openCount)} icon={FileText} />
         <Stat label={t("Sales order value", "Nilai pesanan")} value={formatMoney(stats.soValue, lang)} icon={Receipt} />
         <Stat label={t("Deliveries", "Surat jalan")} value={String(stats.doCount)} icon={PackageCheck} />
@@ -703,7 +705,7 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
         </Badge>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
         <Stat label={t("Revenue", "Pendapatan")} value={formatMoney(revenue, lang)} icon={Receipt} />
         <Stat label={t("Expenses", "Beban")} value={formatMoney(expense, lang)} icon={Wallet} />
         <Stat
@@ -815,11 +817,11 @@ function AccountingDashboard({ workspaceId }: { workspaceId: string }) {
 
 function MiniCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">{label}</p>
       <p
         className={cn(
-          "mt-2 text-xl font-semibold text-navy dark:text-primary-foreground",
+          "mt-2 break-words text-lg font-semibold leading-tight text-navy sm:text-xl dark:text-primary-foreground",
           highlight && "text-gold dark:text-gold",
         )}
       >
@@ -874,7 +876,7 @@ function FixedAssetDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <MiniCard label={t("Active assets", "Aset aktif")} value={String(active.length)} />
         <MiniCard label={t("Acquisition cost", "Harga perolehan")} value={money(cost)} />
         <MiniCard label={t("Net book value", "Nilai buku")} value={money(net)} highlight />
@@ -948,13 +950,13 @@ function TaxDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <MiniCard label={t("Input VAT", "PPN Masukan")} value={money(vatIn)} />
         <MiniCard label={t("Output VAT", "PPN Keluaran")} value={money(vatOut)} />
         <MiniCard label={t("Withholding", "PPh")} value={money(wht)} />
         <MiniCard label={t("Net VAT payable", "PPN kurang bayar")} value={money(vatOut - vatIn)} highlight />
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <MiniCard label={t("Records this period", "Dokumen periode ini")} value={String(currentRecords.length)} />
         <MiniCard label={t("Draft records", "Dokumen draf")} value={String(statuses[0].value)} />
         <MiniCard
@@ -1053,14 +1055,14 @@ function CashBankDashboard({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label={t("Cash & bank balance", "Saldo kas & bank")} value={formatMoney(totalBalance, lang)} icon={Wallet} />
         <Stat label={t("Cash in", "Kas masuk")} value={formatMoney(inflow, lang)} icon={Receipt} hint={String(year)} />
         <Stat label={t("Cash out", "Kas keluar")} value={formatMoney(outflow, lang)} icon={FileText} hint={String(year)} />
         <Stat label={t("Net cash flow", "Arus kas bersih")} value={formatMoney(inflow - outflow, lang)} icon={Wallet} hint={String(year)} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
           label={t("Cash in this month", "Kas masuk bulan ini")}
           value={formatMoney(monthIn, lang)}

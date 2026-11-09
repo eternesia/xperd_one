@@ -460,6 +460,16 @@
     display: block;
     text-align: center;
   }
+  /* Input di dalam kartu baris (editor rincian dokumen): isi sisa lebar di samping label. */
+  .q-cards table td > :is(input, textarea, button[role="combobox"]) {
+    flex: 1 1 auto;
+    width: auto !important;
+    max-width: 62%;
+  }
+  /* Kolom aksi tanpa judul (mis. tombol hapus baris): rata kanan. */
+  .q-cards table td[data-label=""]:last-child:not([colspan]) {
+    justify-content: flex-end;
+  }
   /* Kartu di dalam Card tanpa padding: beri sedikit jarak dari tepi. */
   .q-cards .p-0 > .relative > table,
   .q-cards .p-0 > div > .relative > table {
