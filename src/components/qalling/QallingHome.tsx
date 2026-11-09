@@ -36,6 +36,7 @@ import { getQallingHomeCounts } from "@/lib/qalling-home.functions";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { SocialIcon } from "./SocialIcon";
+import { OnboardingWizard } from "./OnboardingWizard";
 import type { Entitlements } from "@/lib/entitlements";
 
 const money = (v: number) =>
@@ -221,6 +222,15 @@ export function QallingHome() {
           )}
         </div>
       </div>
+
+      {workspaceId && (
+        <OnboardingWizard
+          workspaceId={workspaceId}
+          accountCount={accounts.length}
+          hasPosts={allPosts.length > 0}
+          canPost={canViewSubmodule("crm", "post-scheduler")}
+        />
+      )}
 
       <div className="space-y-4">
         <section className="rounded-2xl border bg-card p-4 shadow-sm sm:rounded-xl sm:p-5 lg:col-span-2">

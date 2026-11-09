@@ -38,7 +38,7 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
   akun: {
     title: "Connecting social accounts",
     summary:
-      "Instagram, Facebook, Threads, TikTok, LinkedIn, YouTube, Pinterest, X, Telegram and Discord accounts can be managed in one place, depending on your plan.",
+      'New users see a "Get started" guide on Home: pick a platform, sign in, then create your first post. It disappears automatically when done. Instagram, Facebook, Threads, TikTok, LinkedIn, YouTube, Pinterest, X, Telegram and Discord accounts can be managed in one place, depending on your plan.',
     steps: [
       "Open Social Accounts and choose Add Account.",
       "Follow the platform's permission flow, then return to Qalling.",

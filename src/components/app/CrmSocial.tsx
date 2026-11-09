@@ -177,7 +177,7 @@ export function useMetaSettings(workspaceId: string) {
   });
 }
 
-const TEBAR_PLATFORMS = [
+export const TEBAR_PLATFORMS = [
   {
     id: "instagram",
     label: "Instagram",
@@ -401,8 +401,12 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
 
       {accounts.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {id ? "Belum ada akun terhubung." : "No accounts connected yet."}
+          <CardContent className="space-y-4 py-12 text-center text-sm text-muted-foreground">
+            <p>{id ? "Belum ada akun terhubung." : "No accounts connected yet."}</p>
+            <Button onClick={() => setPickOpen(true)}>
+              <Plus className="size-4" />{" "}
+              {id ? "Hubungkan akun pertama" : "Connect your first account"}
+            </Button>
           </CardContent>
         </Card>
       ) : (

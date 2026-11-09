@@ -53,7 +53,7 @@ export const QALLING_DOCS: DocSection[] = [
     group: "Mulai",
     title: "Menghubungkan akun media sosial",
     summary:
-      "Akun Instagram, Facebook, Threads, TikTok, LinkedIn, YouTube, Pinterest, X, Telegram, dan Discord dapat dikelola dari satu tempat, sesuai paket Anda.",
+      'Pengguna baru akan melihat panduan "Mulai di sini" di Beranda: pilih platform, login, lalu buat postingan pertama. Panduan hilang otomatis setelah selesai. Akun Instagram, Facebook, Threads, TikTok, LinkedIn, YouTube, Pinterest, X, Telegram, dan Discord dapat dikelola dari satu tempat, sesuai paket Anda.',
     steps: [
       "Buka Dasbor Sosial lalu pilih Hubungkan akun.",
       "Ikuti proses izin dari platform yang bersangkutan, lalu kembali ke Qalling.",
