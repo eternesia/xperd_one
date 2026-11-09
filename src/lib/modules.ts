@@ -331,6 +331,7 @@ const MODULE_DEFS: AppModule[] = [
         icon: Calculator,
       },
       s("reports", "Production Reports", "Laporan Produksi"),
+      s("waste", "Waste & Shrinkage", "Waste & Susut"),
       { ...s("work-centers", "Work Centers & Rates", "Pusat Kerja & Tarif"), icon: Wrench },
       { ...s("settings", "Production Settings", "Pengaturan"), icon: Settings2 },
     ],

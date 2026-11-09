@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AdminField, AdminSelect } from './admin-ui';
 import { PaginationBar, usePagination, searchRows } from './ui-states';
 import { TableSearch } from './ProductionPagedTable';
-import { searchTraceLots, traceProductionLot, getProductionReport, getMaterialUsageReport, getWasteLogs, saveWasteLog, getProductionLetterhead, type WasteValues } from '@/lib/production-trace.functions';
+import { searchTraceLots, traceProductionLot, getProductionReport, getMaterialUsageReport, getWasteLogs, saveWasteLog, getYieldWaste, getProductionLetterhead, type WasteValues } from '@/lib/production-trace.functions';
 import { toCsv } from '@/lib/production-report';
 import { saveProductionPdf } from '@/lib/production-pdf';
 
@@ -31,7 +31,7 @@ function download(name: string, rows: Record<string, unknown>[]) {
 
 export function ProductionTraceView({ workspaceId, section }: { workspaceId: string; section: string }) {
   if (section === 'reports' || section === 'traceability') return <Reports workspaceId={workspaceId} initial={section === 'traceability' ? 'trace' : 'summary'} />;
-  if (section === 'waste') return <Waste workspaceId={workspaceId} />;
+  if (section === 'waste') return <WasteTabs workspaceId={workspaceId} />;
   return <Trace workspaceId={workspaceId} />;
 }
 
@@ -101,6 +101,24 @@ function Reports({ workspaceId, initial = 'summary' }: { workspaceId: string; in
       </>)}
     </>}
   </div>;
+}
+
+const rpf = (n: number) => 'Rp' + Math.round(n).toLocaleString('id-ID');
+function WasteTabs({ workspaceId }: { workspaceId: string }) {
+  const [tab, setTab] = useState<'yield' | 'b3'>('yield');
+  const tabBtn = (k: 'yield' | 'b3', l: string) => <Button size="sm" variant={tab === k ? 'default' : 'outline'} onClick={() => setTab(k)}>{l}</Button>;
+  return <div className="space-y-4"><div className="flex gap-2">{tabBtn('yield', 'Susut Produksi')}{tabBtn('b3', 'Limbah B3')}</div>{tab === 'yield' ? <YieldWaste workspaceId={workspaceId} /> : <Waste workspaceId={workspaceId} />}</div>;
+}
+function YieldWaste({ workspaceId }: { workspaceId: string }) {
+  const get = useServerFn(getYieldWaste);
+  const q = useQuery({ queryKey: ['mfg-yield-waste', workspaceId], queryFn: () => get({ data: { workspaceId } }) });
+  const rows = q.data?.rows ?? []; const [s, setS] = useState(''); const p = usePagination(searchRows(rows, s), 25);
+  const tot = rows.reduce((a, r) => ({ w: a.w + r.waste, ab: a.ab + r.abnormal, c: a.c + r.abnormal_cost }), { w: 0, ab: 0, c: 0 });
+  return <div className="space-y-6"><div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-semibold">Susut Produksi</h1><p className="text-sm text-muted-foreground">Selisih hasil aktual terhadap hasil yang diharapkan (rencana × yield standar), dicatat saat order ditutup. Susut normal (dalam toleransi) tetap masuk HPP barang jadi; di atas toleransi dibebankan sebagai rugi dan dijurnal.</p></div>
+    <Button variant="outline" disabled={!rows.length} onClick={() => download('susut-produksi.csv', rows.map((r) => ({ Tanggal: r.date, Order: r.order_no, Item: r.item, Rencana: r.planned, Diharapkan: r.expected, Aktual: r.actual, Susut: r.waste, Normal: r.normal, Abnormal: r.abnormal, 'Beban (Rp)': r.abnormal_cost, Jurnal: r.journal })))}><Download className="mr-2 size-4" />CSV</Button></div>
+    {q.isPending ? <Loader2 className="m-8 animate-spin text-muted-foreground" /> : q.isError ? <p className="text-muted-foreground">{q.error.message}</p> : <>
+      <div className="grid gap-3 sm:grid-cols-3"><div className={card + ' p-4'}><p className="text-xs text-muted-foreground">Total susut</p><p className="text-xl font-semibold">{num(tot.w)}</p></div><div className={card + ' p-4'}><p className="text-xs text-muted-foreground">Di atas toleransi</p><p className="text-xl font-semibold">{num(tot.ab)}</p></div><div className={card + ' p-4'}><p className="text-xs text-muted-foreground">Beban susut (jurnal)</p><p className="text-xl font-semibold">{rpf(tot.c)}</p></div></div>
+      <div className="space-y-3"><TableSearch value={s} onChange={setS} /><div className={card}><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead className="w-14 text-center">#</TableHead>{['Tanggal', 'Order', 'Item', 'Diharapkan', 'Aktual', 'Susut', 'Normal', 'Di atas toleransi', 'Beban', 'Jurnal'].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{p.items.map((r, i) => <TableRow key={r.id}><TableCell className="text-center text-xs text-muted-foreground">{p.start + i + 1}</TableCell><TableCell>{r.date}</TableCell><TableCell>{r.order_no}</TableCell><TableCell className="max-w-64 truncate">{r.item}</TableCell><TableCell>{num(r.expected)} {r.uom}</TableCell><TableCell>{num(r.actual)} {r.uom}</TableCell><TableCell>{num(r.waste)}</TableCell><TableCell>{num(r.normal)}</TableCell><TableCell>{num(r.abnormal)}</TableCell><TableCell>{rpf(r.abnormal_cost)}</TableCell><TableCell>{r.journal}</TableCell></TableRow>)}{!rows.length && <TableRow><TableCell colSpan={11} className="py-12 text-center text-muted-foreground">Belum ada susut tercatat. Susut muncul saat order ditutup dengan hasil di bawah yang diharapkan.</TableCell></TableRow>}</TableBody></Table></div><PaginationBar p={p as never} /></div></div></>}</div>;
 }
 
 const freshWaste = (): WasteValues => ({ log_date: new Date().toISOString().slice(0, 10), waste_code: '', description: '', qty: 1, uom: 'KG', storage_location: null, handler_name: null, manifest_no: null, status: 'stored' });

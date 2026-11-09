@@ -291,6 +291,43 @@ export const getWasteLogs = createServerFn({ method: "POST" })
     };
   });
 
+/** Riwayat susut produksi (selisih output aktual vs diharapkan) per order tertutup. */
+export const getYieldWaste = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws)
+  .handler(async ({ data, context }) => {
+    await gate(data.workspaceId, context.userId, "waste");
+    const { execute } = await import("@/integrations/mysql/pool");
+    const rows = await execute<any>(
+      `SELECT w.id, w.created_at, o.order_no, i.code AS item_code, i.name AS item_name, i.uom_code, w.planned_qty, w.expected_qty, w.actual_qty,
+              w.waste_qty, w.normal_qty, w.abnormal_qty, w.tolerance_pct, w.total_cost, w.abnormal_cost,
+              (SELECT status FROM mfg_journal_events e WHERE e.workspace_id = w.workspace_id AND e.order_id = w.order_id AND e.event_code = 'J6M') AS j6m,
+              (SELECT status FROM mfg_journal_events e WHERE e.workspace_id = w.workspace_id AND e.order_id = w.order_id AND e.event_code = 'J6C') AS j6c
+         FROM mfg_order_waste w JOIN mfg_orders o ON o.id = w.order_id LEFT JOIN md_items i ON i.id = o.item_id
+        WHERE w.workspace_id = ? ORDER BY w.created_at DESC LIMIT 2000`,
+      [data.workspaceId],
+    );
+    return {
+      rows: rows.map((r) => ({
+        id: String(r.id),
+        date: new Date(r.created_at).toISOString().slice(0, 10),
+        order_no: String(r.order_no),
+        item: `${r.item_code ?? ""} ${r.item_name ?? ""}`.trim(),
+        uom: (r.uom_code as string | null) ?? "",
+        planned: Number(r.planned_qty),
+        expected: Number(r.expected_qty),
+        actual: Number(r.actual_qty),
+        waste: Number(r.waste_qty),
+        normal: Number(r.normal_qty),
+        abnormal: Number(r.abnormal_qty),
+        tolerance: Number(r.tolerance_pct),
+        total_cost: Number(r.total_cost),
+        abnormal_cost: Number(r.abnormal_cost),
+        journal: Number(r.abnormal_cost) === 0 ? "—" : [r.j6m, r.j6c].some((x) => String(x).startsWith("blocked")) ? "Tertahan" : [r.j6m, r.j6c].some((x) => x === "posted") ? "Terposting" : "Belum",
+      })),
+    };
+  });
+
 /**
  * Catatan limbah B3. Pencatatan baru bebas; pada perubahan hanya status/lokasi/pengangkut/manifest/uraian yang boleh berubah —
  * tanggal, kode limbah, jumlah, satuan tetap (koreksi jumlah = arsipkan lalu catat ulang). Arsip = nonaktif, jejak audit utuh.
