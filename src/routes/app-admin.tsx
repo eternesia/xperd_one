@@ -207,7 +207,7 @@ function AdminLayout() {
           </span>
         </header>
         <AdminLoadingBar />
-        <main className="min-w-0 flex-1 overflow-x-hidden p-3 sm:p-6 lg:p-10">
+        <main className="q-cards min-w-0 flex-1 overflow-x-hidden p-3 pb-28 max-md:[&_h1]:text-xl sm:p-6 sm:pb-28 lg:p-10">
           {inSettings && (
             <div className="mb-6 space-y-3">
               <div>
@@ -216,14 +216,15 @@ function AdminLayout() {
                   Semua konfigurasi sistem dalam satu tempat.
                 </p>
               </div>
-              <nav className="flex gap-1 overflow-x-auto border-b">
+              <nav className="-mx-3 flex gap-1 overflow-x-auto px-3 max-md:gap-2 md:mx-0 md:border-b md:px-0">
                 {SETTINGS.map(([to, label]) => (
                   <Link
                     key={to}
                     to={to}
                     className={cn(
-                      "whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground",
-                      pathname.startsWith(to) && "border-primary text-foreground font-medium",
+                      "whitespace-nowrap px-3 py-2 text-sm text-muted-foreground hover:text-foreground max-md:rounded-full max-md:border max-md:bg-card max-md:py-1.5 md:border-b-2 md:border-transparent",
+                      pathname.startsWith(to) &&
+                        "font-medium text-foreground max-md:border-primary max-md:bg-primary max-md:text-primary-foreground md:border-primary",
                     )}
                   >
                     {label}
@@ -234,6 +235,34 @@ function AdminLayout() {
           )}
           <Outlet />
         </main>
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid h-[68px] grid-cols-5 rounded-t-3xl border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] backdrop-blur lg:hidden">
+          {(
+            [
+              ["/app-admin", LayoutDashboard, "Beranda", true],
+              ["/app-admin/tenancy", Building2, "Tenant", false],
+              ["/app-admin/wallet", Wallet, "Top-up", false],
+              ["/app-admin/tickets", LifeBuoy, "Helpdesk", false],
+            ] as const
+          ).map(([to, Icon, label, exact]) => (
+            <Link
+              key={to}
+              to={to}
+              activeOptions={{ exact }}
+              className="flex flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground data-[status=active]:font-medium data-[status=active]:text-primary"
+            >
+              <Icon className="h-5 w-5" />
+              {label}
+            </Link>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 text-[11px] text-muted-foreground"
+          >
+            <Menu className="h-5 w-5" />
+            Lainnya
+          </button>
+        </nav>
       </div>
     </div>
   );
