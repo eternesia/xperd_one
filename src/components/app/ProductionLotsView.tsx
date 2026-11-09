@@ -95,15 +95,28 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
         ))}
       </div>
 
-      {data.lots.some((l) => l.qc_status === "quarantine") && data.canWrite && (
+      {data.kpi.quarantine > 0 && data.canWrite && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
           <span>Ada lot berstatus karantina. Lot dirilis langsung bila itemnya belum punya spesifikasi QC approved; bila sudah punya, lot harus melewati inspeksi di menu QC.</span>
           <Button size="sm" disabled={busy} onClick={async () => {
-            const ids = data.lots.filter((l) => l.qc_status === "quarantine").map((l) => l.id);
             setBusy(true);
-            try { const r = await bulk({ data: { workspaceId, lotIds: ids, status: "released", reason: "Rilis massal dari Stok Bahan" } }); toast.success(`${r.count} lot dirilis`); await qcl.invalidateQueries({ queryKey: ["production-lots"] }); }
-            catch (e) { toast.error(e instanceof Error ? e.message : "Rilis ditolak"); } finally { setBusy(false); }
-          }}>Rilis semua karantina di halaman ini ({data.lots.filter((l) => l.qc_status === "quarantine").length})</Button>
+            try {
+              // Kumpulkan SEMUA lot karantina lintas halaman (server membagi 25 per halaman).
+              const ids: string[] = [];
+              for (let pg = 0; pg < 40; pg++) {
+                const r = await get({ data: { workspaceId, page: pg, status: "quarantine", search: "" } });
+                ids.push(...r.lots.map((l) => l.id));
+                if ((pg + 1) * 25 >= r.total) break;
+              }
+              let count = 0;
+              for (let i = 0; i < ids.length; i += 200) {
+                const r = await bulk({ data: { workspaceId, lotIds: ids.slice(i, i + 200), status: "released", reason: "Rilis massal dari Stok Bahan" } });
+                count += r.count;
+              }
+              toast.success(`${count} lot dirilis`);
+              await qcl.invalidateQueries({ queryKey: ["production-lots"] });
+            } catch (e) { toast.error(e instanceof Error ? e.message : "Rilis ditolak"); } finally { setBusy(false); }
+          }}>Rilis semua karantina ({data.kpi.quarantine})</Button>
         </div>
       )}
 
