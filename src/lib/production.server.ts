@@ -127,10 +127,15 @@ export async function mfgHasAnyRole(workspaceId: string, userId: string, roles: 
     [workspaceId, userId],
   );
   if (m?.role === "owner" || m?.role === "admin") return true;
-  // Disederhanakan: hak akses Production diatur lewat matriks Role Access (lihat/ubah per menu). Peran produksi khusus
-  // (planner/supervisor/QA, dll.) tidak lagi wajib; setiap anggota workspace yang lolos matriks boleh bertindak.
-  void roles;
-  return Boolean(m);
+  if (!m) return false;
+  // Peran departemen bersifat opt-in: anggota TANPA peran produksi aktif hanya dibatasi matriks Role Access (perilaku lama);
+  // anggota yang sudah diberi peran produksi hanya boleh bertindak sesuai peran itu (PPIC = planning, Produksi = eksekusi, dst.).
+  const mine = await execute<{ role: string }>(
+    "SELECT role FROM mfg_workspace_roles WHERE workspace_id = ? AND user_id = ? AND is_active = 1",
+    [workspaceId, userId],
+  );
+  if (!mine.length) return true;
+  return mine.some((r) => roles.includes(r.role));
 }
 
 export const reasonOf = (r: unknown): string => {

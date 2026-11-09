@@ -11,17 +11,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AdminField, AdminSelect } from './admin-ui';
-import { getProductionOrderDetail, getProductionOrderDocument, getProductionOrders, issueAllProductionMaterials, issueProductionMaterial, logProductionLabor, overrideProductionMaterial, performProductionStep, recordProductionOutput, saveProductionStep, transitionProductionOrder, verifyProductionStep } from '@/lib/production-orders.functions';
+import { getProductionOrderDetail, getProductionOrderDocument, getProductionOrders, issueAllProductionMaterials, issueProductionMaterial, getMaterialBatches, logProductionLabor, overrideProductionMaterial, performProductionStep, recordProductionOutput, saveProductionStep, transitionProductionOrder, verifyProductionStep } from '@/lib/production-orders.functions';
 import { nextOrderStatus, type OrderStatus } from '@/lib/production-orders';
 import { saveProductionPdf } from '@/lib/production-pdf';
 
 const LABEL: Record<string, string> = { draft: 'Draf', planned: 'Direncanakan', released: 'Dirilis', in_progress: 'Berjalan', qc_pending: 'Menunggu QC', completed: 'Selesai', closed: 'Ditutup', cancelled: 'Dibatalkan' };
 const fmt = (n: number | null | undefined) => Number(n ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 4 });
 const rp = (n: number | null | undefined) => `Rp${Math.round(n ?? 0).toLocaleString('id-ID')}`;
-type Prompt = { title: string; withQty?: boolean; qty?: string; onSubmit: (reason: string, qty: number | null) => Promise<void> };
+type Batch = { id: string; lot_no: string; expiry_date: string | null; balance: number; eligible: boolean; days_left: number | null };
+type Prompt = { title: string; withQty?: boolean; qty?: string; batches?: Batch[]; onSubmit: (reason: string, qty: number | null, lotId?: string | null) => Promise<void> };
 
 export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId: string; orderId: string }) {
-  const list = useServerFn(getProductionOrders), detail = useServerFn(getProductionOrderDetail), transition = useServerFn(transitionProductionOrder), issue = useServerFn(issueProductionMaterial), issueAll = useServerFn(issueAllProductionMaterials), override = useServerFn(overrideProductionMaterial), saveStep = useServerFn(saveProductionStep), perform = useServerFn(performProductionStep), verify = useServerFn(verifyProductionStep), output = useServerFn(recordProductionOutput), labor = useServerFn(logProductionLabor);
+  const list = useServerFn(getProductionOrders), detail = useServerFn(getProductionOrderDetail), transition = useServerFn(transitionProductionOrder), issue = useServerFn(issueProductionMaterial), getBatches = useServerFn(getMaterialBatches), issueAll = useServerFn(issueAllProductionMaterials), override = useServerFn(overrideProductionMaterial), saveStep = useServerFn(saveProductionStep), perform = useServerFn(performProductionStep), verify = useServerFn(verifyProductionStep), output = useServerFn(recordProductionOutput), labor = useServerFn(logProductionLabor);
   const qc = useQueryClient();
   const getDocument = useServerFn(getProductionOrderDocument);
   async function exportDocument(orderId: string) {
@@ -56,7 +57,8 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
   const dq = useQuery({ queryKey: ['production-order', workspaceId, selected], enabled: !!selected, queryFn: () => detail({ data: { workspaceId, orderId: selected as string } }) });
 
   async function run(fn: () => Promise<void>) { setBusy(true); try { await fn(); await qc.invalidateQueries({ queryKey: ['production-orders', workspaceId] }); await qc.invalidateQueries({ queryKey: ['production-order', workspaceId] }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Ditolak'); } finally { setBusy(false); } }
-  function ask(p: Prompt) { setPReason(''); setPQty(p.qty ?? ''); setPrompt(p); }
+  function ask(p: Prompt) { setPReason(''); setPQty(p.qty ?? ''); setPBatch(p.batches?.find((b) => b.eligible)?.id ?? ''); setPrompt(p); }
+  const [pBatch, setPBatch] = useState('');
   if (q.isPending) return <Loader2 className="m-8 animate-spin text-muted-foreground" />;
   if (q.isError) return <p className="py-12 text-muted-foreground">{q.error.message}</p>;
   const d = q.data;
@@ -101,7 +103,7 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
 
         <TabsContent value="bahan" className="rounded-2xl border border-border bg-card p-4"><section><h3 className="mb-2 font-medium">Material & daftar timbang</h3><div className="overflow-x-auto"><Table><TableHeader><TableRow>{['Item', 'Rencana', 'Terkoreksi', 'Diissue', 'Lot', 'Potensi', ''].map((h, i) => <TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>
           {det.materials.map((m) => <TableRow key={m.id}><TableCell>{item(m.item_id)?.code}{m.is_balancing ? ' · penyeimbang' : ''}{m.override_reason ? ' · override' : ''}</TableCell><TableCell>{m.planned_qty} {m.uom}</TableCell><TableCell className="font-medium">{m.corrected_qty}</TableCell><TableCell>{m.issued_qty}</TableCell><TableCell>{lotNo(m.lot_id)}</TableCell><TableCell>{m.potency_used_pct != null ? `${Number(m.potency_used_pct).toFixed(2)}%` : '—'}</TableCell><TableCell><div className="flex gap-1">
-            <Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status) || m.issued_qty >= m.corrected_qty} onClick={() => ask({ title: `Issue ${item(m.item_id)?.code}`, withQty: true, qty: String(Math.max(0, m.corrected_qty - m.issued_qty)), onSubmit: async (reason, qty) => { await issue({ data: { workspaceId, materialId: m.id, qty: qty ?? 0, lotId: m.lot_id, key: crypto.randomUUID(), reason } }); toast.success('Material diissue'); } })}>Issue</Button>
+            <Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status) || m.issued_qty >= m.corrected_qty} onClick={() => run(async () => { const { batches } = await getBatches({ data: { workspaceId, materialId: m.id } }); ask({ title: `Issue ${item(m.item_id)?.code}`, withQty: true, qty: String(Math.max(0, m.corrected_qty - m.issued_qty)), batches, onSubmit: async (reason, qty, lotId) => { await issue({ data: { workspaceId, materialId: m.id, qty: qty ?? 0, lotId: lotId ?? null, key: crypto.randomUUID(), reason } }); toast.success('Material diissue'); } }); })}>Issue</Button>
             <Button size="sm" variant="ghost" disabled={busy || m.issued_qty > 0 || !['released', 'in_progress'].includes(order.status)} onClick={() => ask({ title: 'Override kuantitas (supervisor)', withQty: true, qty: String(m.corrected_qty), onSubmit: async (reason, qty) => { await override({ data: { workspaceId, materialId: m.id, qty: qty ?? 0, reason } }); } })}>Override</Button>
           </div></TableCell></TableRow>)}
           {!det.materials.length && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Material dihitung saat order dirilis.</TableCell></TableRow>}
@@ -141,7 +143,7 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
         <TabsContent value="output" className="rounded-2xl border border-border bg-card p-4"><section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Output & jam kerja</h3><div className="flex gap-2"><Button size="sm" variant="outline" disabled={busy || order.status !== 'in_progress'} onClick={() => setOut({ type: 'finished', itemId: order.item_id, qty: String(order.expected_output_qty ?? ''), reason: '' })}><Plus className="size-4" />Output</Button><Button size="sm" variant="outline" disabled={busy || !['in_progress', 'qc_pending'].includes(order.status) || !d.centers.length} onClick={() => setLab({ centerId: d.centers[0]?.id ?? '', hours: '', reason: '' })}><Plus className="size-4" />Jam kerja</Button></div></div>
           <Table><TableBody>{det.outputs.map((x) => <TableRow key={x.id}><TableCell>{x.output_type}</TableCell><TableCell>{item(x.item_id)?.code}</TableCell><TableCell>{fmt(Number(x.qty))} {x.uom}</TableCell><TableCell>{lotNo(x.lot_id)} {det.lots.find((l) => l.id === x.lot_id)?.qc_status ? `(${det.lots.find((l) => l.id === x.lot_id)?.qc_status})` : ''}</TableCell></TableRow>)}
           {det.labor.map((l) => <TableRow key={l.id}><TableCell>jam kerja</TableCell><TableCell>{d.centers.find((c) => c.id === l.work_center_id)?.code}</TableCell><TableCell>{l.hours} jam</TableCell><TableCell className="text-right">{rp(l.hours * (Number(l.labor_rate) + Number(l.overhead_rate)))}</TableCell></TableRow>)}</TableBody></Table>
-          {order.status === 'qc_pending' && <p className="mt-2 text-sm text-muted-foreground">Lot hasil berstatus karantina. Lakukan inspeksi rilis akhir di menu Quality, lalu tandai order Selesai.</p>}
+          {order.status === 'qc_pending' && <p className="mt-2 text-sm text-muted-foreground">Batch hasil berstatus karantina. Lakukan inspeksi rilis akhir di menu Quality, lalu tandai order Selesai.</p>}
         </section>
 
         </TabsContent>
@@ -157,9 +159,10 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
     </>
 
     <Dialog open={!!prompt} onOpenChange={(o) => { if (!o) setPrompt(null); }}><DialogContent>{prompt && <><DialogHeader><DialogTitle>{prompt.title}</DialogTitle></DialogHeader><div className="space-y-3">
+      {prompt.batches && <AdminField label="Batch (rekomendasi FEFO di atas)">{prompt.batches.length === 0 ? <p className="text-sm text-destructive">Tidak ada batch bersaldo di gudang order.</p> : <select className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm" value={pBatch} onChange={(e) => setPBatch(e.target.value)}>{prompt.batches.map((b, i) => <option key={b.id} value={b.id} disabled={!b.eligible}>{b.lot_no} · sisa {fmt(b.balance)} · {b.expiry_date ? `ED ${b.expiry_date}${b.days_left != null ? ` (${b.days_left} hari)` : ''}` : 'tanpa ED'}{!b.eligible ? ' · tidak layak (QC/kedaluwarsa)' : i === prompt.batches!.findIndex((x) => x.eligible) ? ' · ★ rekomendasi FEFO' : ''}</option>)}</select>}{pBatch && prompt.batches.find((b) => b.id === pBatch) && Number(pQty) > prompt.batches.find((b) => b.id === pBatch)!.balance && <p className="mt-1 text-xs text-destructive">Kuantitas melebihi sisa batch ini; issue sebagian lalu ulangi dengan batch lain.</p>}</AdminField>}
       {prompt.withQty && <AdminField label="Nilai / kuantitas"><Input type="number" step="any" value={pQty} onChange={(e) => setPQty(e.target.value)} /></AdminField>}
       <AdminField label="Catatan (opsional)"><Input value={pReason} onChange={(e) => setPReason(e.target.value)} /></AdminField>
-      <div className="flex justify-end"><Button disabled={busy || (prompt.withQty && pQty.trim() === '')} onClick={() => run(async () => { await prompt.onSubmit(pReason.trim() || prompt.title, prompt.withQty ? Number(pQty) : null); setPrompt(null); })}>Simpan</Button></div>
+      <div className="flex justify-end"><Button disabled={busy || (prompt.withQty && pQty.trim() === '') || (!!prompt.batches && !pBatch)} onClick={() => run(async () => { const rec = prompt.batches?.find((b) => b.eligible)?.id; if (prompt.batches && pBatch !== rec && !pReason.trim()) throw new Error('Batch bukan rekomendasi FEFO: isi catatan alasan.'); await prompt.onSubmit(pReason.trim() || prompt.title, prompt.withQty ? Number(pQty) : null, prompt.batches ? pBatch : undefined); setPrompt(null); })}>Simpan</Button></div>
     </div></>}</DialogContent></Dialog>
 
     <Dialog open={!!out} onOpenChange={(o) => { if (!o) setOut(null); }}><DialogContent>{out && order && <><DialogHeader><DialogTitle>Catat output</DialogTitle></DialogHeader><div className="space-y-3">
