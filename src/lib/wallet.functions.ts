@@ -151,6 +151,13 @@ export const createWalletTopup = createServerFn({ method: "POST" })
     );
     if (!gateway || !["manual_transfer", "midtrans", "doku"].includes(gateway.provider))
       throw new Error("Metode pembayaran tidak tersedia.");
+    if (data.purchase) {
+      if (gateway.provider === "manual_transfer")
+        throw new Error("Bayar paket langsung hanya lewat QRIS atau kartu.");
+      const { isTenantOwner } = await import("@/lib/billing-wallet.server");
+      if (!(await isTenantOwner(data.tenantId, context.userId)))
+        throw new Error("Hanya pemilik tenant yang dapat membeli langganan.");
+    }
     // DOKU: tujuan kembali browser hanya halaman billing; tidak pernah menyelesaikan saldo.
     let returnUrl: string | undefined;
     if (gateway.provider === "doku" && data.returnPath) {
@@ -160,7 +167,8 @@ export const createWalletTopup = createServerFn({ method: "POST" })
       // Domain yang sedang dipakai (qalling.id/xperd.id), https di balik proxy; bukan APP_PUBLIC_URL yang bisa salah (http).
       returnUrl = walletReturnUrl(requestOrigin(getRequest()), data.returnPath);
     }
-    const dokuModule = gateway.provider === "doku" ? await import("@/lib/wallet/doku.server") : null;
+    const dokuModule =
+      gateway.provider === "doku" ? await import("@/lib/wallet/doku.server") : null;
     const dokuCredentials = dokuModule ? dokuModule.getDokuCredentials(gateway) : null;
     const key = gateway.provider === "midtrans" ? keyOf(gateway) : undefined;
     if (gateway.provider === "midtrans" && !key)
@@ -184,6 +192,11 @@ export const createWalletTopup = createServerFn({ method: "POST" })
           : "Pengajuan top-up gagal. Coba lagi.",
       );
     }
+    if (data.purchase)
+      await execute(
+        "UPDATE topups SET purchase_intent = ? WHERE id = ? AND purchase_intent IS NULL AND status = 'pending'",
+        [JSON.stringify(data.purchase), topup.id],
+      );
     if (dokuModule && dokuCredentials && !topup.payment_url && topup.status === "pending") {
       const reference = `WAL-${topup.id}`;
       // Klaim sekali: kegagalan ambigu tidak diulang buta (pakai "Cek"), supaya tidak ada pembayaran ganda.
@@ -458,7 +471,9 @@ export const reconcileWalletTopup = createServerFn({ method: "POST" })
       }
       return {
         status:
-          notice.transaction.status === "PENDING" ? "pending" : notice.transaction.status.toLowerCase(),
+          notice.transaction.status === "PENDING"
+            ? "pending"
+            : notice.transaction.status.toLowerCase(),
       };
     }
     const key = keyOf(gateway);

@@ -509,6 +509,7 @@ export const QALLING_DOCS: DocSection[] = [
       "Isi saldo, perpanjang langganan dari saldo, dan unduh bukti pembayaran di Tagihan & Saldo.",
     steps: [
       "Klik Top up pada saldo di bagian atas untuk mengisi saldo.",
+      "Ingin langsung beli paket? Di tab Paket pilih paketnya; bila saldo kurang, klik Bayar (QRIS / kartu). Paket aktif otomatis setelah pembayaran terkonfirmasi, tanpa perlu top-up terpisah.",
       "Aktifkan perpanjangan otomatis agar langganan dipotong dari saldo saat jatuh tempo.",
       "Unduh PDF bukti pembayaran dari tab Riwayat tagihan.",
     ],

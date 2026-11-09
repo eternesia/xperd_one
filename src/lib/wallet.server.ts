@@ -294,5 +294,47 @@ export async function walletSettleTopup(p: {
       .then((m) => m.sendInvoiceReceiptNow(invoiceId))
       .catch(() => {});
   }
+  if (settled.status === "paid") await applyTopupPurchase(String(settled.id));
   return settled;
+}
+
+/**
+ * Bayar paket langsung: setelah top-up yang membawa `purchase_intent` lunas, beli paketnya dari saldo.
+ * Idempoten (kunci per top-up) dan aman diulang; bila gagal (mis. harga berubah) saldo tetap tersimpan
+ * dan pengguna bisa membeli paket manual dari saldo.
+ */
+export async function applyTopupPurchase(topupId: string) {
+  try {
+    const row = await executeOne<{
+      tenant_id: string;
+      created_by: string | null;
+      purchase_intent: unknown;
+      purchase_applied_at: string | null;
+    }>(
+      "SELECT tenant_id, created_by, purchase_intent, purchase_applied_at FROM topups WHERE id = ? AND status = 'paid'",
+      [topupId],
+    );
+    if (!row || row.purchase_applied_at || !row.purchase_intent || !row.created_by) return;
+    const intent = (
+      typeof row.purchase_intent === "string"
+        ? JSON.parse(row.purchase_intent)
+        : row.purchase_intent
+    ) as { kind?: string; itemId?: string };
+    if (intent.kind !== "tier" || !intent.itemId) return;
+    const { billingQuote, billingCheckout } = await import("./addon-billing.server");
+    const q = await billingQuote(row.tenant_id, "tier", intent.itemId, 1);
+    if (q.action !== "unchanged")
+      await billingCheckout({
+        tenantId: row.tenant_id,
+        kind: "tier",
+        itemId: intent.itemId,
+        quantity: 1,
+        idem: `topup-${topupId}`,
+        actor: row.created_by,
+        expected: q,
+      });
+    await execute("UPDATE topups SET purchase_applied_at = NOW(6) WHERE id = ?", [topupId]);
+  } catch (e) {
+    console.error("[wallet] pembelian paket otomatis gagal", topupId, (e as Error).message);
+  }
 }
