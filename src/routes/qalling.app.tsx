@@ -21,7 +21,6 @@ import {
   LogOut,
   Menu,
   Plus,
-  Wallet,
   PanelLeftClose,
   PanelLeftOpen,
   Share2,
@@ -36,9 +35,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getWallet } from "@/lib/wallet.functions";
 import { provisionGoogleSignup } from "@/lib/qalling-auth.functions";
 import { SIGNUP_TIER_KEY } from "@/components/qalling/qalling-auth";
 
@@ -107,14 +105,6 @@ function QallingShell() {
       return !c;
     });
   const qc = useQueryClient();
-  const fetchWallet = useServerFn(getWallet);
-  const walletQuery = useQuery({
-    queryKey: ["wallet", tenant?.id, 0],
-    queryFn: () => fetchWallet({ data: { tenantId: tenant!.id, page: 0 } }),
-    enabled: !!tenant?.id,
-    staleTime: 60_000,
-  });
-  const balance = walletQuery.data?.balance;
 
   useEffect(() => {
     if (loading) return;
@@ -463,31 +453,6 @@ function QallingShell() {
             </Link>
           </div>
           <div className="flex items-center gap-1 sm:gap-3">
-            {tenant?.id && (
-              <Link
-                to="/qalling/app/billing"
-                data-testid="qalling-balance"
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1 text-xs font-medium hover:bg-secondary sm:px-2.5"
-                aria-label={
-                  lang === "id" ? "Saldo, isi ulang di Tagihan" : "Balance, top up in Billing"
-                }
-              >
-                <Wallet className="h-3.5 w-3.5 text-primary" />
-                <span>
-                  {balance === undefined
-                    ? "…"
-                    : new Intl.NumberFormat("id-ID", {
-                        style: "currency",
-                        currency: "IDR",
-                        maximumFractionDigits: 0,
-                      }).format(balance)}
-                </span>
-                <span className="hidden items-center gap-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground sm:flex">
-                  <Plus className="h-3 w-3" />
-                  <span className="hidden sm:inline">Top up</span>
-                </span>
-              </Link>
-            )}
             <AnnouncementBell />
             <span className="hidden md:block">
               <QallingPreferences />
