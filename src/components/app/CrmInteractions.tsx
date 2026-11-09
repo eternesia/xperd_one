@@ -557,7 +557,15 @@ function AutomationDialog({
   const set = (p: Partial<Form>) => f && setForm({ ...f, ...p });
   const sendsDm = !!f && (f.trigger === "dm" || f.action === "comment_to_dm");
   const platform = accounts.find((a) => a.id === f?.accountId)?.platform;
-  const err = f ? validateAutomation(f) : null;
+  const commentOnly = !!platform && platform !== "instagram";
+  const replyMax = replyLimitFor(platform);
+  const err = f
+    ? commentOnly && (f.trigger === "dm" || f.action === "comment_to_dm")
+      ? "Platform ini hanya mendukung balasan komentar."
+      : f.reply.length > replyMax
+        ? `Balasan maksimal ${replyMax} karakter untuk platform ini.`
+        : validateAutomation(f)
+    : null;
   return (
     <Dialog
       open={!!f}
@@ -586,7 +594,19 @@ function AutomationDialog({
                   <select
                     className="mt-1 w-full rounded border bg-background p-2"
                     value={f.accountId}
-                    onChange={(e) => set({ accountId: e.target.value })}
+                    onChange={(e) => {
+                      const p = accounts.find((a) => a.id === e.target.value)?.platform;
+                      set(
+                        p && p !== "instagram"
+                          ? {
+                              accountId: e.target.value,
+                              trigger: "comment",
+                              action: "reply",
+                              followGate: false,
+                            }
+                          : { accountId: e.target.value },
+                      );
+                    }}
                   >
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -613,9 +633,9 @@ function AutomationDialog({
                       );
                     }}
                   >
-                    <option value="comment_to_dm">Komentar → kirim DM</option>
+                    {!commentOnly && <option value="comment_to_dm">Komentar → kirim DM</option>}
                     <option value="reply">Komentar → balas komentar</option>
-                    <option value="dm">DM masuk → balas DM</option>
+                    {!commentOnly && <option value="dm">DM masuk → balas DM</option>}
                   </select>
                 </label>
               </div>
@@ -641,7 +661,7 @@ function AutomationDialog({
                 {sendsDm ? "Isi DM" : "Balasan komentar"}
                 <Textarea
                   value={f.reply}
-                  maxLength={f.linkUrl ? 640 : 2000}
+                  maxLength={f.linkUrl ? 640 : replyMax}
                   onChange={(e) => set({ reply: e.target.value })}
                 />
               </label>
@@ -954,6 +974,73 @@ const TH_COMMENT: Tpl[] = [
     },
   },
 ];
+const FB_COMMENT: Tpl[] = [
+  {
+    title: "Balas semua komentar",
+    hint: "Komentar apa saja di Page",
+    sample: "Terima kasih sudah berkomentar kak! 🙏",
+    patch: {
+      name: "Balas komentar Facebook",
+      trigger: "comment",
+      action: "reply",
+      keyword: "",
+      reply: "Terima kasih sudah berkomentar kak! 🙏",
+    },
+  },
+  {
+    title: "Jawab pertanyaan harga",
+    hint: 'Komentar "harga", "berapa"',
+    sample: "Halo kak, info harga sudah kami kirim lewat Messenger ya 🙏",
+    patch: {
+      name: "Harga di Facebook",
+      trigger: "comment",
+      action: "reply",
+      keyword: "harga,berapa,price",
+      reply: "Halo kak, info harga lengkap ada di link di profil kami ya 🙏",
+    },
+  },
+];
+const TT_COMMENT: Tpl[] = [
+  {
+    title: "Balas semua komentar",
+    hint: "Komentar apa saja di video",
+    sample: "Makasih udah nonton kak! 🔥",
+    patch: {
+      name: "Balas komentar TikTok",
+      trigger: "comment",
+      action: "reply",
+      keyword: "",
+      reply: "Makasih udah nonton kak! 🔥",
+    },
+  },
+  {
+    title: "Arahkan ke link",
+    hint: 'Komentar "link", "info", "harga"',
+    sample: "Linknya ada di bio ya kak 👆",
+    patch: {
+      name: "Link di TikTok",
+      trigger: "comment",
+      action: "reply",
+      keyword: "link,info,harga",
+      reply: "Linknya ada di bio ya kak 👆",
+    },
+  },
+];
+type AutoPlatform = "instagram" | "threads" | "facebook" | "tiktok";
+const AUTO_PLATFORMS: { id: AutoPlatform; label: string; desc: string }[] = [
+  {
+    id: "instagram",
+    label: "Instagram",
+    desc: "Komentar → DM, balas komentar & DM, balasan story",
+  },
+  { id: "threads", label: "Threads", desc: "Balas komentar dengan kata kunci" },
+  { id: "facebook", label: "Facebook", desc: "Balas komentar di Page dengan kata kunci" },
+  { id: "tiktok", label: "TikTok", desc: "Balas komentar video dengan kata kunci" },
+];
+/** Platform selain Instagram hanya mendukung balasan komentar (tanpa DM). */
+export const replyLimitFor = (platform?: string) =>
+  platform === "tiktok" ? 150 : platform && platform !== "instagram" ? 500 : 2000;
+
 function TemplatePicker({
   open,
   onOpenChange,
@@ -965,8 +1052,8 @@ function TemplatePicker({
   accounts: { id: string; account_name: string; platform: string }[];
   onPick: (f: Form) => void;
 }) {
-  const [tab, setTab] = useState<"instagram" | "threads">("instagram");
-  const acc = accounts.find((a) => a.platform === tab);
+  const [tab, setTab] = useState<AutoPlatform | null>(null);
+  const acc = tab ? accounts.find((a) => a.platform === tab) : undefined;
   const pick = (t?: Tpl) =>
     onPick({ ...EMPTY, accountId: acc?.id ?? accounts[0]?.id ?? "", ...(t?.patch ?? {}) });
   const card = (t: Tpl) => (
@@ -974,7 +1061,7 @@ function TemplatePicker({
       key={t.title}
       disabled={!acc}
       onClick={() => pick(t)}
-      className="group w-full rounded-xl border bg-card p-4 text-left transition hover:border-primary/50 hover:shadow-md disabled:opacity-50"
+      className="group w-full rounded-2xl border bg-card p-4 text-left transition hover:border-primary/50 hover:shadow-md disabled:opacity-50"
     >
       <div className="flex items-center justify-between gap-2">
         <p className="font-medium">{t.title}</p>
@@ -984,51 +1071,92 @@ function TemplatePicker({
       <p className="mt-3 w-fit max-w-full rounded-2xl bg-secondary px-3 py-2 text-sm">{t.sample}</p>
     </button>
   );
+  const label = AUTO_PLATFORMS.find((p) => p.id === tab)?.label ?? "";
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Automation baru</DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) setTab(null);
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="max-w-3xl">
+        <DialogHeader className="sm:text-center">
+          <DialogTitle className="flex items-center gap-2 sm:justify-center">
+            {tab && (
+              <button
+                type="button"
+                onClick={() => setTab(null)}
+                className="rounded-full p-1 hover:bg-muted"
+                aria-label="Kembali"
+              >
+                <ChevronRight className="size-4 rotate-180" />
+              </button>
+            )}
+            {tab ? `Automation ${label}` : "Automation baru"}
+          </DialogTitle>
+          {!tab && <p className="text-sm text-muted-foreground">Pilih platform-nya dulu.</p>}
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "instagram" | "threads")}>
-          <TabsList>
-            <TabsTrigger value="instagram" className="gap-2">
-              <SocialIcon platform="instagram" className="size-4" />
-              Instagram
-            </TabsTrigger>
-            <TabsTrigger value="threads" className="gap-2">
-              <SocialIcon platform="threads" className="size-4" />
-              Threads
-            </TabsTrigger>
-          </TabsList>
-          {!acc && (
-            <p className="mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-              Belum ada akun {tab === "instagram" ? "Instagram" : "Threads"} terhubung.
-            </p>
-          )}
-          <TabsContent value="instagram">
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Komentar di post</p>
-                {IG_COMMENT.map(card)}
+        {!tab ? (
+          <div className="grid grid-cols-2 gap-3">
+            {AUTO_PLATFORMS.map((p) => {
+              const has = accounts.some((a) => a.platform === p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setTab(p.id)}
+                  className="flex flex-col items-center gap-2 rounded-2xl border bg-card p-4 text-center transition hover:border-primary/50 hover:shadow-md sm:p-6"
+                >
+                  <SocialIcon platform={p.id} className="size-10 sm:size-12" />
+                  <span className="font-semibold">{p.label}</span>
+                  <span className="text-xs text-muted-foreground sm:text-sm">{p.desc}</span>
+                  {!has && (
+                    <span className="text-[11px] text-amber-600">Belum ada akun terhubung</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {!acc && (
+              <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                Belum ada akun {label} terhubung. Hubungkan dulu di menu Akun Sosial.
+              </p>
+            )}
+            {tab === "instagram" ? (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Komentar di post</p>
+                  {IG_COMMENT.map(card)}
+                </div>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">DM</p>
+                  {IG_DM.map(card)}
+                </div>
               </div>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">DM</p>
-                {IG_DM.map(card)}
-              </div>
-            </div>
-          </TabsContent>
-          <TabsContent value="threads">
-            <div className="grid gap-3 md:grid-cols-2">{TH_COMMENT.map(card)}</div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Threads mendukung balasan otomatis untuk komentar/balasan; DM belum tersedia dari
-              platform.
-            </p>
-          </TabsContent>
-        </Tabs>
+            ) : (
+              <>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(tab === "threads"
+                    ? TH_COMMENT
+                    : tab === "facebook"
+                      ? FB_COMMENT
+                      : TT_COMMENT
+                  ).map(card)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {label} hanya mendukung balasan komentar otomatis (tanpa DM), maksimal{" "}
+                  {replyLimitFor(tab)} karakter per balasan dan 30 balasan per jam per akun.
+                </p>
+              </>
+            )}
+          </div>
+        )}
         <DialogFooter className="items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">Pilih template, lalu sesuaikan isinya.</p>
-          <Button variant="outline" disabled={!accounts.length} onClick={() => pick()}>
+          <Button variant="outline" disabled={tab ? !acc : !accounts.length} onClick={() => pick()}>
             Buat dari awal
           </Button>
         </DialogFooter>

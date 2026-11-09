@@ -9,7 +9,7 @@ export default defineTool({
   name: "qalling_create_automation",
   title: "Create a reply automation",
   description:
-    "Create an automatic reply rule on a connected Instagram, Facebook or Threads account. trigger 'dm' answers incoming DMs (action reply). trigger 'comment' with action 'comment_to_dm' sends a DM (optionally with a link button and a follow gate) to people who comment, and with action 'reply' posts public replies. The rule messages real customers, so it is created DISABLED by default: show the user the rule and only set enabled=true after explicit approval. Needs a Meta or Tebar-connected account.",
+    "Create an automatic reply rule on a connected Instagram, Facebook, Threads or TikTok account. Threads, Facebook (via Tebar) and TikTok support only trigger 'comment' with action 'reply' (max 500 chars, TikTok 150). trigger 'dm' answers incoming DMs (action reply). trigger 'comment' with action 'comment_to_dm' sends a DM (optionally with a link button and a follow gate) to people who comment, and with action 'reply' posts public replies. The rule messages real customers, so it is created DISABLED by default: show the user the rule and only set enabled=true after explicit approval. Needs a Meta or Tebar-connected account.",
   inputSchema: {
     workspace_id: z.string().uuid().describe("Workspace id from list_workspaces."),
     account_id: z.string().uuid().describe("Account id from qalling_list_social_accounts."),
