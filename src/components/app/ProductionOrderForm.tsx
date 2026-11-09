@@ -50,6 +50,8 @@ export function ProductionOrderForm({ workspaceId, docId }: { workspaceId: strin
   const [f, setF] = useState<F | null>(null);
   const [tab, setTab] = useState("umum");
   const [busy, setBusy] = useState(false);
+  // Pilihan sumber per tab (BOM L1 / BOM L2 / QC) diingat, agar berpindah tab tidak menghapus BOM yang sudah dicari.
+  const [memo, setMemo] = useState<Record<string, Pick<F, "item_id" | "bom_version_id" | "qc_spec_id" | "planned_qty">>>({});
 
   const d = lq.data;
   const order = dq.data?.order ?? null;
@@ -159,8 +161,15 @@ export function ProductionOrderForm({ workspaceId, docId }: { workspaceId: strin
             <div className="flex flex-wrap gap-2">
               {([["bom1", "BOM Level 1 (barang jadi)"], ["bom2", "BOM Level 2 (bulk)"], ["qc", "Dari QC (spesifikasi)"]] as const).map(([k, label]) => {
                 const active = k === "qc" ? f.source_type === "qc" : f.source_type === "bom" && f.source_level === (k === "bom1" ? 1 : 2);
+                const keyOf = (x: F) => (x.source_type === "qc" ? "qc" : x.source_level === 2 ? "bom2" : "bom1");
                 return <Button key={k} type="button" size="sm" variant={active ? "default" : "outline"}
-                  onClick={() => setF({ ...f, source_type: k === "qc" ? "qc" : "bom", source_level: k === "bom2" ? 2 : 1, item_id: "", bom_version_id: "", qc_spec_id: null })}>{label}</Button>;
+                  onClick={() => {
+                    if (active) return;
+                    const saved = memo[k];
+                    setMemo({ ...memo, [keyOf(f)]: { item_id: f.item_id, bom_version_id: f.bom_version_id, qc_spec_id: f.qc_spec_id, planned_qty: f.planned_qty } });
+                    setF({ ...f, source_type: k === "qc" ? "qc" : "bom", source_level: k === "bom2" ? 2 : 1,
+                      item_id: saved?.item_id ?? "", bom_version_id: saved?.bom_version_id ?? "", qc_spec_id: saved?.qc_spec_id ?? null, planned_qty: saved?.planned_qty ?? f.planned_qty });
+                  }}>{label}</Button>;
               })}
             </div>
             {f.source_type === "bom" ? (
