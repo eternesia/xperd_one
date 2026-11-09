@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { logoutAppUser } from "@/lib/auth.functions";
 import { emitAuthChange } from "@/hooks/use-session";
@@ -62,9 +63,16 @@ export function MobileBottomNav({ workspaceId }: { workspaceId: string }) {
 
   const base = `/app/w/${workspaceId}`;
   const path = pathname.replace(/\/+$/, "");
+  const { hasAddon, loading: addonsLoading } = useTenantAddons();
+  // Modul add-on yang belum aktif (mis. Slipp, Xpro, Omnix, Qalling CRM) tidak ditampilkan
+  // di menu "Lainnya" agar ringkas; tetap bisa diaktifkan dari beranda/Billing.
   const modules = useMemo(
-    () => APP_MODULES.filter((m) => !m.disabled && canViewModule(m.id)),
-    [canViewModule],
+    () =>
+      APP_MODULES.filter(
+        (m) =>
+          !m.disabled && canViewModule(m.id) && (!m.addon || (!addonsLoading && hasAddon(m.addon))),
+      ),
+    [canViewModule, hasAddon, addonsLoading],
   );
   // Sama dengan beranda: Tim/Pengaturan/Billing hanya untuk pengelola workspace.
   const isManager = workspaceRole === "owner" || workspaceRole === "admin";

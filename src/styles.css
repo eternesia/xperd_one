@@ -506,3 +506,24 @@
     padding: 0.45rem 0.85rem;
   }
 }
+
+/* Bar filter ERP di HP: grid dua kolom; kolom cari/pilihan penuh lebar, tanggal berdampingan. */
+@media (max-width: 767px) {
+  .q-filters {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem !important;
+    align-items: end;
+  }
+  .q-filters > * {
+    grid-column: 1 / -1;
+    min-width: 0 !important;
+  }
+  .q-filters > :is(input[type="date"], input[type="month"]),
+  .q-filters > :has(> input:is([type="date"], [type="month"])) {
+    grid-column: auto;
+  }
+  .q-filters :is(input:not([type="checkbox"]):not([type="radio"]), button[role="combobox"]) {
+    width: 100% !important;
+  }
+}

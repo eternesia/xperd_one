@@ -69,7 +69,7 @@ function useMovements(workspaceId: string, filters: { from: string; to: string; 
 }
 
 function Toolbar({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-wrap items-end gap-2">{children}</div>;
+  return <div className="q-filters flex flex-wrap items-end gap-2">{children}</div>;
 }
 
 function Header({ title, kicker, action }: { title: string; kicker: string; action?: React.ReactNode }) {
@@ -162,7 +162,7 @@ export function StockBalanceView({ entity, workspaceId }: { entity: InvEntity; w
         title={lang === "id" ? entity.id_ : entity.en}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         <Card label={t("Items tracked", "Item terpantau")} value={String(rows.length)} />
         <Card label={t("Total quantity", "Total kuantitas")} value={totalQty.toLocaleString(lang === "id" ? "id-ID" : "en-US")} />
         <Card label={t("Inventory value", "Nilai persediaan")} value={formatMoney(totalValue, lang)} />

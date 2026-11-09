@@ -479,7 +479,7 @@ function AccountStatementDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="q-filters flex flex-wrap items-end gap-2">
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
         </div>
@@ -816,7 +816,7 @@ function LedgerView({ entity, workspaceId }: { entity: CbEntity; workspaceId: st
         />
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="q-filters flex flex-wrap items-end gap-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -1280,7 +1280,7 @@ function ReconciliationView({ workspaceId }: { workspaceId: string }) {
         <StatCard label={t("Difference", "Selisih")} value={formatMoney(difference)} />
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="q-filters flex flex-wrap items-end gap-2">
         <Select value={accountCode} onValueChange={setAccountCode}>
           <SelectTrigger className="w-56">
             <SelectValue />
@@ -1504,7 +1504,7 @@ function ReportsView({ workspaceId }: { workspaceId: string }) {
         <StatCard label={t("Transfers", "Transfer")} value={formatMoney(totalTransfer)} />
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="q-filters flex flex-wrap items-end gap-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input

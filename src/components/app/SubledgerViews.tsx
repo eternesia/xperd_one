@@ -188,7 +188,7 @@ export function SubledgerCardView({ side, workspaceId }: { side: SubledgerSide; 
     <div className="space-y-5">
       <Head kicker={t("Accounting", "Akuntansi")} title={title} right={<ExportButtons build={build} />} />
 
-      <div className="no-print flex flex-wrap items-end gap-2">
+      <div className="q-filters no-print flex flex-wrap items-end gap-2">
         <Range
           from={from}
           to={to}
@@ -309,7 +309,7 @@ export function AgingView({ side, workspaceId }: { side: SubledgerSide; workspac
     <div className="space-y-5">
       <Head kicker={t("Accounting", "Akuntansi")} title={title} right={<ExportButtons build={build} />} />
 
-      <div className="no-print flex flex-wrap items-end gap-2">
+      <div className="q-filters no-print flex flex-wrap items-end gap-2">
         <div className="grid gap-1">
           <Label className="text-xs">{t("As of", "Per tanggal")}</Label>
           <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="h-9 w-[150px]" />
