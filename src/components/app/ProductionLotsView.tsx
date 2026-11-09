@@ -82,7 +82,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
         </div>
         <Button disabled={!data.canWrite} onClick={() => setEdit({ id: null, values: fresh })}>
           <Plus className="size-4" />
-          Lot baru
+          Batch baru
         </Button>
       </div>
 
@@ -101,7 +101,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
           <Button size="sm" disabled={busy} onClick={async () => {
             setBusy(true);
             try {
-              // Kumpulkan SEMUA lot karantina lintas halaman (server membagi 25 per halaman).
+              // Kumpulkan SEMUA batch karantina lintas halaman (server membagi 25 per halaman).
               const ids: string[] = [];
               for (let pg = 0; pg < 40; pg++) {
                 const r = await get({ data: { workspaceId, page: pg, status: "quarantine", search: "" } });
@@ -201,7 +201,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/** Detail lot di baris: ringkasan data lot + kartu stok (pergerakan). */
+/** Detail batch di baris: ringkasan data lot + kartu stok (pergerakan). */
 function LotDetail({ workspaceId, lot }: { workspaceId: string; lot: { id: string; supplier_lot_no: string | null; mfg_date: string | null; retest_date: string | null; assay_pct: number | null } }) {
   const [page, setPage] = useState(0);
   const get = useServerFn(getProductionLotCard);
@@ -258,7 +258,7 @@ function UnlottedBanner({ workspaceId, canWrite }: { workspaceId: string; canWri
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-700 dark:bg-amber-950/30">
       <p className="max-w-2xl">
-        Ada stok senilai <strong>{rp(total)}</strong> ({rows.length} item) yang belum tercatat per lot. Buat lot karantina dari penerimaan barang lama agar bisa diperiksa QC dan dipakai produksi.
+        Ada stok senilai <strong>{rp(total)}</strong> ({rows.length} item) yang belum tercatat per lot. Buat batch karantina dari penerimaan barang lama agar bisa diperiksa QC dan dipakai produksi.
       </p>
       <Button
         disabled={!canWrite || busy}
@@ -266,7 +266,7 @@ function UnlottedBanner({ workspaceId, canWrite }: { workspaceId: string; canWri
           setBusy(true);
           try {
             const r = await init({ data: { workspaceId } });
-            toast.success(`${r.linked} penerimaan dibuatkan lot karantina`);
+            toast.success(`${r.linked} penerimaan dibuatkan batch karantina`);
             if (r.skipped?.length) toast.warning(`Dilewati (sudah ada pengeluaran tanpa lot): ${r.skipped.join(", ")}`);
             await qc.invalidateQueries({ queryKey: ["production-lots"] });
             await qc.invalidateQueries({ queryKey: ["production-lot-recon"] });

@@ -143,7 +143,7 @@ function InspectionPage({ workspaceId, d, id }: { workspaceId: string; d: Data; 
   if (!id) {
     const l = lot(lotId);
     const specs = d.specs.filter((s) => s.is_active && s.status === 'approved' && (!l || s.item_id === l.item_id));
-    return <ProductionPageShell workspaceId={workspaceId} section="quality" title="Sampel QC baru" subtitle="Langkah 1 dari 3 — pilih lot dan spesifikasi">
+    return <ProductionPageShell workspaceId={workspaceId} section="quality" title="Sampel QC baru" subtitle="Langkah 1 dari 3 — pilih batch dan spesifikasi">
       <Stepper step={1} />
       {!d.canWrite && <p className="text-sm text-muted-foreground">Anda tidak punya akses menulis QC.</p>}
       <div className="grid max-w-3xl gap-4 sm:grid-cols-3">
@@ -190,7 +190,7 @@ function InspectionPage({ workspaceId, d, id }: { workspaceId: string; d: Data; 
             <AdminField label="Catatan keputusan"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. sesuai spesifikasi" /></AdminField>
             <div className="flex flex-wrap gap-2">{(['released', 'hold', 'rejected'] as const).filter((s) => s !== l.qc_status).map((s) => {
               const label = s === 'released' ? 'Rilis lot' : s === 'hold' ? 'Tahan lot' : 'Tolak lot'; const Icon = s === 'released' ? CheckCircle2 : s === 'hold' ? PauseCircle : XCircle;
-              return <Button key={s} variant={s === 'released' ? 'default' : 'outline'} disabled={busy || !note.trim()} onClick={() => void run(async () => { await decide({ data: { workspaceId, lotId: l.id, status: s, reason: note.trim() } }); toast.success(`Lot ${LOT[s].toLowerCase()}`); setNote(''); })}><Icon className="size-4" />{label}</Button>; })}</div>
+              return <Button key={s} variant={s === 'released' ? 'default' : 'outline'} disabled={busy || !note.trim()} onClick={() => void run(async () => { await decide({ data: { workspaceId, lotId: l.id, status: s, reason: note.trim() } }); toast.success(`Batch ${LOT[s].toLowerCase()}`); setNote(''); })}><Icon className="size-4" />{label}</Button>; })}</div>
           </>}
         </>}
       </div>
