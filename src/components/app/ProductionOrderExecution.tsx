@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -107,10 +108,31 @@ export function ProductionOrderExecution({ workspaceId, orderId }: { workspaceId
         </TableBody></Table></div></section></TabsContent>
 
         <TabsContent value="batch" className="rounded-2xl border border-border bg-card p-4"><section><div className="mb-2 flex items-center justify-between"><h3 className="font-medium">Batch record (eBMR)</h3><Button size="sm" variant="outline" disabled={busy || !['released', 'in_progress'].includes(order.status)} onClick={() => setStep({ instruction: '', measure_label: '', measure_unit: '', min_value: '', max_value: '', reason: '' })}><Plus className="size-4" />Langkah</Button></div><div className="space-y-2">
-          {det.steps.map((s) => <div key={s.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">{s.sequence}. {s.instruction}</p><p className="text-xs text-muted-foreground">{s.measure_label ? `${s.measure_label} ${s.min_value ?? '…'}–${s.max_value ?? '…'} ${s.measure_unit ?? ''}` : 'Tanpa nilai ukur'}{s.value != null ? ` · tercatat ${s.value}${s.within_limits === false ? ' (di luar batas)' : ''}` : ''}</p></div><div className="flex items-center gap-2"><Badge variant={s.status === 'verified' ? 'default' : 'secondary'}>{s.status}</Badge>
-            {s.status === 'pending' && <Button size="sm" disabled={busy || order.status !== 'in_progress'} onClick={() => ask({ title: `Kerjakan langkah ${s.sequence}`, withQty: !!s.measure_label, onSubmit: async (reason, qty) => { await perform({ data: { workspaceId, stepId: s.id, value: s.measure_label ? qty : null, reason } }); } })}>Kerjakan</Button>}
-            {s.status === 'done' && <Button size="sm" variant="outline" disabled={busy} onClick={() => ask({ title: `Verifikasi langkah ${s.sequence}`, onSubmit: async (reason) => { await verify({ data: { workspaceId, stepId: s.id, reason } }); toast.success('Langkah diverifikasi'); } })}>Verifikasi</Button>}
-          </div></div>)}
+          {(() => {
+            const canDo = !busy && order.status === 'in_progress';
+            const quick = det.steps.filter((s) => s.status === 'pending' && !s.measure_label);
+            return quick.length > 1 ? <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm"><span>{quick.length} langkah tanpa nilai ukur belum dikerjakan</span><Button size="sm" variant="outline" disabled={!canDo} onClick={() => void run(async () => { for (const s of quick) await perform({ data: { workspaceId, stepId: s.id, value: null, reason: 'Ceklis batch record' } }); toast.success(`${quick.length} langkah dicentang`); })}>Centang semua</Button></div> : null;
+          })()}
+          {det.steps.map((s) => {
+            const done = s.status !== 'pending';
+            const canDo = !busy && order.status === 'in_progress';
+            return <div key={s.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-start gap-3">
+                <Checkbox className="mt-0.5" checked={done} disabled={done || !canDo} aria-label={`Kerjakan langkah ${s.sequence}`}
+                  onCheckedChange={(v) => {
+                    if (v !== true || done) return;
+                    if (s.measure_label) ask({ title: `Nilai ukur langkah ${s.sequence}`, withQty: true, onSubmit: async (reason, qty) => { await perform({ data: { workspaceId, stepId: s.id, value: qty, reason: reason || 'Ceklis batch record' } }); } });
+                    else void run(async () => { await perform({ data: { workspaceId, stepId: s.id, value: null, reason: 'Ceklis batch record' } }); });
+                  }} />
+                <span><span className={`block text-sm font-medium ${done ? 'text-muted-foreground line-through' : ''}`}>{s.sequence}. {s.instruction}</span><span className="block text-xs text-muted-foreground">{s.measure_label ? `${s.measure_label} ${s.min_value ?? '…'}–${s.max_value ?? '…'} ${s.measure_unit ?? ''}` : 'Tanpa nilai ukur'}{s.value != null ? ` · tercatat ${s.value}${s.within_limits === false ? ' (di luar batas)' : ''}` : ''}</span></span>
+              </label>
+              <div className="flex items-center gap-3">
+                <Badge variant={s.status === 'verified' ? 'default' : 'secondary'}>{s.status}</Badge>
+                {done && <label className="flex items-center gap-2 text-xs text-muted-foreground"><Checkbox checked={s.status === 'verified'} disabled={s.status === 'verified' || busy} aria-label={`Verifikasi langkah ${s.sequence}`}
+                  onCheckedChange={(v) => { if (v === true) void run(async () => { await verify({ data: { workspaceId, stepId: s.id, reason: 'Verifikasi batch record' } }); toast.success('Langkah diverifikasi'); }); }} />Verifikasi</label>}
+              </div>
+            </div>;
+          })}
           {!det.steps.length && <p className="text-sm text-muted-foreground">Langkah dibuat dari BOM saat rilis.</p>}
         </div></section>
         {det.deviations.length > 0 && <section className="mt-6"><h3 className="mb-2 font-medium">Deviasi</h3>{det.deviations.map((v) => <p key={v.id} className="text-sm">{v.deviation_no} · {v.source} · <Badge variant={v.status === 'closed' ? 'default' : 'destructive'}>{v.status}</Badge> {v.description}</p>)}</section>}
