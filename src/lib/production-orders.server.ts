@@ -636,15 +636,32 @@ async function computeOrderCost(conn: PoolConnection, ws: string, userId: string
   const tot = outs.reduce((s, r) => s + num(r.q), 0);
   const alloc = outs.map((r) => ({ item_id: r.item_id, qty: num(r.q), share: tot ? Math.round((num(r.q) / tot) * 1e6) / 1e6 : 0 }));
   const fin = mat + lab + ovh + oth;
+  // Susut: selisih output diharapkan (rencana × yield standar) vs hasil aktual. Normal (≤ toleransi) tetap di HPP;
+  // sisanya (abnormal) dibebankan sebagai rugi dan dikeluarkan dari HPP barang jadi.
+  const expected = num(o.expected_output_qty);
+  const tolPct = num((await row(conn, "SELECT yield_tolerance_pct AS t FROM mfg_settings WHERE workspace_id = ?", [ws]))?.t);
+  const shortfall = Math.max(0, Math.round((expected - outq) * 10000) / 10000);
+  const abnQty = Math.max(0, Math.round((shortfall - (expected * tolPct) / 100) * 10000) / 10000);
+  const loss = outq > 0 && abnQty > 0 && fin > 0 ? Math.round((fin * abnQty) / (outq + abnQty)) : 0;
+  const lossM = fin > 0 ? Math.round((loss * mat) / fin) : 0;
+  const lossC = loss - lossM;
+  const fgCost = fin - loss;
+  if (shortfall > 0 && expected > 0) {
+    await conn.execute(
+      `INSERT INTO mfg_order_waste (id, workspace_id, order_id, planned_qty, expected_qty, actual_qty, waste_qty, normal_qty, abnormal_qty, tolerance_pct, total_cost, abnormal_cost, loss_material, loss_conversion)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE actual_qty = VALUES(actual_qty)`,
+      [uuid(), ws, o.id, num(o.planned_qty), expected, outq, shortfall, Math.round((shortfall - abnQty) * 10000) / 10000, abnQty, tolPct, fin, loss, lossM, lossC],
+    );
+  }
   await conn.execute(
     `INSERT INTO mfg_order_costs (id, workspace_id, order_id, material_cost, labor_cost, overhead_cost, other_cost, total_cost, output_qty, unit_cost,
        std_material_cost, std_conversion_cost, std_total_cost, variance, co_product_allocation, computed_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [uuid(), ws, o.id, mat, lab, ovh, oth, fin, outq, outq > 0 ? Math.round(fin / outq) : 0, stdm, stdc, stdm + stdc, fin - (stdm + stdc), JSON.stringify(alloc), userId],
+    [uuid(), ws, o.id, mat, lab, ovh, oth, fin, outq, outq > 0 ? Math.round(fgCost / outq) : 0, stdm, stdc, stdm + stdc, fin - (stdm + stdc), JSON.stringify(alloc), userId],
   );
   // Biaya lot barang jadi harus membawa total biaya produksi (bahan + tenaga kerja + overhead), bukan hanya bahan,
   // agar HPP penjualan dan saldo persediaan FG sama dengan jurnal J5M + J5C.
   if (outq > 0) {
-    const fu = Math.round((fin / outq) * 10000) / 10000;
+    const fu = Math.round((fgCost / outq) * 10000) / 10000;
     await conn.execute(
       `UPDATE inv_movements SET unit_cost = ?, value = ROUND(qty * ?, 4)
         WHERE workspace_id = ? AND ref_type = 'mfg_order' AND ref_id = ? AND qty > 0
@@ -726,8 +743,13 @@ async function postOrderJournals(conn: PoolConnection, ws: string, userId: strin
   await postEvent(conn, ws, userId, o, "J2", lab, "wip_conversion", "labor_applied", `Tenaga kerja ${o.order_no}`);
   await postEvent(conn, ws, userId, o, "J3", ovh, "wip_conversion", "overhead_applied", `Overhead ${o.order_no}`);
   await postEvent(conn, ws, userId, o, "J4", oth, "wip_conversion", "other_applied", `Biaya lain dibebankan ${o.order_no}`);
-  await postEvent(conn, ws, userId, o, "J5M", mat, "fg_inventory", "wip_material", `Barang jadi (material) ${o.order_no}`);
-  await postEvent(conn, ws, userId, o, "J5C", lab + ovh + oth, "fg_inventory", "wip_conversion", `Barang jadi (konversi) ${o.order_no}`);
+  const w = await row(conn, "SELECT loss_material, loss_conversion FROM mfg_order_waste WHERE workspace_id = ? AND order_id = ?", [ws, o.id]);
+  const lossM = num(w?.loss_material);
+  const lossC = num(w?.loss_conversion);
+  await postEvent(conn, ws, userId, o, "J5M", mat - lossM, "fg_inventory", "wip_material", `Barang jadi (material) ${o.order_no}`);
+  await postEvent(conn, ws, userId, o, "J5C", lab + ovh + oth - lossC, "fg_inventory", "wip_conversion", `Barang jadi (konversi) ${o.order_no}`);
+  await postEvent(conn, ws, userId, o, "J6M", lossM, "scrap_loss", "wip_material", `Beban susut di atas toleransi (material) ${o.order_no}`);
+  await postEvent(conn, ws, userId, o, "J6C", lossC, "scrap_loss", "wip_conversion", `Beban susut di atas toleransi (konversi) ${o.order_no}`);
 }
 
 export async function retryJournals(ws: string, userId: string, input: { orderId: string; reason: string }) {

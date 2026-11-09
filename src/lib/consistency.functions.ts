@@ -218,11 +218,12 @@ export const getConsistencyReport = createServerFn({ method: "POST" })
     await run({ id: "fgcost", group: "Produksi", title: "Biaya lot barang jadi = total biaya produksi (COGM)" }, async () => {
       if (!hasMfg) return { status: "na", summary: "Belum ada production order" };
       const bad = await rows(
-        `SELECT o.order_no, c.total_cost AS cogm, COALESCE(SUM(m.value),0) AS fg
+        `SELECT o.order_no, c.total_cost - COALESCE(w.abnormal_cost,0) AS cogm, COALESCE(SUM(m.value),0) AS fg
            FROM mfg_orders o JOIN mfg_order_costs c ON c.order_id = o.id AND c.workspace_id = o.workspace_id
            JOIN mfg_order_outputs ou ON ou.order_id = o.id AND ou.workspace_id = o.workspace_id AND ou.output_type = 'finished' AND ou.lot_id IS NOT NULL
            JOIN inv_movements m ON m.workspace_id = o.workspace_id AND m.mfg_lot_id = ou.lot_id AND m.ref_type = 'mfg_order' AND m.ref_id = o.id AND m.qty > 0
-          WHERE o.workspace_id = ? GROUP BY o.id, o.order_no, c.total_cost HAVING ABS(c.total_cost - SUM(m.value)) > 1 LIMIT 15`,
+           LEFT JOIN mfg_order_waste w ON w.workspace_id = o.workspace_id AND w.order_id = o.id
+          WHERE o.workspace_id = ? GROUP BY o.id, o.order_no, c.total_cost, w.abnormal_cost HAVING ABS(c.total_cost - COALESCE(w.abnormal_cost,0) - SUM(m.value)) > 1 LIMIT 15`,
       );
       return bad.length === 0
         ? { status: "ok", summary: "Nilai persediaan FG dari setiap order sama dengan COGM-nya" }
