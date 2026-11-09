@@ -39,11 +39,12 @@ export const CRM_FEATURES: Record<string, string> = {
   tenders: "tender",
   "doc-library": "tender",
   calendar: "publishing",
-  clients: "publishing",
-  reports: "insights",
-  agency: "publishing",
+  // Fitur Agency: harus cocok dengan gate server di agency.functions.ts.
+  clients: "client_approval",
+  reports: "white_label_reports",
+  agency: "client_approval",
   ai: "mcp_api",
-  team: "publishing",
+  team: "publishing", // + syarat max_users > 1, lihat hasCatalogFeature
 };
 export function hasCatalogFeature(
   entitlements: Entitlements,
@@ -57,10 +58,13 @@ export function hasCatalogFeature(
   if (moduleId !== "crm") return true;
   const entitlement = entitlements.qalling;
   if (!entitlement) return false;
-  return (
-    entitlement.features.legacy === true ||
-    entitlement.features[CRM_FEATURES[submoduleId] ?? "crm"] === true
-  );
+  if (entitlement.features.legacy === true) return true;
+  // Tim & Anggota hanya berguna bila paket mengizinkan lebih dari satu pengguna.
+  if (submoduleId === "team") {
+    const max = entitlement.limits.max_users;
+    if (max !== null && max !== undefined && max <= 1) return false;
+  }
+  return entitlement.features[CRM_FEATURES[submoduleId] ?? "crm"] === true;
 }
 export function validateTierPrice(
   price: number,
