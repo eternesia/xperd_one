@@ -318,7 +318,7 @@ const MODULE_DEFS: AppModule[] = [
       },
       { ...s("boms", "Formulation / BoM", "Formulasi / BoM"), icon: FlaskConical },
       {
-        ...s("lots", "Material Stock & Lots", "Stok Bahan & Lot"),
+        ...s("lots", "Material Stock & Lots", "Stok Bahan & Batch"),
         icon: PackageSearch,
       },
       { ...s("quality", "QC · Samples & Release", "QC · Sampel & Rilis"), icon: ShieldCheck },

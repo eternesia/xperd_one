@@ -68,7 +68,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
   const itemOf = (id: string) => data.items.find((i) => i.id === id);
   const today = new Date().toLocaleDateString("en-CA");
   const kpis: [string, number][] = [
-    ["Total lot", data.kpi.total],
+    ["Total batch", data.kpi.total],
     ["Karantina (menunggu QC)", data.kpi.quarantine],
     ["Rilis", data.kpi.released],
     ["Hold / ditolak", data.kpi.hold + data.kpi.rejected],
@@ -78,7 +78,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Stok Bahan</h1>
-          <p className="text-sm text-muted-foreground">Saldo bahan per lot dan status QC-nya. Lot baru otomatis terbentuk saat barang diterima (GRN).</p>
+          <p className="text-sm text-muted-foreground">Saldo bahan per batch dan status QC-nya. Batch baru otomatis terbentuk saat barang diterima (GRN).</p>
         </div>
         <Button disabled={!data.canWrite} onClick={() => setEdit({ id: null, values: fresh })}>
           <Plus className="size-4" />
@@ -97,7 +97,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
 
       {data.kpi.quarantine > 0 && data.canWrite && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-3 text-sm">
-          <span>Ada lot berstatus karantina. Lot dirilis langsung bila itemnya belum punya spesifikasi QC approved; bila sudah punya, lot harus melewati inspeksi di menu QC.</span>
+          <span>Ada batch berstatus karantina. Batch dirilis langsung bila itemnya belum punya spesifikasi QC approved; bila sudah punya, batch harus melewati inspeksi di menu QC.</span>
           <Button size="sm" disabled={busy} onClick={async () => {
             setBusy(true);
             try {
@@ -138,7 +138,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
           <Table>
             <TableHeader>
               <TableRow>
-                {["Lot", "Item", "Gudang", "Saldo", "Status QC", "Kedaluwarsa"].map((h) => (
+                {["Batch", "Item", "Gudang", "Saldo", "Status QC", "Kedaluwarsa"].map((h) => (
                   <TableHead key={h} className={h === "Saldo" ? "text-right" : undefined}>{h}</TableHead>
                 ))}
                 <TableHead className="text-right">Aksi</TableHead>
@@ -163,7 +163,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
                       <TableCell className={expired ? "text-destructive" : undefined}>{l.expiry_date ?? "—"}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" aria-label="Ubah lot" disabled={!data.canWrite} onClick={(e) => { e.stopPropagation(); setEdit({ id: l.id, values: { ...fresh, ...l, supplier_lot_no: l.supplier_lot_no ?? "" } }); }}>
+                          <Button variant="ghost" size="icon" aria-label="Ubah batch" disabled={!data.canWrite} onClick={(e) => { e.stopPropagation(); setEdit({ id: l.id, values: { ...fresh, ...l, supplier_lot_no: l.supplier_lot_no ?? "" } }); }}>
                             <Pencil className="size-4" />
                           </Button>
                           {isOpen ? <ChevronUp className="m-2 size-4" /> : <ChevronDown className="m-2 size-4" />}
@@ -179,7 +179,7 @@ export function ProductionLotsView({ workspaceId }: { workspaceId: string }) {
                 );
               })}
               {!data.lots.length && (
-                <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">Tidak ada lot yang cocok.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">Tidak ada batch yang cocok.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -209,7 +209,7 @@ function LotDetail({ workspaceId, lot }: { workspaceId: string; lot: { id: strin
   return (
     <div className="space-y-3 py-1">
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        <span>Lot pemasok: <strong>{lot.supplier_lot_no || "—"}</strong></span>
+        <span>Batch pemasok: <strong>{lot.supplier_lot_no || "—"}</strong></span>
         <span>Tgl produksi: <strong>{lot.mfg_date ?? "—"}</strong></span>
         <span>Uji ulang: <strong>{lot.retest_date ?? "—"}</strong></span>
         <span>Assay: <strong>{lot.assay_pct ?? "—"}</strong></span>
@@ -330,12 +330,12 @@ function Tools({ workspaceId, data }: { workspaceId: string; data: { warehouses:
             </form>
           </section>
           <section className="space-y-2">
-            <h2 className="font-medium">Selisih stok buku vs lot</h2>
-            <p className="text-sm text-muted-foreground">Wajar untuk item non-produksi. Item BoM otomatis mendapat lot saat GRN berikutnya.</p>
+            <h2 className="font-medium">Selisih stok buku vs batch</h2>
+            <p className="text-sm text-muted-foreground">Wajar untuk item non-produksi. Item BoM otomatis mendapat batch saat GRN berikutnya.</p>
             {r.isPending ? <Loader2 className="animate-spin" /> : r.isError ? <p className="text-sm">{r.error.message}</p> : (
               <div className="overflow-x-auto rounded-xl border border-border">
                 <Table>
-                  <TableHeader><TableRow>{["Item", "Qty buku", "Qty lot", "Selisih nilai"].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
+                  <TableHeader><TableRow>{["Item", "Qty buku", "Qty batch", "Selisih nilai"].map((h) => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
                   <TableBody>
                     {r.data.rows.slice(0, 50).map((x) => (
                       <TableRow key={x.item_code}>
@@ -368,7 +368,7 @@ function LotForm({ workspaceId, data, edit, onClose }: { workspaceId: string; da
     <div className="space-y-5">
       <div>
         <button type="button" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" onClick={onClose}><ChevronLeft className="size-4" />Kembali ke daftar</button>
-        <h1 className="text-2xl font-semibold">{id ? `Ubah lot ${values.lot_no}` : "Lot baru"}</h1>
+        <h1 className="text-2xl font-semibold">{id ? `Ubah lot ${values.lot_no}` : "Batch baru"}</h1>
       </div>
       <form
         className="space-y-4"
@@ -376,8 +376,8 @@ function LotForm({ workspaceId, data, edit, onClose }: { workspaceId: string; da
           e.preventDefault();
           setBusy(true);
           try {
-            await save({ data: { workspaceId, id, values, reason: id ? "Perubahan data lot" : "Pembuatan lot" } });
-            toast.success("Lot tersimpan");
+            await save({ data: { workspaceId, id, values, reason: id ? "Perubahan data batch" : "Pembuatan batch" } });
+            toast.success("Batch tersimpan");
             await qc.invalidateQueries({ queryKey: ["production-lots", workspaceId] });
             onClose();
           } catch (err) {
@@ -389,8 +389,8 @@ function LotForm({ workspaceId, data, edit, onClose }: { workspaceId: string; da
       >
         <fieldset disabled={busy} className="grid gap-4 rounded-2xl border border-border bg-card p-5 sm:grid-cols-3">
           <AdminField label="Item"><AdminSelect value={values.item_id} onChange={(v) => { if (!id) setValues({ ...values, item_id: v }); }}><option value="">Pilih item</option>{data.items.map((i) => <option key={i.id} value={i.id}>{i.code} · {i.name}</option>)}</AdminSelect></AdminField>
-          <AdminField label="Nomor lot"><Input required disabled={!!id} value={values.lot_no} onChange={(e) => setValues({ ...values, lot_no: e.target.value })} /></AdminField>
-          <AdminField label="Lot pemasok"><Input value={values.supplier_lot_no} onChange={(e) => setValues({ ...values, supplier_lot_no: e.target.value })} /></AdminField>
+          <AdminField label="Nomor batch"><Input required disabled={!!id} value={values.lot_no} onChange={(e) => setValues({ ...values, lot_no: e.target.value })} /></AdminField>
+          <AdminField label="Batch pemasok"><Input value={values.supplier_lot_no} onChange={(e) => setValues({ ...values, supplier_lot_no: e.target.value })} /></AdminField>
           <AdminField label="Pemasok"><AdminSelect value={values.partner_id ?? ""} onChange={(v) => setValues({ ...values, partner_id: v || null })}><option value="">—</option>{data.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</AdminSelect></AdminField>
           {(["mfg_date", "expiry_date", "retest_date"] as const).map((k) => (
             <AdminField key={k} label={k === "mfg_date" ? "Tanggal produksi" : k === "expiry_date" ? "Kedaluwarsa" : "Uji ulang"}>
@@ -404,7 +404,7 @@ function LotForm({ workspaceId, data, edit, onClose }: { workspaceId: string; da
           ))}
         </fieldset>
         <div className="flex gap-2">
-          <Button disabled={busy || !values.item_id || !values.lot_no.trim()}><Save className="size-4" />Simpan lot</Button>
+          <Button disabled={busy || !values.item_id || !values.lot_no.trim()}><Save className="size-4" />Simpan batch</Button>
           <Button type="button" variant="outline" onClick={onClose}>Batal</Button>
         </div>
       </form>

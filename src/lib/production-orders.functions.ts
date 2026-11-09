@@ -188,6 +188,21 @@ export const transitionProductionOrder = createServerFn({ method: "POST" })
     return m.transitionOrder(data.workspaceId, context.userId, data);
   });
 
+export const getMaterialBatches = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(ws.extend({ materialId: zId }))
+  .handler(async ({ data, context }) => {
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    await gate(data.workspaceId, context.userId, "orders");
+    const m = await executeOne<R>(
+      "SELECT m.item_id, o.warehouse_from FROM mfg_order_materials m JOIN mfg_orders o ON o.id = m.order_id WHERE m.workspace_id = ? AND m.id = ?",
+      [data.workspaceId, data.materialId],
+    );
+    if (!m) return { batches: [] };
+    const { listIssuableBatches } = await import("./production-lots.server");
+    return { batches: await listIssuableBatches(data.workspaceId, String(m.item_id), String(m.warehouse_from)) };
+  });
+
 export const issueProductionMaterial = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator(ws.extend({ materialId: zId, qty: z.number().positive(), lotId: zId.nullable(), key, reason }))

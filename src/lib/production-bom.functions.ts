@@ -7,7 +7,7 @@ import { zId } from "@/lib/production";
 import { saveBomSchema, bomCompositionIssues } from "@/lib/production-bom";
 
 const ws = z.object({ workspaceId: zId });
-const EDIT_ROLES = ["production_planner", "production_supervisor", "qa_manager"];
+const EDIT_ROLES = ["rnd_formulator", "production_supervisor", "qa_manager"];
 const bool = (v: unknown) => Number(v) === 1;
 const sha = async (s: string) => (await import("node:crypto")).createHash("sha256").update(s).digest("hex");
 

@@ -313,7 +313,13 @@ export async function transitionOrder(
     ws,
     userId,
     "orders",
-    status === "closed" ? ["production_supervisor", "cost_accountant"] : ["production_planner", "production_supervisor"],
+    status === "closed"
+      ? ["production_supervisor", "cost_accountant"]
+      : status === "in_progress" || status === "qc_pending"
+        ? ["production_supervisor", "operator"]
+        : status === "completed"
+          ? ["production_supervisor", "qa_manager", "qc_analyst"]
+          : ["production_planner", "production_supervisor"],
   );
   const reason = needReason(input.reason);
   if (!isUuid(input.key)) throw bad("Kunci idempotensi wajib.");
@@ -404,7 +410,7 @@ export async function issueMaterial(
   userId: string,
   input: { materialId: string; qty: number; key: string; lotId: string | null; reason: string },
 ) {
-  await mfgAction(ws, userId, "orders", ["warehouse", "production_supervisor"]);
+  await mfgAction(ws, userId, "orders", ["warehouse", "production_supervisor", "operator"]);
   const reason = needReason(input.reason);
   if (!isUuid(input.key)) throw bad("Kunci idempotensi wajib.");
   return transaction(async (conn) => {
@@ -521,7 +527,7 @@ export async function recordOutput(
   userId: string,
   input: { orderId: string; type: string; itemId: string; qty: number; key: string; reason: string },
 ) {
-  await mfgAction(ws, userId, "orders", ["production_supervisor", "warehouse"]);
+  await mfgAction(ws, userId, "orders", ["production_supervisor", "warehouse", "operator"]);
   const reason = needReason(input.reason);
   if (!isUuid(input.key) || !(input.qty > 0) || input.qty !== round4(input.qty)) throw bad("Kuantitas positif dan kunci wajib.");
   return transaction(async (conn) => {

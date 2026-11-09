@@ -19,8 +19,21 @@ export const productionRoles = [
   "qc_analyst",
   "qa_manager",
   "cost_accountant",
+  "rnd_formulator",
   "viewer",
 ] as const;
+/** Padanan peran → departemen pabrik, untuk tampilan. */
+export const productionRoleLabels: Record<(typeof productionRoles)[number], string> = {
+  production_planner: "PPIC / Perencana (buat & rilis order)",
+  production_supervisor: "Supervisor Produksi (semua tahap produksi)",
+  operator: "Produksi / Operator (issue bahan, batch record, output)",
+  warehouse: "Gudang (issue & stok bahan)",
+  qc_analyst: "QC Analis (sampel & hasil uji)",
+  qa_manager: "QA Manager (rilis & persetujuan)",
+  cost_accountant: "Finance / Costing (biaya & jurnal)",
+  rnd_formulator: "R&D (BoM & formulasi)",
+  viewer: "Hanya lihat",
+};
 export const productionSections = ["settings", "roles", "work-centers", "formulation-codes", "audit"] as const;
 export const numberingRule = z.object({
   prefix: z.string().regex(/^[A-Z][A-Z0-9]{0,11}$/),

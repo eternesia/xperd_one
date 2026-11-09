@@ -97,6 +97,27 @@ function lotEligible(l: any, today: string, minDays: number) {
   return true;
 }
 
+/** Daftar batch (lot) satu item di satu gudang untuk dipilih manual, urut FEFO; `eligible` = boleh di-issue (released, belum kedaluwarsa). */
+export async function listIssuableBatches(workspaceId: string, itemId: string, warehouse: string) {
+  const lots = await execute<any>("SELECT * FROM mfg_lots WHERE workspace_id = ? AND item_id = ? AND is_active = 1", [workspaceId, itemId]);
+  const q = { execute: async (sql: string, params: unknown[]) => [await execute<any>(sql, params as never)] } as unknown as Q;
+  const today = await wsToday(q, workspaceId);
+  const minDays = await minShelfDays(q, workspaceId);
+  const out: { id: string; lot_no: string; expiry_date: string | null; qc_status: string; balance: number; eligible: boolean; days_left: number | null }[] = [];
+  for (const l of lots) {
+    const balance = await lotBalance(null, workspaceId, l.id, warehouse);
+    if (balance <= 0) continue;
+    const exp = l.expiry_date ? d10(l.expiry_date) : null;
+    out.push({
+      id: l.id, lot_no: l.lot_no, expiry_date: exp, qc_status: l.qc_status, balance,
+      eligible: lotEligible(l, today, minDays),
+      days_left: exp ? Math.round((Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000) : null,
+    });
+  }
+  out.sort((a, b) => Number(b.eligible) - Number(a.eligible) || (a.expiry_date ?? "9999-12-31").localeCompare(b.expiry_date ?? "9999-12-31") || a.lot_no.localeCompare(b.lot_no));
+  return out;
+}
+
 /**
  * Pemilihan lot FEFO teraudit (padanan mfg_select_lot). Idempoten per `key`. Mengunci SEMUA lot aktif item
  * (`FOR UPDATE`, urutan id) sehingga dua pemilihan bersamaan untuk item yang sama berjalan berurutan.
