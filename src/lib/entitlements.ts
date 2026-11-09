@@ -2,6 +2,8 @@ export type Entitlement = {
   tier: string | null;
   features: Record<string, boolean>;
   limits: Record<string, number | null>;
+  /** Hibah akses sementara yang sedang berlaku (uji coba / mitra). */
+  grant?: { tier: string | null; ends_at: string; reason: string };
 };
 export type Entitlements = Record<string, Entitlement>;
 export function isLiveAddon(

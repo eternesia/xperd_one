@@ -367,7 +367,7 @@ function QallingShell() {
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetContent
                 side="bottom"
-                className="flex max-h-[88vh] flex-col gap-0 rounded-t-3xl p-0 [&>button]:hidden"
+                className="flex max-h-[62dvh] flex-col gap-0 rounded-t-3xl p-0 [&>button]:hidden"
               >
                 <SheetHeader className="sr-only">
                   <SheetTitle>{id ? "Menu lainnya" : "More"}</SheetTitle>

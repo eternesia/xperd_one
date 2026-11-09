@@ -83,7 +83,51 @@ export async function tenantEntitlements(tenantId: string): Promise<Entitlements
     const e = await compute(r, today);
     if (e) out[r.code] = e;
   }
+  await applyGrants(tenantId, today, out);
   return out;
+}
+
+/** Gabungkan hibah akses sementara (feature_grants): fitur di-OR, batas diambil yang terbesar. */
+async function applyGrants(tenantId: string, today: string, out: Entitlements) {
+  let grants: {
+    addon_code: string;
+    features: unknown;
+    limits: unknown;
+    reason: string;
+    ends_at: string;
+    tier_code: string | null;
+  }[] = [];
+  try {
+    grants = await execute(
+      `SELECT g.addon_code, g.features, g.limits, g.reason, g.ends_at, t.code AS tier_code
+         FROM feature_grants g LEFT JOIN addon_tiers t ON t.id = g.tier_id
+        WHERE g.tenant_id = ? AND g.revoked_at IS NULL AND g.starts_at <= ? AND g.ends_at >= ?
+        ORDER BY g.ends_at DESC`,
+      [tenantId, today, today],
+    );
+  } catch {
+    return; // tabel belum termigrasi
+  }
+  for (const g of grants) {
+    const cur: Entitlement = out[g.addon_code] ?? { tier: null, features: {}, limits: {} };
+    const features = { ...cur.features };
+    for (const [k, v] of Object.entries(obj(g.features))) if (v === true) features[k] = true;
+    const limits = { ...cur.limits };
+    for (const [k, v] of Object.entries(obj(g.limits)) as [string, number | null][]) {
+      if (limits[k] === null) continue; // sudah tak terbatas
+      limits[k] = v === null ? null : Math.max(Number(limits[k] ?? 0), Number(v));
+    }
+    out[g.addon_code] = {
+      ...cur,
+      features,
+      limits,
+      grant: cur.grant ?? {
+        tier: g.tier_code,
+        ends_at: String(g.ends_at).slice(0, 10),
+        reason: g.reason,
+      },
+    };
+  }
 }
 
 export async function workspaceEntitlements(workspaceId: string): Promise<Entitlements> {

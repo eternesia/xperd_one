@@ -20,6 +20,7 @@ import {
   Wallet,
   Settings,
   Menu,
+  Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -128,6 +129,9 @@ function AdminLayout() {
         </NavItem>
         <NavItem to="/app-admin/addons" icon={<Blocks className="h-4 w-4" />}>
           Add-on
+        </NavItem>
+        <NavItem to="/app-admin/grants" icon={<Gift className="h-4 w-4" />}>
+          Akses Uji Coba
         </NavItem>
         <Group>Layanan</Group>
         <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>

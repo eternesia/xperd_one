@@ -241,6 +241,13 @@ export function QallingHome() {
               </p>
               <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
                 {tierName}
+                {q?.grant && (
+                  <Badge variant="outline" className="border-emerald-500 text-emerald-600">
+                    {pick("Trial access", "Akses uji coba")}
+                    {q.grant.tier ? ` ${q.grant.tier.replace("qalling_", "")}` : ""} ·{" "}
+                    {pick("until", "sampai")} {q.grant.ends_at}
+                  </Badge>
+                )}
                 {isTrial && (
                   <Badge variant="outline" className="border-gold text-gold">
                     Trial{trialLeft != null ? ` · sisa ${trialLeft} hari` : ""}
