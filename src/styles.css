@@ -395,3 +395,104 @@
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* Tabel Qalling di HP: setiap baris jadi kartu berlabel (label dari judul kolom, lihat ui/table.tsx). */
+@media (max-width: 767px) {
+  .q-cards table {
+    display: block;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .q-cards table thead {
+    display: none;
+  }
+  .q-cards table tbody,
+  .q-cards table tfoot {
+    display: block;
+  }
+  .q-cards table tbody tr,
+  .q-cards table tfoot tr {
+    display: block;
+    margin: 0 0 0.5rem;
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--card);
+  }
+  .q-cards table tbody tr:last-child {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+  }
+  .q-cards table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 0;
+    padding: 0.25rem 0 !important;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .q-cards table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    text-align: left;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .q-cards table td[data-label=""]::before,
+  .q-cards table td:not([data-label])::before {
+    display: none;
+  }
+  .q-cards table td:first-child {
+    justify-content: flex-start;
+    padding-bottom: 0.4rem !important;
+    text-align: left;
+    font-weight: 600;
+  }
+  .q-cards table td:first-child::before {
+    display: none;
+  }
+  .q-cards table td[colspan] {
+    display: block;
+    text-align: center;
+  }
+  /* Kartu di dalam Card tanpa padding: beri sedikit jarak dari tepi. */
+  .q-cards .p-0 > .relative > table,
+  .q-cards .p-0 > div > .relative > table {
+    padding: 0.5rem;
+  }
+}
+
+/* Gaya aplikasi HP untuk seluruh halaman Qalling: kartu lebih bulat, tab berbentuk pil. */
+@media (max-width: 767px) {
+  .q-cards [data-card] {
+    border-radius: 1.25rem;
+  }
+  .q-cards [data-card] > .p-6 {
+    padding-inline: 1rem;
+    padding-bottom: 1rem;
+  }
+  .q-cards [data-card] > .p-6:not([class*="pt-"]) {
+    padding-top: 1rem;
+  }
+  .q-cards [role="tablist"] {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    overflow-x: auto;
+    border-radius: 9999px;
+    scrollbar-width: none;
+  }
+  .q-cards [role="tablist"] > [role="tab"] {
+    flex: 1 0 auto;
+    border-radius: 9999px;
+    padding: 0.45rem 0.85rem;
+  }
+}
