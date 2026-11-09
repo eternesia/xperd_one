@@ -298,7 +298,11 @@ function QallingShell() {
   ];
   const settingsLinks = settingsItems.map((s) => link(s.to, s.icon, s.label));
   const navGroups = [
-    { key: "chat", label: id ? "Percakapan" : "Conversations", ids: ["inbox", "comments"] },
+    {
+      key: "chat",
+      label: id ? "Percakapan" : "Conversations",
+      ids: ["inbox", "comments", "automations"],
+    },
     {
       key: "content",
       label: id ? "Konten" : "Content",
@@ -318,7 +322,7 @@ function QallingShell() {
     {
       key: "tools",
       label: id ? "Otomasi & Pesan" : "Automation & Messaging",
-      ids: ["automations", "broadcast", "templates", "campaigns", "wa-gateway"],
+      ids: ["broadcast", "templates", "campaigns", "wa-gateway"],
     },
     { key: "tender", label: "Tender", ids: ["tenders", "doc-library"] },
   ];
