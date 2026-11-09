@@ -350,8 +350,9 @@
     max-width: 100%;
     height: 94dvh;
     max-height: 94dvh;
-    transform: none;
-    translate: none;
+    /* minifier menggabung translate:none ke transform; nolkan variabel Tailwind-nya */
+    --tw-translate-x: 0px;
+    --tw-translate-y: 0px;
     border-radius: 1.75rem 1.75rem 0 0;
     overflow: hidden;
   }
