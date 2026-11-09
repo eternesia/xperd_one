@@ -751,11 +751,11 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3">
-        <div className="relative">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-card p-3 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:col-span-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="w-60 pl-9"
+            className="w-full pl-9 sm:w-60"
             placeholder={t("Search number or customer…", "Cari nomor atau pelanggan…")}
             value={search}
             onChange={(e) => {
@@ -771,7 +771,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             setPage(1);
           }}
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="col-span-2 w-full sm:w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -783,11 +783,11 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             ))}
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-2">
+        <div className="col-span-2 grid grid-cols-[auto_1fr_auto_1fr] items-center gap-2 sm:flex">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("From", "Dari")}</span>
           <Input
             type="date"
-            className="w-40"
+            className="min-w-0 sm:w-40"
             value={from}
             onChange={(e) => {
               setFrom(e.target.value);
@@ -797,7 +797,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
           <span className="text-xs uppercase tracking-wide text-muted-foreground">{t("To", "Sampai")}</span>
           <Input
             type="date"
-            className="w-40"
+            className="min-w-0 sm:w-40"
             value={to}
             onChange={(e) => {
               setTo(e.target.value);
@@ -822,7 +822,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-card max-md:border-0 max-md:bg-transparent">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1000,7 +1000,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
             <ChevronLeft className="h-4 w-4" /> {t("Back to list", "Kembali ke daftar")}
           </Button>
           <div>
-            <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">
+            <h1 className="text-xl font-semibold text-navy sm:text-2xl dark:text-primary-foreground">
               {editingId ? t("Edit Draft", "Edit Draf") : t("Create New", "Buat Baru")} ·{" "}
               {lang === "id" ? entity.id_ : entity.en}
             </h1>
@@ -1204,7 +1204,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-navy dark:text-primary-foreground">{t("Lines", "Rincian")}</p>
               </div>
-              <div className="overflow-x-auto rounded-xl border border-border">
+              <div className="overflow-x-auto rounded-xl border border-border max-md:border-0">
                 <table ref={lineTableRef} className="w-full text-sm">
                   <thead className="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
@@ -1378,7 +1378,7 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
                   </tbody>
                 </table>
               </div>
-              {entity.docType !== "delivery_order" && <div className="flex justify-end gap-6 text-sm">
+              {entity.docType !== "delivery_order" && <div className="flex flex-col items-end gap-1 text-sm sm:flex-row sm:justify-end sm:gap-6">
                 <span className="text-muted-foreground">
                   {t("Subtotal", "Subtotal")}: {formatMoney(totals.subtotal, lang)}
                 </span>
@@ -1419,7 +1419,8 @@ export function SalesTable({ entity, workspaceId }: { entity: SlsEntity; workspa
               </span>
             </label>
 
-            <div className="flex justify-end gap-2">
+            {/* Di HP tombol aksi menempel di atas navigasi bawah agar selalu terjangkau. */}
+            <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 -mx-1 flex gap-2 rounded-2xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur max-lg:[&>button]:flex-1 lg:static lg:mx-0 lg:justify-end lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none">
               <Button type="button" variant="outline" onClick={() => { setOpen(false); resetForm(); }}>
                 {t("Cancel", "Batal")}
               </Button>
