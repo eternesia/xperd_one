@@ -21,6 +21,7 @@ import {
   type PrcLine,
 } from "@/lib/procurement";
 import { findSlsEntity } from "@/lib/sales";
+import { useCardLabels } from "@/lib/card-labels";
 import { ProductionDocPage } from "@/components/app/ProductionDocPage";
 
 export const Route = createFileRoute("/app/w/$workspaceId/$moduleId/$submoduleId/$docId")({
@@ -42,6 +43,7 @@ function DocumentDetail() {
   const { lang } = useI18n();
   const { activeWorkspace, accessLoading, canViewSubmodule } = useApp();
   const [pdfBusy, setPdfBusy] = useState(false);
+  const lineTableRef = useCardLabels();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const isSales = moduleId === "sales";
   const salesEntity = findSlsEntity(submoduleId);
@@ -227,7 +229,7 @@ function DocumentDetail() {
           )}
         </dl>
 
-        <table className="mt-6 w-full text-sm">
+        <table ref={lineTableRef} className="mt-6 w-full text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
               <th className="py-2 text-left">#</th>

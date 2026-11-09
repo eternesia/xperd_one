@@ -249,9 +249,9 @@ function ModuleShell() {
             </SheetContent>
           </Sheet>
         </div>
-        <main className="p-4 sm:p-6 lg:p-10">
+        <div className="p-3 sm:p-6 lg:p-10">
           <Outlet />
-        </main>
+        </div>
       </div>
     </div>
   );

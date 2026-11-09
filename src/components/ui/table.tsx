@@ -1,42 +1,16 @@
 import * as React from "react";
 
+import { useCardLabels } from "@/lib/card-labels";
 import { cn } from "@/lib/utils";
-
-/**
- * Beri setiap sel `data-label` dari judul kolomnya. Dipakai CSS `.q-cards` (styles.css) untuk
- * menampilkan baris tabel sebagai kartu berlabel di layar HP. Tidak mengubah tampilan desktop.
- */
-function labelCells(table: HTMLTableElement) {
-  const heads = Array.from(table.tHead?.rows[0]?.cells ?? []).flatMap((th) =>
-    Array(th.colSpan || 1).fill((th.textContent ?? "").trim()),
-  );
-  for (const body of Array.from(table.tBodies))
-    for (const row of Array.from(body.rows)) {
-      let i = 0;
-      for (const cell of Array.from(row.cells)) {
-        const label = cell.colSpan > 1 ? "" : (heads[i] ?? "");
-        if (cell.getAttribute("data-label") !== label) cell.setAttribute("data-label", label);
-        i += cell.colSpan || 1;
-      }
-    }
-}
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => {
-    const inner = React.useRef<HTMLTableElement | null>(null);
-    React.useEffect(() => {
-      const t = inner.current;
-      if (!t || !t.closest(".q-cards")) return;
-      labelCells(t);
-      const mo = new MutationObserver(() => labelCells(t));
-      mo.observe(t, { childList: true, subtree: true, characterData: true });
-      return () => mo.disconnect();
-    }, []);
+    const labelRef = useCardLabels();
     return (
       <div className="relative w-full overflow-auto">
         <table
           ref={(el) => {
-            inner.current = el;
+            labelRef(el);
             if (typeof ref === "function") ref(el);
             else if (ref) ref.current = el;
           }}

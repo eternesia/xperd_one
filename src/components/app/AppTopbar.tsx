@@ -89,20 +89,21 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
   }, [entries]);
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b border-border bg-background/90 px-4 backdrop-blur lg:px-6">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur sm:h-16 sm:px-4 lg:px-6">
       <Link to="/app/w/$workspaceId" params={{ workspaceId }} className="flex shrink-0 items-center">
         <img
           src={appLogo}
           alt="XPERD One — Smart ERP Solution"
-          className="h-8 w-auto dark:brightness-0 dark:invert"
+          className="h-7 w-auto sm:h-8 dark:brightness-0 dark:invert"
           loading="eager"
           decoding="async"
         />
       </Link>
 
       <button
+        aria-label={lang === "id" ? "Cari modul" : "Search modules"}
         onClick={() => setSearchOpen(true)}
-        className="mx-auto flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary md:w-96"
+        className="mx-auto flex items-center gap-2 rounded-full border border-border bg-secondary/50 px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary sm:px-4 md:w-96"
       >
         <Search className="h-4 w-4" />
         <span className="hidden md:inline">{lang === "id" ? "Cari modul…" : "Search modules…"}</span>
@@ -145,6 +146,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
             <Button
               variant="ghost"
               size="icon"
+              className="hidden sm:inline-flex"
               aria-label={lang === "id" ? "Panduan dan XPERD Assistant" : "Guide and XPERD Assistant"}
             >
               <CircleHelp className="h-4 w-4 text-gold" />
@@ -210,7 +212,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Language">
+            <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label="Language">
               <Languages className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -224,7 +226,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
+        <Button variant="ghost" size="icon" className="hidden sm:inline-flex" onClick={toggleTheme} aria-label="Toggle theme">
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 

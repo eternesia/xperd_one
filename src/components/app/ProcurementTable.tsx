@@ -43,7 +43,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useNewDocTrigger } from "@/lib/new-doc-event";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCardLabels } from "@/lib/card-labels";
 import { deleteWorkspaceRow, listWorkspaceRows, replaceChildRows, saveWorkspaceRow, sumDocumentTotalsBySource, upsertWorkspaceRows } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
 import { erpSaveDocument } from "@/lib/erp-document.functions";
@@ -312,6 +314,12 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
   useEffect(() => {
     postingKey.current = null;
   }, [open, editingId, sourceId]);
+  // Tombol "+" di navigasi bawah HP membuka form dokumen baru.
+  useNewDocTrigger(() => {
+    resetForm();
+    setOpen(true);
+  });
+  const lineTableRef = useCardLabels();
   const create = useMutation({
     mutationFn: async () => {
       const sourceDoc = sourceDocs.find((d) => d.id === sourceId) ?? null;
@@ -968,7 +976,7 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                 <p className="text-sm font-semibold text-navy dark:text-primary-foreground">{t("Lines", "Rincian")}</p>
               </div>
               <div className="overflow-x-auto rounded-xl border border-border">
-                <table className="w-full text-sm">
+                <table ref={lineTableRef} className="w-full text-sm">
                   <thead className="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="p-2 text-left">{t("Item", "Item")}</th>
@@ -990,12 +998,12 @@ export function ProcurementTable({ entity, workspaceId }: { entity: PrcEntity; w
                       };
                       return (
                         <tr key={idx} className="border-t border-border align-top">
-                          <td className="min-w-[14rem] p-1">
+                          <td className="p-1 md:min-w-[14rem]">
                             <div className="px-2 py-2 text-sm font-medium">{l.item_code || <span className="text-muted-foreground">{t("(free text)", "(teks bebas)")}</span>}</div>
                           </td>
                           <td className="p-1">
                             <Input
-                              className="h-9 min-w-[10rem]"
+                              className="h-9 md:min-w-[10rem]"
                               value={l.description}
                               onChange={(e) => patch({ description: e.target.value })}
                             />

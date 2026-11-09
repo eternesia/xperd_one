@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useCardLabels } from "@/lib/card-labels";
 import { AdminSelect } from "@/components/app/admin-ui";
 import { deleteWorkspaceRow, listWorkspaceRows, saveWorkspaceRow } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
@@ -37,6 +38,7 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
 
+  const scanTableRef = useCardLabels();
   const [rows, setRows] = useState<ScanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -292,7 +294,7 @@ export function ShipmentScan({ workspaceId }: { workspaceId: string }) {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("No scans yet today.", "Belum ada scan hari ini.")}</p>
           ) : (
-            <table className="w-full min-w-[720px] text-sm">
+            <table ref={scanTableRef} className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="w-12 py-2 text-left">#</th>

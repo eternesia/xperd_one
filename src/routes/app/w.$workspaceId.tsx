@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 
 import { AppTopbar } from "@/components/app/AppTopbar";
+import { MobileBottomNav } from "@/components/app/MobileBottomNav";
 import { useApp } from "@/lib/app-context";
 
 export const Route = createFileRoute("/app/w/$workspaceId")({
@@ -26,7 +27,11 @@ function WorkspaceShell() {
   return (
     <div className="min-h-screen bg-secondary/30">
       <AppTopbar workspaceId={workspaceId} />
-      <Outlet />
+      {/* q-cards: tabel jadi kartu berlabel, tab pil, kartu bulat di HP (<768px); pb-28 agar tidak tertutup navigasi bawah. */}
+      <main className="q-cards min-w-0 overflow-x-hidden pb-28 lg:pb-0">
+        <Outlet />
+      </main>
+      <MobileBottomNav workspaceId={workspaceId} />
     </div>
   );
 }
