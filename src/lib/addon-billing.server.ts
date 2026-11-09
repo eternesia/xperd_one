@@ -263,6 +263,10 @@ export async function billingCheckout(p: {
         );
       }
     }
+    if (p.kind === "tier" && invoiceId && q.charge > 0) {
+      const { rewardReferralOn } = await import("./referral.server");
+      await rewardReferralOn(conn, { ref: invoiceId, tenant_id: p.tenantId, amount_idr: q.charge });
+    }
     const result = { ...q, invoice_id: invoiceId };
     await conn.execute(
       "INSERT INTO billing_operations (id, tenant_id, idempotency_key, request, result) VALUES (?, ?, ?, ?, ?)",

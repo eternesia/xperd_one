@@ -71,8 +71,8 @@ function ReferralPage() {
         <p className="text-sm text-muted-foreground">
           {s
             ? pick(
-                `Earn ${s.percent}% (max ${fmtIDR(Number(s.max_idr))}) of a friend's first top-up of at least ${fmtIDR(Number(s.min_topup_idr))}, credited to your balance.`,
-                `Dapatkan ${s.percent}% (maks ${fmtIDR(Number(s.max_idr))}) dari top-up pertama teman minimal ${fmtIDR(Number(s.min_topup_idr))}, langsung masuk saldo.`,
+                `Earn ${s.percent}% (max ${fmtIDR(Number(s.max_idr))}) of a friend's first paid plan purchase (e.g. Pro) of at least ${fmtIDR(Number(s.min_topup_idr))}, credited to your balance.`,
+                `Dapatkan ${s.percent}% (maks ${fmtIDR(Number(s.max_idr))}) dari pembelian paket berbayar pertama teman (mis. Pro) minimal ${fmtIDR(Number(s.min_topup_idr))}, langsung masuk saldo.`,
               )
             : "…"}
         </p>
