@@ -283,13 +283,7 @@ export async function walletSettleTopup(p: {
       "UPDATE topups SET status = 'paid', paid_at = NOW(6), reviewed_at = NOW(6), approved_by = ?, review_note = ?, invoice_id = ?, late_payment = ? WHERE id = ?",
       [p.actor ?? null, note, invoiceId, late, p.id],
     );
-    // Referral (New 12): komisi untuk referrer pada top-up pertama yang berhasil, satu transaksi dengan top-up.
-    const { rewardReferralOn } = await import("./referral.server");
-    await rewardReferralOn(conn, {
-      id: r.id,
-      tenant_id: r.tenant_id,
-      amount_idr: Number(r.amount_idr),
-    });
+    // Komisi referral kini dibayar saat pembelian paket berbayar pertama (addon-billing.server).
     const [after] = await conn.execute("SELECT * FROM topups WHERE id = ?", [p.id]);
     return (after as TopupRow[])[0];
   });

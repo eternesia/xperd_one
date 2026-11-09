@@ -104,7 +104,7 @@ function ReferralSettingsPage() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ref-min">Min. top up (Rp)</Label>
+            <Label htmlFor="ref-min">Min. pembelian paket (Rp)</Label>
             <Input
               id="ref-min"
               type="number"

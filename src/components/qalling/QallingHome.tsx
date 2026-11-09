@@ -37,6 +37,7 @@ import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 import { SocialIcon } from "./SocialIcon";
 import { OnboardingWizard } from "./OnboardingWizard";
+import { ReferralHomeCard } from "./ReferralHomeCard";
 import type { Entitlements } from "@/lib/entitlements";
 
 const money = (v: number) =>
@@ -505,6 +506,7 @@ export function QallingHome() {
           </a>
         </Button>
       </section>
+      {tenant?.id && <ReferralHomeCard tenantId={tenant.id} />}
     </div>
   );
 }

@@ -67,23 +67,33 @@ export async function referralClaim(userId: string, rawCode: string): Promise<bo
   return Boolean((res as unknown as { affectedRows?: number })?.affectedRows);
 }
 
-/** Dipanggil setelah top-up menjadi `paid` (di transaksi yang sama): komisi ke referrer pada top-up pertama yang memenuhi syarat. */
+/**
+ * Komisi referral dibayar pada pembelian paket berbayar pertama teman (mis. Pro/Agency), di transaksi yang sama.
+ * Syarat: program aktif, nilai pembelian >= minimum (`min_topup_idr`, dipakai sebagai minimal pembelian paket),
+ * dan teman pernah top-up dengan uang sungguhan (paket tidak dibayar dari saldo bonus semata).
+ * Komisi = persen x nilai pembelian, maksimal `max_idr`; hanya sekali per teman.
+ */
 export async function rewardReferralOn(
   conn: PoolConnection,
-  topup: { id: string; tenant_id: string; amount_idr: number },
+  purchase: { ref: string; tenant_id: string; amount_idr: number },
 ) {
   const [srows] = await conn.execute("SELECT * FROM referral_settings WHERE singleton = 1");
   const s = (
     srows as { enabled: number; percent: number; max_idr: number; min_topup_idr: number }[]
   )[0];
-  const amount = Number(topup.amount_idr);
-  if (!s || !s.enabled || amount < Number(s.min_topup_idr)) return;
+  const amount = Number(purchase.amount_idr);
+  if (!s || !s.enabled || amount <= 0 || amount < Number(s.min_topup_idr)) return;
   const [rrows] = await conn.execute(
     "SELECT * FROM referrals WHERE referred_tenant_id = ? AND status = 'pending' FOR UPDATE",
-    [topup.tenant_id],
+    [purchase.tenant_id],
   );
   const ref = (rrows as { referrer_tenant_id: string }[])[0];
   if (!ref) return;
+  const [paid] = await conn.execute(
+    "SELECT 1 AS ok FROM topups WHERE tenant_id = ? AND status = 'paid' LIMIT 1",
+    [purchase.tenant_id],
+  );
+  if (!(paid as unknown[]).length) return;
   const amt = Math.min(Math.floor((amount * Number(s.percent)) / 100), Number(s.max_idr));
   if (amt > 0)
     await walletPostEntryOn(conn, {
@@ -91,14 +101,14 @@ export async function rewardReferralOn(
       type: "voucher",
       amount: amt,
       product: "referral",
-      ref: topup.id,
-      idem: `referral:${topup.tenant_id}`,
+      ref: purchase.ref,
+      idem: `referral:${purchase.tenant_id}`,
       description: "Komisi referral",
       actor: null,
       invoice: null,
     });
   await conn.execute(
-    "UPDATE referrals SET status = 'rewarded', commission_idr = ?, topup_id = ?, rewarded_at = NOW(6) WHERE referred_tenant_id = ?",
-    [amt, topup.id, topup.tenant_id],
+    "UPDATE referrals SET status = 'rewarded', commission_idr = ?, topup_id = NULL, rewarded_at = NOW(6) WHERE referred_tenant_id = ?",
+    [amt, purchase.tenant_id],
   );
 }

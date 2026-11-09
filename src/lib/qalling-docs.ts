@@ -525,7 +525,7 @@ export const QALLING_DOCS: DocSection[] = [
     steps: [
       "Buka menu Referral untuk melihat tautan undangan Anda.",
       "Bagikan tautan itu. Tautan membuka beranda Qalling, jadi teman Anda bisa membaca fitur dulu sebelum mendaftar. Kode referral tersimpan di perangkatnya selama 30 hari dan otomatis terpakai saat ia mendaftar.",
-      "Komisi masuk ke saldo setelah syarat program terpenuhi.",
+      "Komisi masuk ke saldo saat teman membeli paket berbayar pertamanya (mis. Pro atau Agency) dari saldo yang sudah di-top-up. Besarnya persentase dari harga paket, dengan batas maksimal sesuai program. Kartu ajakan juga ada di bagian bawah Beranda.",
     ],
   },
   {

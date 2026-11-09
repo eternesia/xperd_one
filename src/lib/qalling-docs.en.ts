@@ -333,7 +333,7 @@ export const QALLING_DOCS_EN: Record<string, DocEn> = {
     steps: [
       "Open the Referral menu to see your invitation link.",
       "Share the link. It opens the Qalling home page, so your friend can read about the features before signing up. The referral code is kept on their device for 30 days and applied automatically when they register.",
-      "The commission is credited to your balance once the programme conditions are met.",
+      "The commission is credited to your balance when your friend buys their first paid plan (e.g. Pro or Agency) from a topped-up balance. It is a percentage of the plan price, up to the programme maximum. A share card is also at the bottom of Home.",
     ],
   },
   tim: {

@@ -542,18 +542,6 @@ export function SocialAccountsView({ workspaceId }: { workspaceId: string }) {
               ))}
             </div>
           )}
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setPickOpen(false);
-                setOpen(true);
-              }}
-            >
-              {id ? "Tambah manual" : "Add manually"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
