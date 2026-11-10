@@ -209,14 +209,38 @@ export const submitLead = createServerFn({ method: "POST" })
         interested_product?: string;
       },
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data: raw }) => {
     const { execute, uuid } = await import("@/integrations/mysql/pool");
+    // Validasi server (form publik): wajib & batas panjang sesuai kolom.
+    const clip = (v: unknown, n: number) => {
+      const t = String(v ?? "").trim();
+      return t ? t.slice(0, n) : null;
+    };
+    const data = {
+      company_name: clip(raw.company_name, 255),
+      contact_name: clip(raw.contact_name, 255),
+      job_title: clip(raw.job_title, 255),
+      email: clip(raw.email, 255),
+      phone: clip(raw.phone, 50),
+      industry: clip(raw.industry, 100),
+      employee_range: clip(raw.employee_range, 50),
+      message: clip(raw.message, 5000),
+      interested_product: raw.interested_product === "enterprise" ? "enterprise" : "business",
+    };
+    if (
+      !data.company_name ||
+      !data.contact_name ||
+      !data.email ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)
+    )
+      throw new Error("Data tidak lengkap.");
+    const leadId = uuid();
     await execute(
       `INSERT INTO leads
          (id, company_name, contact_name, job_title, email, phone, industry, employee_range, message, interested_product, source)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'website')`,
       [
-        uuid(),
+        leadId,
         data.company_name,
         data.contact_name,
         data.job_title ?? null,
@@ -225,8 +249,43 @@ export const submitLead = createServerFn({ method: "POST" })
         data.industry ?? null,
         data.employee_range ?? null,
         data.message ?? null,
-        data.interested_product ?? "business",
+        data.interested_product,
       ],
     );
+    // Beri tahu superadmin lewat email (bila gateway platform aktif). Gagal kirim tidak menggagalkan form.
+    try {
+      const { loadGateway, PLATFORM_SCOPE } = await import("@/lib/email-gateway.server");
+      const g = await loadGateway(PLATFORM_SCOPE);
+      if (g?.enabled) {
+        const { deliver } = await import("@/lib/billing-notifications.server");
+        const { newLeadAdminEmail } = await import("@/lib/billing-email-templates");
+        const admins = await execute<{ email: string }>(
+          `SELECT DISTINCT u.email FROM user_roles r JOIN app_users u ON u.id = r.user_id
+            WHERE r.role = 'admin' AND u.is_active = 1 LIMIT 10`,
+        );
+        const origin = (process.env.XPERD_PUBLIC_URL || "https://xperd.id").replace(/\/$/, "");
+        for (const a of admins) {
+          await deliver(g, {
+            tenantId: null,
+            kind: "admin_new_lead",
+            dedupe: `lead:${leadId}:${a.email}`,
+            to: a.email,
+            mail: newLeadAdminEmail({
+              company: data.company_name,
+              contact: data.contact_name,
+              email: data.email,
+              phone: data.phone,
+              product: data.interested_product === "enterprise" ? "Enterprise" : "Business",
+              industry: data.industry,
+              employees: data.employee_range,
+              message: data.message,
+              url: `${origin}/app-admin/leads`,
+            }),
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[leads] admin notification failed", e);
+    }
     return { ok: true as const };
   });
