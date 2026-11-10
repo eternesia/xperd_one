@@ -367,3 +367,50 @@ export function xproTaskDigestEmail(p: {
   );
   return { subject, text, html };
 }
+
+/* ------------------------------ Superadmin: prospek baru dari form kontak ------------------------------ */
+
+export function newLeadAdminEmail(p: {
+  company: string;
+  contact: string;
+  email: string;
+  phone: string | null;
+  product: string;
+  industry: string | null;
+  employees: string | null;
+  message: string | null;
+  url: string;
+}): Mail {
+  const subject = `Prospek baru: ${p.company} (${p.contact})`;
+  const rows: [string, string | null][] = [
+    ["Perusahaan", p.company],
+    ["Kontak", p.contact],
+    ["Email", p.email],
+    ["Telepon", p.phone],
+    ["Produk", p.product],
+    ["Industri", p.industry],
+    ["Karyawan", p.employees],
+  ];
+  const text = [
+    "Ada permintaan baru dari form kontak xperd.id:",
+    "",
+    ...rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
+    ...(p.message ? ["", "Pesan:", p.message] : []),
+    "",
+    `Tindak lanjuti: ${p.url}`,
+  ].join("\n");
+  const html = layout(
+    "Prospek baru dari form kontak",
+    `<table style="border-collapse:collapse;font-size:14px">${rows
+      .filter(([, v]) => v)
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:4px 12px 4px 0;color:#666">${esc(k)}</td><td style="padding:4px 0"><b>${esc(String(v))}</b></td></tr>`,
+      )
+      .join(
+        "",
+      )}</table>${p.message ? `<p style="margin-top:12px;white-space:pre-wrap;color:#333">${esc(p.message)}</p>` : ""}`,
+    { label: "Tindak lanjuti", url: p.url },
+  );
+  return { subject, text, html };
+}
