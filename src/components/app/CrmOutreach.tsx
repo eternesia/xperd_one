@@ -1,3 +1,5 @@
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WaChat } from "@/components/app/WaChat";
 import { ManagedWhatsApp } from "@/components/app/ManagedWhatsApp";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -580,233 +582,37 @@ export function BroadcastView({ workspaceId }: { workspaceId: string }) {
 export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
-  const qc = useQueryClient();
-  const runTest = useServerFn(testWaGateway);
-  const [testNumber, setTestNumber] = useState("");
-  const [form, setForm] = useState<null | {
-    provider: string;
-    sender_number: string;
-    endpoint_url: string;
-    api_token: string;
-    is_active: boolean;
-    notes: string;
-    phone_number_id: string;
-    invoice_template: string;
-    template_lang: string;
-  }>(null);
-
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["crm-wa-settings", workspaceId],
     queryFn: async () => getCrmWaSettings({ data: { workspaceId } }),
-  });
-
-  const state = form ?? {
-    provider: data?.provider ?? "manual",
-    sender_number: data?.sender_number ?? "",
-    endpoint_url: data?.endpoint_url ?? "",
-    api_token: data?.api_token ?? "",
-    is_active: data?.is_active ?? false,
-    notes: data?.notes ?? "",
-    phone_number_id: data?.phone_number_id ?? "",
-    invoice_template: data?.invoice_template ?? "",
-    template_lang: data?.template_lang ?? "id",
-  };
-
-  const save = useMutation({
-    mutationFn: async () => {
-      await saveCrmWaSettings({
-        data: {
-          workspaceId,
-          provider: state.provider,
-          sender_number: state.sender_number || null,
-          endpoint_url: state.endpoint_url || null,
-          api_token: state.api_token || null,
-          is_active: state.is_active,
-          notes: state.notes || null,
-          phone_number_id: state.phone_number_id || null,
-          invoice_template: state.invoice_template || null,
-          template_lang: state.template_lang || "id",
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success(t("Gateway saved", "Gateway tersimpan"));
-      qc.invalidateQueries({ queryKey: ["crm-wa-settings", workspaceId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const test = useMutation({
-    mutationFn: async () =>
-      runTest({
-        data: { workspaceId, testNumber: state.provider === "kirimdev" ? "-" : testNumber },
-      }),
-    onSuccess: (res) => {
-      if (res.status === "ok") toast.success(t("Gateway reachable", "Gateway terhubung"));
-      else toast.error(res.detail);
-      qc.invalidateQueries({ queryKey: ["crm-wa-settings", workspaceId] });
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("WhatsApp Gateway", "WhatsApp Gateway")} />
-      <div className="mx-auto max-w-3xl space-y-4">
-        <ManagedWhatsApp workspaceId={workspaceId} />
-      </div>
-      {/* Pengaturan teknis hanya untuk workspace lama yang sudah memakai gateway sendiri. */}
-      {!data?.managed && data?.provider && data.provider !== "manual" && (
-        <details className="mx-auto max-w-3xl rounded-2xl border bg-card p-4">
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            {t("Advanced: your own gateway", "Lanjutan: gateway milik sendiri")}
-          </summary>
-          <Card className="mt-3 border-0 shadow-none">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Plug className="h-4 w-4 text-gold" />
-                {t("Connection settings", "Pengaturan koneksi")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <AdminField label={t("Provider", "Provider")}>
-                <AdminSelect
-                  value={state.provider}
-                  onChange={(v) => setForm({ ...state, provider: v })}
-                >
-                  {CRM_WA_PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {lang === "id" ? p.id_ : p.en}
-                    </option>
-                  ))}
-                </AdminSelect>
-              </AdminField>
-              {state.provider !== "kirimdev" && (
-                <AdminField label={t("Sender number", "Nomor pengirim")}>
-                  <Input
-                    value={state.sender_number}
-                    onChange={(e) => setForm({ ...state, sender_number: e.target.value })}
-                    placeholder="628123456789"
-                  />
-                </AdminField>
-              )}
-              {state.provider === "kirimdev" && (
-                <>
-                  <AdminField label={t("Kirimdev API key", "API key Kirimdev")}>
-                    <Input
-                      type="password"
-                      value={state.api_token}
-                      onChange={(e) => setForm({ ...state, api_token: e.target.value })}
-                      placeholder="kdv_live_…"
-                    />
-                  </AdminField>
-                  <AdminField label="Phone Number ID">
-                    <Input
-                      value={state.phone_number_id}
-                      onChange={(e) => setForm({ ...state, phone_number_id: e.target.value })}
-                      placeholder="106540352242922"
-                    />
-                  </AdminField>
-                  <AdminField label={t("Invoice template name", "Nama template invoice")}>
-                    <Input
-                      value={state.invoice_template}
-                      onChange={(e) => setForm({ ...state, invoice_template: e.target.value })}
-                      placeholder="invoice_baru"
-                    />
-                  </AdminField>
-                  <AdminField label={t("Template language", "Bahasa template")}>
-                    <Input
-                      value={state.template_lang}
-                      onChange={(e) => setForm({ ...state, template_lang: e.target.value })}
-                      placeholder="id"
-                    />
-                  </AdminField>
-                  <p className="rounded-md bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">
-                    {t(
-                      "Create the template in your Kirimdev dashboard and wait for Meta approval. Its body needs exactly 4 variables: {{1}} customer name, {{2}} invoice number, {{3}} total, {{4}} invoice link. Example: “Hello {{1}}, your invoice {{2}} totals {{3}}. View and download it here: {{4}}”. The key and Phone Number ID are in the Kirimdev dashboard (WhatsApp → Accounts). “Test” checks the key without sending any message.",
-                      "Buat template di dashboard Kirimdev lalu tunggu persetujuan Meta. Isi template harus memakai tepat 4 variabel: {{1}} nama pelanggan, {{2}} nomor invoice, {{3}} total, {{4}} link invoice. Contoh: “Halo {{1}}, invoice {{2}} sebesar {{3}}. Lihat dan unduh di sini: {{4}}”. API key dan Phone Number ID ada di dashboard Kirimdev (WhatsApp → Accounts). Tombol Uji hanya memeriksa kunci tanpa mengirim pesan.",
-                    )}
-                  </p>
-                </>
-              )}
-              {state.provider !== "manual" && state.provider !== "kirimdev" && (
-                <>
-                  <AdminField label={t("Endpoint URL", "URL endpoint")}>
-                    <Input
-                      value={state.endpoint_url}
-                      onChange={(e) => setForm({ ...state, endpoint_url: e.target.value })}
-                      placeholder="https://gateway.example.com/send"
-                    />
-                  </AdminField>
-                  <AdminField label={t("API token", "Token API")}>
-                    <Input
-                      type="password"
-                      value={state.api_token}
-                      onChange={(e) => setForm({ ...state, api_token: e.target.value })}
-                    />
-                  </AdminField>
-                </>
-              )}
-              <div className="flex items-center gap-2 sm:col-span-2">
-                <Checkbox
-                  id="wa-active"
-                  checked={state.is_active}
-                  onCheckedChange={(v) => setForm({ ...state, is_active: Boolean(v) })}
-                />
-                <label htmlFor="wa-active" className="text-sm">
-                  {t("Gateway active", "Gateway aktif")}
-                </label>
-              </div>
-              <div className="sm:col-span-2">
-                <AdminField label={t("Notes", "Catatan")}>
-                  <Textarea
-                    value={state.notes}
-                    onChange={(e) => setForm({ ...state, notes: e.target.value })}
-                  />
-                </AdminField>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
-                <Button
-                  variant="navy"
-                  disabled={save.isPending || isLoading}
-                  onClick={() => save.mutate()}
-                >
-                  {t("Save", "Simpan")}
-                </Button>
-                <Input
-                  className={state.provider === "kirimdev" ? "hidden" : "w-48"}
-                  value={testNumber}
-                  onChange={(e) => setTestNumber(e.target.value)}
-                  placeholder={t("Test number", "Nomor uji")}
-                />
-                <Button
-                  variant="outline"
-                  disabled={
-                    test.isPending ||
-                    (state.provider !== "kirimdev" && !testNumber.trim()) ||
-                    state.provider === "manual"
-                  }
-                  onClick={() => test.mutate()}
-                >
-                  <Send /> {t("Send test", "Kirim uji")}
-                </Button>
-              </div>
-              {data?.last_status && (
-                <p className="sm:col-span-2 text-xs text-muted-foreground">
-                  {t("Last check", "Cek terakhir")}:{" "}
-                  {data.last_checked_at ? new Date(data.last_checked_at).toLocaleString() : "—"} ·{" "}
-                  {data.last_status}
-                </p>
-              )}
-              <p className="sm:col-span-2 text-xs text-muted-foreground">
-                {t(
-                  "Manual provider opens wa.me links per recipient. A custom HTTP gateway receives POST { sender, to, message } with a bearer token.",
-                  "Provider manual membuka tautan wa.me per penerima. Gateway HTTP kustom menerima POST { sender, to, message } dengan bearer token.",
-                )}
-              </p>
-            </CardContent>
-          </Card>
-        </details>
+      {data?.managed && data.phone_number_id ? (
+        <Tabs defaultValue="chat" className="space-y-4">
+          <TabsList className="grid w-full max-w-xs grid-cols-2 rounded-full">
+            <TabsTrigger value="chat" className="rounded-full">
+              {t("Chat", "Chat")}
+            </TabsTrigger>
+            <TabsTrigger value="number" className="rounded-full">
+              {t("Number", "Nomor")}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="chat">
+            <WaChat workspaceId={workspaceId} />
+          </TabsContent>
+          <TabsContent value="number">
+            <div className="mx-auto max-w-3xl">
+              <ManagedWhatsApp workspaceId={workspaceId} />
+            </div>
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <div className="mx-auto max-w-3xl">
+          <ManagedWhatsApp workspaceId={workspaceId} />
+        </div>
       )}
     </div>
   );
