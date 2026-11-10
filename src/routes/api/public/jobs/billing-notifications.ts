@@ -1,4 +1,4 @@
-/** Cron (disarankan per jam): email reminder trial & saldo, bukti pembayaran, ringkasan mingguan posting. Idempoten. */
+/** Cron (disarankan per jam): email reminder trial & saldo, bukti pembayaran, ringkasan mingguan posting, pengingat tugas XPro. Idempoten. */
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/api/public/jobs/billing-notifications")({
@@ -10,7 +10,10 @@ export const Route = createFileRoute("/api/public/jobs/billing-notifications")({
         if (failure) return failure;
         const { runBillingNotifications } = await import("@/lib/billing-notifications.server");
         try {
-          return Response.json(await runBillingNotifications());
+          const billing = await runBillingNotifications();
+          const { runXproTaskReminders } = await import("@/lib/xpro-reminders.server");
+          const xpro = await runXproTaskReminders().catch(() => ({ error: "xpro_failed" }));
+          return Response.json({ ...billing, xpro });
         } catch {
           return Response.json({ error: "notifications_failed" }, { status: 500 });
         }

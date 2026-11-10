@@ -47,6 +47,14 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
     } catch (e) {
       console.error("[scheduler] notifications failed", e);
     }
+    try {
+      // Pengingat tugas XPro (in-app selalu; email bila gateway aktif). Aman diulang (dedupe).
+      const { runXproTaskReminders } = await import("./xpro-reminders.server");
+      const r = await runXproTaskReminders();
+      if (r.inApp || r.emails) console.log("[scheduler] xpro reminders", r);
+    } catch (e) {
+      console.error("[scheduler] xpro reminders failed", e);
+    }
   };
 
   let renewing = false;

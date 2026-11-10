@@ -35,6 +35,7 @@ export const OPTIONAL_PREFS = [
   "invoice_receipt",
   "post_summary",
   "followup_digest",
+  "xpro_task_digest",
 ] as const;
 export type OptionalPref = (typeof OPTIONAL_PREFS)[number];
 
@@ -59,7 +60,7 @@ export const reminderStage = (daysLeft: number) => [0, 1, 3, 7].find((t) => t >=
 
 /* ------------------------------ pengiriman ------------------------------ */
 
-async function isEnabled(tenantId: string, pref: OptionalPref | null) {
+export async function isEnabled(tenantId: string, pref: OptionalPref | null) {
   if (!pref) return true;
   const r = await executeOne<{ enabled: number }>(
     "SELECT enabled FROM notification_prefs WHERE tenant_id = ? AND kind = ?",
@@ -105,7 +106,7 @@ async function billingUrl(tenantId: string) {
 }
 
 /** Klaim atomik lalu kirim. `skipped` bila sudah terkirim/sedang diproses/melebihi 3 percobaan. */
-async function deliver(
+export async function deliver(
   g: GatewayRow,
   p: {
     tenantId: string | null;
