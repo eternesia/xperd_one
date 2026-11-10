@@ -28,7 +28,7 @@ function WorkspaceShell() {
     <div className="min-h-screen bg-secondary/30">
       <AppTopbar workspaceId={workspaceId} />
       {/* q-cards: tabel jadi kartu berlabel, tab pil, kartu bulat di HP (<768px); pb-28 agar tidak tertutup navigasi bawah. */}
-      <main className="q-cards min-w-0 overflow-x-hidden pb-28 lg:pb-0">
+      <main className="q-cards min-w-0 overflow-x-clip pb-28 lg:pb-0">
         <Outlet />
       </main>
       <MobileBottomNav workspaceId={workspaceId} />
