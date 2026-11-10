@@ -52,7 +52,8 @@ import { useI18n } from "@/lib/i18n";
 import { nextDocNumber } from "@/lib/procurement";
 import { XproProjectDetail } from "@/components/app/XproDetail";
 import { XproMyTasksView } from "@/components/app/XproTasks";
-import { XproKanbanView, XproWorkloadView } from "@/components/app/XproKanban";
+import { XproKanbanView } from "@/components/app/XproKanban";
+import { XproWorkloadView } from "@/components/app/XproWorkload";
 
 /**
  * Ronde 33 — modul add-on **XPro** (Proyek & Kontrak, Milestone & Tugas, RAB,
