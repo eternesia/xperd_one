@@ -64,6 +64,13 @@ import {
   upsertWorkspaceRows,
 } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
+import {
+  AssigneeStack,
+  PriorityBadge,
+  XproTaskDialog,
+  useXproPeople,
+  useXproTaskList,
+} from "@/components/app/XproTasks";
 import { cn } from "@/lib/utils";
 import {
   type BoardColumn,
@@ -87,6 +94,9 @@ function useT() {
   const { lang } = useI18n();
   return (en: string, id: string) => (lang === "id" ? id : en);
 }
+
+/** Pilihan "proyek" semu untuk tugas internal tanpa proyek. */
+const INTERNAL = "__none";
 
 const TONES: Record<string, { bar: string; bg: string; dot: string }> = {
   info: { bar: "bg-info", bg: "bg-info/10", dot: "bg-info" },
@@ -191,7 +201,11 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
   const canEdit = canEditSubmodule("xpro", "kanban");
 
   const projects = useWsRows("prj_projects", workspaceId);
-  const tasksQ = useWsRows("prj_tasks", workspaceId);
+  // XPro v2: tugas dari server function yang menegakkan hak akses (multi-PIC, prioritas, checklist).
+  const peopleQ = useXproPeople(workspaceId);
+  const me = peopleQ.data?.me;
+  const scope = isManager ? "all" : "mine";
+  const tasksQ = useXproTaskList(workspaceId, scope, 365);
   const membersQ = useWsRows("prj_members", workspaceId);
   const milestonesQ = useWsRows("prj_milestones", workspaceId);
   const colsQ = useBoardColumns(workspaceId);
@@ -204,14 +218,18 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
   const [overKey, setOverKey] = useState<string | null>(null);
   const [quickKey, setQuickKey] = useState<string | null>(null);
   const [quickName, setQuickName] = useState("");
-  const [editTask, setEditTask] = useState<any | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [editCol, setEditCol] = useState<(BoardColumn & { original?: string }) | null>(null);
 
   const P = projects.data ?? [];
-  const T = tasksQ.data ?? [];
+  const T: any[] = tasksQ.data?.tasks ?? [];
   const members = membersQ.data ?? [];
   const myNames = useMyNames(members);
-  const isMine = (x: any) => myNames.has((x.assignee ?? "").toLowerCase());
+  const isMine = (x: any) =>
+    Boolean(
+      me && (x.created_by === me || (x.assignees ?? []).some((a: any) => a.user_id === me)),
+    ) || myNames.has((x.assignee ?? "").toLowerCase());
+  const hasInternal = T.some((x) => !x.project_id);
 
   const visibleProjects = isManager
     ? P
@@ -221,7 +239,11 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
     visibleProjects.find((p) => p.status === "active") ??
     visibleProjects[0] ??
     null;
-  const pid = activeProject?.id ?? "";
+  const pid =
+    projectId === INTERNAL || (!activeProject && hasInternal)
+      ? INTERNAL
+      : (activeProject?.id ?? "");
+  const inProject = (x: any) => (pid === INTERNAL ? !x.project_id : x.project_id === pid);
 
   const columnsReady = colsQ.data !== null;
   const stored = (colsQ.data ?? [])
@@ -232,19 +254,23 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
   const projectMembers = members.filter((m) => m.project_id === pid);
   const projectMilestones = (milestonesQ.data ?? []).filter((m) => m.project_id === pid);
 
-  let tasks = T.filter((x) => x.project_id === pid);
+  let tasks = T.filter(inProject);
   if (!isManager || mineOnly) tasks = tasks.filter(isMine);
-  if (pic) tasks = tasks.filter((x) => (x.assignee ?? "") === pic);
+  if (pic) tasks = tasks.filter((x) => (x.assignees ?? []).some((a: any) => a.name === pic));
   if (search.trim()) {
     const q = search.trim().toLowerCase();
-    tasks = tasks.filter((x) => `${x.name} ${x.assignee ?? ""}`.toLowerCase().includes(q));
+    tasks = tasks.filter((x) =>
+      `${x.name} ${(x.assignees ?? []).map((a: any) => a.name).join(" ")}`
+        .toLowerCase()
+        .includes(q),
+    );
   }
   const grouped = new Map<string, any[]>(columns.map((c) => [c.key, []]));
   for (const x of tasks) grouped.get(resolveColumnKey(x.status, columns))?.push(x);
   for (const list of grouped.values())
     list.sort((a, b) => String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9")));
 
-  const tasksKey = ["xpro", "prj_tasks", workspaceId];
+  const tasksKey = ["xpro", "tasks", workspaceId, scope, 365];
   const invalidate = () => qc.invalidateQueries({ queryKey: ["xpro"] });
   const onErr = (e: any) => toast.error(e?.message ?? String(e));
 
@@ -257,12 +283,22 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
       });
     },
     onMutate: ({ task, col }) => {
-      qc.setQueryData(tasksKey, (old: any[] | undefined) =>
-        (old ?? []).map((x) =>
-          x.id === task.id
-            ? { ...x, status: col.key, progress_pct: col.is_done ? 100 : x.progress_pct }
-            : x,
-        ),
+      qc.setQueryData(tasksKey, (old: { tasks: any[] } | undefined) =>
+        old
+          ? {
+              ...old,
+              tasks: old.tasks.map((x) =>
+                x.id === task.id
+                  ? {
+                      ...x,
+                      status: col.key,
+                      is_done: col.is_done,
+                      progress_pct: col.is_done ? 100 : x.progress_pct,
+                    }
+                  : x,
+              ),
+            }
+          : old,
       );
     },
     onError: (e) => {
@@ -275,7 +311,7 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
   const saveTask = useMutation({
     mutationFn: async (row: any) => {
       const { id, ...rest } = row;
-      const payload = { ...rest, project_id: rest.project_id ?? pid };
+      const payload = { ...rest, project_id: rest.project_id ?? (pid === INTERNAL ? null : pid) };
       await saveWorkspaceRow({
         data: { table: "prj_tasks", workspaceId, id: id || undefined, data: payload },
       });
@@ -408,11 +444,7 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
   const canDrag = (x: any) => canEdit && (isManager || isMine(x));
   const today = todayISO();
   const pics = [
-    ...new Set(
-      T.filter((x) => x.project_id === pid)
-        .map((x) => x.assignee)
-        .filter(Boolean),
-    ),
+    ...new Set(T.filter(inProject).flatMap((x) => (x.assignees ?? []).map((a: any) => a.name))),
   ] as string[];
 
   return (
@@ -433,7 +465,7 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
               )
         }
         action={
-          isManager && pid ? (
+          isManager && pid && pid !== INTERNAL ? (
             <Button
               variant="navy"
               size="sm"
@@ -458,6 +490,11 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
               {p.code} — {p.name}
             </option>
           ))}
+          {(isManager || hasInternal) && (
+            <option value={INTERNAL}>
+              {t("Internal (no project)", "Internal (tanpa proyek)")}
+            </option>
+          )}
         </AdminSelect>
         {isManager && (
           <AdminSelect value={pic} onChange={setPic} className="sm:w-52">
@@ -617,7 +654,7 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
                             setDragId(null);
                             setOverKey(null);
                           }}
-                          onClick={() => setEditTask({ ...x })}
+                          onClick={() => setOpenTaskId(x.id)}
                           className={cn(
                             "rounded-xl border border-border bg-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
                             draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
@@ -632,6 +669,16 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
                           <p className="text-sm font-semibold leading-snug text-navy dark:text-foreground">
                             {x.name}
                           </p>
+                          {(x.priority !== "medium" || x.checklist_total > 0) && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                              {x.priority !== "medium" && <PriorityBadge priority={x.priority} />}
+                              {x.checklist_total > 0 && (
+                                <span>
+                                  ☑ {x.checklist_done}/{x.checklist_total}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="mt-2 h-1.5 rounded-full bg-muted">
                             <div
                               className={cn("h-1.5 rounded-full", tn.bar)}
@@ -654,14 +701,7 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
                             </span>
                             <span className="flex items-center gap-1.5">
                               {num(x.progress_pct)}%
-                              {x.assignee && (
-                                <span
-                                  title={x.assignee}
-                                  className="grid h-6 w-6 place-items-center rounded-full bg-navy text-[10px] font-semibold text-primary-foreground"
-                                >
-                                  {initials(x.assignee)}
-                                </span>
-                              )}
+                              <AssigneeStack assignees={x.assignees ?? []} />
                             </span>
                           </div>
                           {draggable && (
@@ -743,175 +783,13 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
         </div>
       )}
 
-      {/* ----- card dialog ----- */}
-      <Dialog open={!!editTask} onOpenChange={(o) => !o && setEditTask(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t("Task card", "Kartu tugas")}</DialogTitle>
-          </DialogHeader>
-          {editTask && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <AdminField label={t("Task", "Tugas")}>
-                  <Input
-                    value={editTask.name}
-                    disabled={!isManager}
-                    onChange={(e) => setEditTask({ ...editTask, name: e.target.value })}
-                  />
-                </AdminField>
-              </div>
-              <AdminField label={t("Column", "Kolom")}>
-                <AdminSelect
-                  value={resolveColumnKey(editTask.status, columns)}
-                  onChange={(v) => setEditTask({ ...editTask, status: v })}
-                >
-                  {columns.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.name}
-                    </option>
-                  ))}
-                </AdminSelect>
-              </AdminField>
-              <AdminField label={t("Progress %", "Progres %")}>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={editTask.progress_pct ?? 0}
-                  onChange={(e) =>
-                    setEditTask({
-                      ...editTask,
-                      progress_pct: Math.min(100, Math.max(0, num(e.target.value))),
-                    })
-                  }
-                />
-              </AdminField>
-              {isManager ? (
-                <>
-                  <AdminField label="PIC">
-                    <AdminSelect
-                      value={editTask.assignee ?? ""}
-                      onChange={(v) => setEditTask({ ...editTask, assignee: v || null })}
-                    >
-                      <option value="">-</option>
-                      {projectMembers.map((m) => (
-                        <option key={m.id} value={m.name}>
-                          {m.name}
-                          {m.role ? ` · ${m.role}` : ""}
-                        </option>
-                      ))}
-                      {editTask.assignee &&
-                        !projectMembers.some((m) => m.name === editTask.assignee) && (
-                          <option value={editTask.assignee}>{editTask.assignee}</option>
-                        )}
-                    </AdminSelect>
-                  </AdminField>
-                  <AdminField label="Milestone">
-                    <AdminSelect
-                      value={editTask.milestone_id ?? ""}
-                      onChange={(v) => setEditTask({ ...editTask, milestone_id: v || null })}
-                    >
-                      <option value="">-</option>
-                      {projectMilestones.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </AdminSelect>
-                  </AdminField>
-                  <AdminField label={t("Start", "Mulai")}>
-                    <Input
-                      type="date"
-                      value={editTask.start_date ?? ""}
-                      onChange={(e) =>
-                        setEditTask({ ...editTask, start_date: e.target.value || null })
-                      }
-                    />
-                  </AdminField>
-                  <AdminField label={t("Due", "Tenggat")}>
-                    <Input
-                      type="date"
-                      value={editTask.due_date ?? ""}
-                      onChange={(e) =>
-                        setEditTask({ ...editTask, due_date: e.target.value || null })
-                      }
-                    />
-                  </AdminField>
-                </>
-              ) : (
-                <div className="space-y-1 text-sm text-muted-foreground sm:col-span-2">
-                  <p>
-                    PIC: <b className="text-foreground">{editTask.assignee ?? "-"}</b>
-                  </p>
-                  <p>
-                    {t("Schedule", "Jadwal")}:{" "}
-                    <b className="text-foreground">
-                      {editTask.start_date ?? "-"} → {editTask.due_date ?? "-"}
-                    </b>
-                  </p>
-                </div>
-              )}
-              {isManager && projectMembers.length === 0 && (
-                <p className="text-xs text-muted-foreground sm:col-span-2">
-                  {t(
-                    "Add people in Projects → project detail → Team so they can be picked as PIC.",
-                    "Tambahkan orang di Proyek → detail proyek → Tim agar bisa dipilih sebagai PIC.",
-                  )}
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:justify-between">
-            {isManager && editTask?.id ? (
-              <Button
-                variant="outline"
-                className="text-destructive"
-                onClick={() => {
-                  if (confirm(t("Delete this card?", "Hapus kartu ini?")))
-                    removeTask.mutate(editTask.id, { onSuccess: () => setEditTask(null) });
-                }}
-              >
-                <Trash2 /> {t("Delete", "Hapus")}
-              </Button>
-            ) : (
-              <span />
-            )}
-            <Button
-              variant="navy"
-              disabled={
-                !canEdit ||
-                !editTask?.name ||
-                saveTask.isPending ||
-                (!isManager && editTask && !isMine(editTask))
-              }
-              onClick={() => {
-                const col = columns.find((c) => c.key === editTask.status);
-                const row = isManager
-                  ? {
-                      id: editTask.id,
-                      name: editTask.name,
-                      status: editTask.status,
-                      progress_pct: col?.is_done ? 100 : editTask.progress_pct,
-                      assignee: editTask.assignee,
-                      milestone_id: editTask.milestone_id,
-                      start_date: editTask.start_date,
-                      due_date: editTask.due_date,
-                      project_id: editTask.project_id,
-                    }
-                  : {
-                      id: editTask.id,
-                      status: editTask.status,
-                      progress_pct: col?.is_done ? 100 : editTask.progress_pct,
-                      project_id: editTask.project_id,
-                    };
-                saveTask.mutate(row, { onSuccess: () => setEditTask(null) });
-              }}
-            >
-              {t("Save", "Simpan")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ----- detail tugas (XPro v2: multi-PIC, checklist, komentar) ----- */}
+      <XproTaskDialog
+        workspaceId={workspaceId}
+        taskId={openTaskId}
+        open={Boolean(openTaskId)}
+        onOpenChange={(o) => !o && setOpenTaskId(null)}
+      />
 
       {/* ----- column dialog ----- */}
       <Dialog open={!!editCol} onOpenChange={(o) => !o && setEditCol(null)}>

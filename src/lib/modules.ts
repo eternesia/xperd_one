@@ -19,6 +19,7 @@ import {
   Users,
   UserPlus,
   KanbanSquare,
+  ListTodo,
   Contact,
   CalendarCheck,
   Target,
@@ -451,6 +452,7 @@ const MODULE_DEFS: AppModule[] = [
     addon: "xpro",
     submodules: [
       // Ronde 36 (BS New 11): Kanban untuk semua penerima tugas; sisanya khusus owner/admin.
+      s("my-tasks", "My Tasks", "Tugas Saya"),
       s("kanban", "Kanban Tasks", "Kanban Tugas"),
       m("workload", "Team Workload", "Beban Kerja Tim"),
       m("projects", "Projects & Contracts", "Proyek & Kontrak"),
@@ -541,6 +543,7 @@ const SUB_ICONS: Record<string, LucideIcon> = {
   shipping: Truck,
   wallet: Wallet,
   settings: Settings2,
+  "my-tasks": ListTodo,
   kanban: KanbanSquare,
   workload: UsersRound,
   projects: FolderOpen,

@@ -846,6 +846,9 @@ const COLS: Record<string, string[]> = {
     "due_date",
     "progress_pct",
     "status",
+    "description",
+    "priority",
+    "estimate_hours",
     "created_at",
     "updated_at",
   ],
@@ -1410,6 +1413,17 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
         for (const c of cols) after[c] = data.data[c];
         await logAudit(execute, context, table, "UPDATE", before, after);
       }
+      if (table === "prj_tasks") {
+        // XPro v2: jaga daftar PIC (multi) & completed_at tetap sinkron dengan penulisan lama.
+        const { syncLegacyTaskWrite } = await import("@/lib/xpro-tasks.server");
+        await syncLegacyTaskWrite(
+          data.workspaceId,
+          data.id,
+          data.data ?? {},
+          context.userId,
+          false,
+        );
+      }
       return { id: data.id };
     }
 
@@ -1431,6 +1445,16 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
       cols.map((c) => payload[c]),
     );
     await logAudit(execute, context, table, "INSERT", null, payload);
+    if (table === "prj_tasks") {
+      const { syncLegacyTaskWrite } = await import("@/lib/xpro-tasks.server");
+      await syncLegacyTaskWrite(
+        data.workspaceId,
+        payload.id as string,
+        payload,
+        context.userId,
+        true,
+      );
+    }
     return { id: payload.id as string };
   });
 
