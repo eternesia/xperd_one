@@ -899,6 +899,7 @@ const COLS: Record<string, string[]> = {
     "mime_type",
     "size_bytes",
     "folder",
+    "ai_generated",
     "created_by",
     "created_at",
     "updated_at",
@@ -1113,11 +1114,15 @@ function assertTable(table: string): string {
   return table;
 }
 
+/** Kolom yang boleh dibaca klien tetapi hanya diisi server (mis. label "AI" hasil Studio AI). */
+const SERVER_ONLY_COLS: Record<string, string[]> = { crm_media: ["ai_generated"] };
+
 function cleanColumns(table: string, keys: string[], omit = new Set<string>()): string[] {
   const allowed = COLS[table];
+  const serverOnly = SERVER_ONLY_COLS[table] ?? [];
   const out: string[] = [];
   for (const k of keys) {
-    if (allowed.includes(k) && !omit.has(k)) out.push(k);
+    if (allowed.includes(k) && !omit.has(k) && !serverOnly.includes(k)) out.push(k);
   }
   return out;
 }

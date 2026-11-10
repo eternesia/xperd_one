@@ -1,0 +1,126 @@
+/**
+ * Studio AI Qalling (foto → video) — konstanta & tipe bersama klien/server.
+ * Rancangan: docs/AI-STUDIO.md. 1 kredit = Rp1.000, dipotong dari saldo wallet tenant.
+ */
+
+export const CREDIT_IDR = 1000;
+
+export const AI_TIERS = ["hemat", "standar", "premium"] as const;
+export type AiTier = (typeof AI_TIERS)[number];
+
+export const AI_PROVIDERS = ["fal", "atlas"] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+
+export const AI_DURATIONS = [5, 10] as const;
+export const AI_RATIOS = ["9:16", "1:1"] as const;
+
+export const AI_STYLES = ["zoom", "rotate", "steam", "store", "model", "free"] as const;
+export type AiStyle = (typeof AI_STYLES)[number];
+
+/** Prompt bahasa Inggris per gaya — sama persis dengan yang dipakai saat uji kualitas. */
+export const STYLE_PROMPTS: Record<AiStyle, string> = {
+  zoom: "slow cinematic push-in on the product, soft studio lighting, shallow depth of field, product stays sharp and unchanged",
+  rotate:
+    "the product slowly rotates 360 degrees on a turntable, clean background, consistent lighting",
+  steam: "gentle steam rises, subtle liquid splash, appetizing close-up, warm light",
+  store: "handheld camera slowly walks through the store, natural daylight, lively but calm",
+  model: "a model wears the outfit and turns slowly, natural movement, fabric moves realistically",
+  free: "subtle natural motion, product stays sharp and unchanged, keep all text and logos legible",
+};
+
+export const STYLE_LABELS: Record<AiStyle, { id: string; en: string }> = {
+  zoom: { id: "Zoom produk", en: "Product zoom" },
+  rotate: { id: "Putar 360°", en: "360° spin" },
+  steam: { id: "Uap/percikan", en: "Steam/splash" },
+  store: { id: "Suasana toko", en: "Store walk-through" },
+  model: { id: "Dipakai model", en: "Worn by model" },
+  free: { id: "Bebas", en: "Free" },
+};
+
+export const TIER_LABELS: Record<AiTier, { id: string; en: string }> = {
+  hemat: { id: "Hemat", en: "Basic" },
+  standar: { id: "Standar", en: "Standard" },
+  premium: { id: "Premium", en: "Premium" },
+};
+
+export interface TierConfig {
+  enabled: boolean;
+  provider: AiProvider;
+  /** ID model/endpoint di penyedia, mis. `fal-ai/kling-video/v3/standard/image-to-video`. */
+  model: string;
+  /** Nama parameter gambar di model tsb (`image_url`, `start_image_url`, `image`). */
+  image_param: string;
+  credits_5s: number;
+  credits_10s: number;
+  /** Perkiraan biaya penyedia per detik (USD) — hanya untuk laporan margin. */
+  cost_usd_per_s: number;
+  /** Parameter tambahan per model (JSON), digabung ke body permintaan. */
+  extra?: Record<string, string | number | boolean>;
+}
+
+/**
+ * Bawaan (cek ulang di halaman harga resmi sebelum dibuka ke pengguna).
+ * Kredit mengikuti rancangan awal: Hemat 6 / Standar 15 / Premium 30 per 5 detik.
+ */
+export const DEFAULT_TIERS: Record<AiTier, TierConfig> = {
+  hemat: {
+    enabled: true,
+    provider: "fal",
+    model: "fal-ai/wan-25-preview/image-to-video",
+    image_param: "image_url",
+    credits_5s: 6,
+    credits_10s: 12,
+    cost_usd_per_s: 0.05,
+  },
+  standar: {
+    enabled: true,
+    provider: "fal",
+    model: "fal-ai/kling-video/v3/standard/image-to-video",
+    image_param: "start_image_url",
+    credits_5s: 15,
+    credits_10s: 30,
+    cost_usd_per_s: 0.084,
+    extra: { generate_audio: false },
+  },
+  premium: {
+    enabled: true,
+    provider: "fal",
+    model: "bytedance/seedance-2.0/fast/image-to-video",
+    image_param: "image_url",
+    credits_5s: 30,
+    credits_10s: 60,
+    cost_usd_per_s: 0.181,
+    extra: { resolution: "720p" },
+  },
+};
+
+export const tierCredits = (t: TierConfig, duration: number) =>
+  duration >= 10 ? t.credits_10s : t.credits_5s;
+
+export type AiJobStatus = "queued" | "processing" | "saving" | "done" | "failed";
+
+export interface AiJobView {
+  id: string;
+  status: AiJobStatus;
+  tier: AiTier;
+  style: AiStyle;
+  duration_s: number;
+  aspect_ratio: string;
+  credits: number;
+  refunded: boolean;
+  error: string | null;
+  result_media_id: string | null;
+  source_media_id: string;
+  created_at: string;
+}
+
+export interface StudioAccess {
+  /** Studio boleh dipakai pengguna ini sekarang. */
+  available: boolean;
+  /** `live` = dibuka untuk semua; `admin_preview` = fitur OFF, hanya Super Admin (uji). */
+  mode: "off" | "live" | "admin_preview";
+  balance_idr: number;
+  daily_limit: number;
+  used_today: number;
+  tiers: { tier: AiTier; credits_5s: number; credits_10s: number }[];
+}

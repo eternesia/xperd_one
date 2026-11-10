@@ -36,7 +36,7 @@ import { uploadFileChunked } from "@/lib/chunked-upload";
 import { useI18n } from "@/lib/i18n";
 import { fmtBytes, storageQuota } from "@/lib/qalling-quota";
 import { cn } from "@/lib/utils";
-import { AiVideoInterest } from "@/components/qalling/AiVideoInterest";
+import { AiStudioEntry } from "@/components/qalling/AiStudio";
 import { DEFAULT_MEDIA_POLICY, validateMediaFile } from "@/lib/media-upload-policy";
 import { compressCrmMedia } from "@/lib/crm-media-compression";
 import { getMediaPolicy } from "@/lib/media-policy.functions";
@@ -60,6 +60,8 @@ export type MediaItem = {
   created_at: string;
   folder: string | null;
   url: string | null;
+  /** Hasil Studio AI (label "AI"). */
+  ai_generated?: boolean;
 };
 
 const isVideo = (m: { mime_type: string | null }) => (m.mime_type ?? "").startsWith("video/");
@@ -89,6 +91,7 @@ export function useCrmMedia(workspaceId: string) {
         created_at: String(r.created_at),
         folder: (r.folder as string | null) ?? null,
         url: mediaUrl(String(r.file_path)),
+        ai_generated: Number(r.ai_generated ?? 0) === 1,
       })) as MediaItem[];
     },
     staleTime: 30 * 60_000,
@@ -378,7 +381,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
               · {id ? "dipakai saat membuat postingan" : "reused when composing posts"}
             </span>
           </p>
-          <AiVideoInterest workspaceId={workspaceId} className="mt-2" />
+          <AiStudioEntry workspaceId={workspaceId} items={items} className="mt-2" />
         </div>
         <label
           className={cn(
@@ -631,6 +634,9 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
                       <Badge className="absolute left-2 top-2 gap-1">
                         <Film className="h-3 w-3" /> Video
                       </Badge>
+                    )}
+                    {m.ai_generated && (
+                      <Badge className="absolute right-2 top-2 bg-violet-600 text-white">AI</Badge>
                     )}
                   </div>
                   <div className="hidden p-2 sm:block">

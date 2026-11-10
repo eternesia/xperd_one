@@ -29,6 +29,7 @@ import { Route as ApiProductionDocumentRouteImport } from './routes/api/producti
 import { Route as ApiWorkspaceFilesRouteImport } from './routes/api/workspace-files'
 import { Route as AppAdminIndexRouteImport } from './routes/app-admin/index'
 import { Route as AppAdminAddonsRouteImport } from './routes/app-admin/addons'
+import { Route as AppAdminAiStudioRouteImport } from './routes/app-admin/ai-studio'
 import { Route as AppAdminAnnouncementsRouteImport } from './routes/app-admin/announcements'
 import { Route as AppAdminAuthSettingsRouteImport } from './routes/app-admin/auth-settings'
 import { Route as AppAdminContentRouteImport } from './routes/app-admin/content'
@@ -93,6 +94,7 @@ import { Route as QallingInvoiceTokenRouteImport } from './routes/qalling.invoic
 import { Route as QallingReportTokenRouteImport } from './routes/qalling.report.$token'
 import { Route as ApiPublicDocsMcpToolsRouteImport } from './routes/api/public/docs/mcp-tools'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
+import { Route as ApiPublicJobsAiStudioRouteImport } from './routes/api/public/jobs/ai-studio'
 import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/api/public/jobs/billing-notifications'
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
@@ -213,6 +215,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
 const AppAdminAddonsRoute = AppAdminAddonsRouteImport.update({
   id: '/addons',
   path: '/addons',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminAiStudioRoute = AppAdminAiStudioRouteImport.update({
+  id: '/ai-studio',
+  path: '/ai-studio',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminAnnouncementsRoute = AppAdminAnnouncementsRouteImport.update({
@@ -538,6 +545,11 @@ const ApiPublicHooksSocialPublishRoute =
     path: '/api/public/hooks/social-publish',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicJobsAiStudioRoute = ApiPublicJobsAiStudioRouteImport.update({
+  id: '/api/public/jobs/ai-studio',
+  path: '/api/public/jobs/ai-studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicJobsBillingNotificationsRoute =
   ApiPublicJobsBillingNotificationsRouteImport.update({
     id: '/api/public/jobs/billing-notifications',
@@ -669,6 +681,7 @@ export interface FileRoutesByFullPath {
   '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
+  '/app-admin/ai-studio': typeof AppAdminAiStudioRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/auth-settings': typeof AppAdminAuthSettingsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -734,6 +747,7 @@ export interface FileRoutesByFullPath {
   '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
@@ -771,6 +785,7 @@ export interface FileRoutesByTo {
   '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
+  '/app-admin/ai-studio': typeof AppAdminAiStudioRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/auth-settings': typeof AppAdminAuthSettingsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -835,6 +850,7 @@ export interface FileRoutesByTo {
   '/qalling/docs': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
@@ -875,6 +891,7 @@ export interface FileRoutesById {
   '/api/production-document': typeof ApiProductionDocumentRoute
   '/api/workspace-files': typeof ApiWorkspaceFilesRoute
   '/app-admin/addons': typeof AppAdminAddonsRoute
+  '/app-admin/ai-studio': typeof AppAdminAiStudioRoute
   '/app-admin/announcements': typeof AppAdminAnnouncementsRoute
   '/app-admin/auth-settings': typeof AppAdminAuthSettingsRoute
   '/app-admin/content': typeof AppAdminContentRoute
@@ -941,6 +958,7 @@ export interface FileRoutesById {
   '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
@@ -983,6 +1001,7 @@ export interface FileRouteTypes {
     | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
+    | '/app-admin/ai-studio'
     | '/app-admin/announcements'
     | '/app-admin/auth-settings'
     | '/app-admin/content'
@@ -1048,6 +1067,7 @@ export interface FileRouteTypes {
     | '/qalling/docs/'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
@@ -1085,6 +1105,7 @@ export interface FileRouteTypes {
     | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
+    | '/app-admin/ai-studio'
     | '/app-admin/announcements'
     | '/app-admin/auth-settings'
     | '/app-admin/content'
@@ -1149,6 +1170,7 @@ export interface FileRouteTypes {
     | '/qalling/docs'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
@@ -1188,6 +1210,7 @@ export interface FileRouteTypes {
     | '/api/production-document'
     | '/api/workspace-files'
     | '/app-admin/addons'
+    | '/app-admin/ai-studio'
     | '/app-admin/announcements'
     | '/app-admin/auth-settings'
     | '/app-admin/content'
@@ -1254,6 +1277,7 @@ export interface FileRouteTypes {
     | '/qalling/docs/'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
@@ -1314,6 +1338,7 @@ export interface RootRouteChildren {
   QallingDocsIndexRoute: typeof QallingDocsIndexRoute
   ApiPublicDocsMcpToolsRoute: typeof ApiPublicDocsMcpToolsRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
+  ApiPublicJobsAiStudioRoute: typeof ApiPublicJobsAiStudioRoute
   ApiPublicJobsBillingNotificationsRoute: typeof ApiPublicJobsBillingNotificationsRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
@@ -1466,6 +1491,13 @@ declare module '@tanstack/react-router' {
       path: '/addons'
       fullPath: '/app-admin/addons'
       preLoaderRoute: typeof AppAdminAddonsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/app-admin/ai-studio': {
+      id: '/app-admin/ai-studio'
+      path: '/ai-studio'
+      fullPath: '/app-admin/ai-studio'
+      preLoaderRoute: typeof AppAdminAiStudioRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/app-admin/announcements': {
@@ -1916,6 +1948,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSocialPublishRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/jobs/ai-studio': {
+      id: '/api/public/jobs/ai-studio'
+      path: '/api/public/jobs/ai-studio'
+      fullPath: '/api/public/jobs/ai-studio'
+      preLoaderRoute: typeof ApiPublicJobsAiStudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/billing-notifications': {
       id: '/api/public/jobs/billing-notifications'
       path: '/api/public/jobs/billing-notifications'
@@ -2149,6 +2188,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface AppAdminRouteChildren {
   AppAdminAddonsRoute: typeof AppAdminAddonsRoute
+  AppAdminAiStudioRoute: typeof AppAdminAiStudioRoute
   AppAdminAnnouncementsRoute: typeof AppAdminAnnouncementsRoute
   AppAdminAuthSettingsRoute: typeof AppAdminAuthSettingsRoute
   AppAdminContentRoute: typeof AppAdminContentRoute
@@ -2174,6 +2214,7 @@ interface AppAdminRouteChildren {
 
 const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminAddonsRoute: AppAdminAddonsRoute,
+  AppAdminAiStudioRoute: AppAdminAiStudioRoute,
   AppAdminAnnouncementsRoute: AppAdminAnnouncementsRoute,
   AppAdminAuthSettingsRoute: AppAdminAuthSettingsRoute,
   AppAdminContentRoute: AppAdminContentRoute,
@@ -2286,6 +2327,7 @@ const rootRouteChildren: RootRouteChildren = {
   QallingDocsIndexRoute: QallingDocsIndexRoute,
   ApiPublicDocsMcpToolsRoute: ApiPublicDocsMcpToolsRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
+  ApiPublicJobsAiStudioRoute: ApiPublicJobsAiStudioRoute,
   ApiPublicJobsBillingNotificationsRoute:
     ApiPublicJobsBillingNotificationsRoute,
   ApiPublicJobsSubscriptionRenewalRoute: ApiPublicJobsSubscriptionRenewalRoute,
