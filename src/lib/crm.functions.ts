@@ -66,7 +66,8 @@ export const getCrmWaSettings = createServerFn({ method: "POST" })
       number_display: string | null;
     }>(
       `SELECT id, workspace_id, provider, sender_number, endpoint_url, api_token,
-              is_active, notes, last_checked_at, last_status, phone_number_id, invoice_template, template_lang
+              is_active, notes, last_checked_at, last_status, phone_number_id, invoice_template, template_lang,
+              managed, kirimdev_customer_id, number_display
          FROM crm_wa_settings
         WHERE workspace_id = ?
         LIMIT 1`,
