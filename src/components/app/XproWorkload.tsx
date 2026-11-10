@@ -3,8 +3,8 @@
  * Perhitungan murni ada di src/lib/xpro-workload.ts.
  */
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Clock, Gauge, HelpCircle, Users } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Clock, Gauge, HelpCircle, Mail, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { AdminSelect, todayISO } from "@/components/app/admin-ui";
@@ -25,6 +25,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useApp } from "@/lib/app-context";
+import { getNotificationPrefs, setNotificationPref } from "@/lib/notification-prefs.functions";
 import { cn } from "@/lib/utils";
 import { type LoadLevel, type PersonLoad, computeHoursLoad } from "@/lib/xpro-workload";
 import { setXproCapacity } from "@/lib/xpro-tasks.functions";
@@ -101,6 +104,21 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
     () => computeHoursLoad(tasks, peopleQ.data?.people ?? [], today, horizon),
     [tasks, peopleQ.data, today, horizon],
   );
+
+  const { activeWorkspace } = useApp();
+  const tenantId = activeWorkspace?.tenant_id ?? "";
+  const prefsKey = ["notification-prefs", tenantId];
+  const prefsQ = useQuery({
+    queryKey: prefsKey,
+    enabled: Boolean(tenantId) && manager,
+    queryFn: () => getNotificationPrefs({ data: { tenantId } }),
+  });
+  const savePref = useMutation({
+    mutationFn: (enabled: boolean) =>
+      setNotificationPref({ data: { tenantId, kind: "xpro_task_digest", enabled } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: prefsKey }),
+    onError: (e) => toast.error(e instanceof Error ? e.message : String(e)),
+  });
 
   const saveCap = useMutation({
     mutationFn: (p: { userId: string; hours: number }) =>
@@ -201,6 +219,31 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
           <Legend cls="bg-red-500/80" label="> 100%" />
         </div>
       </div>
+
+      {manager && tenantId && (
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-3 sm:p-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {t("Daily task reminder email", "Email pengingat tugas harian")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Every morning (07:00 WIB) each PIC gets one email listing overdue tasks and tasks due today or tomorrow. In-app notifications are always on.",
+                  "Setiap pagi (07.00 WIB) tiap PIC menerima satu email berisi tugas terlambat serta yang bertenggat hari ini atau besok. Notifikasi di aplikasi selalu aktif.",
+                )}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={prefsQ.data?.xpro_task_digest ?? true}
+            disabled={!prefsQ.data || savePref.isPending}
+            onCheckedChange={(v) => savePref.mutate(v)}
+            aria-label={t("Daily task reminder email", "Email pengingat tugas harian")}
+          />
+        </div>
+      )}
 
       {/* Heatmap: tetap tabel (q-keep) dan bisa digeser horizontal di HP; kolom nama menempel. */}
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">

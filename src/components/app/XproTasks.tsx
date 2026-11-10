@@ -843,7 +843,10 @@ function CommentsBlock({
               <p className="text-xs">
                 <span className="font-medium">{c.author_name}</span>{" "}
                 <span className="text-muted-foreground">
-                  {String(c.created_at).slice(0, 16).replace("T", " ")}
+                  {new Date(`${String(c.created_at).replace(" ", "T")}Z`).toLocaleString("id-ID", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
                 </span>
               </p>
               <p className="whitespace-pre-wrap break-words text-sm">{c.body}</p>

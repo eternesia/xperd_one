@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
-  Bell,
   BookOpenCheck,
   Check,
   ChevronsUpDown,
@@ -18,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { AssistantPanel } from "@/components/app/AssistantPanel";
+import { NotificationBell } from "@/components/app/NotificationBell";
 import { Button } from "@/components/ui/button";
 import {
   CommandDialog,
@@ -35,11 +35,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useApp } from "@/lib/app-context";
 import { logoutAppUser } from "@/lib/auth.functions";
 import { emitAuthChange } from "@/hooks/use-session";
@@ -178,37 +173,7 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-gold" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
-            <div className="border-b border-border px-4 py-3 text-sm font-medium">
-              {lang === "id" ? "Notifikasi" : "Notifications"}
-            </div>
-            <div className="space-y-3 p-4 text-sm">
-              <div className="rounded-lg bg-secondary/60 p-3">
-                <p className="font-medium text-foreground">
-                  {lang === "id" ? "Workspace siap digunakan" : "Workspace is ready"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {lang === "id"
-                    ? "Lengkapi master data untuk mulai transaksi."
-                    : "Complete master data to start transacting."}
-                </p>
-              </div>
-              <div className="rounded-lg bg-secondary/60 p-3">
-                <p className="font-medium text-foreground">{lang === "id" ? "Undang tim" : "Invite your team"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {lang === "id" ? "Tambahkan pengguna sesuai kuota paket." : "Add users within your package quota."}
-                </p>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <NotificationBell workspaceId={workspaceId} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -307,3 +307,63 @@ export function followUpDigestEmail(p: {
   );
   return { subject, text, html };
 }
+
+/* ------------------------------ XPro: pengingat tugas harian ------------------------------ */
+
+export interface XproDigestItem {
+  name: string;
+  detail: string;
+}
+
+export function xproTaskDigestEmail(p: {
+  name: string;
+  workspaceName: string;
+  overdue: XproDigestItem[];
+  dueToday: XproDigestItem[];
+  dueTomorrow: XproDigestItem[];
+  url: string;
+}): Mail {
+  const sections: [string, XproDigestItem[]][] = [
+    ["Terlambat", p.overdue],
+    ["Tenggat hari ini", p.dueToday],
+    ["Tenggat besok", p.dueTomorrow],
+  ];
+  const total = sections.reduce((n, [, l]) => n + l.length, 0);
+  const subject = `${total} tugas perlu perhatian · ${p.workspaceName}`;
+  const cap = (l: XproDigestItem[]) => l.slice(0, 10);
+  const text = [
+    `Halo ${p.name},`,
+    "",
+    `Berikut tugas Anda di ${p.workspaceName} yang perlu perhatian:`,
+    ...sections.flatMap(([title, l]) =>
+      l.length
+        ? [
+            "",
+            `${title} (${l.length}):`,
+            ...cap(l).map((x) => `- ${x.name} — ${x.detail}`),
+            ...(l.length > 10 ? [`- dan ${l.length - 10} lainnya`] : []),
+          ]
+        : [],
+    ),
+    "",
+    `Buka Tugas Saya: ${p.url}`,
+    "",
+    "XPERD One",
+  ].join("\n");
+  const html = layout(
+    "Tugas perlu perhatian",
+    `<p>Halo ${esc(p.name)}, berikut tugas Anda di <b>${esc(p.workspaceName)}</b> yang perlu perhatian.</p>${sections
+      .map(([title, l]) =>
+        l.length
+          ? `<h3 style="margin:16px 0 6px;font-size:15px">${esc(title)} (${l.length})</h3><ul style="color:#444">${cap(
+              l,
+            )
+              .map((x) => `<li><b>${esc(x.name)}</b> — ${esc(x.detail)}</li>`)
+              .join("")}${l.length > 10 ? `<li>dan ${l.length - 10} lainnya</li>` : ""}</ul>`
+          : "",
+      )
+      .join("")}`,
+    { label: "Buka Tugas Saya", url: p.url },
+  );
+  return { subject, text, html };
+}

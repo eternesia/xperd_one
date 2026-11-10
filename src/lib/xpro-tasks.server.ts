@@ -247,8 +247,8 @@ export async function pushNotification(p: {
   body?: string | null;
   link?: string | null;
   dedupe?: string | null;
-}) {
-  await execute(
+}): Promise<boolean> {
+  const r = await result(
     `INSERT IGNORE INTO app_notifications (id, workspace_id, user_id, kind, title, body, link, dedupe_key)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -262,6 +262,7 @@ export async function pushNotification(p: {
       p.dedupe ?? null,
     ],
   );
+  return r.affectedRows > 0;
 }
 
 async function actorName(userId: string) {
