@@ -109,11 +109,11 @@ export function WaChat({ workspaceId }: { workspaceId: string }) {
   }, [msgs.data, locale]);
 
   return (
-    <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-md sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[340px_minmax(0,1fr)]">
+    <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-md sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[340px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
       {/* Daftar percakapan */}
       <aside
         className={cn(
-          "min-w-0 flex-col border-r bg-muted/30 md:flex",
+          "min-h-0 min-w-0 flex-col border-r bg-muted/30 md:flex",
           selected ? "hidden" : "flex",
         )}
       >
@@ -220,7 +220,14 @@ export function WaChat({ workspaceId }: { workspaceId: string }) {
       </aside>
 
       {/* Isi chat */}
-      <section className={cn("min-w-0 flex-col md:flex", selected ? "flex" : "hidden")}>
+      <section
+        className={cn(
+          "min-h-0 min-w-0 flex-col md:flex",
+          selected
+            ? "flex max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-card max-md:pb-[env(safe-area-inset-bottom)] max-md:pt-[env(safe-area-inset-top)]"
+            : "hidden",
+        )}
+      >
         {!current ? (
           <div className="hidden flex-1 place-items-center p-8 text-center text-sm text-muted-foreground md:grid">
             <div>
@@ -268,7 +275,7 @@ export function WaChat({ workspaceId }: { workspaceId: string }) {
               )}
             </header>
 
-            <div className="min-h-[50dvh] flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,hsl(var(--muted))_1px,transparent_0)] bg-[size:18px_18px] p-3 sm:p-5 md:min-h-0">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,hsl(var(--muted))_1px,transparent_0)] bg-[size:18px_18px] p-3 sm:p-5 md:min-h-0">
               {msgs.isLoading && (
                 <div className="grid place-items-center py-10 text-muted-foreground">
                   <Loader2 className="animate-spin" />
