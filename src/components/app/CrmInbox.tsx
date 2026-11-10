@@ -211,7 +211,7 @@ export function CrmInboxView({
   return (
     <div className="min-w-0">
       {!embedded && <h1 className="mb-4 text-2xl font-medium">Inbox</h1>}
-      <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-sm sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[360px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+      <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-sm sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[360px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] max-md:h-[calc(100dvh-15.5rem-env(safe-area-inset-bottom))] max-md:min-h-[360px]">
         {/* Daftar percakapan */}
         <aside
           className={cn(

@@ -109,7 +109,7 @@ export function WaChat({ workspaceId }: { workspaceId: string }) {
   }, [msgs.data, locale]);
 
   return (
-    <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-md sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[340px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+    <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-md sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[340px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] max-md:h-[calc(100dvh-15.5rem-env(safe-area-inset-bottom))] max-md:min-h-[360px]">
       {/* Daftar percakapan */}
       <aside
         className={cn(
