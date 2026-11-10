@@ -46,7 +46,7 @@ export function InboxHub({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="text-2xl font-medium">Inbox</h1>
         {tabs.length > 1 && (
           <div className="grid w-full grid-cols-2 gap-1 rounded-full bg-muted p-1 sm:w-auto">
