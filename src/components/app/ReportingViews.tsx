@@ -62,7 +62,7 @@ function Header({ title, kicker, action }: { title: string; kicker: string; acti
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="text-xs font-semibold tracking-[0.28em] text-gold">{kicker.toUpperCase()}</p>
-        <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">{title}</h1>
+        <h1 className="text-xl font-semibold text-navy sm:text-2xl dark:text-primary-foreground">{title}</h1>
       </div>
       {action}
     </div>
@@ -71,9 +71,11 @@ function Header({ title, kicker, action }: { title: string; kicker: string; acti
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-navy dark:text-primary-foreground">{value}</p>
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-3.5 sm:p-5">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">{label}</p>
+      <p className="mt-2 break-words text-lg font-semibold leading-tight text-navy sm:text-2xl dark:text-primary-foreground">
+        {value}
+      </p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -81,9 +83,9 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 function Panel({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-border bg-card p-5 ${className ?? ""}`}>
+    <div className={`min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5 ${className ?? ""}`}>
       <p className="text-sm font-semibold text-navy dark:text-primary-foreground">{title}</p>
-      <div className="mt-4 h-72">{children}</div>
+      <div className="mt-4 h-60 sm:h-72">{children}</div>
     </div>
   );
 }
@@ -106,7 +108,7 @@ function RangeBar({
   const { lang } = useI18n();
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-4">
+    <div className="q-filters flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card p-3 sm:p-4">
       <div className="space-y-1">
         <Label className="text-xs">{t("From", "Dari")}</Label>
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" />
@@ -116,7 +118,7 @@ function RangeBar({
         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" />
       </div>
       {extra}
-      <div className="ml-auto">
+      <div className="ml-auto empty:hidden">
         {onExport && (
           <Button variant="outline" onClick={onExport}>
             <Download /> {t("Export CSV", "Ekspor CSV")}
@@ -221,7 +223,7 @@ export function ExecutiveDashboard({ workspaceId }: { workspaceId: string }) {
         <Loading />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label={t("Revenue", "Pendapatan")} value={money(revenue)} hint={t("AR invoices", "Faktur piutang")} />
             <Stat label={t("Purchases", "Pembelian")} value={money(spend)} hint={t("AP invoices", "Faktur hutang")} />
             <Stat
@@ -262,7 +264,7 @@ export function ExecutiveDashboard({ workspaceId }: { workspaceId: string }) {
             </Panel>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label={t("Receivables", "Piutang")} value={money(receivableOf(s))} />
             <Stat label={t("Payables", "Hutang")} value={money(payableOf(p))} />
             <Stat label={t("Sales documents", "Dokumen penjualan")} value={String(s.length)} />
@@ -387,11 +389,10 @@ function RankTable({
   const t = (en: string, id: string) => (lang === "id" ? id : en);
   const total = rows.reduce((s, r) => s + r.value, 0);
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card max-md:border-0 max-md:bg-transparent">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-12">#</TableHead>
             <TableHead>{label}</TableHead>
             <TableHead className="text-right">{t("Documents", "Dokumen")}</TableHead>
             <TableHead className="text-right">{t("Amount", "Nilai")}</TableHead>
@@ -401,15 +402,17 @@ function RankTable({
         <TableBody>
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                 {t("No data for this period.", "Tidak ada data pada periode ini.")}
               </TableCell>
             </TableRow>
           )}
           {rows.map((r, i) => (
             <TableRow key={r.name}>
-              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-              <TableCell className="font-medium">{r.name}</TableCell>
+              <TableCell className="font-medium">
+                <span className="mr-2 tabular-nums text-muted-foreground">{i + 1}.</span>
+                {r.name}
+              </TableCell>
               <TableCell className="text-right">{r.count}</TableCell>
               <TableCell className="text-right">{money(r.value)}</TableCell>
               <TableCell className="text-right text-muted-foreground">
@@ -582,7 +585,7 @@ function InventoryAnalytics({ workspaceId }: { workspaceId: string }) {
         <Loading />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label={t("Stock in value", "Nilai masuk")} value={money(summary.inValue)} />
             <Stat label={t("Stock out value", "Nilai keluar")} value={money(summary.outValue)} />
             <Stat label={t("Net movement", "Mutasi bersih")} value={money(summary.inValue - summary.outValue)} />
@@ -713,7 +716,7 @@ function FinancialReports({ workspaceId }: { workspaceId: string }) {
         <Loading />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label={t("Revenue", "Pendapatan")} value={money(revenue)} />
             <Stat label={t("Expenses", "Beban")} value={money(expense)} />
             <Stat label={t("Net profit", "Laba bersih")} value={money(revenue - expense)} />
@@ -900,7 +903,7 @@ function DataExports({ workspaceId }: { workspaceId: string }) {
           <div key={d.id} className="flex flex-col rounded-2xl border border-border bg-card p-5">
             <p className="font-semibold text-navy dark:text-primary-foreground">{lang === "id" ? d.id_ : d.en}</p>
             <p className="mt-1 text-sm text-muted-foreground">{lang === "id" ? d.descId : d.descEn}</p>
-            <Button className="mt-4 self-start" variant="outline" disabled={busy === d.id} onClick={() => run(d.id)}>
+            <Button className="mt-4 w-full sm:w-auto sm:self-start" variant="outline" disabled={busy === d.id} onClick={() => run(d.id)}>
               {busy === d.id ? <Loader2 className="animate-spin" /> : <Download />}
               {t("Download CSV", "Unduh CSV")}
             </Button>

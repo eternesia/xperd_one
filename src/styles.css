@@ -398,20 +398,20 @@
 
 /* Tabel Qalling di HP: setiap baris jadi kartu berlabel (label dari judul kolom, lihat ui/table.tsx). */
 @media (max-width: 767px) {
-  .q-cards table {
+  .q-cards table:not(.q-keep) {
     display: block;
     min-width: 0 !important;
     width: 100% !important;
   }
-  .q-cards table thead {
+  .q-cards table:not(.q-keep) thead {
     display: none;
   }
-  .q-cards table tbody,
-  .q-cards table tfoot {
+  .q-cards table:not(.q-keep) tbody,
+  .q-cards table:not(.q-keep) tfoot {
     display: block;
   }
-  .q-cards table tbody tr,
-  .q-cards table tfoot tr {
+  .q-cards table:not(.q-keep) tbody tr,
+  .q-cards table:not(.q-keep) tfoot tr {
     display: block;
     margin: 0 0 0.5rem;
     padding: 0.75rem 0.875rem;
@@ -419,11 +419,11 @@
     border-radius: 1rem;
     background: var(--card);
   }
-  .q-cards table tbody tr:last-child {
+  .q-cards table:not(.q-keep) tbody tr:last-child {
     border-bottom: 1px solid var(--border);
     margin-bottom: 0;
   }
-  .q-cards table td {
+  .q-cards table:not(.q-keep) td {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -435,7 +435,7 @@
     white-space: normal;
     word-break: break-word;
   }
-  .q-cards table td::before {
+  .q-cards table:not(.q-keep) td::before {
     content: attr(data-label);
     flex-shrink: 0;
     max-width: 45%;
@@ -443,31 +443,31 @@
     font-size: 0.75rem;
     color: var(--muted-foreground);
   }
-  .q-cards table td[data-label=""]::before,
-  .q-cards table td:not([data-label])::before {
+  .q-cards table:not(.q-keep) td[data-label=""]::before,
+  .q-cards table:not(.q-keep) td:not([data-label])::before {
     display: none;
   }
-  .q-cards table td:first-child {
+  .q-cards table:not(.q-keep) td:first-child {
     justify-content: flex-start;
     padding-bottom: 0.4rem !important;
     text-align: left;
     font-weight: 600;
   }
-  .q-cards table td:first-child::before {
+  .q-cards table:not(.q-keep) td:first-child::before {
     display: none;
   }
-  .q-cards table td[colspan] {
+  .q-cards table:not(.q-keep) td[colspan] {
     display: block;
     text-align: center;
   }
   /* Input di dalam kartu baris (editor rincian dokumen): isi sisa lebar di samping label. */
-  .q-cards table td > :is(input, textarea, button[role="combobox"]) {
+  .q-cards table:not(.q-keep) td > :is(input, textarea, button[role="combobox"]) {
     flex: 1 1 auto;
     width: auto !important;
     max-width: 62%;
   }
   /* Kolom aksi tanpa judul (mis. tombol hapus baris): rata kanan. */
-  .q-cards table td[data-label=""]:last-child:not([colspan]) {
+  .q-cards table:not(.q-keep) td[data-label=""]:last-child:not([colspan]) {
     justify-content: flex-end;
   }
   /* Kartu di dalam Card tanpa padding: beri sedikit jarak dari tepi. */

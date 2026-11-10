@@ -114,7 +114,7 @@ function Header({
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="text-xs font-semibold tracking-[0.28em] text-gold">{kicker.toUpperCase()}</p>
-        <h1 className="text-2xl font-semibold text-navy dark:text-primary-foreground">{title}</h1>
+        <h1 className="text-xl font-semibold text-navy sm:text-2xl dark:text-primary-foreground">{title}</h1>
       </div>
       {action}
     </div>
@@ -123,9 +123,9 @@ function Header({
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("mt-1 text-xl font-semibold text-navy dark:text-primary-foreground", tone)}>
+    <div className="min-w-0 rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground sm:text-xs">{label}</p>
+      <p className={cn("mt-1 break-words text-lg font-semibold leading-tight sm:text-xl text-navy dark:text-primary-foreground", tone)}>
         {value}
       </p>
     </div>
@@ -876,7 +876,7 @@ function TrialBalanceView({ workspaceId }: { workspaceId: string }) {
         title={t("Trial Balance", "Neraca Saldo")}
         action={<StatementActions build={buildStatement} />}
       />
-      <div className="flex flex-wrap items-end gap-2 no-print">
+      <div className="q-filters flex flex-wrap items-end gap-2 no-print">
         <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
       </div>
 
@@ -989,7 +989,7 @@ function StatementActions({ build }: { build: () => StatementDoc }) {
     }
   };
   return (
-    <div className="no-print flex flex-wrap items-center gap-2">
+    <div className="no-print grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
       <Button variant="outline" onClick={() => run("xlsx")}>
         Excel
       </Button>
@@ -1057,23 +1057,29 @@ function StatementSection({
       <div className="border-b border-border bg-muted/40 px-4 py-3 text-sm font-semibold text-navy dark:text-primary-foreground">
         {title}
       </div>
-      <Table>
+      <Table className="q-keep">
         <TableBody>
           {!rows.length && (
             <TableRow>
-              <TableCell className="py-6 text-center text-muted-foreground">—</TableCell>
+              <TableCell colSpan={3} className="py-6 text-center text-muted-foreground">—</TableCell>
             </TableRow>
           )}
           {rows.map((r) => (
             <TableRow key={r.code}>
-              <TableCell className="w-24 text-muted-foreground">{r.code}</TableCell>
-              <TableCell>{r.name}</TableCell>
-              <TableCell className="text-right">{formatMoney(r.balance, lang)}</TableCell>
+              <TableCell className="hidden w-24 text-muted-foreground sm:table-cell">{r.code}</TableCell>
+              <TableCell className="py-2.5 sm:py-4">
+                {r.name}
+                <span className="block text-xs text-muted-foreground sm:hidden">{r.code}</span>
+              </TableCell>
+              <TableCell className="whitespace-nowrap py-2.5 text-right tabular-nums sm:py-4">
+                {formatMoney(r.balance, lang)}
+              </TableCell>
             </TableRow>
           ))}
           <TableRow className="bg-muted/50 font-semibold">
-            <TableCell colSpan={2}>{lang === "id" ? "Total" : "Total"}</TableCell>
-            <TableCell className="text-right">{formatMoney(total, lang)}</TableCell>
+            <TableCell className="hidden sm:table-cell" />
+            <TableCell>{lang === "id" ? "Total" : "Total"}</TableCell>
+            <TableCell className="whitespace-nowrap text-right tabular-nums">{formatMoney(total, lang)}</TableCell>
           </TableRow>
         </TableBody>
       </Table>
