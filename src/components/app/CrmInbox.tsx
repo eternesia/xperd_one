@@ -211,9 +211,14 @@ export function CrmInboxView({
   return (
     <div className="min-w-0">
       {!embedded && <h1 className="mb-4 text-2xl font-medium">Inbox</h1>}
-      <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-sm sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid min-w-0 overflow-hidden rounded-3xl border bg-card shadow-sm sm:rounded-2xl md:h-[calc(100dvh-13rem)] md:min-h-[540px] md:grid-cols-[360px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
         {/* Daftar percakapan */}
-        <aside className={cn("min-w-0 flex-col md:flex md:border-r", selected ? "hidden" : "flex")}>
+        <aside
+          className={cn(
+            "min-h-0 min-w-0 flex-col md:flex md:border-r",
+            selected ? "hidden" : "flex",
+          )}
+        >
           <div className="space-y-3 border-b p-3 sm:p-4">
             <div className="flex items-center gap-2">
               <select
@@ -340,7 +345,14 @@ export function CrmInboxView({
         </aside>
 
         {/* Isi percakapan */}
-        <section className={cn("min-w-0 flex-col md:flex", selected ? "flex" : "hidden")}>
+        <section
+          className={cn(
+            "min-h-0 min-w-0 flex-col md:flex",
+            selected
+              ? "flex max-md:fixed max-md:inset-0 max-md:z-50 max-md:bg-card max-md:pb-[env(safe-area-inset-bottom)] max-md:pt-[env(safe-area-inset-top)]"
+              : "hidden",
+          )}
+        >
           {!active ? (
             <div className="hidden flex-1 place-items-center text-sm text-muted-foreground md:grid">
               <div className="text-center">
@@ -433,7 +445,7 @@ export function CrmInboxView({
               </header>
 
               <div
-                className="min-h-[50dvh] flex-1 space-y-3 overflow-y-auto p-3 sm:p-5 md:min-h-0"
+                className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-5 md:min-h-0"
                 aria-label={id ? "Pesan percakapan" : "Conversation messages"}
               >
                 {messages.error ? (
