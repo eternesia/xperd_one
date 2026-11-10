@@ -36,7 +36,14 @@ import { QuickInvoice, QuickReplies } from "@/components/app/QuickReplies";
  * Qalling **Inbox** (DM Facebook/Instagram) — diporting dari BS New 11 `CrmInbox.tsx`; data lewat
  * server fn MySQL Old. Tanpa Realtime: segar saat fokus atau lewat tombol segarkan (tanpa polling).
  */
-export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
+export function CrmInboxView({
+  workspaceId,
+  embedded,
+}: {
+  workspaceId: string;
+  /** Di dalam InboxHub: judul halaman sudah ada, cukup tombol segarkan. */
+  embedded?: boolean;
+}) {
   const { lang } = useI18n();
   const id = lang === "id";
   const qc = useQueryClient();
@@ -170,7 +177,7 @@ export function CrmInboxView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-5 min-w-0">
       <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-        <h1 className="text-2xl font-medium">Inbox Terpadu</h1>
+        {embedded ? <span /> : <h1 className="text-2xl font-medium">Inbox Terpadu</h1>}
         <Button
           variant="outline"
           size="icon"
