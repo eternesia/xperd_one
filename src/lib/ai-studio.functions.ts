@@ -66,9 +66,13 @@ export const listAiJobs = createServerFn({ method: "POST" })
     await processPendingJobs(data.workspaceId, 5);
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute<Record<string, unknown>>(
-      `SELECT id, status, tier, style, duration_s, aspect_ratio, credits, refunded, error, result_media_id,
-              source_media_id, created_at
-         FROM ai_jobs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 20`,
+      `SELECT j.id, j.status, j.tier, j.style, j.duration_s, j.aspect_ratio, j.credits, j.refunded, j.error,
+              j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.submitted_at, j.finished_at,
+              r.file_path AS result_path, r.name AS result_name, s.file_path AS source_path
+         FROM ai_jobs j
+         LEFT JOIN crm_media r ON r.id = j.result_media_id
+         LEFT JOIN crm_media s ON s.id = j.source_media_id
+        WHERE j.workspace_id = ? ORDER BY j.created_at DESC LIMIT 40`,
       [data.workspaceId],
     );
     return rows.map((r) => ({
@@ -79,6 +83,18 @@ export const listAiJobs = createServerFn({ method: "POST" })
       aspect_ratio: String(r.aspect_ratio),
       result_media_id: r.result_media_id ? String(r.result_media_id) : null,
       source_media_id: String(r.source_media_id),
+      result_path: r.result_path ? String(r.result_path) : null,
+      result_name: r.result_name ? String(r.result_name) : null,
+      source_path: r.source_path ? String(r.source_path) : null,
+      note: r.user_note ? String(r.user_note) : null,
+      seconds_elapsed: Math.max(
+        0,
+        Math.round(
+          ((r.finished_at ? new Date(String(r.finished_at)).getTime() : Date.now()) -
+            new Date(String(r.created_at)).getTime()) /
+            1000,
+        ),
+      ),
       duration_s: Number(r.duration_s),
       credits: Number(r.credits),
       refunded: Number(r.refunded) === 1,
@@ -86,6 +102,57 @@ export const listAiJobs = createServerFn({ method: "POST" })
       error: r.error ? "Pembuatan gagal, kredit dikembalikan." : null,
       created_at: String(r.created_at),
     })) as AiJobView[];
+  });
+
+async function tenantForMember(workspaceId: string, userId: string) {
+  const { isWorkspaceMember, hasRole } = await import("./auth-context.server");
+  if (!(await isWorkspaceMember(workspaceId, userId)) && !(await hasRole(userId, "admin")))
+    throw new Error("Akses ditolak");
+  const { executeOne } = await import("@/integrations/mysql/pool");
+  const w = await executeOne<{ tenant_id: string }>(
+    "SELECT tenant_id FROM workspaces WHERE id = ?",
+    [workspaceId],
+  );
+  if (!w) throw new Error("Workspace tidak ditemukan");
+  return w.tenant_id;
+}
+
+/** Beli paket kredit dari saldo Qalling. */
+export const buyCreditPack = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        credits: z.number().int().positive(),
+        idempotencyKey: z.string().uuid(),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const tenantId = await tenantForMember(data.workspaceId, context.userId);
+    const { studioAccess } = await import("./ai-studio.server");
+    const access = await studioAccess(data.workspaceId, context.userId);
+    if (!access.available) throw new Error("Studio AI belum tersedia");
+    if (!access.can_buy) throw new Error("Hanya owner/admin workspace yang dapat membeli kredit.");
+    const { buyPackFromWallet } = await import("./ai-credits.server");
+    const r = await buyPackFromWallet({
+      tenantId,
+      credits: data.credits,
+      key: data.idempotencyKey,
+      actor: context.userId,
+    });
+    return { credits: r.credits, bought: r.pack.credits, price_idr: r.pack.price_idr };
+  });
+
+/** Riwayat kredit + pembayaran langsung yang masih menunggu. */
+export const getCreditActivity = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => z.object({ workspaceId: z.string().uuid() }).parse(v))
+  .handler(async ({ data, context }) => {
+    const tenantId = await tenantForMember(data.workspaceId, context.userId);
+    const { creditActivity } = await import("./ai-credits.server");
+    return { tenantId, ...(await creditActivity(tenantId)) };
   });
 
 /* -------------------------------- Super Admin -------------------------------- */
@@ -111,25 +178,43 @@ export const adminGetStudio = createServerFn({ method: "POST" })
       `SELECT COUNT(*) AS jobs,
               SUM(status = 'done') AS done,
               SUM(status = 'failed') AS failed,
-              COALESCE(SUM(CASE WHEN refunded = 0 THEN charged_idr ELSE 0 END), 0) AS revenue_idr,
+              COALESCE(SUM(CASE WHEN status = 'done' THEN credits ELSE 0 END), 0) AS credits_used,
               COALESCE(SUM(CASE WHEN status = 'done' THEN est_cost_usd ELSE 0 END), 0) AS cost_usd
          FROM ai_jobs WHERE created_at >= NOW(6) - INTERVAL 30 DAY AND is_admin_test = 0`,
     );
+    // Penjualan paket (tanpa pembelian akun Super Admin).
+    const sales = await execute<Record<string, unknown>>(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(amount_idr), 0) AS idr, COALESCE(SUM(delta), 0) AS credits
+         FROM ai_credit_ledger
+        WHERE kind = 'purchase' AND created_at >= NOW(6) - INTERVAL 30 DAY
+          AND (created_by IS NULL OR created_by NOT IN (SELECT user_id FROM user_roles WHERE role = 'admin'))`,
+    );
+    const outstanding = await execute<Record<string, unknown>>(
+      "SELECT COALESCE(SUM(credits), 0) AS n FROM ai_credit_accounts",
+    );
+    const { getPacks } = await import("./ai-credits.server");
+    const packs = await getPacks();
     const t = totals[0] ?? {};
+    const sl = sales[0] ?? {};
     return {
       enabled: s.enabled,
       fal_key_hint: hint(s.fal_api_key),
       atlas_key_hint: hint(s.atlas_api_key),
       tiers: s.tiers,
+      packs,
       daily_limit: s.daily_limit,
       usd_idr: s.usd_idr,
       totals30d: {
         jobs: Number(t.jobs ?? 0),
         done: Number(t.done ?? 0),
         failed: Number(t.failed ?? 0),
-        revenue_idr: Number(t.revenue_idr ?? 0),
+        credits_used: Number(t.credits_used ?? 0),
         cost_idr: Math.round(Number(t.cost_usd ?? 0) * s.usd_idr),
+        packs_sold: Number(sl.n ?? 0),
+        sales_idr: Number(sl.idr ?? 0),
+        credits_sold: Number(sl.credits ?? 0),
       },
+      credits_outstanding: Number(outstanding[0]?.n ?? 0),
       jobs: jobs.map((j) => ({
         id: String(j.id),
         status: String(j.status),
@@ -185,6 +270,18 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
         tiers: z.object({ hemat: tierSchema, standar: tierSchema, premium: tierSchema }),
         dailyLimit: z.number().int().min(0).max(500),
         usdIdr: z.number().int().min(1000).max(100000),
+        packs: z
+          .array(
+            z.object({
+              credits: z.number().int().min(1).max(100000),
+              price_idr: z.number().int().min(1000).max(100_000_000),
+            }),
+          )
+          .min(1)
+          .max(8)
+          .refine((a) => new Set(a.map((p) => p.credits)).size === a.length, {
+            message: "Jumlah kredit tiap paket harus berbeda",
+          }),
       })
       .parse(v),
   )
@@ -198,7 +295,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
     const atlas = data.clearAtlas ? null : data.atlasApiKey || cur.atlas_api_key;
     await execute(
       `UPDATE ai_studio_settings SET enabled = ?, fal_api_key = ?, atlas_api_key = ?, tiers = ?, daily_limit = ?,
-              usd_idr = ?, updated_by = ? WHERE id = 'platform'`,
+              usd_idr = ?, credit_packs = ?, updated_by = ? WHERE id = 'platform'`,
       [
         data.enabled ? 1 : 0,
         fal,
@@ -206,6 +303,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
         JSON.stringify(data.tiers),
         data.dailyLimit,
         data.usdIdr,
+        JSON.stringify([...data.packs].sort((a, b) => a.credits - b.credits)),
         context.userId,
       ],
     );
@@ -220,4 +318,56 @@ export const adminProcessJobs = createServerFn({ method: "POST" })
     await requireAdmin(context.userId);
     const { processPendingJobs } = await import("./ai-studio.server");
     return processPendingJobs(undefined, 50);
+  });
+
+/** Super Admin: beri kredit bonus (uji coba, promosi, kompensasi) ke tenant lewat email pengguna. */
+export const adminGrantCredits = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        email: z.string().trim().toLowerCase().email(),
+        credits: z
+          .number()
+          .int()
+          .min(-10000)
+          .max(10000)
+          .refine((n) => n !== 0),
+        note: z.string().trim().max(200).default(""),
+        idempotencyKey: z.string().uuid(),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const tenant =
+      (await executeOne<{ id: string; name: string }>(
+        `SELECT t.id, t.name FROM tenants t JOIN app_users u ON u.id = t.owner_id
+          WHERE u.email = ? ORDER BY t.created_at LIMIT 1`,
+        [data.email],
+      )) ??
+      (await executeOne<{ id: string; name: string }>(
+        `SELECT t.id, t.name FROM app_users u JOIN workspace_members m ON m.user_id = u.id
+           JOIN workspaces w ON w.id = m.workspace_id JOIN tenants t ON t.id = w.tenant_id
+          WHERE u.email = ? LIMIT 1`,
+        [data.email],
+      ));
+    if (!tenant) throw new Error("Email ini belum punya workspace di Qalling.");
+    const { grantBonusCredits } = await import("./ai-credits.server");
+    try {
+      const balance = await grantBonusCredits({
+        tenantId: tenant.id,
+        credits: data.credits,
+        key: data.idempotencyKey,
+        actor: context.userId,
+        note: data.note,
+      });
+      return { tenant: tenant.name, balance };
+    } catch (e) {
+      if ((e as Error).message === "insufficient_credits")
+        throw new Error("Saldo kredit tenant tidak cukup untuk dikurangi sebanyak itu.");
+      throw e;
+    }
   });

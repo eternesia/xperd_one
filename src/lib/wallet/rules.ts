@@ -8,8 +8,13 @@ export const requestTopupSchema = z.object({
   idempotencyKey: z.string().uuid(),
   note: z.string().trim().max(1000).default(""),
   returnPath: z.string().min(1).max(200).optional(),
-  /** Bayar paket langsung: setelah top-up ini lunas, paket dibeli otomatis. */
-  purchase: z.object({ kind: z.literal("tier"), itemId: z.string().uuid() }).optional(),
+  /** Bayar paket langsung: setelah top-up ini lunas, paket (langganan atau kredit Studio AI) dibeli otomatis. */
+  purchase: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("tier"), itemId: z.string().uuid() }),
+      z.object({ kind: z.literal("ai_credits"), credits: z.number().int().positive().max(100000) }),
+    ])
+    .optional(),
 });
 export const reviewTopupSchema = z
   .object({

@@ -87,6 +87,7 @@ import { Route as QallingAppClientsRouteImport } from './routes/qalling.app.clie
 import { Route as QallingAppProfileRouteImport } from './routes/qalling.app.profile'
 import { Route as QallingAppReferralRouteImport } from './routes/qalling.app.referral'
 import { Route as QallingAppReportsRouteImport } from './routes/qalling.app.reports'
+import { Route as QallingAppStudioRouteImport } from './routes/qalling.app.studio'
 import { Route as QallingAppSupportRouteImport } from './routes/qalling.app.support'
 import { Route as QallingApproveTokenRouteImport } from './routes/qalling.approve.$token'
 import { Route as QallingDocsIndexRouteImport } from './routes/qalling.docs.index'
@@ -510,6 +511,11 @@ const QallingAppReportsRoute = QallingAppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => QallingAppRoute,
 } as any)
+const QallingAppStudioRoute = QallingAppStudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => QallingAppRoute,
+} as any)
 const QallingAppSupportRoute = QallingAppSupportRouteImport.update({
   id: '/support',
   path: '/support',
@@ -744,6 +750,7 @@ export interface FileRoutesByFullPath {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/studio': typeof QallingAppStudioRoute
   '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
@@ -848,6 +855,7 @@ export interface FileRoutesByTo {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/studio': typeof QallingAppStudioRoute
   '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
@@ -957,6 +965,7 @@ export interface FileRoutesById {
   '/qalling/app/profile': typeof QallingAppProfileRoute
   '/qalling/app/referral': typeof QallingAppReferralRoute
   '/qalling/app/reports': typeof QallingAppReportsRoute
+  '/qalling/app/studio': typeof QallingAppStudioRoute
   '/qalling/app/support': typeof QallingAppSupportRoute
   '/qalling/approve/$token': typeof QallingApproveTokenRoute
   '/qalling/docs/$slug': typeof QallingDocsSlugRoute
@@ -1067,6 +1076,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/studio'
     | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
@@ -1171,6 +1181,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/studio'
     | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
@@ -1279,6 +1290,7 @@ export interface FileRouteTypes {
     | '/qalling/app/profile'
     | '/qalling/app/referral'
     | '/qalling/app/reports'
+    | '/qalling/app/studio'
     | '/qalling/app/support'
     | '/qalling/approve/$token'
     | '/qalling/docs/$slug'
@@ -1911,6 +1923,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QallingAppReportsRouteImport
       parentRoute: typeof QallingAppRoute
     }
+    '/qalling/app/studio': {
+      id: '/qalling/app/studio'
+      path: '/studio'
+      fullPath: '/qalling/app/studio'
+      preLoaderRoute: typeof QallingAppStudioRouteImport
+      parentRoute: typeof QallingAppRoute
+    }
     '/qalling/app/support': {
       id: '/qalling/app/support'
       path: '/support'
@@ -2287,6 +2306,7 @@ interface QallingAppRouteChildren {
   QallingAppProfileRoute: typeof QallingAppProfileRoute
   QallingAppReferralRoute: typeof QallingAppReferralRoute
   QallingAppReportsRoute: typeof QallingAppReportsRoute
+  QallingAppStudioRoute: typeof QallingAppStudioRoute
   QallingAppSupportRoute: typeof QallingAppSupportRoute
   QallingAppIndexRoute: typeof QallingAppIndexRoute
 }
@@ -2300,6 +2320,7 @@ const QallingAppRouteChildren: QallingAppRouteChildren = {
   QallingAppProfileRoute: QallingAppProfileRoute,
   QallingAppReferralRoute: QallingAppReferralRoute,
   QallingAppReportsRoute: QallingAppReportsRoute,
+  QallingAppStudioRoute: QallingAppStudioRoute,
   QallingAppSupportRoute: QallingAppSupportRoute,
   QallingAppIndexRoute: QallingAppIndexRoute,
 }

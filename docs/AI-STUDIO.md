@@ -1,8 +1,9 @@
 # Studio AI Qalling: Foto → Video
 
-Status: **fondasi terbangun, NONAKTIF untuk pengguna** (saklar `ai_studio_settings.enabled = 0`).
+Status: **NONAKTIF untuk pengguna** (saklar `ai_studio_settings.enabled = 0`).
 Selama nonaktif, pengguna tetap melihat tombol "Foto → Video AI · segera" (uji minat, migrasi 068);
-Super Admin melihat Studio sungguhan di menu **Media** workspace-nya sendiri (label "uji admin") untuk uji kualitas.
+Super Admin melihat Studio sungguhan di halaman **/qalling/app/studio** (menu Konten → Studio AI, dan tombol di Media)
+dengan label "uji admin".
 
 ## Cara mengaktifkan / uji
 1. `npm run migrate` (menerapkan `069_ai_studio.sql`).
@@ -18,10 +19,21 @@ Pilih foto (JPG/PNG/WebP milik workspace) → gaya (Zoom, Putar 360°, Uap/perci
 tingkat Hemat/Standar/Premium (harga kredit tampil) → centang pernyataan hak foto & bukan tokoh publik → proses
 di latar belakang → hasil masuk Media folder **Studio AI**, berlabel **AI**, siap dijadwalkan.
 
-## Uang
-- 1 kredit = Rp1.000. Potong saldo saat membuat: `wallet_ledger` `usage`, produk `qalling`, kunci `ai-job:<id>`.
-- Gagal di penyedia / ditolak / >30 menit / gagal simpan → refund otomatis `refund`, kunci `ai-job:<id>:refund` (tepat sekali).
-- Saldo kurang, batas harian, atau kuota penyimpanan penuh → ditolak **sebelum** saldo dipotong.
+## Kredit & harga (migrasi 070)
+- Kredit = saldo tersendiri per tenant (`ai_credit_accounts`, buku besar `ai_credit_ledger`, kunci idempotensi unik).
+- Paket bawaan (ubah di Super Admin → Studio AI → Paket kredit): 10 kredit Rp25.000, 25 Rp60.000, 50 Rp110.000,
+  100 Rp200.000. Kredit tidak hangus.
+- Harga video (kredit, 5/10 detik): Hemat 3/6, Standar 5/10, Premium 10/20.
+- Cara beli (owner/admin workspace):
+  1. **Dari saldo Qalling** — wallet `usage` produk `qalling_ai` + kredit `purchase`, kunci `ai-pack:<uuid>`.
+  2. **Bayar langsung QRIS/kartu** — top-up sebesar harga paket persis (boleh di bawah minimum top-up) dengan
+     `purchase_intent {kind:"ai_credits", credits, price_idr}`; begitu gateway mengonfirmasi lunas,
+     `applyTopupPurchase` → `applyCreditIntent` langsung mengonversi ke kredit (kunci `ai-pack:topup-<id>`).
+     Pengguna kembali ke halaman Studio; pembayaran tertunda bisa dicek dari dialog Beli kredit.
+- Membuat video memotong kredit (`ai-job:<id>`); gagal/ditolak/>30 menit → kredit kembali tepat sekali.
+  Pekerjaan lama (`charge_source = 'wallet'`) di-refund ke saldo Rupiah.
+- Kredit kurang, batas harian, atau kuota penyimpanan penuh → ditolak **sebelum** apa pun terpotong.
+- Super Admin bisa memberi kredit bonus (atau mengurangi) per email.
 
 ## Berkas
 | Berkas | Isi |
@@ -31,16 +43,19 @@ di latar belakang → hasil masuk Media folder **Studio AI**, berlabel **AI**, s
 | `src/lib/ai-studio-providers.server.ts` | Adaptor fal.ai (queue API) & Atlas Cloud (generateVideo/prediction) |
 | `src/lib/ai-studio.server.ts` | Akses, buat pekerjaan + potong kredit, pantau, simpan ke Media, refund |
 | `src/lib/ai-studio.functions.ts` | Server function pengguna & Super Admin |
-| `src/components/qalling/AiStudio.tsx` | Tombol + dialog Studio di Media (jatuh ke tombol uji minat bila tidak ada akses) |
+| `db/migrations/070_ai_credits.sql` | Saldo & buku besar kredit, paket, `ai_jobs.charge_source`, harga baru |
+| `src/lib/ai-credits.server.ts` | Entri kredit, beli paket (saldo / niat top-up), bonus, riwayat |
+| `src/components/qalling/pages/AiStudioPage.tsx` | Halaman Studio: kontrol, panggung pratinjau, galeri (unduh, jadwalkan), harga, beli kredit |
+| `src/components/qalling/AiStudio.tsx` | Tombol di Media → halaman Studio (atau tombol uji minat bila tidak ada akses) |
 | `src/routes/app-admin/ai-studio.tsx` | Pengaturan penyedia/harga, laporan pemakaian & margin |
 | `src/routes/api/public/jobs/ai-studio.ts` | Endpoint cron (juga jalan tiap menit di scheduler internal) |
 
 ## Model bawaan (cek ulang harga resmi sebelum dibuka)
 | Tingkat | Model fal.ai | Param gambar | Kredit 5s/10s |
 |---|---|---|---|
-| Hemat | `fal-ai/wan-25-preview/image-to-video` | `image_url` | 6 / 12 |
-| Standar | `fal-ai/kling-video/v3/standard/image-to-video` | `start_image_url` | 15 / 30 |
-| Premium | `bytedance/seedance-2.0/fast/image-to-video` | `image_url` | 30 / 60 |
+| Hemat | `fal-ai/wan-25-preview/image-to-video` | `image_url` | 3 / 6 |
+| Standar | `fal-ai/kling-video/v3/standard/image-to-video` | `start_image_url` | 5 / 10 |
+| Premium | `bytedance/seedance-2.0/fast/image-to-video` | `image_url` | 10 / 20 |
 
 Semua bisa diubah di Super Admin tanpa deploy (termasuk pindah ke Atlas Cloud, mis. `bytedance/seedance-2.0-fast/image-to-video`
 dengan param `image`). Parameter khusus model ditambahkan lewat kolom JSON "Parameter tambahan".

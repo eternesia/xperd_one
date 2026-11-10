@@ -1,9 +1,26 @@
 /**
  * Studio AI Qalling (foto → video) — konstanta & tipe bersama klien/server.
- * Rancangan: docs/AI-STUDIO.md. 1 kredit = Rp1.000, dipotong dari saldo wallet tenant.
+ * Rancangan: docs/AI-STUDIO.md. Kredit = saldo tersendiri per tenant, dibeli per paket
+ * (dari saldo Qalling atau bayar langsung QRIS/kartu); video memotong kredit.
  */
 
-export const CREDIT_IDR = 1000;
+export interface CreditPack {
+  credits: number;
+  price_idr: number;
+}
+
+/** Paket bawaan (bisa diubah di Super Admin). */
+export const DEFAULT_PACKS: CreditPack[] = [
+  { credits: 10, price_idr: 25_000 },
+  { credits: 25, price_idr: 60_000 },
+  { credits: 50, price_idr: 110_000 },
+  { credits: 100, price_idr: 200_000 },
+];
+
+export const perCredit = (p: CreditPack) => Math.round(p.price_idr / p.credits);
+/** Nilai kredit terendah (paket termurah per kredit) — dasar perhitungan margin yang aman. */
+export const minCreditValue = (packs: CreditPack[]) =>
+  packs.length ? Math.min(...packs.map(perCredit)) : 0;
 
 export const AI_TIERS = ["hemat", "standar", "premium"] as const;
 export type AiTier = (typeof AI_TIERS)[number];
@@ -60,7 +77,7 @@ export interface TierConfig {
 
 /**
  * Bawaan (cek ulang di halaman harga resmi sebelum dibuka ke pengguna).
- * Kredit mengikuti rancangan awal: Hemat 6 / Standar 15 / Premium 30 per 5 detik.
+ * Kredit per 5 detik: Hemat 3 / Standar 5 / Premium 10 (1 kredit ±Rp2.000–2.500).
  */
 export const DEFAULT_TIERS: Record<AiTier, TierConfig> = {
   hemat: {
@@ -68,8 +85,8 @@ export const DEFAULT_TIERS: Record<AiTier, TierConfig> = {
     provider: "fal",
     model: "fal-ai/wan-25-preview/image-to-video",
     image_param: "image_url",
-    credits_5s: 6,
-    credits_10s: 12,
+    credits_5s: 3,
+    credits_10s: 6,
     cost_usd_per_s: 0.05,
   },
   standar: {
@@ -77,8 +94,8 @@ export const DEFAULT_TIERS: Record<AiTier, TierConfig> = {
     provider: "fal",
     model: "fal-ai/kling-video/v3/standard/image-to-video",
     image_param: "start_image_url",
-    credits_5s: 15,
-    credits_10s: 30,
+    credits_5s: 5,
+    credits_10s: 10,
     cost_usd_per_s: 0.084,
     extra: { generate_audio: false },
   },
@@ -87,8 +104,8 @@ export const DEFAULT_TIERS: Record<AiTier, TierConfig> = {
     provider: "fal",
     model: "bytedance/seedance-2.0/fast/image-to-video",
     image_param: "image_url",
-    credits_5s: 30,
-    credits_10s: 60,
+    credits_5s: 10,
+    credits_10s: 20,
     cost_usd_per_s: 0.181,
     extra: { resolution: "720p" },
   },
@@ -111,6 +128,11 @@ export interface AiJobView {
   error: string | null;
   result_media_id: string | null;
   source_media_id: string;
+  result_path: string | null;
+  result_name: string | null;
+  source_path: string | null;
+  note: string | null;
+  seconds_elapsed: number;
   created_at: string;
 }
 
@@ -119,7 +141,13 @@ export interface StudioAccess {
   available: boolean;
   /** `live` = dibuka untuk semua; `admin_preview` = fitur OFF, hanya Super Admin (uji). */
   mode: "off" | "live" | "admin_preview";
+  /** Saldo kredit AI tenant. */
+  credits: number;
+  /** Saldo Rupiah wallet (untuk membeli paket). */
   balance_idr: number;
+  /** Boleh membeli paket (owner/admin tenant). */
+  can_buy: boolean;
+  packs: CreditPack[];
   daily_limit: number;
   used_today: number;
   tiers: { tier: AiTier; credits_5s: number; credits_10s: number }[];
