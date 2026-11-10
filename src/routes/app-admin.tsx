@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useIsFetching, useIsMutating } from "@tanstack/react-query";
+import { useIsFetching, useIsMutating, useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -23,6 +23,7 @@ import {
   Gift,
   Sparkles,
   Wand2,
+  Inbox,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useIsAdmin, useSession, emitAuthChange } from "@/hooks/use-session";
 import { loginAppUser, logoutAppUser } from "@/lib/auth.functions";
+import { adminLeadsBadge } from "@/lib/admin-leads.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app-admin")({
@@ -52,6 +54,13 @@ function AdminLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (st) => st.location.pathname });
   const [menuOpen, setMenuOpen] = useState(false);
+  // Badge menu Prospek: prospek baru + jadwal follow-up yang jatuh tempo.
+  const leadsBadge = useQuery({
+    queryKey: ["admin-leads-badge"],
+    queryFn: () => adminLeadsBadge(),
+    enabled: isAdmin === true,
+    refetchInterval: 60_000,
+  });
 
   if (loading) {
     return (
@@ -112,6 +121,13 @@ function AdminLayout() {
         <Group>Pelanggan</Group>
         <NavItem to="/app-admin/tenancy" icon={<Building2 className="h-4 w-4" />}>
           Tenancy
+        </NavItem>
+        <NavItem
+          to="/app-admin/leads"
+          icon={<Inbox className="h-4 w-4" />}
+          badge={(leadsBadge.data?.new ?? 0) + (leadsBadge.data?.due ?? 0)}
+        >
+          Prospek
         </NavItem>
         <NavItem to="/app-admin/registrations" icon={<ClipboardCheck className="h-4 w-4" />}>
           Pendaftaran
@@ -299,11 +315,14 @@ function NavItem({
   icon,
   children,
   exact,
+  badge,
 }: {
   to: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   exact?: boolean;
+  /** Angka kecil di kanan (mis. prospek baru); disembunyikan bila 0. */
+  badge?: number;
 }) {
   return (
     <Link
@@ -315,7 +334,12 @@ function NavItem({
       )}
     >
       {icon}
-      {children}
+      <span className="flex-1">{children}</span>
+      {badge ? (
+        <span className="min-w-5 rounded-full bg-gold px-1.5 text-center text-[11px] font-semibold leading-5 text-navy">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

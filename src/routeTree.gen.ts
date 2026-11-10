@@ -38,6 +38,7 @@ import { Route as AppAdminGrantsRouteImport } from './routes/app-admin/grants'
 import { Route as AppAdminInterestRouteImport } from './routes/app-admin/interest'
 import { Route as AppAdminInvoicesRouteImport } from './routes/app-admin/invoices'
 import { Route as AppAdminKirimdevRouteImport } from './routes/app-admin/kirimdev'
+import { Route as AppAdminLeadsRouteImport } from './routes/app-admin/leads'
 import { Route as AppAdminPackagesRouteImport } from './routes/app-admin/packages'
 import { Route as AppAdminPaymentsRouteImport } from './routes/app-admin/payments'
 import { Route as AppAdminReferralRouteImport } from './routes/app-admin/referral'
@@ -260,6 +261,11 @@ const AppAdminInvoicesRoute = AppAdminInvoicesRouteImport.update({
 const AppAdminKirimdevRoute = AppAdminKirimdevRouteImport.update({
   id: '/kirimdev',
   path: '/kirimdev',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminLeadsRoute = AppAdminLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminPackagesRoute = AppAdminPackagesRouteImport.update({
@@ -690,6 +696,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
+  '/app-admin/leads': typeof AppAdminLeadsRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
   '/app-admin/referral': typeof AppAdminReferralRoute
@@ -794,6 +801,7 @@ export interface FileRoutesByTo {
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
+  '/app-admin/leads': typeof AppAdminLeadsRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
   '/app-admin/referral': typeof AppAdminReferralRoute
@@ -900,6 +908,7 @@ export interface FileRoutesById {
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
+  '/app-admin/leads': typeof AppAdminLeadsRoute
   '/app-admin/packages': typeof AppAdminPackagesRoute
   '/app-admin/payments': typeof AppAdminPaymentsRoute
   '/app-admin/referral': typeof AppAdminReferralRoute
@@ -1010,6 +1019,7 @@ export interface FileRouteTypes {
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
+    | '/app-admin/leads'
     | '/app-admin/packages'
     | '/app-admin/payments'
     | '/app-admin/referral'
@@ -1114,6 +1124,7 @@ export interface FileRouteTypes {
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
+    | '/app-admin/leads'
     | '/app-admin/packages'
     | '/app-admin/payments'
     | '/app-admin/referral'
@@ -1219,6 +1230,7 @@ export interface FileRouteTypes {
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
+    | '/app-admin/leads'
     | '/app-admin/packages'
     | '/app-admin/payments'
     | '/app-admin/referral'
@@ -1554,6 +1566,13 @@ declare module '@tanstack/react-router' {
       path: '/kirimdev'
       fullPath: '/app-admin/kirimdev'
       preLoaderRoute: typeof AppAdminKirimdevRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/app-admin/leads': {
+      id: '/app-admin/leads'
+      path: '/leads'
+      fullPath: '/app-admin/leads'
+      preLoaderRoute: typeof AppAdminLeadsRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/app-admin/packages': {
@@ -2197,6 +2216,7 @@ interface AppAdminRouteChildren {
   AppAdminInterestRoute: typeof AppAdminInterestRoute
   AppAdminInvoicesRoute: typeof AppAdminInvoicesRoute
   AppAdminKirimdevRoute: typeof AppAdminKirimdevRoute
+  AppAdminLeadsRoute: typeof AppAdminLeadsRoute
   AppAdminPackagesRoute: typeof AppAdminPackagesRoute
   AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
   AppAdminReferralRoute: typeof AppAdminReferralRoute
@@ -2223,6 +2243,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminInterestRoute: AppAdminInterestRoute,
   AppAdminInvoicesRoute: AppAdminInvoicesRoute,
   AppAdminKirimdevRoute: AppAdminKirimdevRoute,
+  AppAdminLeadsRoute: AppAdminLeadsRoute,
   AppAdminPackagesRoute: AppAdminPackagesRoute,
   AppAdminPaymentsRoute: AppAdminPaymentsRoute,
   AppAdminReferralRoute: AppAdminReferralRoute,
