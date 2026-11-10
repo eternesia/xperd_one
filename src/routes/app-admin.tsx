@@ -22,6 +22,7 @@ import {
   Menu,
   Gift,
   Sparkles,
+  Wand2,
   Inbox,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -152,6 +153,9 @@ function AdminLayout() {
         </NavItem>
         <NavItem to="/app-admin/interest" icon={<Sparkles className="h-4 w-4" />}>
           Minat Fitur
+        </NavItem>
+        <NavItem to="/app-admin/ai-studio" icon={<Wand2 className="h-4 w-4" />}>
+          Studio AI
         </NavItem>
         <Group>Layanan</Group>
         <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>

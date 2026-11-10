@@ -72,6 +72,23 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
     }
   };
 
+  // Studio AI: periksa pekerjaan video di penyedia, simpan hasil, refund yang gagal. Ringan bila tidak ada pekerjaan.
+  let aiChecking = false;
+  const aiTick = async () => {
+    if (aiChecking) return;
+    aiChecking = true;
+    try {
+      const { processPendingJobs } = await import("./ai-studio.server");
+      const r = await processPendingJobs(undefined, 25);
+      if (r.checked) console.log("[scheduler] ai-studio", r);
+    } catch (e) {
+      console.error("[scheduler] ai-studio failed", e);
+    } finally {
+      aiChecking = false;
+    }
+  };
+  setInterval(aiTick, PUBLISH_EVERY_MS).unref?.();
+
   setInterval(publishTick, PUBLISH_EVERY_MS).unref?.();
   setInterval(notifyTick, NOTIFY_EVERY_MS).unref?.();
   setInterval(renewTick, NOTIFY_EVERY_MS).unref?.();

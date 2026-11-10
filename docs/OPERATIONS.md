@@ -74,6 +74,7 @@ dipanggil cron eksternal di server (crontab host atau container cron). Rahasia d
 |---|---|---|---|
 | Auto-publish postingan sosial terjadwal (Qalling), maks 25 per panggilan | `GET/POST /api/public/hooks/social-publish` | `SOCIAL_PUBLISH_SECRET` (kosong = **terbuka**, isi di produksi) | tiap menit |
 | Perpanjangan langganan ERP dari saldo (tenant yang opt-in), maks 25 per panggilan | `POST /api/public/jobs/subscription-renewal` | `CRON_SECRET` (atau `SOCIAL_PUBLISH_SECRET`); tanpa rahasia = 403 | tiap jam |
+| Studio AI: periksa pekerjaan video di penyedia (fal/Atlas), simpan hasil ke Media, refund yang gagal/kedaluwarsa. Juga berjalan tiap menit di scheduler internal | `POST /api/public/jobs/ai-studio` | sama seperti di bawah | tiap menit |
 | Email notifikasi: pengingat trial (7/3/1/0 hari), saldo kurang untuk perpanjangan, bukti pembayaran (topup/perpanjangan), ringkasan posting mingguan. Idempoten (tabel `email_notifications`, kunci unik). Juga dijalankan otomatis oleh job perpanjangan di atas; endpoint ini hanya bila ingin jadwal terpisah | `POST /api/public/jobs/billing-notifications` | sama seperti di atas | tiap jam |
 
 ```cron
