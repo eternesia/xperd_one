@@ -51,6 +51,7 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { nextDocNumber } from "@/lib/procurement";
 import { XproProjectDetail } from "@/components/app/XproDetail";
+import { XproMyTasksView } from "@/components/app/XproTasks";
 import { XproKanbanView, XproWorkloadView } from "@/components/app/XproKanban";
 
 /**
@@ -1546,6 +1547,7 @@ export function XproView({
   submoduleId: string;
   workspaceId: string;
 }) {
+  if (submoduleId === "my-tasks") return <XproMyTasksView workspaceId={workspaceId} />;
   if (submoduleId === "kanban") return <XproKanbanView workspaceId={workspaceId} />;
   if (submoduleId === "workload") return <XproWorkloadView workspaceId={workspaceId} />;
   if (submoduleId === "projects") return <ProjectsView workspaceId={workspaceId} />;
