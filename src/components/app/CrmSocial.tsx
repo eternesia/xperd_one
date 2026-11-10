@@ -59,6 +59,7 @@ import { useApp } from "@/lib/app-context";
 import { accountsFull } from "@/lib/qalling-quota";
 import { CRM_SOCIAL_PLATFORMS } from "@/lib/crm";
 import { cn } from "@/lib/utils";
+import { AiVideoInterest } from "@/components/qalling/AiVideoInterest";
 import { TablePager } from "@/components/app/admin-table";
 import { getMetaSettings, publishPostNow, startMetaConnect } from "@/lib/meta-social.functions";
 import {
@@ -888,6 +889,7 @@ function MobileComposer({
             >
               {id ? "Opsi lainnya" : "More options"}
             </Button>
+            <AiVideoInterest compact />
             <span className="ml-auto pr-2 text-xs text-muted-foreground">
               {editing.caption.length}
             </span>
@@ -1700,6 +1702,7 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                   </p>
                 </AdminField>
                 <AdminField label={id ? "Media" : "Media"}>
+                  <AiVideoInterest workspaceId={workspaceId} className="mb-2" />
                   <div className="flex flex-wrap gap-2">
                     {editing.media_paths.map((path) => {
                       const m = mediaUrl.get(path);

@@ -36,6 +36,7 @@ import { uploadFileChunked } from "@/lib/chunked-upload";
 import { useI18n } from "@/lib/i18n";
 import { fmtBytes, storageQuota } from "@/lib/qalling-quota";
 import { cn } from "@/lib/utils";
+import { AiVideoInterest } from "@/components/qalling/AiVideoInterest";
 import { DEFAULT_MEDIA_POLICY, validateMediaFile } from "@/lib/media-upload-policy";
 import { compressCrmMedia } from "@/lib/crm-media-compression";
 import { getMediaPolicy } from "@/lib/media-policy.functions";
@@ -377,6 +378,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
               · {id ? "dipakai saat membuat postingan" : "reused when composing posts"}
             </span>
           </p>
+          <AiVideoInterest workspaceId={workspaceId} className="mt-2" />
         </div>
         <label
           className={cn(

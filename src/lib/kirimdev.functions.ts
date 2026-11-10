@@ -94,11 +94,13 @@ export const getKirimdevManaged = createServerFn({ method: "POST" })
 
 export const connectKirimdevManaged = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
-  .validator((v: unknown) => ws.parse(v))
+  .validator((v: unknown) =>
+    ws.extend({ returnUrl: z.string().url().max(1800).optional() }).parse(v),
+  )
   .handler(async ({ data, context }) => {
     await assertWsAdmin(data.workspaceId, context.userId);
     const { createSetupLink } = await import("@/lib/kirimdev-managed.server");
-    return createSetupLink(data.workspaceId);
+    return createSetupLink(data.workspaceId, data.returnUrl);
   });
 
 export const syncKirimdevManaged = createServerFn({ method: "POST" })
@@ -141,4 +143,45 @@ export const switchToOwnKirimdevKey = createServerFn({ method: "POST" })
       [data.workspaceId],
     );
     return { ok: true };
+  });
+
+/* ---- Chat WhatsApp (anggota workspace) ---- */
+async function assertWaMember(workspaceId: string, userId: string) {
+  const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
+  if (!(await hasWorkspaceRole(workspaceId, userId, ["owner", "admin", "staff"])))
+    throw new Error("Forbidden");
+  const { workspaceHasFeature } = await import("@/lib/entitlements.server");
+  if (!(await workspaceHasFeature(workspaceId, "whatsapp")))
+    throw new Error("Fitur WhatsApp belum aktif di paket Anda.");
+}
+
+export const listWaChats = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    ws.extend({ status: z.enum(["open", "resolved", "pending"]).optional() }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWaMember(data.workspaceId, context.userId);
+    const { listWaConversations } = await import("@/lib/wa-chat.server");
+    return listWaConversations(data.workspaceId, data.status);
+  });
+
+export const getWaChatMessages = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => ws.extend({ conversationId: z.string().max(40) }).parse(v))
+  .handler(async ({ data, context }) => {
+    await assertWaMember(data.workspaceId, context.userId);
+    const { listWaMessages } = await import("@/lib/wa-chat.server");
+    return listWaMessages(data.workspaceId, data.conversationId);
+  });
+
+export const sendWaChatMessage = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    ws.extend({ to: z.string().min(6).max(30), text: z.string().trim().min(1).max(4096) }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWaMember(data.workspaceId, context.userId);
+    const { sendWaChat } = await import("@/lib/wa-chat.server");
+    return sendWaChat(data.workspaceId, data.to, data.text);
   });

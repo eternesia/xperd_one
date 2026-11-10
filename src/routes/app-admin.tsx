@@ -21,6 +21,7 @@ import {
   Settings,
   Menu,
   Gift,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -132,6 +133,9 @@ function AdminLayout() {
         </NavItem>
         <NavItem to="/app-admin/grants" icon={<Gift className="h-4 w-4" />}>
           Akses Uji Coba
+        </NavItem>
+        <NavItem to="/app-admin/interest" icon={<Sparkles className="h-4 w-4" />}>
+          Minat Fitur
         </NavItem>
         <Group>Layanan</Group>
         <NavItem to="/app-admin/content" icon={<FileText className="h-4 w-4" />}>

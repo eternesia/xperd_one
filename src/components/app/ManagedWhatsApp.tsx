@@ -69,10 +69,14 @@ export function ManagedWhatsApp({ workspaceId }: { workspaceId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
   const connect = useMutation({
-    mutationFn: () => connectKirimdevManaged({ data: { workspaceId } }),
+    mutationFn: () => {
+      // Kembali ke halaman ini setelah pairing selesai (Kirimdev menambahkan ?wa=connected / failed).
+      const back = new URL(window.location.href);
+      back.search = "";
+      return connectKirimdevManaged({ data: { workspaceId, returnUrl: back.toString() } });
+    },
     onSuccess: (r) => {
-      window.open(r.url, "_blank", "noopener");
-      refresh();
+      window.location.href = r.url;
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -81,6 +85,23 @@ export function ManagedWhatsApp({ workspaceId }: { workspaceId: string }) {
     onSuccess: refresh,
     onError: (e: Error) => toast.error(e.message),
   });
+  // Kembali dari halaman pairing Meta/Kirimdev.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const wa = p.get("wa");
+    if (!wa) return;
+    if (wa === "connected") sync.mutate();
+    else
+      toast.error(
+        pick("WhatsApp connection was not completed.", "Pemasangan WhatsApp belum selesai."),
+      );
+    p.delete("wa");
+    for (const k of ["customer_id", "account_id", "status", "reason"]) p.delete(k);
+    const rest = p.toString();
+    window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const d = q.data;
   // Saat menunggu pemasangan, periksa status otomatis agar nomor muncul setelah selesai di Meta.
   const polled = useRef(false);

@@ -51,11 +51,37 @@ export async function ensureCustomer(ws: string) {
 }
 
 /** Tautan sekali pakai agar pengguna menghubungkan nomor WhatsApp-nya sendiri (Embedded Signup Meta). */
-export async function createSetupLink(ws: string) {
+/** Alamat kembali setelah pairing hanya boleh ke domain aplikasi sendiri. */
+export function safeReturnUrl(raw?: string | null) {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    const app = process.env.APP_PUBLIC_URL ? new URL(process.env.APP_PUBLIC_URL).hostname : null;
+    const ok =
+      u.protocol === "https:" &&
+      (u.hostname === app ||
+        ["qalling.id", "xperd.id"].some((d) => u.hostname === d || u.hostname.endsWith(`.${d}`)));
+    return ok ? u.toString().slice(0, 1800) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createSetupLink(ws: string, returnUrl?: string | null) {
   const api = await asApi();
   const customer = await ensureCustomer(ws);
+  const back = safeReturnUrl(returnUrl);
+  const body: Record<string, string> = {};
+  if (back) {
+    const ok = new URL(back);
+    ok.searchParams.set("wa", "connected");
+    const fail = new URL(back);
+    fail.searchParams.set("wa", "failed");
+    body.success_redirect_url = ok.toString();
+    body.failure_redirect_url = fail.toString();
+  }
   const r = flat(
-    await kirimdev(api, "POST", `/customers/${encodeURIComponent(customer)}/setup_links`, {}),
+    await kirimdev(api, "POST", `/customers/${encodeURIComponent(customer)}/setup_links`, body),
   );
   const url = String(r.url ?? r.setup_url ?? r.link ?? "");
   if (!/^https:\/\//.test(url)) throw new Error("Kirimdev tidak mengembalikan tautan setup.");
