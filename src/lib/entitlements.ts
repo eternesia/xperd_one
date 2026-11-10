@@ -60,6 +60,7 @@ export function hasCatalogFeature(
   if (!entitlement) return false;
   if (entitlement.features.legacy === true) return true;
   // Tim & Anggota hanya berguna bila paket mengizinkan lebih dari satu pengguna.
+  if (submoduleId === "inbox" && entitlement.features.whatsapp === true) return true;
   if (submoduleId === "team") {
     const max = entitlement.limits.max_users;
     if (max !== null && max !== undefined && max <= 1) return false;

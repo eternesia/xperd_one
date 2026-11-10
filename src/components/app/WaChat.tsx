@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { QuickReplies } from "@/components/app/QuickReplies";
 import { getWaChatMessages, listWaChats, sendWaChatMessage } from "@/lib/kirimdev.functions";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -361,6 +362,11 @@ export function WaChat({ workspaceId }: { workspaceId: string }) {
                     "Sudah lewat 24 jam sejak pesan terakhir pelanggan. WhatsApp hanya mengizinkan balasan bebas setelah pelanggan mengirim pesan lagi.",
                   )}
                 </p>
+              )}
+              {windowOpen && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  <QuickReplies workspaceId={workspaceId} onPick={(t) => setText(t)} />
+                </div>
               )}
               <div className="flex items-end gap-2">
                 <Textarea

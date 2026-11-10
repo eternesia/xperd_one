@@ -1,5 +1,4 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WaChat } from "@/components/app/WaChat";
+import { Link } from "@tanstack/react-router";
 import { ManagedWhatsApp } from "@/components/app/ManagedWhatsApp";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -590,30 +589,20 @@ export function WaGatewayView({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader kicker="QALLING CRM" title={t("WhatsApp Gateway", "WhatsApp Gateway")} />
-      {data?.managed && data.phone_number_id ? (
-        <Tabs defaultValue="chat" className="space-y-4">
-          <TabsList className="grid w-full max-w-xs grid-cols-2 rounded-full">
-            <TabsTrigger value="chat" className="rounded-full">
-              {t("Chat", "Chat")}
-            </TabsTrigger>
-            <TabsTrigger value="number" className="rounded-full">
-              {t("Number", "Nomor")}
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="chat">
-            <WaChat workspaceId={workspaceId} />
-          </TabsContent>
-          <TabsContent value="number">
-            <div className="mx-auto max-w-3xl">
-              <ManagedWhatsApp workspaceId={workspaceId} />
-            </div>
-          </TabsContent>
-        </Tabs>
-      ) : (
-        <div className="mx-auto max-w-3xl">
-          <ManagedWhatsApp workspaceId={workspaceId} />
-        </div>
-      )}
+      <div className="mx-auto max-w-3xl space-y-4">
+        {data?.managed && data.phone_number_id && (
+          <Link
+            to="/qalling/app/$submoduleId"
+            params={{ submoduleId: "inbox" }}
+            search={{ tab: "wa" } as never}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-700 dark:text-emerald-400"
+          >
+            {t("Customer chats are in Inbox → WhatsApp", "Chat pelanggan ada di Inbox → WhatsApp")}
+            <span aria-hidden>→</span>
+          </Link>
+        )}
+        <ManagedWhatsApp workspaceId={workspaceId} />
+      </div>
     </div>
   );
 }

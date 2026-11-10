@@ -1,3 +1,4 @@
+import { useInboxUnread } from "@/lib/use-inbox-unread";
 import { useDevtoolsDeterrent } from "@/lib/use-devtools-deterrent";
 import { AnnouncementBell } from "@/components/qalling/AnnouncementBell";
 import { QallingTrialAlert } from "@/components/qalling/QallingTrialAlert";
@@ -136,6 +137,11 @@ function QallingShell() {
       .catch(() => setAutoState("failed"));
   }, [loading, accessLoading, userId, workspaces.length, autoState, provision, refresh]);
 
+  const inboxUnread = useInboxUnread(
+    activeWorkspace?.id ?? null,
+    entitlements.qalling?.features?.inbox_dm === true,
+    entitlements.qalling?.features?.whatsapp === true,
+  );
   if (loading || accessLoading || (userId && workspaces.length === 0 && autoState !== "failed")) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
@@ -208,6 +214,11 @@ function QallingShell() {
       >
         {sub.icon && <sub.icon className="h-4 w-4 shrink-0" />}
         <span className="truncate qs-label">{lang === "id" ? sub.id_ : sub.en}</span>
+        {id === "inbox" && inboxUnread > 0 && (
+          <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold text-white qs-label">
+            {inboxUnread > 99 ? "99+" : inboxUnread}
+          </span>
+        )}
       </Link>
     );
   };
@@ -319,7 +330,7 @@ function QallingShell() {
     {
       key: "chat",
       label: id ? "Percakapan" : "Conversations",
-      ids: ["inbox", "comments", "automations"],
+      ids: ["inbox", "comments", "automations", "templates", "wa-gateway"],
     },
     {
       key: "content",
@@ -334,14 +345,9 @@ function QallingShell() {
     {
       key: "reports",
       label: id ? "Analitik" : "Analytics",
-      ids: ["social-dashboard", "funnel", "attribution", "targets"],
+      ids: ["social-dashboard", "funnel", "attribution", "targets", "campaigns"],
     },
     { key: "clients", label: "Agency", ids: ["clients", "reports", "agency"] },
-    {
-      key: "tools",
-      label: id ? "Otomasi & Pesan" : "Automation & Messaging",
-      ids: ["broadcast", "templates", "campaigns", "wa-gateway"],
-    },
     { key: "tender", label: "Tender", ids: ["tenders", "doc-library"] },
   ];
   /** Baris menu mobile (sheet "Lainnya"): ikon, label, panah. */
@@ -627,6 +633,11 @@ function QallingShell() {
                   )}
                 >
                   <b.icon className="h-5 w-5" />
+                  {b.to === "/qalling/app/inbox" && inboxUnread > 0 && (
+                    <span className="absolute -mt-5 ml-6 grid h-4 min-w-4 place-items-center rounded-full bg-emerald-600 px-1 text-[10px] font-semibold text-white">
+                      {inboxUnread > 99 ? "99+" : inboxUnread}
+                    </span>
+                  )}
                 </span>
                 {b.label}
               </Link>

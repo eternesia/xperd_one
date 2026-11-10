@@ -57,7 +57,7 @@ import { SocialInsightsView } from "@/components/app/SocialInsights";
 import { DocLibraryView } from "@/components/app/CrmDocLibrary";
 import { MediaLibraryView } from "@/components/app/CrmMedia";
 import { CrmIdeasView } from "@/components/app/CrmIdeas";
-import { CrmInboxView } from "@/components/app/CrmInbox";
+import { InboxHub } from "@/components/app/InboxHub";
 import { CrmCommentsView, CrmAutomationsView } from "@/components/app/CrmInteractions";
 import {
   deleteWorkspaceRow,
@@ -251,7 +251,7 @@ export function CrmView({
   if (submoduleId === "social-dashboard") return <SocialInsightsView workspaceId={workspaceId} />;
   // #51 (BS New 3): pustaka dokumen tender.
   if (submoduleId === "media") return <MediaLibraryView workspaceId={workspaceId} />;
-  if (submoduleId === "inbox") return <CrmInboxView workspaceId={workspaceId} />;
+  if (submoduleId === "inbox") return <InboxHub workspaceId={workspaceId} />;
   if (submoduleId === "comments") return <CrmCommentsView workspaceId={workspaceId} />;
   if (submoduleId === "automations") return <CrmAutomationsView workspaceId={workspaceId} />;
   if (submoduleId === "ideas") return <CrmIdeasView workspaceId={workspaceId} />;
