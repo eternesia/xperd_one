@@ -49,7 +49,7 @@ export async function runXproTaskReminders(): Promise<{ inApp: number; emails: n
        JOIN app_users u ON u.id = a.user_id AND u.is_active = 1
        JOIN workspace_members wm ON wm.workspace_id = t.workspace_id AND wm.user_id = u.id
        LEFT JOIN prj_projects p ON p.id = t.project_id
-      WHERE t.due_date IS NOT NULL AND t.due_date <= ? AND t.completed_at IS NULL
+      WHERE t.due_date IS NOT NULL AND t.due_date <= ? AND t.completed_at IS NULL AND t.backlog = 0
         AND NOT EXISTS (SELECT 1 FROM prj_board_columns c
                          WHERE c.project_id = t.project_id AND c.\`key\` = t.status AND c.is_done = 1)
         AND NOT (t.status = 'done' AND NOT EXISTS (SELECT 1 FROM prj_board_columns c2

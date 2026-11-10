@@ -24,6 +24,9 @@ export interface XproTask {
   progress_pct: number;
   status: string;
   is_done: boolean;
+  /** Tugas belum dimulai (ada di Backlog, tidak tampil di Kanban/Tugas Saya). */
+  backlog: boolean;
+  sprint_id: string | null;
   priority: string;
   estimate_hours: number | null;
   completed_at: string | null;
@@ -110,7 +113,16 @@ export const listXproTasks = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator(
     (input: unknown) =>
-      input as { workspaceId: string; scope?: "mine" | "all"; doneDays?: number; ids?: string[] },
+      input as {
+        workspaceId: string;
+        scope?: "mine" | "all";
+        doneDays?: number;
+        ids?: string[];
+        /** exclude (bawaan): tanpa tugas backlog; only: hanya backlog + tugas di sprint belum selesai. */
+        backlog?: "exclude" | "include" | "only";
+        /** Batasi ke satu proyek; "__none" = tugas internal tanpa proyek. */
+        projectId?: string;
+      },
   )
   .handler(async ({ data, context }) => {
     const access = await ctx(data.workspaceId, context.userId);
@@ -127,6 +139,20 @@ export const listXproTasks = createServerFn({ method: "POST" })
     if (data.ids?.length) {
       where.push(`t.id IN (${data.ids.map(() => "?").join(",")})`);
       params.push(...data.ids);
+    }
+    const backlogMode = data.ids?.length ? "include" : (data.backlog ?? "exclude");
+    if (backlogMode === "exclude") where.push("t.backlog = 0");
+    if (backlogMode === "only") {
+      where.push(
+        "(t.backlog = 1 OR t.sprint_id IN (SELECT s.id FROM prj_sprints s WHERE s.status <> 'completed'))",
+      );
+    }
+    if (data.projectId) {
+      if (data.projectId === "__none") where.push("t.project_id IS NULL");
+      else {
+        where.push("t.project_id = ?");
+        params.push(data.projectId);
+      }
     }
     // Tugas selesai hanya yang selesai dalam N hari terakhir (default 30) agar daftar tetap ringan.
     const doneDays = Math.max(0, Math.min(365, Number(data.doneDays ?? 30)));
@@ -176,6 +202,8 @@ export const listXproTasks = createServerFn({ method: "POST" })
       progress_pct: Number(r.progress_pct ?? 0),
       status: String(r.status ?? "todo"),
       is_done: Number(r.is_done) === 1,
+      backlog: Number(r.backlog) === 1,
+      sprint_id: (r.sprint_id as string) ?? null,
       priority: String(r.priority ?? "medium"),
       estimate_hours:
         r.estimate_hours === null || r.estimate_hours === undefined
@@ -242,6 +270,9 @@ export interface SaveXproTaskInput {
     status?: string;
     priority?: string;
     estimate_hours?: number | null;
+    /** Hanya pengelola: taruh di Backlog (true) atau langsung aktif (false). */
+    backlog?: boolean;
+    sprint_id?: string | null;
   };
   assigneeIds?: string[];
 }
@@ -292,6 +323,24 @@ export const saveXproTask = createServerFn({ method: "POST" })
         if (h !== null && (!Number.isFinite(h) || h < 0 || h > 10000))
           throw new Error("Estimasi jam tidak valid.");
         patch.estimate_hours = h;
+      }
+      if (f.backlog !== undefined) {
+        if (!access.manager) throw new Error("Hanya pengelola yang dapat mengatur backlog.");
+        patch.backlog = f.backlog ? 1 : 0;
+      }
+      if (f.sprint_id !== undefined) {
+        if (!access.manager) throw new Error("Hanya pengelola yang dapat mengatur sprint.");
+        if (f.sprint_id) {
+          const sp = await executeOne<{ status: string }>(
+            "SELECT status FROM prj_sprints WHERE id = ? AND workspace_id = ?",
+            [f.sprint_id, data.workspaceId],
+          );
+          if (!sp) throw new Error("Sprint tidak ditemukan.");
+          if (sp.status === "completed") throw new Error("Sprint sudah selesai.");
+          // Masuk sprint yang sedang berjalan = langsung aktif di Kanban.
+          if (sp.status === "active") patch.backlog = 0;
+        }
+        patch.sprint_id = f.sprint_id || null;
       }
       if (f.start_date !== undefined) patch.start_date = toDate(f.start_date);
       if (f.due_date !== undefined) patch.due_date = toDate(f.due_date);

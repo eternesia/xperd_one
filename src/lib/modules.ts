@@ -453,6 +453,7 @@ const MODULE_DEFS: AppModule[] = [
     submodules: [
       // Ronde 36 (BS New 11): Kanban untuk semua penerima tugas; sisanya khusus owner/admin.
       s("my-tasks", "My Tasks", "Tugas Saya"),
+      m("backlog", "Backlog & Sprints", "Backlog & Sprint"),
       s("kanban", "Kanban Tasks", "Kanban Tugas"),
       m("workload", "Team Workload", "Beban Kerja Tim"),
       m("projects", "Projects & Contracts", "Proyek & Kontrak"),
@@ -544,6 +545,7 @@ const SUB_ICONS: Record<string, LucideIcon> = {
   wallet: Wallet,
   settings: Settings2,
   "my-tasks": ListTodo,
+  backlog: Inbox,
   kanban: KanbanSquare,
   workload: UsersRound,
   projects: FolderOpen,

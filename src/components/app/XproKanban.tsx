@@ -43,6 +43,7 @@ import {
   upsertWorkspaceRows,
 } from "@/lib/data.functions";
 import { useI18n } from "@/lib/i18n";
+import { XproSprintChip } from "@/components/app/XproBacklog";
 import {
   AssigneeStack,
   PriorityBadge,
@@ -428,6 +429,8 @@ export function XproKanbanView({ workspaceId }: { workspaceId: string }) {
           ) : undefined
         }
       />
+
+      <XproSprintChip workspaceId={workspaceId} projectId={pid} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <AdminSelect value={pid} onChange={setProjectId} className="sm:w-72">
