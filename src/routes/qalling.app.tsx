@@ -609,10 +609,10 @@ function QallingShell() {
                       search: { new: 1 } as never,
                     });
                 }}
-                className="flex flex-col items-center gap-0.5 text-[11px] font-medium text-primary"
+                className="flex flex-col items-center gap-0.5 text-[11px] font-medium text-foreground"
                 aria-label={id ? "Buat post" : "Create post"}
               >
-                <span className="-mt-7 flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg ring-4 ring-background">
+                <span className="-mt-7 flex size-14 items-center justify-center rounded-full bg-neutral-900 text-white shadow-lg dark:bg-white dark:text-neutral-900 ring-4 ring-background">
                   <b.icon className="h-6 w-6" />
                 </span>
                 {b.label}
