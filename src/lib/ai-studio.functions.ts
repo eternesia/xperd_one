@@ -6,10 +6,13 @@ import {
   AI_DURATIONS,
   AI_PROVIDERS,
   AI_RATIOS,
-  AI_STYLES,
   AI_TIERS,
+  NOTE_MAX,
   type AiJobView,
+  type UserStyle,
 } from "./ai-studio";
+
+const STYLE_KEY = /^[a-z0-9_-]{2,30}$/;
 
 /* --------------------------------- pengguna --------------------------------- */
 
@@ -34,8 +37,8 @@ export const createAiVideo = createServerFn({ method: "POST" })
       .object({
         workspaceId: z.string().uuid(),
         sourceMediaId: z.string().uuid(),
-        style: z.enum(AI_STYLES),
-        note: z.string().trim().max(300).optional(),
+        style: z.string().regex(STYLE_KEY),
+        note: z.string().trim().max(NOTE_MAX).optional(),
         tier: z.enum(AI_TIERS),
         duration: z.union([z.literal(AI_DURATIONS[0]), z.literal(AI_DURATIONS[1])]),
         aspectRatio: z.enum(AI_RATIOS),
@@ -54,54 +57,181 @@ export const createAiVideo = createServerFn({ method: "POST" })
     });
   });
 
-/** Daftar pekerjaan terbaru workspace; sekalian memeriksa yang masih berjalan. */
+const RUNNING = "('queued','processing','saving')";
+
+/** Riwayat video workspace (berhalaman, bisa difilter & dicari); sekalian memeriksa yang masih berjalan. */
 export const listAiJobs = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        status: z.enum(["all", "active", "done", "running", "failed"]).default("all"),
+        q: z.string().trim().max(80).default(""),
+        limit: z.number().int().min(1).max(48).default(12),
+        offset: z.number().int().min(0).max(5000).default(0),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { isWorkspaceMember } = await import("./auth-context.server");
+    if (!(await isWorkspaceMember(data.workspaceId, context.userId)))
+      throw new Error("Akses ditolak");
+    const { processPendingJobs, getStudioSettings } = await import("./ai-studio.server");
+    await processPendingJobs(data.workspaceId, 5);
+    const { execute } = await import("@/integrations/mysql/pool");
+    const styles = (await getStudioSettings()).styles;
+    const where = ["j.workspace_id = ?"];
+    const args: (string | number)[] = [data.workspaceId];
+    if (data.status === "done") where.push("j.status = 'done'");
+    if (data.status === "active") where.push("j.status <> 'failed'");
+    if (data.status === "failed") where.push("j.status = 'failed'");
+    if (data.status === "running") where.push(`j.status IN ${RUNNING}`);
+    if (data.q) {
+      const keys = styles
+        .filter((x) => `${x.name} ${x.name_en}`.toLowerCase().includes(data.q.toLowerCase()))
+        .map((x) => x.key);
+      const like = `%${data.q.replace(/[\\%_]/g, "\\$&")}%`;
+      where.push(
+        `(s.name LIKE ? OR j.user_note LIKE ?${keys.length ? ` OR j.style IN (${keys.map(() => "?").join(",")})` : ""})`,
+      );
+      args.push(like, like, ...keys);
+    }
+    const rows = await execute<Record<string, unknown>>(
+      `SELECT j.id, j.status, j.tier, j.style, j.duration_s, j.aspect_ratio, j.credits, j.refunded, j.error,
+              j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.finished_at,
+              r.file_path AS result_path, r.name AS result_name, s.file_path AS source_path, s.name AS source_name
+         FROM ai_jobs j
+         LEFT JOIN crm_media r ON r.id = j.result_media_id
+         LEFT JOIN crm_media s ON s.id = j.source_media_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY j.created_at DESC LIMIT ${data.limit + 1} OFFSET ${data.offset}`,
+      args,
+    );
+    const counts = await execute<Record<string, unknown>>(
+      `SELECT SUM(status = 'done') AS done, SUM(status = 'failed') AS failed,
+              SUM(status IN ${RUNNING}) AS running, COUNT(*) AS total
+         FROM ai_jobs WHERE workspace_id = ?`,
+      [data.workspaceId],
+    );
+    const c = counts[0] ?? {};
+    const items = rows.slice(0, data.limit).map((r) => {
+      const st = styles.find((x) => x.key === r.style);
+      return {
+        id: String(r.id),
+        status: String(r.status),
+        tier: String(r.tier),
+        style: String(r.style),
+        style_label: st?.name ?? String(r.style),
+        style_label_en: st?.name_en || st?.name || String(r.style),
+        aspect_ratio: String(r.aspect_ratio),
+        result_media_id: r.result_media_id ? String(r.result_media_id) : null,
+        source_media_id: String(r.source_media_id),
+        result_path: r.result_path ? String(r.result_path) : null,
+        result_name: r.result_name ? String(r.result_name) : null,
+        source_path: r.source_path ? String(r.source_path) : null,
+        source_name: r.source_name ? String(r.source_name) : null,
+        note: r.user_note ? String(r.user_note) : null,
+        seconds_elapsed: Math.max(
+          0,
+          Math.round(
+            ((r.finished_at ? new Date(String(r.finished_at)).getTime() : Date.now()) -
+              new Date(String(r.created_at)).getTime()) /
+              1000,
+          ),
+        ),
+        duration_s: Number(r.duration_s),
+        credits: Number(r.credits),
+        refunded: Number(r.refunded) === 1,
+        // Pesan teknis penyedia hanya untuk Super Admin; pengguna melihat pesan umum.
+        error: r.error ? "Pembuatan gagal, kredit dikembalikan." : null,
+        created_at: String(r.created_at),
+      };
+    }) as AiJobView[];
+    return {
+      items,
+      has_more: rows.length > data.limit,
+      counts: {
+        done: Number(c.done ?? 0),
+        failed: Number(c.failed ?? 0),
+        running: Number(c.running ?? 0),
+        total: Number(c.total ?? 0),
+      },
+    };
+  });
+
+/* --------------------------------- Gaya saya --------------------------------- */
+
+async function assertWriter(workspaceId: string, userId: string) {
+  const { canWriteWorkspace } = await import("./auth-context.server");
+  if (!(await canWriteWorkspace(workspaceId, userId))) throw new Error("Akses ditolak");
+  const { studioAccess } = await import("./ai-studio.server");
+  if (!(await studioAccess(workspaceId, userId)).available)
+    throw new Error("Studio AI belum tersedia");
+}
+
+export const listUserStyles = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((v: unknown) => z.object({ workspaceId: z.string().uuid() }).parse(v))
   .handler(async ({ data, context }) => {
     const { isWorkspaceMember } = await import("./auth-context.server");
     if (!(await isWorkspaceMember(data.workspaceId, context.userId)))
       throw new Error("Akses ditolak");
-    const { processPendingJobs } = await import("./ai-studio.server");
-    await processPendingJobs(data.workspaceId, 5);
     const { execute } = await import("@/integrations/mysql/pool");
     const rows = await execute<Record<string, unknown>>(
-      `SELECT j.id, j.status, j.tier, j.style, j.duration_s, j.aspect_ratio, j.credits, j.refunded, j.error,
-              j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.submitted_at, j.finished_at,
-              r.file_path AS result_path, r.name AS result_name, s.file_path AS source_path
-         FROM ai_jobs j
-         LEFT JOIN crm_media r ON r.id = j.result_media_id
-         LEFT JOIN crm_media s ON s.id = j.source_media_id
-        WHERE j.workspace_id = ? ORDER BY j.created_at DESC LIMIT 40`,
+      "SELECT id, name, style, note FROM ai_user_styles WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 30",
       [data.workspaceId],
     );
     return rows.map((r) => ({
       id: String(r.id),
-      status: String(r.status),
-      tier: String(r.tier),
+      name: String(r.name),
       style: String(r.style),
-      aspect_ratio: String(r.aspect_ratio),
-      result_media_id: r.result_media_id ? String(r.result_media_id) : null,
-      source_media_id: String(r.source_media_id),
-      result_path: r.result_path ? String(r.result_path) : null,
-      result_name: r.result_name ? String(r.result_name) : null,
-      source_path: r.source_path ? String(r.source_path) : null,
-      note: r.user_note ? String(r.user_note) : null,
-      seconds_elapsed: Math.max(
-        0,
-        Math.round(
-          ((r.finished_at ? new Date(String(r.finished_at)).getTime() : Date.now()) -
-            new Date(String(r.created_at)).getTime()) /
-            1000,
-        ),
-      ),
-      duration_s: Number(r.duration_s),
-      credits: Number(r.credits),
-      refunded: Number(r.refunded) === 1,
-      // Pesan teknis penyedia hanya untuk Super Admin; pengguna melihat pesan umum.
-      error: r.error ? "Pembuatan gagal, kredit dikembalikan." : null,
-      created_at: String(r.created_at),
-    })) as AiJobView[];
+      note: String(r.note ?? ""),
+    })) as UserStyle[];
+  });
+
+export const saveUserStyle = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        name: z.string().trim().min(1).max(60),
+        style: z.string().regex(STYLE_KEY),
+        note: z.string().trim().max(NOTE_MAX).default(""),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWriter(data.workspaceId, context.userId);
+    const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
+    const n = await executeOne<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM ai_user_styles WHERE workspace_id = ?",
+      [data.workspaceId],
+    );
+    if (Number(n?.n ?? 0) >= 30)
+      throw new Error("Maksimal 30 gaya tersimpan. Hapus yang tidak dipakai dulu.");
+    const id = uuid();
+    await execute(
+      "INSERT INTO ai_user_styles (id, workspace_id, name, style, note, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+      [id, data.workspaceId, data.name, data.style, data.note, context.userId],
+    );
+    return { id };
+  });
+
+export const deleteUserStyle = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z.object({ workspaceId: z.string().uuid(), id: z.string().uuid() }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    await assertWriter(data.workspaceId, context.userId);
+    const { execute } = await import("@/integrations/mysql/pool");
+    await execute("DELETE FROM ai_user_styles WHERE id = ? AND workspace_id = ?", [
+      data.id,
+      data.workspaceId,
+    ]);
+    return { ok: true };
   });
 
 async function tenantForMember(workspaceId: string, userId: string) {
@@ -201,6 +331,7 @@ export const adminGetStudio = createServerFn({ method: "POST" })
       fal_key_hint: hint(s.fal_api_key),
       atlas_key_hint: hint(s.atlas_api_key),
       tiers: s.tiers,
+      styles: s.styles,
       packs,
       daily_limit: s.daily_limit,
       usd_idr: s.usd_idr,
@@ -268,6 +399,24 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
         clearFal: z.boolean().optional(),
         clearAtlas: z.boolean().optional(),
         tiers: z.object({ hemat: tierSchema, standar: tierSchema, premium: tierSchema }),
+        styles: z
+          .array(
+            z.object({
+              key: z.string().regex(STYLE_KEY),
+              name: z.string().trim().min(1).max(40),
+              name_en: z.string().trim().max(40).default(""),
+              hint: z.string().trim().max(120).default(""),
+              hint_en: z.string().trim().max(120).default(""),
+              prompt: z.string().trim().min(5).max(600),
+              enabled: z.boolean(),
+            }),
+          )
+          .min(1)
+          .max(24)
+          .refine((a) => new Set(a.map((x) => x.key)).size === a.length, {
+            message: "Kunci gaya harus berbeda",
+          })
+          .refine((a) => a.some((x) => x.enabled), { message: "Minimal satu gaya aktif" }),
         dailyLimit: z.number().int().min(0).max(500),
         usdIdr: z.number().int().min(1000).max(100000),
         packs: z
@@ -295,7 +444,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
     const atlas = data.clearAtlas ? null : data.atlasApiKey || cur.atlas_api_key;
     await execute(
       `UPDATE ai_studio_settings SET enabled = ?, fal_api_key = ?, atlas_api_key = ?, tiers = ?, daily_limit = ?,
-              usd_idr = ?, credit_packs = ?, updated_by = ? WHERE id = 'platform'`,
+              usd_idr = ?, credit_packs = ?, styles = ?, updated_by = ? WHERE id = 'platform'`,
       [
         data.enabled ? 1 : 0,
         fal,
@@ -304,6 +453,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
         data.dailyLimit,
         data.usdIdr,
         JSON.stringify([...data.packs].sort((a, b) => a.credits - b.credits)),
+        JSON.stringify(data.styles),
         context.userId,
       ],
     );

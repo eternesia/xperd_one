@@ -21,9 +21,8 @@ import {
 import {
   AI_PROVIDERS,
   AI_TIERS,
-  STYLE_LABELS,
   TIER_LABELS,
-  type AiStyle,
+  type StyleConfig,
   type AiTier,
   type CreditPack,
   type TierConfig,
@@ -63,6 +62,9 @@ function StudioAdmin() {
   const [dailyLimit, setDailyLimit] = useState(10);
   const [usdIdr, setUsdIdr] = useState(16500);
   const [packs, setPacks] = useState<CreditPack[]>([]);
+  const [styles, setStyles] = useState<StyleConfig[]>([]);
+  const setStyleAt = (i: number, patch: Partial<StyleConfig>) =>
+    setStyles((x) => x.map((y, j) => (j === i ? { ...y, ...patch } : y)));
   const [grant, setGrant] = useState({ email: "", credits: 10, note: "" });
   const grantFn = useServerFn(adminGrantCredits);
 
@@ -80,6 +82,7 @@ function StudioAdmin() {
     );
     setDailyLimit(q.data.daily_limit);
     setUsdIdr(q.data.usd_idr);
+    setStyles(q.data.styles);
     setPacks(q.data.packs);
   }, [q.data]);
 
@@ -109,6 +112,7 @@ function StudioAdmin() {
           dailyLimit,
           usdIdr,
           packs: packs.filter((p) => p.credits > 0 && p.price_idr > 0),
+          styles,
           ...opts,
         },
       });
@@ -170,14 +174,14 @@ function StudioAdmin() {
       <Card>
         <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
           <div className="max-w-xl space-y-1">
-            <p className="font-semibold">
+            <div className="font-semibold">
               Status untuk pengguna:{" "}
               {d.enabled ? (
                 <Badge>Aktif</Badge>
               ) : (
                 <Badge variant="secondary">Nonaktif (mode uji Super Admin)</Badge>
               )}
-            </p>
+            </div>
             <p className="text-sm text-muted-foreground">
               Saat nonaktif, pengguna hanya melihat tombol “segera hadir” (uji minat). Super Admin
               tetap bisa membuat video dari menu Media di workspace-nya sendiri untuk uji kualitas;
@@ -270,6 +274,125 @@ function StudioAdmin() {
             )}
             <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
               Simpan paket
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <div>
+            <p className="font-semibold">Gaya gerakan bawaan</p>
+            <p className="text-sm text-muted-foreground">
+              Tampil di tab “Bawaan” Studio. Prompt ditulis dalam bahasa Inggris dan tidak terlihat
+              pengguna. Kunci dipakai riwayat video, jadi jangan diubah setelah gaya dipakai;
+              nonaktifkan saja bila tidak dipakai lagi.
+            </p>
+          </div>
+          {styles.map((st, i) => (
+            <div key={i} className="space-y-2 rounded-2xl border p-3">
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                <Field label="Nama (Indonesia)">
+                  <Input
+                    value={st.name}
+                    onChange={(e) => setStyleAt(i, { name: e.target.value })}
+                  />
+                </Field>
+                <Field label="Nama (Inggris)">
+                  <Input
+                    value={st.name_en}
+                    onChange={(e) => setStyleAt(i, { name_en: e.target.value })}
+                  />
+                </Field>
+                <Field label="Kunci (huruf kecil, tanpa spasi)">
+                  <Input
+                    value={st.key}
+                    onChange={(e) =>
+                      setStyleAt(i, {
+                        key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+                      })
+                    }
+                  />
+                </Field>
+                <label className="flex items-center gap-2 pb-2 text-sm sm:self-end">
+                  <Switch
+                    checked={st.enabled}
+                    onCheckedChange={(v) => setStyleAt(i, { enabled: v })}
+                  />
+                  Aktif
+                </label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Field label="Keterangan singkat (Indonesia)">
+                  <Input
+                    value={st.hint}
+                    onChange={(e) => setStyleAt(i, { hint: e.target.value })}
+                  />
+                </Field>
+                <Field label="Keterangan singkat (Inggris)">
+                  <Input
+                    value={st.hint_en}
+                    onChange={(e) => setStyleAt(i, { hint_en: e.target.value })}
+                  />
+                </Field>
+              </div>
+              <Field label="Prompt (Inggris)">
+                <Input
+                  value={st.prompt}
+                  onChange={(e) => setStyleAt(i, { prompt: e.target.value })}
+                />
+              </Field>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={i === 0}
+                  onClick={() =>
+                    setStyles((x) => {
+                      const y = [...x];
+                      [y[i - 1], y[i]] = [y[i], y[i - 1]];
+                      return y;
+                    })
+                  }
+                >
+                  Naikkan
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={styles.length <= 1}
+                  onClick={() => setStyles((x) => x.filter((_, j) => j !== i))}
+                >
+                  Hapus
+                </Button>
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            {styles.length < 24 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setStyles((x) => [
+                    ...x,
+                    {
+                      key: "",
+                      name: "",
+                      name_en: "",
+                      hint: "",
+                      hint_en: "",
+                      prompt: "",
+                      enabled: true,
+                    },
+                  ])
+                }
+              >
+                Tambah gaya
+              </Button>
+            )}
+            <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+              Simpan gaya
             </Button>
           </div>
         </CardContent>
@@ -491,7 +614,7 @@ function StudioAdmin() {
                       </p>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {STYLE_LABELS[j.style as AiStyle]?.id ?? String(j.style)}
+                      {styles.find((x) => x.key === j.style)?.name ?? String(j.style)}
                     </TableCell>
                     <TableCell className="text-xs">
                       <Badge
@@ -540,14 +663,14 @@ function KeyField(p: {
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-sm font-medium">
+      <div className="text-sm font-medium">
         {p.label}{" "}
         {p.hint ? (
           <Badge variant="outline">{p.hint}</Badge>
         ) : (
           <Badge variant="secondary">belum diisi</Badge>
         )}
-      </p>
+      </div>
       <div className="flex gap-2">
         <Input
           type="password"
