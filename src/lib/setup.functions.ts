@@ -194,6 +194,12 @@ export const getPublicPackages = createServerFn({ method: "GET" }).handler(async
   );
 });
 
+/** Token form kontak (dibuat saat halaman dibuka) + site key Turnstile bila aktif. */
+export const getContactFormGuard = createServerFn({ method: "POST" }).handler(async () => {
+  const { issueFormToken } = await import("@/lib/form-guard.server");
+  return issueFormToken("contact");
+});
+
 export const submitLead = createServerFn({ method: "POST" })
   .validator(
     (input: unknown) =>
@@ -207,6 +213,7 @@ export const submitLead = createServerFn({ method: "POST" })
         employee_range?: string;
         message?: string;
         interested_product?: string;
+        guard?: { token?: string; website?: string; turnstile?: string };
       },
   )
   .handler(async ({ data: raw }) => {
@@ -234,6 +241,26 @@ export const submitLead = createServerFn({ method: "POST" })
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)
     )
       throw new Error("Data tidak lengkap.");
+    // Anti-spam: token sekali pakai, honeypot, batas per IP/email, cek tautan, Turnstile (bila aktif).
+    const { checkFormSubmission, clientIp, FormRejected } = await import("@/lib/form-guard.server");
+    const { getRequest } = await import("@tanstack/react-start/server");
+    let verdict: "ok" | "drop";
+    try {
+      verdict = await checkFormSubmission({
+        form: "contact",
+        token: raw.guard?.token,
+        honeypot: raw.guard?.website,
+        turnstile: raw.guard?.turnstile,
+        email: data.email,
+        ip: clientIp(getRequest()),
+        names: [data.company_name, data.contact_name, data.job_title],
+        message: data.message,
+      });
+    } catch (e) {
+      if (e instanceof FormRejected) return { ok: false as const, error: e.message };
+      throw e;
+    }
+    if (verdict === "drop") return { ok: true as const };
     const leadId = uuid();
     await execute(
       `INSERT INTO leads

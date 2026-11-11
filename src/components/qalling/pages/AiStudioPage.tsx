@@ -341,6 +341,25 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
         : "hover:bg-muted/60",
     );
 
+  // Desktop: Studio mengisi sisa tinggi layar (dihitung dari posisinya, termasuk banner di atasnya),
+  // supaya tombol "Buat video" selalu terlihat tanpa menggulir halaman.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(144);
+  useEffect(() => {
+    const measure = () => {
+      const el = rootRef.current;
+      if (el) setTop(Math.round(el.getBoundingClientRect().top + window.scrollY));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const ro = new ResizeObserver(measure);
+    if (rootRef.current?.parentElement) ro.observe(rootRef.current.parentElement);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
+  }, []);
+
   const recentStrip = (
     <section className="space-y-3">
       <div className="flex items-baseline justify-between">
@@ -356,27 +375,30 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
         )}
       </div>
       {recent.isLoading ? (
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:flex">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="aspect-[9/16] animate-pulse rounded-xl bg-muted" />
+            <div
+              key={i}
+              className="aspect-[9/16] animate-pulse rounded-xl bg-muted lg:h-[128px] lg:shrink-0"
+            />
           ))}
         </div>
       ) : list.length === 0 ? (
-        <p className="rounded-2xl border border-dashed p-5 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed p-5 text-center text-sm text-muted-foreground lg:p-4">
           {pick(
             "Videos you create appear here, ready to download or post.",
             "Video yang Anda buat muncul di sini, siap diunduh atau diposting.",
           )}
         </p>
       ) : (
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:flex lg:overflow-x-auto lg:p-1">
           {list.map((j) => (
             <button
               key={j.id}
               type="button"
               onClick={() => setView(j)}
               className={cn(
-                "relative aspect-[9/16] overflow-hidden rounded-xl text-left",
+                "relative aspect-[9/16] overflow-hidden rounded-xl text-left lg:h-[128px] lg:shrink-0",
                 view?.id === j.id && "ring-2 ring-violet-600 ring-offset-2 ring-offset-background",
               )}
             >
@@ -402,9 +424,13 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-3">
+    <div
+      ref={rootRef}
+      style={{ "--studio-top": `${top}px` } as React.CSSProperties}
+      className="space-y-4 lg:-mt-5 lg:flex lg:h-[calc(100dvh-var(--studio-top)-2.5rem)] lg:min-h-[560px] lg:flex-col lg:gap-3 lg:space-y-0"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 lg:gap-5">
           <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold text-navy dark:text-foreground">
             Studio AI
             {access.mode === "admin_preview" && (
@@ -453,21 +479,23 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
       <LoadingBar workspaceId={workspaceId} />
 
       {tab === "history" ? (
-        <History
-          workspaceId={workspaceId}
-          counts={counts}
-          jobStyle={jobStyle}
-          onOpen={(j) => {
-            setView(j);
-            setTab("create");
-          }}
-          onPost={setPostJob}
-        />
+        <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+          <History
+            workspaceId={workspaceId}
+            counts={counts}
+            jobStyle={jobStyle}
+            onOpen={(j) => {
+              setView(j);
+              setTab("create");
+            }}
+            onPost={setPostJob}
+          />
+        </div>
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[400px_minmax(0,1fr)]">
+        <div className="grid items-start gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[400px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch">
           {/* Panel pengaturan; tombol Buat video selalu terlihat di bawahnya */}
-          <div className="flex flex-col rounded-3xl border bg-card lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
-            <div className="space-y-6 overflow-y-auto p-5">
+          <div className="flex flex-col rounded-3xl border bg-card lg:h-full lg:min-h-0">
+            <div className="space-y-6 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold">{pick("Product photo", "Foto produk")}</h2>
                 <div className="flex items-center gap-3">
@@ -782,7 +810,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
             </div>
           </div>
 
-          <div className="-order-1 min-w-0 space-y-5 lg:order-none">
+          <div className="-order-1 min-w-0 space-y-5 lg:order-none lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:gap-4 lg:space-y-0">
             <Stage
               ratio={view ? view.aspect_ratio : ratio}
               job={view}
@@ -795,7 +823,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               onBack={view ? () => setView(null) : undefined}
               onPost={setPostJob}
             />
-            <div className="hidden lg:block">{recentStrip}</div>
+            <div className="hidden shrink-0 lg:block">{recentStrip}</div>
           </div>
           <div className="lg:hidden">{recentStrip}</div>
         </div>
@@ -911,7 +939,7 @@ function Stage({
   const videoKey = job?.status === "done" ? job.id : null;
   useEffect(() => setReady(false), [videoKey]);
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-[#121a2e] px-4 pb-6 pt-12 sm:py-9">
+    <div className="relative overflow-hidden rounded-3xl bg-[#121a2e] px-4 pb-6 pt-12 sm:py-9 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:py-6">
       {onBack && (
         <button
           type="button"
@@ -921,82 +949,86 @@ function Stage({
           {pick("Back to preview", "Kembali ke pratinjau")}
         </button>
       )}
-      <div
-        className={cn(
-          "relative mx-auto overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/10",
-          vertical
-            ? "aspect-[9/16] w-[min(100%,220px)] sm:w-[min(100%,300px)]"
-            : "aspect-square w-[min(100%,300px)] sm:w-[min(100%,420px)]",
-        )}
-      >
-        {photoUrl ? (
-          <Thumb src={photoUrl} className="size-full bg-white/5" />
-        ) : (
-          <div className="flex size-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-white/70">
-            <ImagePlus className="size-8" aria-hidden="true" />
-            {pick("Choose or upload a product photo", "Pilih atau unggah foto produk")}
-          </div>
-        )}
-        {job?.status === "done" && job.result_path && (
-          <>
-            <video
-              key={job.id}
-              src={fileUrl(job.result_path)}
-              poster={photoUrl ?? undefined}
-              className={cn("absolute inset-0 size-full object-cover", !ready && "opacity-0")}
-              controls
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              onLoadedData={() => setReady(true)}
-            />
-            {!ready && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/45 text-white">
-                <Loader2 className="size-7 animate-spin" />
-                <p className="text-xs">{pick("Loading video…", "Memuat video…")}</p>
-              </div>
-            )}
-          </>
-        )}
-        {job && running(job) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-5 text-white">
-            <Loader2 className="size-8 animate-spin" />
-            <p className="text-sm font-medium">
-              {pick("Creating your video", "Membuat video Anda")}
-            </p>
-            {/* Perkiraan kemajuan: kebanyakan video selesai dalam ±3 menit. */}
-            <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-violet-400 transition-[width] duration-1000"
-                style={{ width: `${Math.min(95, Math.round((job.seconds_elapsed / 180) * 100))}%` }}
-              />
+      <div className="lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
+        <div
+          className={cn(
+            "relative mx-auto overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/10 lg:mx-0 lg:h-full lg:max-h-[720px] lg:w-auto lg:max-w-full",
+            vertical
+              ? "aspect-[9/16] w-[min(100%,220px)] sm:w-[min(100%,300px)]"
+              : "aspect-square w-[min(100%,300px)] sm:w-[min(100%,420px)]",
+          )}
+        >
+          {photoUrl ? (
+            <Thumb src={photoUrl} className="size-full bg-white/5" />
+          ) : (
+            <div className="flex size-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-white/70">
+              <ImagePlus className="size-8" aria-hidden="true" />
+              {pick("Choose or upload a product photo", "Pilih atau unggah foto produk")}
             </div>
-            <p className="text-xs tabular-nums text-white/80">
-              {clock(job.seconds_elapsed)},{" "}
-              {pick("usually 1 to 3 min", "biasanya 1 sampai 3 menit")}
-            </p>
-          </div>
-        )}
-        {job?.status === "failed" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-6 text-center text-white">
-            <AlertCircle className="size-7 text-rose-300" aria-hidden="true" />
-            <p className="text-sm font-medium">
-              {pick("This video failed", "Video ini gagal dibuat")}
-            </p>
-            <p className="text-xs text-white/80">
-              {pick(
-                "Credits are back in your balance. Try another photo or style.",
-                "Kredit sudah kembali ke saldo. Coba foto atau gaya lain.",
+          )}
+          {job?.status === "done" && job.result_path && (
+            <>
+              <video
+                key={job.id}
+                src={fileUrl(job.result_path)}
+                poster={photoUrl ?? undefined}
+                className={cn("absolute inset-0 size-full object-cover", !ready && "opacity-0")}
+                controls
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                onLoadedData={() => setReady(true)}
+              />
+              {!ready && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/45 text-white">
+                  <Loader2 className="size-7 animate-spin" />
+                  <p className="text-xs">{pick("Loading video…", "Memuat video…")}</p>
+                </div>
               )}
-            </p>
-          </div>
-        )}
+            </>
+          )}
+          {job && running(job) && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 px-5 text-white">
+              <Loader2 className="size-8 animate-spin" />
+              <p className="text-sm font-medium">
+                {pick("Creating your video", "Membuat video Anda")}
+              </p>
+              {/* Perkiraan kemajuan: kebanyakan video selesai dalam ±3 menit. */}
+              <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-violet-400 transition-[width] duration-1000"
+                  style={{
+                    width: `${Math.min(95, Math.round((job.seconds_elapsed / 180) * 100))}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs tabular-nums text-white/80">
+                {clock(job.seconds_elapsed)},{" "}
+                {pick("usually 1 to 3 min", "biasanya 1 sampai 3 menit")}
+              </p>
+            </div>
+          )}
+          {job?.status === "failed" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-6 text-center text-white">
+              <AlertCircle className="size-7 text-rose-300" aria-hidden="true" />
+              <p className="text-sm font-medium">
+                {pick("This video failed", "Video ini gagal dibuat")}
+              </p>
+              <p className="text-xs text-white/80">
+                {pick(
+                  "Credits are back in your balance. Try another photo or style.",
+                  "Kredit sudah kembali ke saldo. Coba foto atau gaya lain.",
+                )}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-      <p className="mt-4 text-center text-[13px] text-white/75">{caption}</p>
+      <p className="mt-4 shrink-0 text-center text-[13px] text-white/75">{caption}</p>
       {job?.status === "done" && job.result_path && (
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <div className="mt-4 flex shrink-0 flex-wrap justify-center gap-2">
           <Button asChild variant="onDark" className="min-h-11 rounded-full">
             <a href={fileUrl(job.result_path, true)} download>
               <Download /> {pick("Download MP4", "Unduh MP4")}
