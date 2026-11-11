@@ -1,6 +1,6 @@
 import { ContactItems } from "@/components/site/ContactItems";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Section, SectionHeading } from "@/components/site/Section";
-import { submitLead } from "@/lib/setup.functions";
+import { getContactFormGuard, submitLead } from "@/lib/setup.functions";
 import { BRAND, INDUSTRIES } from "@/lib/xperd";
 import { useI18n } from "@/lib/i18n";
 
@@ -81,6 +81,8 @@ const COPY = {
     toastCheckData: "Please check the data you have entered.",
     toastSubmitFailed: "Message failed to send. Please try again.",
     toastSuccess: "Your request has been sent.",
+    verifying: "Preparing a secure form…",
+    turnstileNeeded: "Please complete the security check above the button.",
   },
   id: {
     eyebrow: "Contact Sales",
@@ -122,6 +124,8 @@ const COPY = {
     toastCheckData: "Periksa kembali data yang Anda isi.",
     toastSubmitFailed: "Pesan gagal dikirim. Silakan coba lagi.",
     toastSuccess: "Permintaan Anda telah dikirim.",
+    verifying: "Menyiapkan form aman…",
+    turnstileNeeded: "Selesaikan verifikasi keamanan di atas tombol.",
   },
 } as const;
 
@@ -150,6 +154,17 @@ function ContactPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [guard, setGuard] = useState<{ token: string; turnstileSiteKey: string | null } | null>(
+    null,
+  );
+  const [turnstile, setTurnstile] = useState("");
+  const refreshGuard = () =>
+    getContactFormGuard()
+      .then((g) => setGuard(g))
+      .catch(() => setGuard(null));
+  useEffect(() => {
+    void refreshGuard();
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -165,10 +180,15 @@ function ContactPage() {
     }
 
     setErrors({});
+    if (guard?.turnstileSiteKey && !turnstile) {
+      toast.error(c.turnstileNeeded);
+      return;
+    }
     setSubmitting(true);
     const v = parsed.data;
+    let result: { ok: true } | { ok: false; error: string };
     try {
-      await submitLead({
+      result = await submitLead({
         data: {
           company_name: v.company_name,
           contact_name: v.contact_name,
@@ -179,12 +199,24 @@ function ContactPage() {
           employee_range: v.employee_range || undefined,
           message: v.message || undefined,
           interested_product: product,
+          guard: {
+            token: guard?.token,
+            website: String(raw.website ?? ""),
+            turnstile: turnstile || undefined,
+          },
         },
       });
       setSubmitting(false);
     } catch {
       setSubmitting(false);
       toast.error(c.toastSubmitFailed);
+      return;
+    }
+    if (!result.ok) {
+      toast.error(result.error);
+      // Token sekali pakai: siapkan yang baru supaya pengguna bisa mencoba lagi tanpa memuat ulang.
+      setTurnstile("");
+      void refreshGuard();
       return;
     }
     setDone(true);
@@ -235,7 +267,7 @@ function ContactPage() {
           ) : (
             <form
               onSubmit={handleSubmit}
-              className="rounded-2xl border border-border bg-card p-8 md:p-10"
+              className="relative rounded-2xl border border-border bg-card p-8 md:p-10"
             >
               <Label>{c.interestedProduct}</Label>
               <div className="mt-2 flex flex-wrap gap-3">
@@ -311,6 +343,15 @@ function ContactPage() {
                 </div>
               </div>
 
+              {/* Honeypot: tidak terlihat & tidak bisa difokus pengguna; bot yang mengisinya dibuang. */}
+              <div
+                aria-hidden="true"
+                className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden"
+              >
+                <label htmlFor="website">Website</label>
+                <input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+              </div>
+
               <div className="mt-6">
                 <Label htmlFor="message">{c.yourNeeds}</Label>
                 <Textarea
@@ -322,9 +363,19 @@ function ContactPage() {
                 />
               </div>
 
-              <Button type="submit" variant="navy" size="xl" className="mt-8" disabled={submitting}>
-                {submitting && <Loader2 className="animate-spin" />}
-                {c.submitButton}
+              {guard?.turnstileSiteKey && (
+                <Turnstile siteKey={guard.turnstileSiteKey} lang={lang} onToken={setTurnstile} />
+              )}
+
+              <Button
+                type="submit"
+                variant="navy"
+                size="xl"
+                className="mt-8"
+                disabled={submitting || !guard}
+              >
+                {(submitting || !guard) && <Loader2 className="animate-spin" />}
+                {guard ? c.submitButton : c.verifying}
               </Button>
             </form>
           )}
@@ -356,4 +407,57 @@ function Field({
       {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
     </div>
   );
+}
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: Record<string, unknown>) => string;
+      remove: (id: string) => void;
+    };
+  }
+}
+
+/** Widget Cloudflare Turnstile (hanya dimuat bila site key diatur di server). */
+function Turnstile({
+  siteKey,
+  lang,
+  onToken,
+}: {
+  siteKey: string;
+  lang: string;
+  onToken: (t: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let id: string | undefined;
+    let cancelled = false;
+    const mount = () => {
+      if (cancelled || !ref.current || !window.turnstile) return;
+      id = window.turnstile.render(ref.current, {
+        sitekey: siteKey,
+        language: lang === "id" ? "id" : "en",
+        callback: (t: string) => onToken(t),
+        "expired-callback": () => onToken(""),
+        "error-callback": () => onToken(""),
+      });
+    };
+    if (window.turnstile) mount();
+    else {
+      const src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      let tag = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+      if (!tag) {
+        tag = document.createElement("script");
+        tag.src = src;
+        tag.async = true;
+        document.head.appendChild(tag);
+      }
+      tag.addEventListener("load", mount, { once: true });
+    }
+    return () => {
+      cancelled = true;
+      if (id && window.turnstile) window.turnstile.remove(id);
+    };
+  }, [siteKey, lang, onToken]);
+  return <div ref={ref} className="mt-6" />;
 }
