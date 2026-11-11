@@ -38,3 +38,10 @@ export function publicOrigin(requestUrl?: string): string {
   if (requestUrl) return new URL(requestUrl).origin;
   throw new Error("APP_PUBLIC_URL is not configured");
 }
+
+/** Seperti `publicOrigin`, tetapi selalu HTTPS kecuali localhost (di balik proxy, URL permintaan terbaca http). */
+export function securePublicOrigin(requestUrl?: string): string {
+  const u = new URL(publicOrigin(requestUrl));
+  if (!["localhost", "127.0.0.1"].includes(u.hostname)) u.protocol = "https:";
+  return u.origin;
+}

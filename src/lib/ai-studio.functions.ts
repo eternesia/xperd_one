@@ -590,10 +590,10 @@ export const adminRotateWorkerToken = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("./auth-context.server");
     await requireAdmin(context.userId);
     const { rotateWorkerToken } = await import("./ai-templates.server");
-    const { publicOrigin } = await import("./crm-media.server");
+    const { securePublicOrigin } = await import("./crm-media.server");
     const { getRequest } = await import("@tanstack/react-start/server");
     return {
       token: await rotateWorkerToken(context.userId),
-      url: publicOrigin(getRequest().url),
+      url: securePublicOrigin(getRequest().url),
     };
   });

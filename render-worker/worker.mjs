@@ -8,7 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import { prepare, renderTemplate } from "./lib.mjs";
 
-const BASE = (process.env.QALLING_URL || "").replace(/\/+$/, "");
+// http:// ke domain publik dialihkan ke https dan POST berubah jadi GET, jadi paksa https kecuali localhost.
+const BASE = (process.env.QALLING_URL || "")
+  .replace(/\/+$/, "")
+  .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
 const VERSION = "1.0.0";
