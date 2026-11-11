@@ -101,6 +101,9 @@ import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
+import { Route as ApiPublicRenderWorkerClaimRouteImport } from './routes/api/public/render-worker/claim'
+import { Route as ApiPublicRenderWorkerCompleteRouteImport } from './routes/api/public/render-worker/complete'
+import { Route as ApiPublicRenderWorkerFailRouteImport } from './routes/api/public/render-worker/fail'
 import { Route as ApiPublicSiteAssetKeyRouteImport } from './routes/api/public/site-asset/$key'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
 import { Route as ApiPublicWebhooksWalletDokuRouteImport } from './routes/api/public/webhooks/wallet-doku'
@@ -584,6 +587,24 @@ const ApiPublicMetaWebhookRoute = ApiPublicMetaWebhookRouteImport.update({
   path: '/api/public/meta/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRenderWorkerClaimRoute =
+  ApiPublicRenderWorkerClaimRouteImport.update({
+    id: '/api/public/render-worker/claim',
+    path: '/api/public/render-worker/claim',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicRenderWorkerCompleteRoute =
+  ApiPublicRenderWorkerCompleteRouteImport.update({
+    id: '/api/public/render-worker/complete',
+    path: '/api/public/render-worker/complete',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicRenderWorkerFailRoute =
+  ApiPublicRenderWorkerFailRouteImport.update({
+    id: '/api/public/render-worker/fail',
+    path: '/api/public/render-worker/fail',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSiteAssetKeyRoute = ApiPublicSiteAssetKeyRouteImport.update({
   id: '/api/public/site-asset/$key',
   path: '/api/public/site-asset/$key',
@@ -766,6 +787,9 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
+  '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
+  '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -871,6 +895,9 @@ export interface FileRoutesByTo {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
+  '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
+  '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -981,6 +1008,9 @@ export interface FileRoutesById {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
+  '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
+  '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -1092,6 +1122,9 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/claim'
+    | '/api/public/render-worker/complete'
+    | '/api/public/render-worker/fail'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1197,6 +1230,9 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/claim'
+    | '/api/public/render-worker/complete'
+    | '/api/public/render-worker/fail'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1306,6 +1342,9 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/claim'
+    | '/api/public/render-worker/complete'
+    | '/api/public/render-worker/fail'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1367,6 +1406,9 @@ export interface RootRouteChildren {
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
+  ApiPublicRenderWorkerClaimRoute: typeof ApiPublicRenderWorkerClaimRoute
+  ApiPublicRenderWorkerCompleteRoute: typeof ApiPublicRenderWorkerCompleteRoute
+  ApiPublicRenderWorkerFailRoute: typeof ApiPublicRenderWorkerFailRoute
   ApiPublicSiteAssetKeyRoute: typeof ApiPublicSiteAssetKeyRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
   ApiPublicWebhooksWalletDokuRoute: typeof ApiPublicWebhooksWalletDokuRoute
@@ -2021,6 +2063,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMetaWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/render-worker/claim': {
+      id: '/api/public/render-worker/claim'
+      path: '/api/public/render-worker/claim'
+      fullPath: '/api/public/render-worker/claim'
+      preLoaderRoute: typeof ApiPublicRenderWorkerClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/render-worker/complete': {
+      id: '/api/public/render-worker/complete'
+      path: '/api/public/render-worker/complete'
+      fullPath: '/api/public/render-worker/complete'
+      preLoaderRoute: typeof ApiPublicRenderWorkerCompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/render-worker/fail': {
+      id: '/api/public/render-worker/fail'
+      path: '/api/public/render-worker/fail'
+      fullPath: '/api/public/render-worker/fail'
+      preLoaderRoute: typeof ApiPublicRenderWorkerFailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/site-asset/$key': {
       id: '/api/public/site-asset/$key'
       path: '/api/public/site-asset/$key'
@@ -2375,6 +2438,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsSubscriptionRenewalRoute: ApiPublicJobsSubscriptionRenewalRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
+  ApiPublicRenderWorkerClaimRoute: ApiPublicRenderWorkerClaimRoute,
+  ApiPublicRenderWorkerCompleteRoute: ApiPublicRenderWorkerCompleteRoute,
+  ApiPublicRenderWorkerFailRoute: ApiPublicRenderWorkerFailRoute,
   ApiPublicSiteAssetKeyRoute: ApiPublicSiteAssetKeyRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
   ApiPublicWebhooksWalletDokuRoute: ApiPublicWebhooksWalletDokuRoute,

@@ -77,3 +77,34 @@ dengan param `image`). Parameter khusus model ditambahkan lewat kolom JSON "Para
 - **Memuat**: garis memuat di atas halaman, placeholder berdenyut untuk foto/kartu, gambar lazy; video hanya diunduh saat
   dibuka di panggung (indikator "Memuat video"), kartu memakai foto sumber sebagai sampul.
 - Harga tidak lagi tampil di halaman; tautan "Lihat harga" membuka dialog paket & kredit per video.
+
+## Tingkat Template (migrasi 073) — video tanpa model AI
+Foto + teks digabung menjadi video 6 detik 1080p (9:16 atau 1:1) oleh mesin render Remotion di VPS terpisah.
+Tidak ada biaya model per video; foto produk tampil persis aslinya. Bawaan 1 kredit per video.
+
+- **Template** (`src/lib/ai-templates.ts`, komposisi di `render-worker/src/templates/`): Promo Harga, Sorotan Produk,
+  Cerita Bertahap. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
+  komposisi di `render-worker` + entri di `ai-templates.ts` dengan kunci yang sama.
+- **Alur**: pengguna membuat → kredit dipotong, pekerjaan `ai_jobs` (`provider = 'render'`, `tier = 'template'`) berstatus
+  `queued` → mesin render `POST /api/public/render-worker/claim` (Bearer token) → render → `…/complete?job=<id>` (body MP4)
+  atau `…/fail`. Hasil masuk Media folder "Studio AI" tanpa label AI.
+- **Batas waktu & refund** (`processJob`): antre > 20 menit tanpa mesin render, atau render > 10 menit → gagal + kredit kembali.
+- **Saklar**: Super Admin → Studio AI → tab Template. Selama OFF hanya Super Admin yang melihat mode Template.
+
+### Memasang mesin render di VPS
+Kebutuhan: Ubuntu + Docker, ±2 vCPU / 4 GB RAM, internet keluar. Tidak perlu domain atau port terbuka.
+1. Image dibangun otomatis oleh workflow "Build Render Worker Image" saat `render-worker/` berubah di `master`
+   → `ghcr.io/eternesia/xperd_one-render-worker:latest`. Paket GHCR dari repo privat bersifat privat: jadikan publik
+   (GitHub → Packages → Package settings → Change visibility; image tidak berisi rahasia), atau `docker login ghcr.io`
+   di VPS dengan token GitHub berizin `read:packages`.
+2. Pasang Docker di VPS: `curl -fsSL https://get.docker.com | sh`
+3. Super Admin → Studio AI → Template → **Buat token mesin render**, salin perintah `docker run …` yang muncul
+   (token hanya tampil sekali) dan jalankan di VPS.
+4. Status "Terhubung" muncul di tab Template dalam beberapa detik. Log: `docker logs -f qalling-render`.
+   Pembaruan: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan lagi perintahnya.
+
+Menambah kapasitas: jalankan perintah yang sama di VPS lain (satu token dipakai bersama; tiap pekerjaan hanya diambil satu mesin).
+Uji lokal tanpa Qalling: `cd render-worker && npm ci && node sample.mjs foto.jpg out/`.
+
+Lisensi Remotion: gratis untuk perusahaan sampai 3 orang; 4 orang ke atas wajib Company License
+(remotion.dev/license) sebelum fitur dipakai secara komersial.

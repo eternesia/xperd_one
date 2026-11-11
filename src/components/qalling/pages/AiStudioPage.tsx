@@ -55,6 +55,7 @@ import {
 import {
   buyCreditPack,
   createAiVideo,
+  createTemplateVideo,
   deleteUserStyle,
   getCreditActivity,
   getStudioAccess,
@@ -62,6 +63,7 @@ import {
   listUserStyles,
   saveUserStyle,
 } from "@/lib/ai-studio.functions";
+import { TEMPLATE_ACCENTS, TEMPLATE_LIMITS, TEMPLATE_SECONDS, TEMPLATES } from "@/lib/ai-templates";
 import { useApp } from "@/lib/app-context";
 import { saveWorkspaceRow } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
@@ -217,6 +219,12 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     access.tiers.find((t) => t.tier === "standar")?.tier ?? access.tiers[0]?.tier ?? "hemat",
   );
   const [consent, setConsent] = useState(false);
+  // Mode Template: video dari foto + teks (tanpa AI), dirender mesin render.
+  const [mode, setMode] = useState<"ai" | "template">("ai");
+  const [tplKey, setTplKey] = useState<string>(TEMPLATES[0].key);
+  const [tpl, setTpl] = useState({ headline: "", subline: "", badge: "", cta: "" });
+  const [accent, setAccent] = useState<string>(TEMPLATE_ACCENTS[0]);
+  const isTpl = mode === "template" && access.template.available;
   const [view, setView] = useState<AiJobView | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
@@ -270,26 +278,48 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   });
 
   const cur = access.tiers.find((t) => t.tier === tier);
-  const cost = cur ? (duration >= 10 ? cur.credits_10s : cur.credits_5s) : 0;
+  const cost = isTpl
+    ? access.template.credits
+    : cur
+      ? duration >= 10
+        ? cur.credits_10s
+        : cur.credits_5s
+      : 0;
+  const tierLabel = (t: AiJobView["tier"]) => (t === "template" ? "Template" : L(TIER_LABELS[t]));
   const enough = access.credits >= cost;
   const limitHit = access.used_today >= access.daily_limit;
   const selected = photos.find((p) => p.id === source) ?? null;
   const curStyle = access.styles.find((s) => s.key === style) ?? access.styles[0];
 
   const create = useMutation({
-    mutationFn: () =>
-      createAiVideo({
-        data: {
-          workspaceId,
-          sourceMediaId: source!,
-          style: curStyle!.key,
-          note: note.trim() || undefined,
-          tier,
-          duration,
-          aspectRatio: ratio,
-          consent: true,
-        },
-      }),
+    mutationFn: (): Promise<unknown> =>
+      isTpl
+        ? createTemplateVideo({
+            data: {
+              workspaceId,
+              sourceMediaId: source!,
+              template: tplKey,
+              headline: tpl.headline.trim(),
+              subline: tpl.subline.trim(),
+              badge: tpl.badge.trim(),
+              cta: tpl.cta.trim(),
+              accent,
+              aspectRatio: ratio,
+              consent: true,
+            },
+          })
+        : createAiVideo({
+            data: {
+              workspaceId,
+              sourceMediaId: source!,
+              style: curStyle!.key,
+              note: note.trim() || undefined,
+              tier,
+              duration,
+              aspectRatio: ratio,
+              consent: true,
+            },
+          }),
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ["ai-studio-access", workspaceId] });
       qc.invalidateQueries({ queryKey: ["ai-credit-activity", workspaceId] });
@@ -320,13 +350,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
 
   const blocker = !source
     ? pick("Choose a photo first", "Pilih foto dulu")
-    : !curStyle
-      ? pick("Choose a style", "Pilih gaya")
-      : !consent
-        ? pick("Tick the confirmation first", "Centang pernyataan dulu")
-        : limitHit
-          ? pick("Daily limit reached", "Batas harian tercapai")
-          : null;
+    : isTpl && !tpl.headline.trim()
+      ? pick("Write a title first", "Isi judul dulu")
+      : !isTpl && !curStyle
+        ? pick("Choose a style", "Pilih gaya")
+        : !consent
+          ? pick("Tick the confirmation first", "Centang pernyataan dulu")
+          : limitHit
+            ? pick("Daily limit reached", "Batas harian tercapai")
+            : null;
 
   const tabBtn = (on: boolean) =>
     cn(
@@ -496,6 +528,49 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
           {/* Panel pengaturan; tombol Buat video selalu terlihat di bawahnya */}
           <div className="flex flex-col rounded-3xl border bg-card lg:h-full lg:min-h-0">
             <div className="space-y-6 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              {access.template.available && (
+                <div className="space-y-2">
+                  <div
+                    className="flex rounded-xl bg-muted p-1"
+                    role="group"
+                    aria-label={pick("Video type", "Jenis video")}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={!isTpl}
+                      className={cn(tabBtn(!isTpl), "min-h-10 flex-1 px-2 text-[13px]")}
+                      onClick={() => {
+                        setMode("ai");
+                        setView(null);
+                      }}
+                    >
+                      {pick("AI video", "Video AI")}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={isTpl}
+                      className={cn(tabBtn(isTpl), "min-h-10 flex-1 px-2 text-[13px]")}
+                      onClick={() => {
+                        setMode("template");
+                        setView(null);
+                      }}
+                    >
+                      Template, {access.template.credits} {pick("credit", "kredit")}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {isTpl
+                      ? pick(
+                          "Your photo stays exactly as it is. Text, price and motion are added on top.",
+                          "Foto Anda tetap persis aslinya. Teks, harga, dan gerakan ditambahkan di atasnya.",
+                        )
+                      : pick(
+                          "AI makes the product itself move: steam, spin, a model wearing it.",
+                          "AI membuat produknya sendiri bergerak: uap, putaran, dipakai model.",
+                        )}
+                  </p>
+                </div>
+              )}
               <section className="space-y-3">
                 <h2 className="text-sm font-semibold">{pick("Product photo", "Foto produk")}</h2>
                 <div className="flex items-center gap-3">
@@ -569,198 +644,326 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                 />
               </section>
 
-              <section className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">{pick("Motion style", "Gaya gerakan")}</h2>
-                  <div className="inline-flex gap-1 rounded-[10px] bg-muted p-[3px]">
-                    <button
-                      type="button"
-                      className={cn(
-                        tabBtn(styleTab === "builtin"),
-                        "min-h-9 rounded-lg px-3 text-xs",
-                      )}
-                      onClick={() => setStyleTab("builtin")}
-                    >
-                      {pick("Built-in", "Bawaan")}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(tabBtn(styleTab === "mine"), "min-h-9 rounded-lg px-3 text-xs")}
-                      onClick={() => setStyleTab("mine")}
-                    >
-                      {pick("My styles", "Gaya saya")} ({myStyles.data?.length ?? 0})
-                    </button>
-                  </div>
-                </div>
-                {styleTab === "builtin" ? (
-                  <>
-                    <div className="grid grid-cols-3 gap-2">
-                      {access.styles.map((s) => (
+              {isTpl ? (
+                <>
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-semibold">Template</h2>
+                    <div className="space-y-2">
+                      {TEMPLATES.map((t) => (
                         <button
-                          key={s.key}
+                          key={t.key}
                           type="button"
-                          aria-pressed={curStyle?.key === s.key}
-                          className={pill(curStyle?.key === s.key)}
-                          onClick={() => setStyle(s.key)}
+                          aria-pressed={tplKey === t.key}
+                          className={cn(pill(tplKey === t.key), "w-full px-3 py-2.5 text-left")}
+                          onClick={() => setTplKey(t.key)}
                         >
-                          {styleName(s)}
+                          <span className="block">{lang === "id" ? t.name : t.name_en}</span>
+                          <span className="block text-[11px] font-normal leading-snug text-muted-foreground">
+                            {lang === "id" ? t.hint : t.hint_en}
+                          </span>
                         </button>
                       ))}
                     </div>
-                    {curStyle && (
-                      <p className="text-xs text-muted-foreground">
-                        {lang === "id" ? curStyle.hint : curStyle.hint_en || curStyle.hint}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-semibold">
+                      {pick("Text on the video", "Teks di video")}
+                    </h2>
+                    {(
+                      [
+                        ["headline", pick("Title", "Judul"), "Kopi Susu Gula Aren"],
+                        [
+                          "subline",
+                          pick("Description (optional)", "Keterangan (opsional)"),
+                          pick("Fresh every day", "Segar setiap hari"),
+                        ],
+                        [
+                          "badge",
+                          pick("Price or promo (optional)", "Harga atau promo (opsional)"),
+                          pick("Rp18.000 or 20% off", "Rp18.000 atau Diskon 20%"),
+                        ],
+                        [
+                          "cta",
+                          pick("Call to action (optional)", "Ajakan (opsional)"),
+                          pick("Order now", "Pesan sekarang"),
+                        ],
+                      ] as const
+                    ).map(([k, label, ph]) => (
+                      <div key={k}>
+                        <div className="mb-1 flex items-baseline justify-between">
+                          <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
+                            {label}
+                          </label>
+                          <span className="text-[11px] tabular-nums text-muted-foreground">
+                            {tpl[k].length}/{TEMPLATE_LIMITS[k]}
+                          </span>
+                        </div>
+                        <Input
+                          id={`tpl-${k}`}
+                          className="h-11"
+                          maxLength={TEMPLATE_LIMITS[k]}
+                          value={tpl[k]}
+                          placeholder={`${pick("e.g.", "mis.")} ${ph}`}
+                          onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-semibold">
+                      {pick("Colour and ratio", "Warna dan rasio")}
+                    </h2>
+                    <div
+                      className="flex flex-wrap gap-2"
+                      role="group"
+                      aria-label={pick("Accent colour", "Warna aksen")}
+                    >
+                      {TEMPLATE_ACCENTS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          aria-label={c}
+                          aria-pressed={accent === c}
+                          onClick={() => setAccent(c)}
+                          className={cn(
+                            "size-11 rounded-full border",
+                            accent === c && "ring-2 ring-violet-600 ring-offset-2 ring-offset-card",
+                          )}
+                          style={{ background: c }}
+                        />
+                      ))}
+                    </div>
+                    <Segmented
+                      label={pick("Ratio", "Rasio")}
+                      value={ratio}
+                      options={AI_RATIOS.map((r) => ({
+                        value: r,
+                        label: r === "9:16" ? "9:16 Reels" : "1:1 Feed",
+                      }))}
+                      onChange={(v) => setRatio(v as (typeof AI_RATIOS)[number])}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {pick(
+                        `${TEMPLATE_SECONDS}-second video, 1080p.`,
+                        `Video ${TEMPLATE_SECONDS} detik, 1080p.`,
+                      )}
+                    </p>
+                    {!access.template.worker_online && (
+                      <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+                        {pick(
+                          "The render machine is offline. Your video will wait in the queue; if it is not picked up within 20 minutes the credit is refunded.",
+                          "Mesin render sedang tidak terhubung. Video akan menunggu di antrean; bila 20 menit tidak dikerjakan, kredit kembali.",
+                        )}
                       </p>
                     )}
-                  </>
-                ) : myStyles.isLoading ? (
-                  <div className="h-12 animate-pulse rounded-xl bg-muted" />
-                ) : (myStyles.data?.length ?? 0) === 0 ? (
-                  <p className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
-                    {pick(
-                      "No saved styles yet. Pick a style, write a direction, then save it to reuse with one tap.",
-                      "Belum ada gaya tersimpan. Pilih gaya, tulis arahan, lalu simpan supaya bisa dipakai lagi sekali ketuk.",
+                  </section>
+                </>
+              ) : (
+                <>
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-sm font-semibold">
+                        {pick("Motion style", "Gaya gerakan")}
+                      </h2>
+                      <div className="inline-flex gap-1 rounded-[10px] bg-muted p-[3px]">
+                        <button
+                          type="button"
+                          className={cn(
+                            tabBtn(styleTab === "builtin"),
+                            "min-h-9 rounded-lg px-3 text-xs",
+                          )}
+                          onClick={() => setStyleTab("builtin")}
+                        >
+                          {pick("Built-in", "Bawaan")}
+                        </button>
+                        <button
+                          type="button"
+                          className={cn(
+                            tabBtn(styleTab === "mine"),
+                            "min-h-9 rounded-lg px-3 text-xs",
+                          )}
+                          onClick={() => setStyleTab("mine")}
+                        >
+                          {pick("My styles", "Gaya saya")} ({myStyles.data?.length ?? 0})
+                        </button>
+                      </div>
+                    </div>
+                    {styleTab === "builtin" ? (
+                      <>
+                        <div className="grid grid-cols-3 gap-2">
+                          {access.styles.map((s) => (
+                            <button
+                              key={s.key}
+                              type="button"
+                              aria-pressed={curStyle?.key === s.key}
+                              className={pill(curStyle?.key === s.key)}
+                              onClick={() => setStyle(s.key)}
+                            >
+                              {styleName(s)}
+                            </button>
+                          ))}
+                        </div>
+                        {curStyle && (
+                          <p className="text-xs text-muted-foreground">
+                            {lang === "id" ? curStyle.hint : curStyle.hint_en || curStyle.hint}
+                          </p>
+                        )}
+                      </>
+                    ) : myStyles.isLoading ? (
+                      <div className="h-12 animate-pulse rounded-xl bg-muted" />
+                    ) : (myStyles.data?.length ?? 0) === 0 ? (
+                      <p className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+                        {pick(
+                          "No saved styles yet. Pick a style, write a direction, then save it to reuse with one tap.",
+                          "Belum ada gaya tersimpan. Pilih gaya, tulis arahan, lalu simpan supaya bisa dipakai lagi sekali ketuk.",
+                        )}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {myStyles.data!.map((u) => {
+                          const base = access.styles.find((s) => s.key === u.style);
+                          const on = style === u.style && note === u.note;
+                          return (
+                            <div key={u.id} className="flex items-stretch gap-1">
+                              <button
+                                type="button"
+                                aria-pressed={on}
+                                className={cn(pill(on), "flex-1 px-3 py-2 text-left")}
+                                onClick={() => {
+                                  setStyle(base?.key ?? access.styles[0]?.key ?? "");
+                                  setNote(u.note);
+                                }}
+                              >
+                                <span className="block">{u.name}</span>
+                                <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                                  {base ? styleName(base) : pick("style removed", "gaya dihapus")}
+                                  {u.note ? `, ${u.note}` : ""}
+                                </span>
+                              </button>
+                              {access.can_write && (
+                                <button
+                                  type="button"
+                                  aria-label={pick(`Delete ${u.name}`, `Hapus ${u.name}`)}
+                                  className="grid w-11 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-destructive"
+                                  onClick={() => removeStyle.mutate(u.id)}
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {myStyles.data!.map((u) => {
-                      const base = access.styles.find((s) => s.key === u.style);
-                      const on = style === u.style && note === u.note;
-                      return (
-                        <div key={u.id} className="flex items-stretch gap-1">
+                  </section>
+
+                  <section className="space-y-2">
+                    <label htmlFor="ai-note" className="block text-sm font-semibold">
+                      {pick("Extra direction", "Arahan tambahan")}{" "}
+                      <span className="text-[13px] font-normal text-muted-foreground">
+                        ({pick("optional", "opsional")})
+                      </span>
+                    </label>
+                    <Textarea
+                      id="ai-note"
+                      rows={4}
+                      maxLength={NOTE_MAX}
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      className="min-h-[104px] resize-y text-sm leading-relaxed"
+                      placeholder={pick(
+                        "Describe the motion you want, e.g. coffee steam rising slowly, warm morning light from the left",
+                        "Ceritakan gerakan yang diinginkan, mis. uap kopi naik pelan, cahaya pagi hangat dari kiri",
+                      )}
+                    />
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {NOTE_IDEAS.map((x) => (
                           <button
+                            key={x.id}
                             type="button"
-                            aria-pressed={on}
-                            className={cn(pill(on), "flex-1 px-3 py-2 text-left")}
-                            onClick={() => {
-                              setStyle(base?.key ?? access.styles[0]?.key ?? "");
-                              setNote(u.note);
-                            }}
+                            className="min-h-9 rounded-full border bg-muted/50 px-3 text-xs hover:bg-muted"
+                            onClick={() =>
+                              setNote((n) =>
+                                `${n.trim()}${n.trim() ? ", " : ""}${L(x)}`.slice(0, NOTE_MAX),
+                              )
+                            }
                           >
-                            <span className="block">{u.name}</span>
-                            <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                              {base ? styleName(base) : pick("style removed", "gaya dihapus")}
-                              {u.note ? `, ${u.note}` : ""}
+                            + {L(x)}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="shrink-0 pt-2 text-xs tabular-nums text-muted-foreground">
+                        {note.length}/{NOTE_MAX}
+                      </span>
+                    </div>
+                    {access.can_write && curStyle && (
+                      <button
+                        type="button"
+                        className="min-h-11 text-[13px] font-medium text-primary underline underline-offset-2"
+                        onClick={() => setSaveOpen(true)}
+                      >
+                        {pick(
+                          "Save this style + direction to My styles",
+                          "Simpan gaya + arahan ini ke Gaya saya",
+                        )}
+                      </button>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-semibold">
+                      {pick("Format and quality", "Format dan kualitas")}
+                    </h2>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <Segmented
+                        label={pick("Duration", "Durasi")}
+                        value={String(duration)}
+                        options={AI_DURATIONS.map((d) => ({
+                          value: String(d),
+                          label: `${d} ${pick("sec", "detik")}`,
+                        }))}
+                        onChange={(v) => setDuration(Number(v) as 5 | 10)}
+                      />
+                      <Segmented
+                        label={pick("Ratio", "Rasio")}
+                        value={ratio}
+                        options={AI_RATIOS.map((r) => ({
+                          value: r,
+                          label: r === "9:16" ? "9:16 Reels" : "1:1 Feed",
+                        }))}
+                        onChange={(v) => setRatio(v as (typeof AI_RATIOS)[number])}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {access.tiers.map((t) => {
+                        const c = duration >= 10 ? t.credits_10s : t.credits_5s;
+                        return (
+                          <button
+                            key={t.tier}
+                            type="button"
+                            aria-pressed={tier === t.tier}
+                            title={L(TIER_HINTS[t.tier])}
+                            onClick={() => setTier(t.tier)}
+                            className={cn(
+                              pill(tier === t.tier),
+                              "min-h-[60px] px-3 py-2 text-left",
+                            )}
+                          >
+                            <span className="block">{L(TIER_LABELS[t.tier])}</span>
+                            <span className="block text-xs font-normal tabular-nums opacity-80">
+                              {c} {pick("credits", "kredit")}
                             </span>
                           </button>
-                          {access.can_write && (
-                            <button
-                              type="button"
-                              aria-label={pick(`Delete ${u.name}`, `Hapus ${u.name}`)}
-                              className="grid w-11 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-destructive"
-                              onClick={() => removeStyle.mutate(u.id)}
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              <section className="space-y-2">
-                <label htmlFor="ai-note" className="block text-sm font-semibold">
-                  {pick("Extra direction", "Arahan tambahan")}{" "}
-                  <span className="text-[13px] font-normal text-muted-foreground">
-                    ({pick("optional", "opsional")})
-                  </span>
-                </label>
-                <Textarea
-                  id="ai-note"
-                  rows={4}
-                  maxLength={NOTE_MAX}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="min-h-[104px] resize-y text-sm leading-relaxed"
-                  placeholder={pick(
-                    "Describe the motion you want, e.g. coffee steam rising slowly, warm morning light from the left",
-                    "Ceritakan gerakan yang diinginkan, mis. uap kopi naik pelan, cahaya pagi hangat dari kiri",
-                  )}
-                />
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {NOTE_IDEAS.map((x) => (
-                      <button
-                        key={x.id}
-                        type="button"
-                        className="min-h-9 rounded-full border bg-muted/50 px-3 text-xs hover:bg-muted"
-                        onClick={() =>
-                          setNote((n) =>
-                            `${n.trim()}${n.trim() ? ", " : ""}${L(x)}`.slice(0, NOTE_MAX),
-                          )
-                        }
-                      >
-                        + {L(x)}
-                      </button>
-                    ))}
-                  </div>
-                  <span className="shrink-0 pt-2 text-xs tabular-nums text-muted-foreground">
-                    {note.length}/{NOTE_MAX}
-                  </span>
-                </div>
-                {access.can_write && curStyle && (
-                  <button
-                    type="button"
-                    className="min-h-11 text-[13px] font-medium text-primary underline underline-offset-2"
-                    onClick={() => setSaveOpen(true)}
-                  >
-                    {pick(
-                      "Save this style + direction to My styles",
-                      "Simpan gaya + arahan ini ke Gaya saya",
-                    )}
-                  </button>
-                )}
-              </section>
-
-              <section className="space-y-3">
-                <h2 className="text-sm font-semibold">
-                  {pick("Format and quality", "Format dan kualitas")}
-                </h2>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <Segmented
-                    label={pick("Duration", "Durasi")}
-                    value={String(duration)}
-                    options={AI_DURATIONS.map((d) => ({
-                      value: String(d),
-                      label: `${d} ${pick("sec", "detik")}`,
-                    }))}
-                    onChange={(v) => setDuration(Number(v) as 5 | 10)}
-                  />
-                  <Segmented
-                    label={pick("Ratio", "Rasio")}
-                    value={ratio}
-                    options={AI_RATIOS.map((r) => ({
-                      value: r,
-                      label: r === "9:16" ? "9:16 Reels" : "1:1 Feed",
-                    }))}
-                    onChange={(v) => setRatio(v as (typeof AI_RATIOS)[number])}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {access.tiers.map((t) => {
-                    const c = duration >= 10 ? t.credits_10s : t.credits_5s;
-                    return (
-                      <button
-                        key={t.tier}
-                        type="button"
-                        aria-pressed={tier === t.tier}
-                        title={L(TIER_HINTS[t.tier])}
-                        onClick={() => setTier(t.tier)}
-                        className={cn(pill(tier === t.tier), "min-h-[60px] px-3 py-2 text-left")}
-                      >
-                        <span className="block">{L(TIER_LABELS[t.tier])}</span>
-                        <span className="block text-xs font-normal tabular-nums opacity-80">
-                          {c} {pick("credits", "kredit")}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">{L(TIER_HINTS[tier])}</p>
-              </section>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{L(TIER_HINTS[tier])}</p>
+                  </section>
+                </>
+              )}
             </div>
 
             <div className="space-y-3 rounded-b-3xl border-t bg-card px-5 pb-5 pt-4">
@@ -770,10 +973,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                   checked={consent}
                   onCheckedChange={(v) => setConsent(v === true)}
                 />
-                {pick(
-                  "This photo is mine and shows no public figures. The video is labelled AI.",
-                  "Foto ini milik saya dan tidak menampilkan tokoh publik. Video diberi label AI.",
-                )}
+                {isTpl
+                  ? pick(
+                      "This photo is mine and shows no public figures.",
+                      "Foto ini milik saya dan tidak menampilkan tokoh publik.",
+                    )
+                  : pick(
+                      "This photo is mine and shows no public figures. The video is labelled AI.",
+                      "Foto ini milik saya dan tidak menampilkan tokoh publik. Video diberi label AI.",
+                    )}
               </label>
               {enough ? (
                 <Button
@@ -817,11 +1025,24 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               photoUrl={view?.source_path ? fileUrl(view.source_path) : (selected?.url ?? null)}
               caption={
                 view
-                  ? `${jobStyle(view)}, ${L(TIER_LABELS[view.tier])}, ${view.duration_s} ${pick("sec", "detik")}`
-                  : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
+                  ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
+                  : isTpl
+                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${TEMPLATE_SECONDS} ${pick("sec", "detik")}, ${ratio}`
+                    : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
               onPost={setPostJob}
+              overlay={
+                isTpl && !view ? (
+                  <TemplatePreview
+                    template={tplKey}
+                    text={tpl}
+                    accent={accent}
+                    square={ratio === "1:1"}
+                    photoUrl={selected?.url ?? null}
+                  />
+                ) : null
+              }
             />
             <div className="hidden shrink-0 lg:block">{recentStrip}</div>
           </div>
@@ -917,6 +1138,185 @@ function Segmented({
   );
 }
 
+/** Warna teks yang terbaca di atas warna aksen (sama dengan mesin render). */
+function onAccent(hex: string) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.62 ? "#111827" : "#FFFFFF";
+}
+
+/**
+ * Pratinjau tata letak template di atas foto (posisi & warna teks, tanpa animasi). Video akhirnya
+ * dirender mesin render; ukuran memakai satuan lebar bingkai (cqw) agar proporsinya sama.
+ */
+function TemplatePreview({
+  template,
+  text,
+  accent,
+  square,
+  photoUrl,
+}: {
+  template: string;
+  text: { headline: string; subline: string; badge: string; cta: string };
+  accent: string;
+  square: boolean;
+  photoUrl: string | null;
+}) {
+  const { pick } = useI18n();
+  const ink = onAccent(accent);
+  const head = text.headline || pick("Your title", "Judul Anda");
+  const wrap = "pointer-events-none absolute inset-0 [container-type:inline-size]";
+  if (template === "showcase") {
+    const copy = (big: string, small: string) => (
+      <div style={{ color: ink }}>
+        <p className="font-bold leading-tight" style={{ fontSize: big }}>
+          {head}
+        </p>
+        <p style={{ fontSize: small, opacity: 0.85, marginTop: "1.4cqw" }}>{text.subline}</p>
+      </div>
+    );
+    return (
+      <div className={wrap} style={{ background: accent }}>
+        <div
+          className={cn(
+            "flex size-full items-center justify-center",
+            square ? "flex-row text-left" : "flex-col text-center",
+          )}
+          style={{ gap: "5cqw", padding: "7cqw" }}
+        >
+          {!square && copy("8cqw", "3.6cqw")}
+          <div
+            className="shrink-0 overflow-hidden bg-white shadow-2xl"
+            style={{
+              width: square ? "46cqw" : "68cqw",
+              aspectRatio: square ? "52/68" : "76/90",
+              borderRadius: "4.4cqw",
+              border: "0.9cqw solid rgba(255,255,255,.9)",
+            }}
+          >
+            {photoUrl && <img src={photoUrl} alt="" className="size-full object-cover" />}
+          </div>
+          <div style={{ color: ink }} className="min-w-0">
+            {square && copy("6.2cqw", "3cqw")}
+            {text.badge && (
+              <span
+                className="inline-block rounded-full font-bold"
+                style={{
+                  background: ink === "#FFFFFF" ? "#fff" : "#111827",
+                  color: ink === "#FFFFFF" ? "#111827" : "#fff",
+                  fontSize: "5.6cqw",
+                  padding: "1.6cqw 3.6cqw",
+                  marginTop: square ? "2.6cqw" : 0,
+                }}
+              >
+                {text.badge}
+              </span>
+            )}
+            <p className="font-semibold" style={{ fontSize: "3.6cqw", marginTop: "2cqw" }}>
+              {text.cta}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (template === "story")
+    return (
+      <div
+        className={cn(wrap, "flex flex-col justify-center text-white")}
+        style={{
+          padding: "7.5cqw",
+          background:
+            "linear-gradient(90deg, rgba(8,12,28,.82), rgba(8,12,28,.45) 55%, rgba(8,12,28,.15))",
+        }}
+      >
+        <span
+          style={{
+            width: "13cqw",
+            height: "1.1cqw",
+            background: accent,
+            borderRadius: 99,
+            marginBottom: "3cqw",
+          }}
+        />
+        {text.badge && (
+          <span
+            className="self-start font-bold"
+            style={{
+              background: accent,
+              color: ink,
+              fontSize: "4cqw",
+              padding: "1.2cqw 2.6cqw",
+              borderRadius: "1.3cqw",
+              marginBottom: "2.6cqw",
+            }}
+          >
+            {text.badge}
+          </span>
+        )}
+        <p className="font-bold leading-[1.06]" style={{ fontSize: "9.6cqw" }}>
+          {head}
+        </p>
+        <p style={{ fontSize: "4.2cqw", marginTop: "2.6cqw", opacity: 0.9 }}>{text.subline}</p>
+        {text.cta && (
+          <span
+            className="self-start font-semibold"
+            style={{
+              fontSize: "3.9cqw",
+              marginTop: "4.6cqw",
+              paddingBottom: "0.8cqw",
+              borderBottom: `0.55cqw solid ${accent}`,
+            }}
+          >
+            {text.cta}
+          </span>
+        )}
+      </div>
+    );
+  return (
+    <div
+      className={cn(wrap, "text-white")}
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(8,12,28,.3) 0%, rgba(8,12,28,0) 30%, rgba(8,12,28,0) 48%, rgba(8,12,28,.88) 100%)",
+      }}
+    >
+      {text.badge && (
+        <span
+          className="absolute rounded-full font-bold shadow-lg"
+          style={{
+            top: "7cqw",
+            right: "7cqw",
+            background: accent,
+            color: ink,
+            fontSize: "5.4cqw",
+            padding: "1.8cqw 3.4cqw",
+          }}
+        >
+          {text.badge}
+        </span>
+      )}
+      <div
+        className="absolute"
+        style={{ left: "7cqw", right: "7cqw", bottom: square ? "6cqw" : "12cqw" }}
+      >
+        <p className="font-bold leading-[1.08]" style={{ fontSize: square ? "7.8cqw" : "9.4cqw" }}>
+          {head}
+        </p>
+        <p style={{ fontSize: "3.9cqw", marginTop: "1.8cqw", opacity: 0.9 }}>{text.subline}</p>
+        {text.cta && (
+          <span
+            className="inline-block rounded-full bg-white font-semibold text-[#0b1020]"
+            style={{ fontSize: "3.7cqw", marginTop: "3.4cqw", padding: "2cqw 4cqw" }}
+          >
+            {text.cta}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Panggung: latar gelap, bingkai sesuai rasio. Video baru diunduh saat tampil, dengan indikator memuat. */
 function Stage({
   ratio,
@@ -925,6 +1325,7 @@ function Stage({
   caption,
   onBack,
   onPost,
+  overlay,
 }: {
   ratio: string;
   job: AiJobView | null;
@@ -932,9 +1333,12 @@ function Stage({
   caption: string;
   onBack?: () => void;
   onPost: (j: AiJobView) => void;
+  /** Pratinjau teks template di atas foto (mode Template, sebelum dibuat). */
+  overlay?: React.ReactNode;
 }) {
   const { pick } = useI18n();
   const vertical = ratio === "9:16";
+  const quick = job?.tier === "template";
   const [ready, setReady] = useState(false);
   const videoKey = job?.status === "done" ? job.id : null;
   useEffect(() => setReady(false), [videoKey]);
@@ -966,6 +1370,7 @@ function Stage({
               {pick("Choose or upload a product photo", "Pilih atau unggah foto produk")}
             </div>
           )}
+          {overlay}
           {job?.status === "done" && job.result_path && (
             <>
               <video
@@ -1000,13 +1405,15 @@ function Stage({
                 <div
                   className="h-full rounded-full bg-violet-400 transition-[width] duration-1000"
                   style={{
-                    width: `${Math.min(95, Math.round((job.seconds_elapsed / 180) * 100))}%`,
+                    width: `${Math.min(95, Math.round((job.seconds_elapsed / (quick ? 45 : 180)) * 100))}%`,
                   }}
                 />
               </div>
               <p className="text-xs tabular-nums text-white/80">
                 {clock(job.seconds_elapsed)},{" "}
-                {pick("usually 1 to 3 min", "biasanya 1 sampai 3 menit")}
+                {quick
+                  ? pick("usually under a minute", "biasanya di bawah 1 menit")
+                  : pick("usually 1 to 3 min", "biasanya 1 sampai 3 menit")}
               </p>
             </div>
           )}
@@ -1165,8 +1572,10 @@ function History({
               <div className="flex flex-1 flex-col gap-1 p-3">
                 <p className="truncate text-sm font-medium">{jobStyle(j)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {TIER_LABELS[j.tier][lang === "id" ? "id" : "en"]}, {j.duration_s}{" "}
-                  {pick("sec", "detik")}, {j.credits} {pick("credits", "kredit")}
+                  {j.tier === "template"
+                    ? "Template"
+                    : TIER_LABELS[j.tier][lang === "id" ? "id" : "en"]}
+                  , {j.duration_s} {pick("sec", "detik")}, {j.credits} {pick("credits", "kredit")}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {j.source_name ?? ""} {j.created_at.slice(0, 16).replace("T", " ")}

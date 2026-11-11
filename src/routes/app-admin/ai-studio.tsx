@@ -34,6 +34,7 @@ import {
   adminGetStudio,
   adminGrantCredits,
   adminProcessJobs,
+  adminRotateWorkerToken,
   adminSaveStudio,
 } from "@/lib/ai-studio.functions";
 
@@ -64,6 +65,18 @@ function StudioAdmin() {
   const [usdIdr, setUsdIdr] = useState(16500);
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [tab, setTab] = useState("ringkasan");
+  const [tplEnabled, setTplEnabled] = useState(false);
+  const [tplCredits, setTplCredits] = useState(1);
+  const [newToken, setNewToken] = useState<{ token: string; url: string } | null>(null);
+  const rotateFn = useServerFn(adminRotateWorkerToken);
+  const rotate = useMutation({
+    mutationFn: () => rotateFn(),
+    onSuccess: (r) => {
+      setNewToken(r);
+      qc.invalidateQueries({ queryKey: ["admin-ai-studio"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const [styles, setStyles] = useState<StyleConfig[]>([]);
   const setStyleAt = (i: number, patch: Partial<StyleConfig>) =>
     setStyles((x) => x.map((y, j) => (j === i ? { ...y, ...patch } : y)));
@@ -85,6 +98,8 @@ function StudioAdmin() {
     setDailyLimit(q.data.daily_limit);
     setUsdIdr(q.data.usd_idr);
     setStyles(q.data.styles);
+    setTplEnabled(q.data.template.enabled);
+    setTplCredits(q.data.template.credits);
     setPacks(q.data.packs);
   }, [q.data]);
 
@@ -115,6 +130,8 @@ function StudioAdmin() {
           usdIdr,
           packs: packs.filter((p) => p.credits > 0 && p.price_idr > 0),
           styles,
+          templateEnabled: tplEnabled,
+          templateCredits: tplCredits,
           ...opts,
         },
       });
@@ -180,6 +197,7 @@ function StudioAdmin() {
           <TabsTrigger value="paket">Paket kredit</TabsTrigger>
           <TabsTrigger value="tingkat">Tingkat & harga</TabsTrigger>
           <TabsTrigger value="gaya">Gaya gerakan</TabsTrigger>
+          <TabsTrigger value="template">Template</TabsTrigger>
           <TabsTrigger value="pekerjaan">Pekerjaan</TabsTrigger>
         </TabsList>
 
@@ -586,6 +604,107 @@ function StudioAdmin() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="template" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-xl space-y-1">
+                  <p className="font-semibold">Video Template (tanpa AI)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Foto + teks digabung mesin render (Remotion) di VPS Anda. Tidak ada biaya model
+                    AI per video. Saat nonaktif, hanya Super Admin yang melihat mode Template di
+                    Studio.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={tplEnabled} onCheckedChange={setTplEnabled} />
+                  Buka Template untuk pengguna
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Field label="Kredit per video Template">
+                  <NumInput value={tplCredits} onChange={setTplCredits} />
+                </Field>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Template hanya tampil ke pengguna bila saklar utama Studio AI (tab Ringkasan) juga
+                aktif.
+              </p>
+              <Button onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+                Simpan Template
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold">
+                    Mesin render{" "}
+                    {d.template.worker_online ? (
+                      <Badge>Terhubung</Badge>
+                    ) : d.template.has_token ? (
+                      <Badge variant="destructive">Tidak terhubung</Badge>
+                    ) : (
+                      <Badge variant="secondary">Belum disiapkan</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {d.template.worker_seen_at
+                      ? `Terakhir menghubungi ${new Date(d.template.worker_seen_at).toLocaleString("id-ID")} (${d.template.worker_info ?? "?"})`
+                      : "Belum pernah ada mesin render yang menghubungi."}{" "}
+                    Antrean: {d.template.queued} video.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={rotate.isPending}
+                  onClick={() => {
+                    if (
+                      !d.template.has_token ||
+                      window.confirm(
+                        "Buat token baru? Token lama langsung tidak berlaku dan mesin render yang berjalan harus dipasang ulang.",
+                      )
+                    )
+                      rotate.mutate();
+                  }}
+                >
+                  {d.template.has_token ? "Ganti token" : "Buat token mesin render"}
+                </Button>
+              </div>
+              {newToken && (
+                <div className="space-y-2 rounded-2xl border border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="text-sm font-medium">
+                    Salin perintah ini sekarang. Token hanya ditampilkan sekali.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Jalankan di VPS (Ubuntu dengan Docker) setelah masuk lewat SSH:
+                  </p>
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-muted p-3 text-xs">
+                    {installCommand(newToken.url, newToken.token)}
+                  </pre>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(
+                        installCommand(newToken.url, newToken.token),
+                      );
+                      toast.success("Perintah disalin");
+                    }}
+                  >
+                    Salin perintah
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Mesin render hanya membuat koneksi keluar ke Qalling, jadi VPS tidak perlu domain
+                atau port terbuka. Panduan lengkap: docs/AI-STUDIO.md, bagian Template.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="pekerjaan" className="space-y-6">
           <Card>
             <CardContent className="space-y-3 p-4">
@@ -686,6 +805,10 @@ function StudioAdmin() {
     </div>
   );
 }
+
+const WORKER_IMAGE = "ghcr.io/eternesia/xperd_one-render-worker:latest";
+const installCommand = (url: string, token: string) =>
+  `docker run -d --name qalling-render --restart=always \\\n  -e QALLING_URL=${url} \\\n  -e WORKER_TOKEN=${token} \\\n  ${WORKER_IMAGE}`;
 
 function KeyField(p: {
   label: string;
