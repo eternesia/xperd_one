@@ -13,6 +13,9 @@ import {
 export const FPS = 30;
 export const DURATION = 180; // 6 detik (bawaan)
 export const SECONDS = [6, 10, 15];
+/** Slideshow Katalog: frame per foto dan frame penutup. */
+export const SLIDE = 75;
+export const SLIDE_OUTRO = 60;
 
 export interface TemplateProps {
   /** Foto produk (data URL atau URL). */
@@ -26,6 +29,8 @@ export interface TemplateProps {
   ratio: "9:16" | "1:1" | "16:9";
   /** Durasi video: 6, 10, atau 15 detik (bawaan 6). */
   seconds?: number;
+  /** Slideshow Katalog: foto + nama + harga per slide. */
+  items?: { image: string; title: string; price: string }[];
 }
 
 export const sizeOf = (ratio: string) =>

@@ -2,6 +2,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
+  CATALOG,
   TEMPLATE_KEYS,
   TEMPLATE_LIMITS,
   TEMPLATE_RATIOS,
@@ -135,7 +136,7 @@ export const listAiJobs = createServerFn({ method: "POST" })
         style_label_en: st?.name_en || st?.name || String(r.style),
         aspect_ratio: String(r.aspect_ratio),
         result_media_id: r.result_media_id ? String(r.result_media_id) : null,
-        source_media_id: String(r.source_media_id),
+        source_media_id: r.source_media_id ? String(r.source_media_id) : null,
         result_path: r.result_path ? String(r.result_path) : null,
         result_name: r.result_name ? String(r.result_name) : null,
         source_path: r.source_path ? String(r.source_path) : null,
@@ -176,7 +177,17 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
     z
       .object({
         workspaceId: z.string().uuid(),
-        sourceMediaId: z.string().uuid(),
+        sourceMediaId: z.string().uuid().nullable().default(null),
+        items: z
+          .array(
+            z.object({
+              mediaId: z.string().uuid(),
+              title: z.string().trim().min(1).max(CATALOG.title),
+              price: z.string().trim().max(CATALOG.price).default(""),
+            }),
+          )
+          .max(CATALOG.max)
+          .default([]),
         template: z.enum(TEMPLATE_KEYS),
         headline: z.string().trim().min(1).max(TEMPLATE_LIMITS.headline),
         subline: z.string().trim().max(TEMPLATE_LIMITS.subline).default(""),
@@ -195,6 +206,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
       workspaceId: data.workspaceId,
       userId: context.userId,
       sourceMediaId: data.sourceMediaId,
+      items: data.items,
       template: data.template,
       aspectRatio: data.aspectRatio,
       seconds: data.seconds,

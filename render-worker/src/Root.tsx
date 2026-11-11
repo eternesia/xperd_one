@@ -6,7 +6,9 @@ import { Composition } from "remotion";
 import { Promo } from "./templates/Promo";
 import { Showcase } from "./templates/Showcase";
 import { Story } from "./templates/Story";
-import { FPS, DURATION, framesOf, sizeOf, type TemplateProps } from "./shared";
+import { Catalog } from "./templates/Catalog";
+import { Announce } from "./templates/Announce";
+import { FPS, DURATION, framesOf, sizeOf, SLIDE, SLIDE_OUTRO, type TemplateProps } from "./shared";
 
 const defaults: TemplateProps = {
   image: "",
@@ -18,7 +20,7 @@ const defaults: TemplateProps = {
   ratio: "9:16",
 };
 
-const TEMPLATES = { promo: Promo, showcase: Showcase, story: Story } as const;
+const TEMPLATES = { promo: Promo, showcase: Showcase, story: Story, catalog: Catalog, announce: Announce } as const;
 
 export const Root: React.FC = () => (
   <>
@@ -34,7 +36,10 @@ export const Root: React.FC = () => (
         defaultProps={defaults as unknown as Record<string, unknown>}
         calculateMetadata={({ props }) => {
           const p = props as unknown as TemplateProps;
-          return { ...sizeOf(p.ratio), durationInFrames: framesOf(p.seconds) };
+          const n = p.items?.length ?? 0;
+          const durationInFrames =
+            id === "catalog" && n ? n * SLIDE + SLIDE_OUTRO : framesOf(p.seconds);
+          return { ...sizeOf(p.ratio), durationInFrames };
         }}
       />
     ))}

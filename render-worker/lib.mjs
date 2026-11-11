@@ -5,7 +5,7 @@ import { bundle } from "@remotion/bundler";
 import { ensureBrowser, renderMedia, selectComposition } from "@remotion/renderer";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const TEMPLATE_IDS = ["promo", "showcase", "story"];
+export const TEMPLATE_IDS = ["promo", "showcase", "story", "catalog", "announce"];
 const browserExecutable = process.env.BROWSER_EXECUTABLE || undefined;
 
 let serveUrl;

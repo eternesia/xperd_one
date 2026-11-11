@@ -84,7 +84,9 @@ di VPS terpisah. Harga sama untuk semua durasi. Rasio 16:9 dan durasi > 6 detik 
 Tidak ada biaya model per video; foto produk tampil persis aslinya. Bawaan 1 kredit per video.
 
 - **Template** (`src/lib/ai-templates.ts`, komposisi di `render-worker/src/templates/`): Promo Harga, Sorotan Produk,
-  Cerita Bertahap. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
+  Cerita Bertahap (satu foto); **Slideshow Katalog** (2–6 foto, nama + harga per foto, durasi otomatis
+  2,5 detik per foto + 2 detik penutup; daftar foto disimpan di `ai_jobs.prompt.items`); **Pengumuman Teks**
+  (tanpa foto, `source_media_id` kosong, migrasi 074). Dua yang terakhir butuh mesin render v1.2.0 ke atas. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
   komposisi di `render-worker` + entri di `ai-templates.ts` dengan kunci yang sama.
 - **Alur**: pengguna membuat → kredit dipotong, pekerjaan `ai_jobs` (`provider = 'render'`, `tier = 'template'`) berstatus
   `queued` → mesin render `POST /api/public/render-worker/claim` (Bearer token) → render → `…/complete?job=<id>` (body MP4)

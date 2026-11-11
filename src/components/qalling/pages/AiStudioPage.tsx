@@ -25,6 +25,7 @@ import {
   Trash2,
   Wallet,
   Wand2,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,8 @@ import {
   saveUserStyle,
 } from "@/lib/ai-studio.functions";
 import {
+  CATALOG,
+  catalogSeconds,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -234,6 +237,21 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const [tplRatio, setTplRatio] = useState<(typeof TEMPLATE_RATIOS)[number]>("9:16");
   const [tplSeconds, setTplSeconds] = useState<number>(TEMPLATE_SECONDS);
   const isTpl = mode === "template" && access.template.available;
+  // Kebutuhan foto template terpilih: satu, beberapa (Slideshow Katalog), atau tanpa foto.
+  const tplPhotos = isTpl ? (TEMPLATES.find((t) => t.key === tplKey)?.photos ?? "one") : "one";
+  const [items, setItems] = useState<{ id: string; title: string; price: string }[]>([]);
+  const addItem = (id: string) =>
+    setItems((x) =>
+      x.some((i) => i.id === id) || x.length >= CATALOG.max
+        ? x
+        : [...x, { id, title: "", price: "" }],
+    );
+  /** Pilih foto; di Slideshow Katalog foto itu juga masuk daftar. */
+  const choose = (id: string) => {
+    setSource(id);
+    setView(null);
+    if (tplPhotos === "many") addItem(id);
+  };
   const [view, setView] = useState<AiJobView | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
@@ -244,6 +262,10 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   useEffect(() => {
     if (!source && photos[0]) setSource(photos[0].id);
   }, [photos, source]);
+  useEffect(() => {
+    if (tplPhotos === "many" && source)
+      setItems((x) => (x.length ? x : [{ id: source, title: "", price: "" }]));
+  }, [tplPhotos, source]);
 
   const recent = useQuery({
     queryKey: ["ai-jobs", workspaceId, "recent"],
@@ -306,7 +328,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
         ? createTemplateVideo({
             data: {
               workspaceId,
-              sourceMediaId: source!,
+              sourceMediaId: tplPhotos === "one" ? source! : null,
+              items:
+                tplPhotos === "many"
+                  ? items.map((i) => ({
+                      mediaId: i.id,
+                      title: i.title.trim(),
+                      price: i.price.trim(),
+                    }))
+                  : [],
               template: tplKey,
               headline: tpl.headline.trim(),
               subline: tpl.subline.trim(),
@@ -349,8 +379,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
       const fresh = qc.getQueryData<Media[]>(["crm-media", workspaceId]) ?? [];
       const hit = fresh.find((m) => paths.includes(m.file_path));
       if (hit) {
-        setSource(hit.id);
-        setView(null);
+        choose(hit.id);
         setPickerOpen(false);
       }
     } catch {
@@ -358,17 +387,22 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     }
   };
 
-  const blocker = !source
-    ? pick("Choose a photo first", "Pilih foto dulu")
-    : isTpl && !tpl.headline.trim()
-      ? pick("Write a title first", "Isi judul dulu")
-      : !isTpl && !curStyle
-        ? pick("Choose a style", "Pilih gaya")
-        : !consent
-          ? pick("Tick the confirmation first", "Centang pernyataan dulu")
-          : limitHit
-            ? pick("Daily limit reached", "Batas harian tercapai")
-            : null;
+  const blocker =
+    tplPhotos === "many" && items.length < CATALOG.min
+      ? pick(`Add at least ${CATALOG.min} photos`, `Tambahkan minimal ${CATALOG.min} foto`)
+      : tplPhotos === "many" && items.some((i) => !i.title.trim())
+        ? pick("Name every photo first", "Isi nama tiap foto dulu")
+        : tplPhotos !== "none" && !source
+          ? pick("Choose a photo first", "Pilih foto dulu")
+          : isTpl && !tpl.headline.trim()
+            ? pick("Write a title first", "Isi judul dulu")
+            : !isTpl && !curStyle
+              ? pick("Choose a style", "Pilih gaya")
+              : !consent
+                ? pick("Tick the confirmation first", "Centang pernyataan dulu")
+                : limitHit
+                  ? pick("Daily limit reached", "Batas harian tercapai")
+                  : null;
 
   const tabBtn = (on: boolean) =>
     cn(
@@ -581,8 +615,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                   </p>
                 </div>
               )}
-              <section className="space-y-3">
-                <h2 className="text-sm font-semibold">{pick("Product photo", "Foto produk")}</h2>
+              <section className={cn("space-y-3", tplPhotos === "none" && "hidden")}>
+                <h2 className="text-sm font-semibold">
+                  {tplPhotos === "many"
+                    ? pick(
+                        `Product photos (${CATALOG.min} to ${CATALOG.max})`,
+                        `Foto produk (${CATALOG.min} sampai ${CATALOG.max})`,
+                      )
+                    : pick("Product photo", "Foto produk")}
+                </h2>
                 <div className="flex items-center gap-3">
                   <Thumb src={selected?.url ?? null} className="size-[76px] shrink-0 rounded-xl" />
                   <div className="min-w-0 space-y-2">
@@ -626,10 +667,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         title={m.name}
                         aria-label={m.name}
                         aria-pressed={source === m.id}
-                        onClick={() => {
-                          setSource(m.id);
-                          setView(null);
-                        }}
+                        onClick={() => choose(m.id)}
                         className={cn(
                           "size-11 overflow-hidden rounded-[10px]",
                           source === m.id &&
@@ -639,6 +677,65 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         <Thumb src={m.url} className="size-full" />
                       </button>
                     ))}
+                  </div>
+                )}
+                {tplPhotos === "many" && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      {pick(
+                        "Each photo you choose or upload is added to the list. Videos play in this order.",
+                        "Setiap foto yang dipilih atau diunggah masuk ke daftar. Video diputar sesuai urutan ini.",
+                      )}
+                    </p>
+                    {items.map((it, n) => (
+                      <div key={it.id} className="flex items-center gap-2">
+                        <span className="w-4 text-xs tabular-nums text-muted-foreground">
+                          {n + 1}
+                        </span>
+                        <Thumb
+                          src={photos.find((m) => m.id === it.id)?.url ?? null}
+                          className="size-11 shrink-0 rounded-[10px]"
+                        />
+                        <Input
+                          className="h-11 min-w-0 flex-[2]"
+                          aria-label={pick(`Name of photo ${n + 1}`, `Nama foto ${n + 1}`)}
+                          placeholder={pick("Product name", "Nama produk")}
+                          maxLength={CATALOG.title}
+                          value={it.title}
+                          onChange={(e) =>
+                            setItems((x) =>
+                              x.map((i) => (i.id === it.id ? { ...i, title: e.target.value } : i)),
+                            )
+                          }
+                        />
+                        <Input
+                          className="h-11 min-w-0 flex-1"
+                          aria-label={pick(`Price of photo ${n + 1}`, `Harga foto ${n + 1}`)}
+                          placeholder={pick("Price", "Harga")}
+                          maxLength={CATALOG.price}
+                          value={it.price}
+                          onChange={(e) =>
+                            setItems((x) =>
+                              x.map((i) => (i.id === it.id ? { ...i, price: e.target.value } : i)),
+                            )
+                          }
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-11 shrink-0"
+                          aria-label={pick(`Remove photo ${n + 1}`, `Hapus foto ${n + 1}`)}
+                          onClick={() => setItems((x) => x.filter((i) => i.id !== it.id))}
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    ))}
+                    {items.length >= CATALOG.max && (
+                      <p className="text-xs text-muted-foreground">
+                        {pick(`Maximum ${CATALOG.max} photos.`, `Maksimal ${CATALOG.max} foto.`)}
+                      </p>
+                    )}
                   </div>
                 )}
                 <input
@@ -703,26 +800,28 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                           pick("Order now", "Pesan sekarang"),
                         ],
                       ] as const
-                    ).map(([k, label, ph]) => (
-                      <div key={k}>
-                        <div className="mb-1 flex items-baseline justify-between">
-                          <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
-                            {label}
-                          </label>
-                          <span className="text-[11px] tabular-nums text-muted-foreground">
-                            {tpl[k].length}/{TEMPLATE_LIMITS[k]}
-                          </span>
+                    )
+                      .filter(([k]) => tplPhotos !== "many" || k === "headline" || k === "cta")
+                      .map(([k, label, ph]) => (
+                        <div key={k}>
+                          <div className="mb-1 flex items-baseline justify-between">
+                            <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
+                              {label}
+                            </label>
+                            <span className="text-[11px] tabular-nums text-muted-foreground">
+                              {tpl[k].length}/{TEMPLATE_LIMITS[k]}
+                            </span>
+                          </div>
+                          <Input
+                            id={`tpl-${k}`}
+                            className="h-11"
+                            maxLength={TEMPLATE_LIMITS[k]}
+                            value={tpl[k]}
+                            placeholder={`${pick("e.g.", "mis.")} ${ph}`}
+                            onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
+                          />
                         </div>
-                        <Input
-                          id={`tpl-${k}`}
-                          className="h-11"
-                          maxLength={TEMPLATE_LIMITS[k]}
-                          value={tpl[k]}
-                          placeholder={`${pick("e.g.", "mis.")} ${ph}`}
-                          onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
+                      ))}
                   </section>
 
                   <section className="space-y-3">
@@ -759,15 +858,24 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                       }))}
                       onChange={(v) => setTplRatio(v as (typeof TEMPLATE_RATIOS)[number])}
                     />
-                    <Segmented
-                      label={pick("Duration", "Durasi")}
-                      value={String(tplSeconds)}
-                      options={TEMPLATE_DURATIONS.map((d) => ({
-                        value: String(d),
-                        label: `${d} ${pick("sec", "detik")}`,
-                      }))}
-                      onChange={(v) => setTplSeconds(Number(v))}
-                    />
+                    {tplPhotos === "many" ? (
+                      <p className="text-xs text-muted-foreground">
+                        {pick(
+                          `Length follows the number of photos: about ${catalogSeconds(Math.max(items.length, CATALOG.min))} seconds.`,
+                          `Durasi mengikuti jumlah foto: sekitar ${catalogSeconds(Math.max(items.length, CATALOG.min))} detik.`,
+                        )}
+                      </p>
+                    ) : (
+                      <Segmented
+                        label={pick("Duration", "Durasi")}
+                        value={String(tplSeconds)}
+                        options={TEMPLATE_DURATIONS.map((d) => ({
+                          value: String(d),
+                          label: `${d} ${pick("sec", "detik")}`,
+                        }))}
+                        onChange={(v) => setTplSeconds(Number(v))}
+                      />
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {pick(
                         "1080p. Same price for every duration. For 16:9, a landscape photo works best.",
@@ -1046,12 +1154,18 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
             <Stage
               ratio={view ? view.aspect_ratio : isTpl ? tplRatio : ratio}
               job={view}
-              photoUrl={view?.source_path ? fileUrl(view.source_path) : (selected?.url ?? null)}
+              photoUrl={
+                view?.source_path
+                  ? fileUrl(view.source_path)
+                  : tplPhotos === "many"
+                    ? (photos.find((m) => m.id === items[0]?.id)?.url ?? null)
+                    : (selected?.url ?? null)
+              }
               caption={
                 view
                   ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
                   : isTpl
-                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
+                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplPhotos === "many" ? catalogSeconds(Math.max(items.length, CATALOG.min)) : tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
                     : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
@@ -1060,7 +1174,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                 isTpl && !view ? (
                   <TemplatePreview
                     template={tplKey}
-                    text={tpl}
+                    text={
+                      tplPhotos === "many"
+                        ? {
+                            ...tpl,
+                            subline: items[0]?.title || pick("Product name", "Nama produk"),
+                            badge: items[0]?.price ?? "",
+                          }
+                        : tpl
+                    }
                     accent={accent}
                     ratio={tplRatio}
                     photoUrl={selected?.url ?? null}
@@ -1083,8 +1205,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
         uploading={upload.isPending}
         onUpload={() => fileInput.current?.click()}
         onPick={(id) => {
-          setSource(id);
-          setView(null);
+          choose(id);
           setPickerOpen(false);
         }}
       />
@@ -1235,6 +1356,38 @@ function TemplateSketch({ template, accent }: { template: string; accent: string
           </span>
         </span>
       )}
+      {template === "catalog" && (
+        <>
+          <span className="absolute right-1.5 top-1.5 flex gap-0.5">
+            <span className="h-1 w-3 rounded-full" style={{ background: accent }} />
+            <span className="size-1 rounded-full bg-white/60" />
+            <span className="size-1 rounded-full bg-white/60" />
+          </span>
+          <span className="absolute inset-x-2 bottom-2 space-y-1">
+            {line("60%")}
+            <span className="block h-2 w-6 rounded-full" style={{ background: accent }} />
+          </span>
+        </>
+      )}
+      {template === "announce" && (
+        <span
+          className="absolute inset-0 flex flex-col justify-center gap-1 px-2.5"
+          style={{ background: accent }}
+        >
+          <span
+            className="block h-1.5 w-[75%] rounded-full"
+            style={{ background: onAccent(accent) }}
+          />
+          <span
+            className="block h-1.5 w-[55%] rounded-full"
+            style={{ background: onAccent(accent) }}
+          />
+          <span
+            className="block h-1 w-[40%] rounded-full opacity-60"
+            style={{ background: onAccent(accent) }}
+          />
+        </span>
+      )}
       {template === "story" && (
         <span className="absolute inset-y-0 left-2 flex w-[60%] flex-col justify-center gap-1">
           <span className="block h-1 w-4 rounded-full" style={{ background: accent }} />
@@ -1321,6 +1474,93 @@ function TemplatePreviewBody({
       </div>
     );
   }
+  if (template === "announce")
+    return (
+      <div
+        className={cn(wrap, "flex flex-col items-start justify-center")}
+        style={{ padding: "8cqw", background: accent, color: ink }}
+      >
+        {text.badge && (
+          <span
+            className="rounded-full font-bold"
+            style={{
+              background: ink === "#FFFFFF" ? "#fff" : "#111827",
+              color: ink === "#FFFFFF" ? "#111827" : "#fff",
+              fontSize: "4.4cqw",
+              padding: "1.2cqw 3cqw",
+              marginBottom: "3.6cqw",
+            }}
+          >
+            {text.badge}
+          </span>
+        )}
+        <p className="font-bold leading-[1.05]" style={{ fontSize: square ? "10.5cqw" : "12cqw" }}>
+          {head}
+        </p>
+        <span
+          style={{
+            width: "18cqw",
+            height: "1.2cqw",
+            background: ink,
+            borderRadius: 99,
+            marginTop: "3.6cqw",
+          }}
+        />
+        <p style={{ fontSize: "4.4cqw", marginTop: "3.2cqw", opacity: 0.85 }}>{text.subline}</p>
+        {text.cta && (
+          <span
+            className="rounded-full font-semibold"
+            style={{
+              fontSize: "4cqw",
+              marginTop: "4.6cqw",
+              padding: "1.8cqw 4cqw",
+              border: `0.45cqw solid ${ink}`,
+            }}
+          >
+            {text.cta}
+          </span>
+        )}
+      </div>
+    );
+  if (template === "catalog")
+    return (
+      <div
+        className={cn(wrap, "text-white")}
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(8,12,28,.45), rgba(8,12,28,0) 26%, rgba(8,12,28,0) 50%, rgba(8,12,28,.9))",
+        }}
+      >
+        <p
+          className="absolute font-semibold"
+          style={{ top: "7cqw", left: "7cqw", right: "7cqw", fontSize: "4cqw" }}
+        >
+          {head}
+        </p>
+        <div
+          className="absolute"
+          style={{ left: "7cqw", right: "7cqw", bottom: square ? "8cqw" : "15cqw" }}
+        >
+          <p className="font-bold leading-[1.08]" style={{ fontSize: square ? "8cqw" : "9.4cqw" }}>
+            {text.subline}
+          </p>
+          {text.badge && (
+            <span
+              className="inline-block rounded-full font-bold"
+              style={{
+                background: accent,
+                color: ink,
+                fontSize: "5.6cqw",
+                marginTop: "2.4cqw",
+                padding: "1.6cqw 3.4cqw",
+              }}
+            >
+              {text.badge}
+            </span>
+          )}
+        </div>
+      </div>
+    );
   if (template === "story")
     return (
       <div
