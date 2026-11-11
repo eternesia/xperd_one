@@ -24,9 +24,9 @@ const parse = <T>(v: unknown, d: T): T => {
 };
 
 async function assertManager(workspaceId: string, userId: string) {
-  const { hasWorkspaceRole, ownsTenant } = await import("@/lib/auth-context.server");
+  const { isWorkspaceManager, ownsTenant } = await import("@/lib/auth-context.server");
   const { executeOne } = await import("@/integrations/mysql/pool");
-  if (await hasWorkspaceRole(workspaceId, userId, ["owner", "admin"])) return;
+  if (await isWorkspaceManager(workspaceId, userId)) return;
   const ws = await executeOne<{ tenant_id: string }>(
     "SELECT tenant_id FROM workspaces WHERE id = ?",
     [workspaceId],

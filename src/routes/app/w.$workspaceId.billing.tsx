@@ -1,3 +1,4 @@
+import { ManagerOnly } from "@/components/app/ManagerOnly";
 import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { AddonTierChoices } from "@/components/app/AddonTierChoices";
 import { WalletPanel } from "@/components/app/WalletPanel";
@@ -40,7 +41,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatMoney } from "@/lib/procurement";
 
 export const Route = createFileRoute("/app/w/$workspaceId/billing")({
-  component: BillingPage,
+  component: GuardedBillingPage,
 });
 
 function BillingPage() {
@@ -600,5 +601,14 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
         {value}
       </span>
     </div>
+  );
+}
+
+function GuardedBillingPage() {
+  const { workspaceId } = Route.useParams();
+  return (
+    <ManagerOnly workspaceId={workspaceId}>
+      <BillingPage />
+    </ManagerOnly>
   );
 }

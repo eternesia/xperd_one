@@ -21,8 +21,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data, context }) => {
-    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+    const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId))) {
       throw new Error("Forbidden");
     }
 
@@ -80,7 +80,8 @@ export const updateWorkspaceUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole, isWorkspaceMember } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"])))
+    const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId)))
       throw new Error("Forbidden");
     if (!(await isWorkspaceMember(data.workspaceId, data.targetUserId))) {
       throw new Error("User is not a member of this workspace");
@@ -118,6 +119,8 @@ export type WorkspaceRole = "owner" | "admin" | "staff" | "viewer";
 
 export interface WorkspaceAccessResult {
   role: WorkspaceRole | null;
+  /** Nama peran kustom bila anggota memakai peran kustom (bukan pengelola workspace). */
+  custom_role: string | null;
   /** Izin per kunci: `module` untuk dashboard/modul, `module/submodule` untuk submodul. */
   access: { module_id: string; can_view: boolean; can_edit: boolean }[];
 }
@@ -157,8 +160,8 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
 
     // Peran kustom: izin diambil dari `permissions` peran itu (menu yang tidak dicentang ditolak eksplisit saat disimpan).
     if (member?.custom_role_id && role !== "owner") {
-      const custom = await executeOne<{ permissions: unknown }>(
-        "SELECT permissions FROM workspace_custom_roles WHERE id = ? AND workspace_id = ?",
+      const custom = await executeOne<{ permissions: unknown; name: string }>(
+        "SELECT permissions, name FROM workspace_custom_roles WHERE id = ? AND workspace_id = ?",
         [member.custom_role_id, data.workspaceId],
       );
       if (custom) {
@@ -169,6 +172,7 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
         ) as Record<string, { view?: boolean; edit?: boolean }>;
         return {
           role: role as WorkspaceRole,
+          custom_role: custom.name,
           access: Object.entries(perms ?? {}).map(([k, p]) => ({
             module_id: k,
             can_view: Boolean(p?.view),
@@ -185,6 +189,7 @@ export const getWorkspaceAccess = createServerFn({ method: "POST" })
 
     return {
       role: role as WorkspaceRole,
+      custom_role: null,
       access: (rows ?? []).map((row) => ({
         module_id: row.module_id,
         can_view: Number(row.can_view) === 1,
@@ -212,8 +217,8 @@ export const listTenantUsers = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data, context }): Promise<TenantUserRow[]> => {
-    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+    const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId))) {
       throw new Error("Forbidden");
     }
 
@@ -272,8 +277,8 @@ export const addExistingUserToWorkspace = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ data, context }) => {
-    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+    const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId))) {
       throw new Error("Forbidden");
     }
 
@@ -357,15 +362,24 @@ export const getAccessMatrix = createServerFn({ method: "POST" })
     }
 
     const placeholders = workspaceIds.map(() => "?").join(", ");
-    const members = await execute<{ workspace_id: string; user_id: string; role: string }>(
-      `SELECT workspace_id, user_id, role FROM workspace_members WHERE workspace_id IN (${placeholders})`,
+    const members = await execute<{
+      workspace_id: string;
+      user_id: string;
+      role: string;
+      custom_role_id: string | null;
+    }>(
+      `SELECT workspace_id, user_id, role, custom_role_id FROM workspace_members WHERE workspace_id IN (${placeholders})`,
       workspaceIds,
     );
 
     // Pemanggil boleh mengubah workspace tempat ia owner/admin; pemilik tenant
     // (pemilik perusahaan) selalu boleh mengubah semua workspace tenant-nya.
     const myAdminWs = (members ?? [])
-      .filter((row) => row.user_id === context.userId && ["owner", "admin"].includes(row.role))
+      .filter(
+        (row) =>
+          row.user_id === context.userId &&
+          (row.role === "owner" || (row.role === "admin" && !row.custom_role_id)),
+      )
       .map((row) => row.workspace_id);
     if (!isTenantOwner && myAdminWs.length === 0) throw new Error("Forbidden");
     const manageable = isTenantOwner ? workspaceIds : myAdminWs;
@@ -440,11 +454,8 @@ export const setWorkspaceAccess = createServerFn({ method: "POST" })
 
     let allowed = tenant?.owner_id === context.userId;
     if (!allowed) {
-      const me = await executeOne<{ role: string }>(
-        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
-        [data.targetWorkspaceId, context.userId],
-      );
-      allowed = !!me && ["owner", "admin"].includes(me.role);
+      const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+      allowed = await isWorkspaceManager(data.targetWorkspaceId, context.userId);
     }
     if (!allowed) throw new Error("Forbidden");
 

@@ -17,10 +17,10 @@ export const Route = createFileRoute("/app/w/$workspaceId/")({
 
 function Launcher() {
   const { workspaceId } = Route.useParams();
-  const { activeWorkspace, workspaceRole, canViewModule, canViewSubmodule } = useApp();
-  // BS New 4: kartu utilitas (Team, Settings, Billing, Backup) hanya untuk
-  // owner/admin — peran staff/viewer tidak melihat menu pengelolaan workspace.
-  const isManager = workspaceRole === "owner" || workspaceRole === "admin";
+  const { activeWorkspace, isWorkspaceManager, canViewModule, canViewSubmodule } = useApp();
+  // Kartu utilitas (Tim, Pengaturan, Tagihan, Backup) hanya untuk owner/admin bawaan; peran kustom
+  // (walau berdasar admin) dan staff/viewer tidak melihat menu pengelolaan workspace.
+  const isManager = isWorkspaceManager;
   const { lang } = useI18n();
   const { hasAddon, loading: addonsLoading } = useTenantAddons();
 

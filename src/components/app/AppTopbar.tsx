@@ -44,7 +44,7 @@ import { useTheme } from "@/lib/theme";
 import appLogo from "@/assets/xperd-one.png";
 
 export function AppTopbar({ workspaceId }: { workspaceId: string }) {
-  const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId, canViewModule, canViewSubmodule } = useApp();
+  const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId, canViewModule, canViewSubmodule, isWorkspaceManager } = useApp();
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -64,13 +64,13 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
             group: lang === "id" ? "Sub modul" : "Sub modules",
           })),
       ]),
-      ...LAUNCHER_UTILITIES.map((u) => ({
+      ...LAUNCHER_UTILITIES.filter(() => isWorkspaceManager).map((u) => ({
         label: lang === "id" ? u.id_ : u.en,
         to: `/app/w/${workspaceId}/${u.id}`,
         group: lang === "id" ? "Pengaturan" : "Workspace",
       })),
     ],
-    [lang, workspaceId, canViewModule, canViewSubmodule],
+    [lang, workspaceId, canViewModule, canViewSubmodule, isWorkspaceManager],
   );
 
   const groups = useMemo(() => {
@@ -206,9 +206,11 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
               {email}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => navigate({ to: "/app/w/$workspaceId/settings", params: { workspaceId } })}>
-              {lang === "id" ? "Pengaturan workspace" : "Workspace settings"}
-            </DropdownMenuItem>
+            {isWorkspaceManager && (
+              <DropdownMenuItem onSelect={() => navigate({ to: "/app/w/$workspaceId/settings", params: { workspaceId } })}>
+                {lang === "id" ? "Pengaturan workspace" : "Workspace settings"}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={async () => {
                 await logoutAppUser();

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -62,6 +63,7 @@ function StudioAdmin() {
   const [dailyLimit, setDailyLimit] = useState(10);
   const [usdIdr, setUsdIdr] = useState(16500);
   const [packs, setPacks] = useState<CreditPack[]>([]);
+  const [tab, setTab] = useState("ringkasan");
   const [styles, setStyles] = useState<StyleConfig[]>([]);
   const setStyleAt = (i: number, patch: Partial<StyleConfig>) =>
     setStyles((x) => x.map((y, j) => (j === i ? { ...y, ...patch } : y)));
@@ -171,485 +173,516 @@ function StudioAdmin() {
         </p>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
-          <div className="max-w-xl space-y-1">
-            <div className="font-semibold">
-              Status untuk pengguna:{" "}
-              {d.enabled ? (
-                <Badge>Aktif</Badge>
-              ) : (
-                <Badge variant="secondary">Nonaktif (mode uji Super Admin)</Badge>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Saat nonaktif, pengguna hanya melihat tombol “segera hadir” (uji minat). Super Admin
-              tetap bisa membuat video dari menu Media di workspace-nya sendiri untuk uji kualitas;
-              kredit dipotong dari saldo kredit workspace tersebut (beri kredit bonus di bawah).
-            </p>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-            Buka untuk semua pengguna
-          </label>
-        </CardContent>
-      </Card>
+      <Tabs value={tab} onValueChange={setTab} className="space-y-5">
+        <TabsList className="sticky top-0 z-10 h-auto flex-wrap justify-start gap-1 bg-muted p-1">
+          <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
+          <TabsTrigger value="umum">Umum & penyedia</TabsTrigger>
+          <TabsTrigger value="paket">Paket kredit</TabsTrigger>
+          <TabsTrigger value="tingkat">Tingkat & harga</TabsTrigger>
+          <TabsTrigger value="gaya">Gaya gerakan</TabsTrigger>
+          <TabsTrigger value="pekerjaan">Pekerjaan</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <p className="font-semibold">API key penyedia</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <KeyField
-              label="fal.ai"
-              hint={d.fal_key_hint}
-              value={falKey}
-              onChange={setFalKey}
-              onClear={() => save.mutate({ clearFal: true })}
+        <TabsContent value="ringkasan" className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <Stat label="Video (30 hari)" value={String(d.totals30d.jobs)} />
+            <Stat label="Berhasil / gagal" value={`${d.totals30d.done} / ${d.totals30d.failed}`} />
+            <Stat
+              label="Penjualan paket"
+              value={`${rp(d.totals30d.sales_idr)} · ${d.totals30d.packs_sold}×`}
             />
-            <KeyField
-              label="Atlas Cloud"
-              hint={d.atlas_key_hint}
-              value={atlasKey}
-              onChange={setAtlasKey}
-              onClear={() => save.mutate({ clearAtlas: true })}
-            />
+            <Stat label="Penjualan − biaya penyedia" value={rp(margin)} />
           </div>
-          <p className="text-xs text-muted-foreground">
-            Key disimpan di server dan tidak pernah dikirim ke browser. Penyedia mengambil foto
-            lewat URL bertanda tangan, jadi uji harus dijalankan di domain produksi
-            (APP_PUBLIC_URL), bukan localhost.
+          <p className="-mt-3 text-xs text-muted-foreground">
+            30 hari, tanpa video uji dan pembelian Super Admin. Kredit terpakai{" "}
+            {d.totals30d.credits_used} dari {d.totals30d.credits_sold} terjual; kredit beredar di
+            semua tenant {d.credits_outstanding}. Biaya = perkiraan dari tarif per detik, cocokkan
+            dengan tagihan penyedia.
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div>
-            <p className="font-semibold">Paket kredit</p>
-            <p className="text-sm text-muted-foreground">
-              Dibeli pengguna dari saldo Qalling atau dibayar langsung (QRIS/kartu, kredit masuk
-              otomatis setelah lunas). Kredit tidak hangus.
-            </p>
-          </div>
-          {packs.map((p, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-end gap-2">
-              <Field label="Kredit">
-                <NumInput
-                  value={p.credits}
-                  onChange={(v) =>
-                    setPacks((x) => x.map((y, j) => (j === i ? { ...y, credits: v } : y)))
-                  }
-                />
-              </Field>
-              <Field label="Harga (Rp)">
-                <NumInput
-                  value={p.price_idr}
-                  onChange={(v) =>
-                    setPacks((x) => x.map((y, j) => (j === i ? { ...y, price_idr: v } : y)))
-                  }
-                />
-              </Field>
-              <p className="pb-2 text-xs text-muted-foreground">
-                {p.credits > 0 ? `${rp(perCredit(p))}/kredit` : "—"}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={packs.length <= 1}
-                onClick={() => setPacks((x) => x.filter((_, j) => j !== i))}
-              >
-                Hapus
-              </Button>
-            </div>
-          ))}
-          <div className="flex gap-2">
-            {packs.length < 8 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPacks((x) => [...x, { credits: 0, price_idr: 0 }])}
-              >
-                Tambah paket
-              </Button>
-            )}
-            <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
-              Simpan paket
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div>
-            <p className="font-semibold">Gaya gerakan bawaan</p>
-            <p className="text-sm text-muted-foreground">
-              Tampil di tab “Bawaan” Studio. Prompt ditulis dalam bahasa Inggris dan tidak terlihat
-              pengguna. Kunci dipakai riwayat video, jadi jangan diubah setelah gaya dipakai;
-              nonaktifkan saja bila tidak dipakai lagi.
-            </p>
-          </div>
-          {styles.map((st, i) => (
-            <div key={i} className="space-y-2 rounded-2xl border p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                <Field label="Nama (Indonesia)">
-                  <Input
-                    value={st.name}
-                    onChange={(e) => setStyleAt(i, { name: e.target.value })}
-                  />
-                </Field>
-                <Field label="Nama (Inggris)">
-                  <Input
-                    value={st.name_en}
-                    onChange={(e) => setStyleAt(i, { name_en: e.target.value })}
-                  />
-                </Field>
-                <Field label="Kunci (huruf kecil, tanpa spasi)">
-                  <Input
-                    value={st.key}
-                    onChange={(e) =>
-                      setStyleAt(i, {
-                        key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
-                      })
-                    }
-                  />
-                </Field>
-                <label className="flex items-center gap-2 pb-2 text-sm sm:self-end">
-                  <Switch
-                    checked={st.enabled}
-                    onCheckedChange={(v) => setStyleAt(i, { enabled: v })}
-                  />
-                  Aktif
-                </label>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="Keterangan singkat (Indonesia)">
-                  <Input
-                    value={st.hint}
-                    onChange={(e) => setStyleAt(i, { hint: e.target.value })}
-                  />
-                </Field>
-                <Field label="Keterangan singkat (Inggris)">
-                  <Input
-                    value={st.hint_en}
-                    onChange={(e) => setStyleAt(i, { hint_en: e.target.value })}
-                  />
-                </Field>
-              </div>
-              <Field label="Prompt (Inggris)">
-                <Input
-                  value={st.prompt}
-                  onChange={(e) => setStyleAt(i, { prompt: e.target.value })}
-                />
-              </Field>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={i === 0}
-                  onClick={() =>
-                    setStyles((x) => {
-                      const y = [...x];
-                      [y[i - 1], y[i]] = [y[i], y[i - 1]];
-                      return y;
-                    })
-                  }
-                >
-                  Naikkan
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={styles.length <= 1}
-                  onClick={() => setStyles((x) => x.filter((_, j) => j !== i))}
-                >
-                  Hapus
-                </Button>
-              </div>
-            </div>
-          ))}
-          <div className="flex gap-2">
-            {styles.length < 24 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setStyles((x) => [
-                    ...x,
-                    {
-                      key: "",
-                      name: "",
-                      name_en: "",
-                      hint: "",
-                      hint_en: "",
-                      prompt: "",
-                      enabled: true,
-                    },
-                  ])
-                }
-              >
-                Tambah gaya
-              </Button>
-            )}
-            <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
-              Simpan gaya
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <p className="font-semibold">Tingkat & harga per video (kredit)</p>
-          {AI_TIERS.map((t) => {
-            const c = tiers[t];
-            const cost5 = c.cost_usd_per_s * 5 * usdIdr;
-            const m5 = c.credits_5s * creditValue - cost5;
-            return (
-              <div key={t} className="space-y-3 rounded-2xl border p-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium">{TIER_LABELS[t].id}</p>
-                  <label className="flex items-center gap-2 text-sm">
-                    <Switch
-                      checked={c.enabled}
-                      onCheckedChange={(v) => setTier(t, { enabled: v })}
-                    />
-                    Dibuka
-                  </label>
+          <Card>
+            <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
+              <div className="max-w-xl space-y-1">
+                <div className="font-semibold">
+                  Status untuk pengguna:{" "}
+                  {d.enabled ? (
+                    <Badge>Aktif</Badge>
+                  ) : (
+                    <Badge variant="secondary">Nonaktif (mode uji Super Admin)</Badge>
+                  )}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <Field label="Penyedia">
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm"
-                      value={c.provider}
-                      onChange={(e) =>
-                        setTier(t, { provider: e.target.value as TierConfig["provider"] })
+                <p className="text-sm text-muted-foreground">
+                  Saat nonaktif, pengguna hanya melihat tombol “segera hadir” (uji minat). Super
+                  Admin tetap bisa membuat video dari menu Media di workspace-nya sendiri untuk uji
+                  kualitas; kredit dipotong dari saldo kredit workspace tersebut (beri kredit bonus
+                  di bawah).
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={enabled} onCheckedChange={setEnabled} />
+                Buka untuk semua pengguna
+              </label>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="umum" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-4">
+              <p className="font-semibold">API key penyedia</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <KeyField
+                  label="fal.ai"
+                  hint={d.fal_key_hint}
+                  value={falKey}
+                  onChange={setFalKey}
+                  onClear={() => save.mutate({ clearFal: true })}
+                />
+                <KeyField
+                  label="Atlas Cloud"
+                  hint={d.atlas_key_hint}
+                  value={atlasKey}
+                  onChange={setAtlasKey}
+                  onClear={() => save.mutate({ clearAtlas: true })}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Key disimpan di server dan tidak pernah dikirim ke browser. Penyedia mengambil foto
+                lewat URL bertanda tangan, jadi uji harus dijalankan di domain produksi
+                (APP_PUBLIC_URL), bukan localhost.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <p className="font-semibold">Batas & laporan</p>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Field label="Batas video per workspace / 24 jam">
+                  <NumInput value={dailyLimit} onChange={setDailyLimit} />
+                </Field>
+                <Field label="Kurs USD → IDR (laporan)">
+                  <NumInput value={usdIdr} onChange={setUsdIdr} />
+                </Field>
+              </div>
+              <Button onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+                Simpan pengaturan
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="paket" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <p className="font-semibold">Paket kredit</p>
+                <p className="text-sm text-muted-foreground">
+                  Dibeli pengguna dari saldo Qalling atau dibayar langsung (QRIS/kartu, kredit masuk
+                  otomatis setelah lunas). Kredit tidak hangus.
+                </p>
+              </div>
+              {packs.map((p, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-end gap-2">
+                  <Field label="Kredit">
+                    <NumInput
+                      value={p.credits}
+                      onChange={(v) =>
+                        setPacks((x) => x.map((y, j) => (j === i ? { ...y, credits: v } : y)))
+                      }
+                    />
+                  </Field>
+                  <Field label="Harga (Rp)">
+                    <NumInput
+                      value={p.price_idr}
+                      onChange={(v) =>
+                        setPacks((x) => x.map((y, j) => (j === i ? { ...y, price_idr: v } : y)))
+                      }
+                    />
+                  </Field>
+                  <p className="pb-2 text-xs text-muted-foreground">
+                    {p.credits > 0 ? `${rp(perCredit(p))}/kredit` : "—"}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={packs.length <= 1}
+                    onClick={() => setPacks((x) => x.filter((_, j) => j !== i))}
+                  >
+                    Hapus
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                {packs.length < 8 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPacks((x) => [...x, { credits: 0, price_idr: 0 }])}
+                  >
+                    Tambah paket
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+                  Simpan paket
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <p className="font-semibold">Beri kredit bonus</p>
+                <p className="text-sm text-muted-foreground">
+                  Untuk uji coba, promosi, atau kompensasi. Angka negatif untuk mengurangi.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto] sm:items-end">
+                <Field label="Email pengguna">
+                  <Input
+                    value={grant.email}
+                    onChange={(e) => setGrant((g) => ({ ...g, email: e.target.value }))}
+                    placeholder="nama@contoh.id"
+                  />
+                </Field>
+                <Field label="Kredit">
+                  <NumInput
+                    value={grant.credits}
+                    onChange={(v) => setGrant((g) => ({ ...g, credits: v }))}
+                  />
+                </Field>
+                <Field label="Catatan">
+                  <Input
+                    value={grant.note}
+                    onChange={(e) => setGrant((g) => ({ ...g, note: e.target.value }))}
+                    placeholder="mis. kredit uji coba"
+                  />
+                </Field>
+                <Button
+                  disabled={!grant.email || !grant.credits || giveCredits.isPending}
+                  onClick={() => giveCredits.mutate()}
+                >
+                  Beri kredit
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tingkat" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-4 p-4">
+              <p className="font-semibold">Tingkat & harga per video (kredit)</p>
+              {AI_TIERS.map((t) => {
+                const c = tiers[t];
+                const cost5 = c.cost_usd_per_s * 5 * usdIdr;
+                const m5 = c.credits_5s * creditValue - cost5;
+                return (
+                  <div key={t} className="space-y-3 rounded-2xl border p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{TIER_LABELS[t].id}</p>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Switch
+                          checked={c.enabled}
+                          onCheckedChange={(v) => setTier(t, { enabled: v })}
+                        />
+                        Dibuka
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <Field label="Penyedia">
+                        <select
+                          className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                          value={c.provider}
+                          onChange={(e) =>
+                            setTier(t, { provider: e.target.value as TierConfig["provider"] })
+                          }
+                        >
+                          {AI_PROVIDERS.map((p) => (
+                            <option key={p} value={p}>
+                              {p === "fal" ? "fal.ai" : "Atlas Cloud"}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="ID model" className="sm:col-span-2">
+                        <Input
+                          value={c.model}
+                          onChange={(e) => setTier(t, { model: e.target.value })}
+                        />
+                      </Field>
+                      <Field label="Parameter gambar">
+                        <Input
+                          value={c.image_param}
+                          onChange={(e) => setTier(t, { image_param: e.target.value })}
+                        />
+                      </Field>
+                      <Field label="Kredit / 5 detik">
+                        <NumInput
+                          value={c.credits_5s}
+                          onChange={(v) => setTier(t, { credits_5s: v })}
+                        />
+                      </Field>
+                      <Field label="Kredit / 10 detik">
+                        <NumInput
+                          value={c.credits_10s}
+                          onChange={(v) => setTier(t, { credits_10s: v })}
+                        />
+                      </Field>
+                      <Field label="Biaya penyedia USD/detik">
+                        <NumInput
+                          step={0.001}
+                          value={c.cost_usd_per_s}
+                          onChange={(v) => setTier(t, { cost_usd_per_s: v })}
+                        />
+                      </Field>
+                      <Field label="Margin 5 detik (perkiraan)">
+                        <p className="pt-2 text-sm">
+                          {rp(m5)}{" "}
+                          <span className="text-muted-foreground">
+                            (
+                            {c.credits_5s && creditValue
+                              ? Math.round((m5 / (c.credits_5s * creditValue)) * 100)
+                              : 0}
+                            %)
+                          </span>
+                        </p>
+                      </Field>
+                      <Field label="Parameter tambahan (JSON, opsional)" className="sm:col-span-4">
+                        <Input
+                          placeholder='{"resolution":"720p"}'
+                          value={extraText[t]}
+                          onChange={(e) => setExtraText((x) => ({ ...x, [t]: e.target.value }))}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <Button onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+                Simpan tingkat & harga
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="gaya" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <p className="font-semibold">Gaya gerakan bawaan</p>
+                <p className="text-sm text-muted-foreground">
+                  Tampil di tab “Bawaan” Studio. Prompt ditulis dalam bahasa Inggris dan tidak
+                  terlihat pengguna. Kunci dipakai riwayat video, jadi jangan diubah setelah gaya
+                  dipakai; nonaktifkan saja bila tidak dipakai lagi.
+                </p>
+              </div>
+              {styles.map((st, i) => (
+                <div key={i} className="space-y-2 rounded-2xl border p-3">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                    <Field label="Nama (Indonesia)">
+                      <Input
+                        value={st.name}
+                        onChange={(e) => setStyleAt(i, { name: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Nama (Inggris)">
+                      <Input
+                        value={st.name_en}
+                        onChange={(e) => setStyleAt(i, { name_en: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Kunci (huruf kecil, tanpa spasi)">
+                      <Input
+                        value={st.key}
+                        onChange={(e) =>
+                          setStyleAt(i, {
+                            key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+                          })
+                        }
+                      />
+                    </Field>
+                    <label className="flex items-center gap-2 pb-2 text-sm sm:self-end">
+                      <Switch
+                        checked={st.enabled}
+                        onCheckedChange={(v) => setStyleAt(i, { enabled: v })}
+                      />
+                      Aktif
+                    </label>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Field label="Keterangan singkat (Indonesia)">
+                      <Input
+                        value={st.hint}
+                        onChange={(e) => setStyleAt(i, { hint: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Keterangan singkat (Inggris)">
+                      <Input
+                        value={st.hint_en}
+                        onChange={(e) => setStyleAt(i, { hint_en: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Prompt (Inggris)">
+                    <Input
+                      value={st.prompt}
+                      onChange={(e) => setStyleAt(i, { prompt: e.target.value })}
+                    />
+                  </Field>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={i === 0}
+                      onClick={() =>
+                        setStyles((x) => {
+                          const y = [...x];
+                          [y[i - 1], y[i]] = [y[i], y[i - 1]];
+                          return y;
+                        })
                       }
                     >
-                      {AI_PROVIDERS.map((p) => (
-                        <option key={p} value={p}>
-                          {p === "fal" ? "fal.ai" : "Atlas Cloud"}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="ID model" className="sm:col-span-2">
-                    <Input
-                      value={c.model}
-                      onChange={(e) => setTier(t, { model: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Parameter gambar">
-                    <Input
-                      value={c.image_param}
-                      onChange={(e) => setTier(t, { image_param: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Kredit / 5 detik">
-                    <NumInput
-                      value={c.credits_5s}
-                      onChange={(v) => setTier(t, { credits_5s: v })}
-                    />
-                  </Field>
-                  <Field label="Kredit / 10 detik">
-                    <NumInput
-                      value={c.credits_10s}
-                      onChange={(v) => setTier(t, { credits_10s: v })}
-                    />
-                  </Field>
-                  <Field label="Biaya penyedia USD/detik">
-                    <NumInput
-                      step={0.001}
-                      value={c.cost_usd_per_s}
-                      onChange={(v) => setTier(t, { cost_usd_per_s: v })}
-                    />
-                  </Field>
-                  <Field label="Margin 5 detik (perkiraan)">
-                    <p className="pt-2 text-sm">
-                      {rp(m5)}{" "}
-                      <span className="text-muted-foreground">
-                        (
-                        {c.credits_5s && creditValue
-                          ? Math.round((m5 / (c.credits_5s * creditValue)) * 100)
-                          : 0}
-                        %)
-                      </span>
-                    </p>
-                  </Field>
-                  <Field label="Parameter tambahan (JSON, opsional)" className="sm:col-span-4">
-                    <Input
-                      placeholder='{"resolution":"720p"}'
-                      value={extraText[t]}
-                      onChange={(e) => setExtraText((x) => ({ ...x, [t]: e.target.value }))}
-                    />
-                  </Field>
-                </div>
-              </div>
-            );
-          })}
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Field label="Batas video per workspace / 24 jam">
-              <NumInput value={dailyLimit} onChange={setDailyLimit} />
-            </Field>
-            <Field label="Kurs USD → IDR (laporan)">
-              <NumInput value={usdIdr} onChange={setUsdIdr} />
-            </Field>
-          </div>
-          <Button onClick={() => save.mutate(undefined)} disabled={save.isPending}>
-            Simpan pengaturan
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Stat label="Video (30 hari)" value={String(d.totals30d.jobs)} />
-        <Stat label="Berhasil / gagal" value={`${d.totals30d.done} / ${d.totals30d.failed}`} />
-        <Stat
-          label="Penjualan paket"
-          value={`${rp(d.totals30d.sales_idr)} · ${d.totals30d.packs_sold}×`}
-        />
-        <Stat label="Penjualan − biaya penyedia" value={rp(margin)} />
-      </div>
-      <p className="-mt-3 text-xs text-muted-foreground">
-        30 hari, tanpa video uji dan pembelian Super Admin. Kredit terpakai{" "}
-        {d.totals30d.credits_used} dari {d.totals30d.credits_sold} terjual; kredit beredar di semua
-        tenant {d.credits_outstanding}. Biaya = perkiraan dari tarif per detik, cocokkan dengan
-        tagihan penyedia.
-      </p>
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div>
-            <p className="font-semibold">Beri kredit bonus</p>
-            <p className="text-sm text-muted-foreground">
-              Untuk uji coba, promosi, atau kompensasi. Angka negatif untuk mengurangi.
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto] sm:items-end">
-            <Field label="Email pengguna">
-              <Input
-                value={grant.email}
-                onChange={(e) => setGrant((g) => ({ ...g, email: e.target.value }))}
-                placeholder="nama@contoh.id"
-              />
-            </Field>
-            <Field label="Kredit">
-              <NumInput
-                value={grant.credits}
-                onChange={(v) => setGrant((g) => ({ ...g, credits: v }))}
-              />
-            </Field>
-            <Field label="Catatan">
-              <Input
-                value={grant.note}
-                onChange={(e) => setGrant((g) => ({ ...g, note: e.target.value }))}
-                placeholder="mis. kredit uji coba"
-              />
-            </Field>
-            <Button
-              disabled={!grant.email || !grant.credits || giveCredits.isPending}
-              onClick={() => giveCredits.mutate()}
-            >
-              Beri kredit
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold">Pekerjaan terbaru</p>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => process.mutate()}
-              disabled={process.isPending}
-            >
-              <RefreshCw className="mr-1 h-4 w-4" /> Periksa sekarang
-            </Button>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Waktu</TableHead>
-                  <TableHead>Workspace</TableHead>
-                  <TableHead>Tingkat / model</TableHead>
-                  <TableHead>Gaya</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Kredit</TableHead>
-                  <TableHead className="text-right">Biaya est.</TableHead>
-                  <TableHead className="text-right">Proses</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {d.jobs.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="py-6 text-center text-sm text-muted-foreground"
+                      Naikkan
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={styles.length <= 1}
+                      onClick={() => setStyles((x) => x.filter((_, j) => j !== i))}
                     >
-                      Belum ada video.
-                    </TableCell>
-                  </TableRow>
+                      Hapus
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                {styles.length < 24 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setStyles((x) => [
+                        ...x,
+                        {
+                          key: "",
+                          name: "",
+                          name_en: "",
+                          hint: "",
+                          hint_en: "",
+                          prompt: "",
+                          enabled: true,
+                        },
+                      ])
+                    }
+                  >
+                    Tambah gaya
+                  </Button>
                 )}
-                {d.jobs.map((j) => (
-                  <TableRow key={String(j.id)}>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      {j.created_at.slice(0, 16)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {String(j.workspace_name ?? "—")}
-                      {j.is_admin_test && (
-                        <Badge variant="outline" className="ml-1">
-                          uji
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {TIER_LABELS[j.tier as AiTier]?.id ?? String(j.tier)} · {j.duration_s}s
-                      <p className="max-w-[220px] truncate text-muted-foreground">
-                        {String(j.provider)}: {String(j.model)}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {styles.find((x) => x.key === j.style)?.name ?? String(j.style)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      <Badge
-                        variant={
-                          j.status === "failed"
-                            ? "destructive"
-                            : j.status === "done"
-                              ? "default"
-                              : "secondary"
-                        }
-                      >
-                        {String(j.status)}
-                      </Badge>
-                      {j.refunded && <span className="ml-1 text-muted-foreground">refund</span>}
-                      {j.error && (
-                        <p
-                          className="max-w-[260px] truncate text-destructive"
-                          title={String(j.error)}
+                <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+                  Simpan gaya
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pekerjaan" className="space-y-6">
+          <Card>
+            <CardContent className="space-y-3 p-4">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold">Pekerjaan terbaru</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => process.mutate()}
+                  disabled={process.isPending}
+                >
+                  <RefreshCw className="mr-1 h-4 w-4" /> Periksa sekarang
+                </Button>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Waktu</TableHead>
+                      <TableHead>Workspace</TableHead>
+                      <TableHead>Tingkat / model</TableHead>
+                      <TableHead>Gaya</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Kredit</TableHead>
+                      <TableHead className="text-right">Biaya est.</TableHead>
+                      <TableHead className="text-right">Proses</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {d.jobs.length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="py-6 text-center text-sm text-muted-foreground"
                         >
-                          {String(j.error)}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right text-xs">{j.credits}</TableCell>
-                    <TableCell className="text-right text-xs">{rp(j.est_cost_idr)}</TableCell>
-                    <TableCell className="text-right text-xs">
-                      {j.seconds != null ? `${j.seconds}s` : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                          Belum ada video.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {d.jobs.map((j) => (
+                      <TableRow key={String(j.id)}>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {j.created_at.slice(0, 16)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {String(j.workspace_name ?? "—")}
+                          {j.is_admin_test && (
+                            <Badge variant="outline" className="ml-1">
+                              uji
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {TIER_LABELS[j.tier as AiTier]?.id ?? String(j.tier)} · {j.duration_s}s
+                          <p className="max-w-[220px] truncate text-muted-foreground">
+                            {String(j.provider)}: {String(j.model)}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {styles.find((x) => x.key === j.style)?.name ?? String(j.style)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <Badge
+                            variant={
+                              j.status === "failed"
+                                ? "destructive"
+                                : j.status === "done"
+                                  ? "default"
+                                  : "secondary"
+                            }
+                          >
+                            {String(j.status)}
+                          </Badge>
+                          {j.refunded && <span className="ml-1 text-muted-foreground">refund</span>}
+                          {j.error && (
+                            <p
+                              className="max-w-[260px] truncate text-destructive"
+                              title={String(j.error)}
+                            >
+                              {String(j.error)}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs">{j.credits}</TableCell>
+                        <TableCell className="text-right text-xs">{rp(j.est_cost_idr)}</TableCell>
+                        <TableCell className="text-right text-xs">
+                          {j.seconds != null ? `${j.seconds}s` : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

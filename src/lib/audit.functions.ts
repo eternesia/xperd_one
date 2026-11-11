@@ -117,8 +117,8 @@ export const listAuditLogs = createServerFn({ method: "POST" })
   .middleware([requireAppAuth])
   .validator((i: unknown) => i as AuditLogQuery)
   .handler(async ({ data, context }) => {
-    const { hasWorkspaceRole } = await import("@/lib/auth-context.server");
-    if (!(await hasWorkspaceRole(data.workspaceId, context.userId, ["owner", "admin"]))) {
+    const { isWorkspaceManager } = await import("@/lib/auth-context.server");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId))) {
       throw new Error("Hanya owner/admin yang bisa melihat Audit Trail.");
     }
     const { execute, executeOne } = await import("@/integrations/mysql/pool");

@@ -1,3 +1,4 @@
+import { ManagerOnly } from "@/components/app/ManagerOnly";
 import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, Download, Loader2, Sparkles, Upload } from "lucide-react";
@@ -11,7 +12,7 @@ import { useI18n } from "@/lib/i18n";
 import { seedWorkspace } from "@/lib/provisioning.functions";
 
 export const Route = createFileRoute("/app/w/$workspaceId/maintenance")({
-  component: MaintenancePage,
+  component: GuardedMaintenancePage,
 });
 
 const BACKUP_TABLES = [
@@ -221,5 +222,13 @@ function MaintenancePage() {
         </Card>
       </div>
     </div>
+  );
+}
+function GuardedMaintenancePage() {
+  const { workspaceId } = Route.useParams();
+  return (
+    <ManagerOnly workspaceId={workspaceId}>
+      <MaintenancePage />
+    </ManagerOnly>
   );
 }

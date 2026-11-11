@@ -83,6 +83,7 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
   const tasksQ = useXproTaskList(workspaceId, "all", 30);
   const [horizon, setHorizon] = useState(6);
   const [project, setProject] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<PersonLoad | null>(null);
   const [openTask, setOpenTask] = useState<string | null>(null);
   const manager = Boolean(peopleQ.data?.manager);
@@ -132,7 +133,11 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
 
   if (peopleQ.isLoading || tasksQ.isLoading) return <PageSkeleton stats={4} />;
 
-  const rows = [...load.rows].sort(
+  // Hanya orang yang terlibat: punya tugas aktif, atau menyelesaikan tugas 30 hari terakhir
+  // (mengikuti filter proyek). "Tampilkan semua anggota" untuk mengatur kapasitas orang lain.
+  const involved = load.rows.filter((r) => r.active > 0 || r.done30 > 0);
+  const hiddenCount = load.rows.length - involved.length;
+  const rows = [...(showAll ? load.rows : involved)].sort(
     (a, b) =>
       LEVEL[a.level].rank - LEVEL[b.level].rank ||
       b.weeks[0] - a.weeks[0] ||
@@ -142,7 +147,7 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
     rows.push({ ...load.unassigned, name: t("Unassigned", "Belum ditugaskan") });
 
   const teamRemaining = load.rows.reduce((s, r) => s + r.remaining, 0) + load.unassigned.remaining;
-  const teamCapacity = load.rows.filter((r) => r.user_id).reduce((s, r) => s + r.capacity, 0);
+  const teamCapacity = involved.filter((r) => r.user_id).reduce((s, r) => s + r.capacity, 0);
   const thisWeek = load.rows.reduce((s, r) => s + r.weeks[0], 0) + load.unassigned.weeks[0];
   const overloaded = load.rows.filter((r) => r.level === "overload").length;
   const noEstimate = new Set(
@@ -354,13 +359,32 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
                   colSpan={load.weekStarts.length + 5}
                   className="px-3 py-10 text-center text-muted-foreground"
                 >
-                  {t("No team members yet.", "Belum ada anggota tim.")}
+                  {hiddenCount > 0
+                    ? t(
+                        "Nobody has tasks here yet. Assign tasks to see their workload.",
+                        "Belum ada yang mendapat tugas. Tugaskan seseorang untuk melihat beban kerjanya.",
+                      )
+                    : t("No team members yet.", "Belum ada anggota tim.")}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="text-xs font-medium text-navy underline-offset-2 hover:underline dark:text-foreground"
+        >
+          {showAll
+            ? t("Show only people with tasks", "Tampilkan hanya yang punya tugas")
+            : t(
+                `Show all members (${hiddenCount} without tasks hidden)`,
+                `Tampilkan semua anggota (${hiddenCount} tanpa tugas disembunyikan)`,
+              )}
+        </button>
+      )}
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <Users className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {t(
