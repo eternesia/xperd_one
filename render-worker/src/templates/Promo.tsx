@@ -1,17 +1,20 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
-import { FONT, fit, onAccent, Photo, useFonts, useKenBurns, useOutro, usePop, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, useFonts, useKenBurns, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
 
 /** Promo Harga: foto penuh dengan zoom pelan, judul naik dari bawah, lencana harga membal, ajakan di akhir. */
 export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio }) => {
   useFonts();
   const zoom = useKenBurns();
   const out = useOutro();
-  const head = useRise(14);
-  const sub = useRise(26);
-  const pop = usePop(48);
-  const call = useRise(96, 40);
-  const square = ratio === "1:1";
+  const at = usePace();
+  const head = useRise(at(14));
+  const sub = useRise(at(26));
+  const pop = usePop(at(48));
+  const call = useRise(at(96), 40);
+  const wide = ratio === "16:9";
+  // Kanvas setinggi 1080 (1:1 dan 16:9) memakai ukuran huruf yang sama.
+  const square = ratio !== "9:16";
   const pad = square ? 64 : 80;
   const ink = onAccent(accent);
   return (
@@ -45,13 +48,13 @@ export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge
           {badge}
         </div>
       ) : null}
-      <div style={{ position: "absolute", left: pad, right: pad, bottom: pad + (square ? 0 : 60) }}>
+      <div style={{ position: "absolute", left: pad, right: pad, bottom: pad + (square ? 0 : 60), maxWidth: wide ? 1180 : undefined }}>
         <div
           style={{
             ...head,
             color: "#fff",
             fontWeight: 700,
-            fontSize: fit(headline, square ? 84 : 104, 18),
+            fontSize: wide ? fit(headline, 100, 30) : fit(headline, square ? 84 : 104, 18),
             lineHeight: 1.08,
             letterSpacing: -1.5,
             textShadow: "0 4px 24px rgba(0,0,0,0.45)",
@@ -66,7 +69,7 @@ export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge
               marginTop: 22,
               color: "rgba(255,255,255,0.9)",
               fontWeight: 500,
-              fontSize: fit(subline, square ? 38 : 44, 38),
+              fontSize: wide ? fit(subline, 44, 60) : fit(subline, square ? 38 : 44, 38),
               lineHeight: 1.3,
             }}
           >

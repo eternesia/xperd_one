@@ -1,6 +1,6 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
-import { FONT, fit, onAccent, Photo, useFonts, useKenBurns, useOutro, useRise, type TemplateProps } from "../shared";
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { FONT, fit, onAccent, Photo, useFonts, useKenBurns, useOutro, usePace, useRise, type TemplateProps } from "../shared";
 
 /** Cerita Bertahap: foto bergeser pelan, lalu teks muncul satu per satu dengan garis aksen. Cocok untuk pengumuman. */
 export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio }) => {
@@ -8,13 +8,16 @@ export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge
   const frame = useCurrentFrame();
   const out = useOutro();
   const zoom = useKenBurns(1.12, 1.04);
-  const pan = interpolate(frame, [0, 180], [-18, 18]);
-  const bar = interpolate(frame, [10, 34], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const tag = useRise(16, 30);
-  const head = useRise(34);
-  const sub = useRise(70);
-  const call = useRise(108, 40);
-  const square = ratio === "1:1";
+  const { durationInFrames } = useVideoConfig();
+  const at = usePace();
+  const pan = interpolate(frame, [0, durationInFrames], [-18, 18]);
+  const bar = interpolate(frame, [at(10), at(34)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const tag = useRise(at(16), 30);
+  const head = useRise(at(34));
+  const sub = useRise(at(70));
+  const call = useRise(at(108), 40);
+  const wide = ratio === "16:9";
+  const square = ratio !== "9:16";
   const pad = square ? 64 : 84;
   const ink = onAccent(accent);
   return (
@@ -58,10 +61,10 @@ export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge
             ...head,
             color: "#fff",
             fontWeight: 700,
-            fontSize: fit(headline, square ? 88 : 112, 16),
+            fontSize: wide ? fit(headline, 108, 28) : fit(headline, square ? 88 : 112, 16),
             lineHeight: 1.06,
             letterSpacing: -2,
-            maxWidth: square ? 820 : 900,
+            maxWidth: wide ? 1100 : square ? 820 : 900,
           }}
         >
           {headline}
@@ -73,9 +76,9 @@ export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge
               marginTop: 30,
               color: "rgba(255,255,255,0.9)",
               fontWeight: 500,
-              fontSize: fit(subline, square ? 40 : 48, 36),
+              fontSize: wide ? fit(subline, 46, 56) : fit(subline, square ? 40 : 48, 36),
               lineHeight: 1.32,
-              maxWidth: square ? 760 : 840,
+              maxWidth: wide ? 980 : square ? 760 : 840,
             }}
           >
             {subline}

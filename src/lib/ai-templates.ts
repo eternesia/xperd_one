@@ -46,7 +46,11 @@ export const TEMPLATE_ACCENTS = [
 ] as const;
 
 export const TEMPLATE_LIMITS = { headline: 40, subline: 70, badge: 18, cta: 24 } as const;
+/** Durasi bawaan; pilihan lengkap di TEMPLATE_DURATIONS. */
 export const TEMPLATE_SECONDS = 6;
+export const TEMPLATE_DURATIONS = [6, 10, 15] as const;
+/** 16:9 = video lebar (YouTube). */
+export const TEMPLATE_RATIOS = ["9:16", "1:1", "16:9"] as const;
 
 export interface TemplateText {
   headline: string;

@@ -6,7 +6,7 @@ import { Composition } from "remotion";
 import { Promo } from "./templates/Promo";
 import { Showcase } from "./templates/Showcase";
 import { Story } from "./templates/Story";
-import { FPS, DURATION, sizeOf, type TemplateProps } from "./shared";
+import { FPS, DURATION, framesOf, sizeOf, type TemplateProps } from "./shared";
 
 const defaults: TemplateProps = {
   image: "",
@@ -32,7 +32,10 @@ export const Root: React.FC = () => (
         width={1080}
         height={1920}
         defaultProps={defaults as unknown as Record<string, unknown>}
-        calculateMetadata={({ props }) => sizeOf((props as unknown as TemplateProps).ratio)}
+        calculateMetadata={({ props }) => {
+          const p = props as unknown as TemplateProps;
+          return { ...sizeOf(p.ratio), durationInFrames: framesOf(p.seconds) };
+        }}
       />
     ))}
   </>

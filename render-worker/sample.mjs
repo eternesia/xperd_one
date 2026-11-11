@@ -1,4 +1,4 @@
-// Uji lokal: node sample.mjs <foto> [folder-keluaran] → merender semua template di dua rasio.
+// Uji lokal: node sample.mjs <foto> [folder-keluaran] → merender semua template di semua rasio.
 import fs from "node:fs";
 import path from "node:path";
 import { renderTemplate, TEMPLATE_IDS } from "./lib.mjs";
@@ -10,7 +10,7 @@ const image = photo
   : "";
 const accents = { promo: "#F59E0B", showcase: "#6D28D9", story: "#10B981" };
 for (const template of TEMPLATE_IDS)
-  for (const ratio of ["9:16", "1:1"]) {
+  for (const ratio of ["9:16", "1:1", "16:9"]) {
     const t0 = Date.now();
     const output = path.join(outDir, `${template}-${ratio.replace(":", "x")}.mp4`);
     await renderTemplate({

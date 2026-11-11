@@ -79,7 +79,8 @@ dengan param `image`). Parameter khusus model ditambahkan lewat kolom JSON "Para
 - Harga tidak lagi tampil di halaman; tautan "Lihat harga" membuka dialog paket & kredit per video.
 
 ## Tingkat Template (migrasi 073) — video tanpa model AI
-Foto + teks digabung menjadi video 6 detik 1080p (9:16 atau 1:1) oleh mesin render Remotion di VPS terpisah.
+Foto + teks digabung menjadi video 1080p berdurasi 6, 10, atau 15 detik (9:16, 1:1, atau 16:9) oleh mesin render Remotion
+di VPS terpisah. Harga sama untuk semua durasi. Rasio 16:9 dan durasi > 6 detik butuh mesin render v1.1.0 ke atas.
 Tidak ada biaya model per video; foto produk tampil persis aslinya. Bawaan 1 kredit per video.
 
 - **Template** (`src/lib/ai-templates.ts`, komposisi di `render-worker/src/templates/`): Promo Harga, Sorotan Produk,
