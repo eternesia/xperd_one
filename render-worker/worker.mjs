@@ -14,7 +14,7 @@ const BASE = (process.env.QALLING_URL || "")
   .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 if (!/^https?:\/\//.test(BASE) || TOKEN.length < 20) {
   console.error("QALLING_URL dan WORKER_TOKEN wajib diisi.");
   process.exit(1);
@@ -52,11 +52,16 @@ async function run(job) {
     const image = await imageDataUrl(job.image_url);
     await renderTemplate({ template: job.template, props: { ...job.props, image }, output });
     const bytes = fs.readFileSync(output);
-    await api(`complete?job=${encodeURIComponent(job.id)}`, {
-      body: bytes,
-      headers: { "Content-Type": "video/mp4" },
-      timeout: 120_000,
-    });
+    // Berpotongan 512 KB: proxy (nginx) bawaan menolak body > 1 MB.
+    const CHUNK = 512 * 1024;
+    const parts = Math.max(1, Math.ceil(bytes.length / CHUNK));
+    for (let i = 0; i < parts; i++) {
+      await api(`complete?job=${encodeURIComponent(job.id)}&part=${i}&parts=${parts}`, {
+        body: bytes.subarray(i * CHUNK, (i + 1) * CHUNK),
+        headers: { "Content-Type": "application/octet-stream" },
+        timeout: 120_000,
+      });
+    }
     log(`selesai ${job.id} ${job.template} ${((Date.now() - t0) / 1000).toFixed(1)}s ${(bytes.length / 1e6).toFixed(2)}MB`);
   } catch (e) {
     log(`gagal ${job.id}: ${e.message}`);
