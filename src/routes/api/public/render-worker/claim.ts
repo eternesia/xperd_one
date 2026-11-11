@@ -10,8 +10,8 @@ export const Route = createFileRoute("/api/public/render-worker/claim")({
           return Response.json({ error: "unauthorized" }, { status: 401 });
         const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
         const info = `${String(body.host ?? "?")} · v${String(body.version ?? "?")} · ${String(body.cpus ?? "?")} CPU`;
-        const { publicOrigin } = await import("@/lib/crm-media.server");
-        return Response.json({ job: await claimRenderJob(publicOrigin(request.url), info) });
+        const { securePublicOrigin } = await import("@/lib/crm-media.server");
+        return Response.json({ job: await claimRenderJob(securePublicOrigin(request.url), info) });
       },
     },
   },
