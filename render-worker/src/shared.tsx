@@ -11,7 +11,8 @@ import {
 } from "remotion";
 
 export const FPS = 30;
-export const DURATION = 180; // 6 detik
+export const DURATION = 180; // 6 detik (bawaan)
+export const SECONDS = [6, 10, 15];
 
 export interface TemplateProps {
   /** Foto produk (data URL atau URL). */
@@ -22,11 +23,30 @@ export interface TemplateProps {
   badge: string;
   cta: string;
   accent: string;
-  ratio: "9:16" | "1:1";
+  ratio: "9:16" | "1:1" | "16:9";
+  /** Durasi video: 6, 10, atau 15 detik (bawaan 6). */
+  seconds?: number;
 }
 
 export const sizeOf = (ratio: string) =>
-  ratio === "1:1" ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
+  ratio === "1:1"
+    ? { width: 1080, height: 1080 }
+    : ratio === "16:9"
+      ? { width: 1920, height: 1080 }
+      : { width: 1080, height: 1920 };
+
+export const framesOf = (seconds?: number) =>
+  (SECONDS.includes(Number(seconds)) ? Number(seconds) : 6) * FPS;
+
+/**
+ * Pengali waktu muncul: video lebih panjang memunculkan teks sedikit lebih lambat (maks 1,5×),
+ * sisanya dipakai untuk menahan tampilan akhir supaya terbaca.
+ */
+export function usePace() {
+  const { durationInFrames } = useVideoConfig();
+  const k = Math.min(1.5, Math.max(1, durationInFrames / DURATION));
+  return (frame: number) => Math.round(frame * k);
+}
 
 export const FONT = "Poppins, system-ui, sans-serif";
 

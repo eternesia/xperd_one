@@ -1,7 +1,14 @@
 /** Studio AI Qalling — server function (pengguna & Super Admin). Logika inti di `ai-studio.server.ts`. */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { TEMPLATE_KEYS, TEMPLATE_LIMITS, TEMPLATES, WORKER_ONLINE_MS } from "./ai-templates";
+import {
+  TEMPLATE_KEYS,
+  TEMPLATE_LIMITS,
+  TEMPLATE_RATIOS,
+  TEMPLATE_SECONDS,
+  TEMPLATES,
+  WORKER_ONLINE_MS,
+} from "./ai-templates";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 import {
   AI_DURATIONS,
@@ -176,7 +183,8 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
         badge: z.string().trim().max(TEMPLATE_LIMITS.badge).default(""),
         cta: z.string().trim().max(TEMPLATE_LIMITS.cta).default(""),
         accent: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-        aspectRatio: z.enum(AI_RATIOS),
+        aspectRatio: z.enum(TEMPLATE_RATIOS),
+        seconds: z.number().int().min(1).max(60).default(TEMPLATE_SECONDS),
         consent: z.literal(true),
       })
       .parse(v),
@@ -189,6 +197,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
       sourceMediaId: data.sourceMediaId,
       template: data.template,
       aspectRatio: data.aspectRatio,
+      seconds: data.seconds,
       text: {
         headline: data.headline,
         subline: data.subline,

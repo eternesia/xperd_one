@@ -9,7 +9,9 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { execute, executeOne, result, transaction, uuid } from "@/integrations/mysql/pool";
 import {
   TEMPLATE_ACCENTS,
+  TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
+  TEMPLATE_RATIOS,
   TEMPLATE_SECONDS,
   TEMPLATES,
   type TemplateText,
@@ -25,6 +27,7 @@ export interface CreateTemplateInput {
   template: string;
   text: TemplateText;
   aspectRatio: string;
+  seconds?: number;
 }
 
 export async function createTemplateJob(i: CreateTemplateInput) {
@@ -50,6 +53,11 @@ export async function createTemplateJob(i: CreateTemplateInput) {
       : TEMPLATE_ACCENTS[0],
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
+  if (!(TEMPLATE_RATIOS as readonly string[]).includes(i.aspectRatio))
+    throw new Error("Rasio tidak didukung");
+  const seconds = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
+    ? (i.seconds as number)
+    : TEMPLATE_SECONDS;
   if (BLOCKED.test(`${text.headline} ${text.subline} ${text.badge} ${text.cta}`))
     throw new Error("Teks mengandung kata yang tidak diizinkan");
 
@@ -81,7 +89,7 @@ export async function createTemplateJob(i: CreateTemplateInput) {
         JSON.stringify(text),
         text.headline,
         media.id,
-        TEMPLATE_SECONDS,
+        seconds,
         i.aspectRatio,
         credits,
         access.mode === "admin_preview" || !s.template_enabled ? 1 : 0,
@@ -140,7 +148,7 @@ export async function claimRenderJob(origin: string, info: string) {
   );
   for (let attempt = 0; attempt < 3; attempt++) {
     const j = await executeOne<Record<string, unknown>>(
-      `SELECT j.id, j.model, j.prompt, j.aspect_ratio, m.file_path
+      `SELECT j.id, j.model, j.prompt, j.aspect_ratio, j.duration_s, m.file_path
          FROM ai_jobs j JOIN crm_media m ON m.id = j.source_media_id
         WHERE j.provider = 'render' AND j.status = 'queued'
         ORDER BY j.created_at LIMIT 1`,
@@ -157,7 +165,11 @@ export async function claimRenderJob(origin: string, info: string) {
       id: String(j.id),
       template: String(j.model),
       image_url: signMediaUrl(origin, String(j.file_path), 3600),
-      props: { ...text, ratio: String(j.aspect_ratio) },
+      props: {
+        ...text,
+        ratio: String(j.aspect_ratio),
+        seconds: Number(j.duration_s) || TEMPLATE_SECONDS,
+      },
     };
   }
   return null;

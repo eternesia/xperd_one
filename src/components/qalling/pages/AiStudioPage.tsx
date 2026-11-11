@@ -63,7 +63,14 @@ import {
   listUserStyles,
   saveUserStyle,
 } from "@/lib/ai-studio.functions";
-import { TEMPLATE_ACCENTS, TEMPLATE_LIMITS, TEMPLATE_SECONDS, TEMPLATES } from "@/lib/ai-templates";
+import {
+  TEMPLATE_ACCENTS,
+  TEMPLATE_DURATIONS,
+  TEMPLATE_LIMITS,
+  TEMPLATE_RATIOS,
+  TEMPLATE_SECONDS,
+  TEMPLATES,
+} from "@/lib/ai-templates";
 import { useApp } from "@/lib/app-context";
 import { saveWorkspaceRow } from "@/lib/data.functions";
 import { sqlDateTime } from "@/lib/datetime";
@@ -224,6 +231,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const [tplKey, setTplKey] = useState<string>(TEMPLATES[0].key);
   const [tpl, setTpl] = useState({ headline: "", subline: "", badge: "", cta: "" });
   const [accent, setAccent] = useState<string>(TEMPLATE_ACCENTS[0]);
+  const [tplRatio, setTplRatio] = useState<(typeof TEMPLATE_RATIOS)[number]>("9:16");
+  const [tplSeconds, setTplSeconds] = useState<number>(TEMPLATE_SECONDS);
   const isTpl = mode === "template" && access.template.available;
   const [view, setView] = useState<AiJobView | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
@@ -304,7 +313,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               badge: tpl.badge.trim(),
               cta: tpl.cta.trim(),
               accent,
-              aspectRatio: ratio,
+              aspectRatio: tplRatio,
+              seconds: tplSeconds,
               consent: true,
             },
           })
@@ -524,7 +534,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
           />
         </div>
       ) : (
-        <div className="grid items-start gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[400px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch">
+        <div className="grid items-start gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(400px,46%)_minmax(0,1fr)] 2xl:grid-cols-[700px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:items-stretch">
           {/* Panel pengaturan; tombol Buat video selalu terlihat di bawahnya */}
           <div className="flex flex-col rounded-3xl border bg-card lg:h-full lg:min-h-0">
             <div className="space-y-6 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
@@ -648,15 +658,19 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                 <>
                   <section className="space-y-3">
                     <h2 className="text-sm font-semibold">Template</h2>
-                    <div className="space-y-2">
+                    <div className="grid gap-2.5 sm:grid-cols-3">
                       {TEMPLATES.map((t) => (
                         <button
                           key={t.key}
                           type="button"
                           aria-pressed={tplKey === t.key}
-                          className={cn(pill(tplKey === t.key), "w-full px-3 py-2.5 text-left")}
+                          className={cn(
+                            pill(tplKey === t.key),
+                            "flex h-full w-full flex-col gap-2 p-2.5 text-left",
+                          )}
                           onClick={() => setTplKey(t.key)}
                         >
+                          <TemplateSketch template={t.key} accent={accent} />
                           <span className="block">{lang === "id" ? t.name : t.name_en}</span>
                           <span className="block text-[11px] font-normal leading-snug text-muted-foreground">
                             {lang === "id" ? t.hint : t.hint_en}
@@ -713,7 +727,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
 
                   <section className="space-y-3">
                     <h2 className="text-sm font-semibold">
-                      {pick("Colour and ratio", "Warna dan rasio")}
+                      {pick("Colour, ratio and duration", "Warna, rasio, dan durasi")}
                     </h2>
                     <div
                       className="flex flex-wrap gap-2"
@@ -737,17 +751,27 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     </div>
                     <Segmented
                       label={pick("Ratio", "Rasio")}
-                      value={ratio}
-                      options={AI_RATIOS.map((r) => ({
+                      value={tplRatio}
+                      options={TEMPLATE_RATIOS.map((r) => ({
                         value: r,
-                        label: r === "9:16" ? "9:16 Reels" : "1:1 Feed",
+                        label:
+                          r === "9:16" ? "9:16 Reels" : r === "1:1" ? "1:1 Feed" : "16:9 YouTube",
                       }))}
-                      onChange={(v) => setRatio(v as (typeof AI_RATIOS)[number])}
+                      onChange={(v) => setTplRatio(v as (typeof TEMPLATE_RATIOS)[number])}
+                    />
+                    <Segmented
+                      label={pick("Duration", "Durasi")}
+                      value={String(tplSeconds)}
+                      options={TEMPLATE_DURATIONS.map((d) => ({
+                        value: String(d),
+                        label: `${d} ${pick("sec", "detik")}`,
+                      }))}
+                      onChange={(v) => setTplSeconds(Number(v))}
                     />
                     <p className="text-xs text-muted-foreground">
                       {pick(
-                        `${TEMPLATE_SECONDS}-second video, 1080p.`,
-                        `Video ${TEMPLATE_SECONDS} detik, 1080p.`,
+                        "1080p. Same price for every duration. For 16:9, a landscape photo works best.",
+                        "1080p. Harga sama untuk semua durasi. Untuk 16:9, foto mendatar hasilnya paling pas.",
                       )}
                     </p>
                     {!access.template.worker_online && (
@@ -1020,14 +1044,14 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
 
           <div className="-order-1 min-w-0 space-y-5 lg:order-none lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:gap-4 lg:space-y-0">
             <Stage
-              ratio={view ? view.aspect_ratio : ratio}
+              ratio={view ? view.aspect_ratio : isTpl ? tplRatio : ratio}
               job={view}
               photoUrl={view?.source_path ? fileUrl(view.source_path) : (selected?.url ?? null)}
               caption={
                 view
                   ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
                   : isTpl
-                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${TEMPLATE_SECONDS} ${pick("sec", "detik")}, ${ratio}`
+                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
                     : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
@@ -1038,7 +1062,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     template={tplKey}
                     text={tpl}
                     accent={accent}
-                    square={ratio === "1:1"}
+                    ratio={tplRatio}
                     photoUrl={selected?.url ?? null}
                   />
                 ) : null
@@ -1149,23 +1173,100 @@ function onAccent(hex: string) {
  * Pratinjau tata letak template di atas foto (posisi & warna teks, tanpa animasi). Video akhirnya
  * dirender mesin render; ukuran memakai satuan lebar bingkai (cqw) agar proporsinya sama.
  */
-function TemplatePreview({
+function TemplatePreview(p: {
+  template: string;
+  text: { headline: string; subline: string; badge: string; cta: string };
+  accent: string;
+  ratio: string;
+  photoUrl: string | null;
+}) {
+  if (p.ratio !== "16:9") return <TemplatePreviewBody {...p} />;
+  // 16:9: ukuran teks mengikuti tinggi (kanvas 1920×1080 memakai ukuran huruf kanvas 1080), jadi satuan
+  // cqw diacu ke 56,25% lebar bingkai sementara isinya tetap membentang selebar bingkai.
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      <div className="relative h-full w-[56.25%] [container-type:inline-size]">
+        <div className="absolute inset-y-0 left-0 w-[177.78%]">
+          <TemplatePreviewBody {...p} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Mini-diagram tata letak template untuk kartu pilihan. */
+function TemplateSketch({ template, accent }: { template: string; accent: string }) {
+  const line = (w: string, o = 0.9) => (
+    <span className="block h-1 rounded-full bg-white" style={{ width: w, opacity: o }} />
+  );
+  return (
+    <span
+      aria-hidden="true"
+      className="relative block aspect-[16/10] w-full overflow-hidden rounded-lg"
+      style={{
+        background:
+          template === "showcase" ? accent : "linear-gradient(160deg,#64748b 0%,#1e293b 100%)",
+      }}
+    >
+      {template === "promo" && (
+        <>
+          <span
+            className="absolute right-1.5 top-1.5 h-2.5 w-7 rounded-full"
+            style={{ background: accent }}
+          />
+          <span className="absolute inset-x-2 bottom-2 space-y-1">
+            {line("70%")}
+            {line("45%", 0.6)}
+          </span>
+        </>
+      )}
+      {template === "showcase" && (
+        <span className="absolute inset-0 flex items-center gap-2 px-2.5">
+          <span className="h-[72%] w-[38%] rounded-md bg-white/90 shadow" />
+          <span className="flex-1 space-y-1">
+            <span
+              className="block h-1 w-[80%] rounded-full"
+              style={{ background: onAccent(accent) }}
+            />
+            <span
+              className="block h-1 w-[50%] rounded-full opacity-60"
+              style={{ background: onAccent(accent) }}
+            />
+          </span>
+        </span>
+      )}
+      {template === "story" && (
+        <span className="absolute inset-y-0 left-2 flex w-[60%] flex-col justify-center gap-1">
+          <span className="block h-1 w-4 rounded-full" style={{ background: accent }} />
+          {line("90%")}
+          {line("70%")}
+          {line("50%", 0.6)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function TemplatePreviewBody({
   template,
   text,
   accent,
-  square,
+  ratio,
   photoUrl,
 }: {
   template: string;
   text: { headline: string; subline: string; badge: string; cta: string };
   accent: string;
-  square: boolean;
+  ratio: string;
   photoUrl: string | null;
 }) {
   const { pick } = useI18n();
   const ink = onAccent(accent);
   const head = text.headline || pick("Your title", "Judul Anda");
-  const wrap = "pointer-events-none absolute inset-0 [container-type:inline-size]";
+  const wide = ratio === "16:9";
+  // 1:1 dan 16:9 memakai tata letak mendatar yang sama (foto kiri, teks kanan).
+  const square = ratio !== "9:16";
+  const wrap = cn("pointer-events-none absolute inset-0", !wide && "[container-type:inline-size]");
   if (template === "showcase") {
     const copy = (big: string, small: string) => (
       <div style={{ color: ink }}>
@@ -1188,8 +1289,8 @@ function TemplatePreview({
           <div
             className="shrink-0 overflow-hidden bg-white shadow-2xl"
             style={{
-              width: square ? "46cqw" : "68cqw",
-              aspectRatio: square ? "52/68" : "76/90",
+              width: wide ? "62cqw" : square ? "46cqw" : "68cqw",
+              aspectRatio: wide ? "70/86" : square ? "52/68" : "76/90",
               borderRadius: "4.4cqw",
               border: "0.9cqw solid rgba(255,255,255,.9)",
             }}
@@ -1197,7 +1298,7 @@ function TemplatePreview({
             {photoUrl && <img src={photoUrl} alt="" className="size-full object-cover" />}
           </div>
           <div style={{ color: ink }} className="min-w-0">
-            {square && copy("6.2cqw", "3cqw")}
+            {square && (wide ? copy("8.2cqw", "3.6cqw") : copy("6.2cqw", "3cqw"))}
             {text.badge && (
               <span
                 className="inline-block rounded-full font-bold"
@@ -1338,6 +1439,7 @@ function Stage({
 }) {
   const { pick } = useI18n();
   const vertical = ratio === "9:16";
+  const wide = ratio === "16:9";
   const quick = job?.tier === "template";
   const [ready, setReady] = useState(false);
   const videoKey = job?.status === "done" ? job.id : null;
@@ -1356,10 +1458,13 @@ function Stage({
       <div className="lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center">
         <div
           className={cn(
-            "relative mx-auto overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/10 lg:mx-0 lg:h-full lg:max-h-[720px] lg:w-auto lg:max-w-full",
+            "relative mx-auto overflow-hidden rounded-2xl bg-black/40 ring-1 ring-white/10 lg:mx-0 lg:max-w-full",
+            wide ? "lg:w-full" : "lg:h-full lg:max-h-[720px] lg:w-auto",
             vertical
               ? "aspect-[9/16] w-[min(100%,220px)] sm:w-[min(100%,300px)]"
-              : "aspect-square w-[min(100%,300px)] sm:w-[min(100%,420px)]",
+              : wide
+                ? "aspect-video w-full"
+                : "aspect-square w-[min(100%,300px)] sm:w-[min(100%,420px)]",
           )}
         >
           {photoUrl ? (
