@@ -81,8 +81,7 @@ export const updateWorkspaceUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { hasWorkspaceRole, isWorkspaceMember } = await import("@/lib/auth-context.server");
     const { isWorkspaceManager } = await import("@/lib/auth-context.server");
-    if (!(await isWorkspaceManager(data.workspaceId, context.userId)))
-      throw new Error("Forbidden");
+    if (!(await isWorkspaceManager(data.workspaceId, context.userId))) throw new Error("Forbidden");
     if (!(await isWorkspaceMember(data.workspaceId, data.targetUserId))) {
       throw new Error("User is not a member of this workspace");
     }
