@@ -19,6 +19,7 @@ import {
   type TierConfig,
 } from "./ai-studio";
 import { PROVIDERS } from "./ai-studio-providers.server";
+import { WORKER_ONLINE_MS } from "./ai-templates";
 
 export interface StudioSettings {
   enabled: boolean;
@@ -26,6 +27,11 @@ export interface StudioSettings {
   atlas_api_key: string | null;
   tiers: Record<AiTier, TierConfig>;
   styles: StyleConfig[];
+  template_enabled: boolean;
+  template_credits: number;
+  worker_seen_at: string | null;
+  worker_info: string | null;
+  has_worker_token: boolean;
   daily_limit: number;
   usd_idr: number;
 }
@@ -49,6 +55,11 @@ export async function getStudioSettings(): Promise<StudioSettings> {
     atlas_api_key: (r?.atlas_api_key as string) || null,
     tiers,
     styles: parseStyles(r?.styles),
+    template_enabled: Number(r?.template_enabled ?? 0) === 1,
+    template_credits: Math.max(1, Number(r?.template_credits ?? 1)),
+    worker_seen_at: r?.worker_seen_at ? new Date(r.worker_seen_at as string).toISOString() : null,
+    worker_info: (r?.worker_info as string) || null,
+    has_worker_token: Boolean(r?.worker_token_hash),
     daily_limit: Number(r?.daily_limit ?? 10),
     usd_idr: Number(r?.usd_idr ?? 16500),
   };
@@ -68,7 +79,7 @@ async function isAdmin(userId: string) {
   return hasRole(userId, "admin");
 }
 
-async function workspaceTenant(workspaceId: string): Promise<string> {
+export async function workspaceTenant(workspaceId: string): Promise<string> {
   const r = await executeOne<{ tenant_id: string }>(
     "SELECT tenant_id FROM workspaces WHERE id = ? LIMIT 1",
     [workspaceId],
@@ -77,7 +88,7 @@ async function workspaceTenant(workspaceId: string): Promise<string> {
   return r.tenant_id;
 }
 
-async function usedToday(workspaceId: string): Promise<number> {
+export async function usedToday(workspaceId: string): Promise<number> {
   const r = await executeOne<{ n: number }>(
     "SELECT COUNT(*) AS n FROM ai_jobs WHERE workspace_id = ? AND created_at >= NOW(6) - INTERVAL 1 DAY",
     [workspaceId],
@@ -107,6 +118,7 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
       used_today: 0,
       tiers: [],
       styles: [],
+      template: { available: false, credits: 1, worker_online: false },
       can_write: false,
     };
   const tenantId = await workspaceTenant(workspaceId);
@@ -129,6 +141,13 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
     styles: s.styles
       .filter((x) => x.enabled)
       .map(({ key, name, name_en, hint, hint_en }) => ({ key, name, name_en, hint, hint_en })),
+    // Template: Super Admin selalu bisa mencoba (mode uji), pengguna hanya bila saklarnya ON.
+    template: {
+      available: s.template_enabled || admin,
+      credits: s.template_credits,
+      worker_online:
+        !!s.worker_seen_at && Date.now() - new Date(s.worker_seen_at).getTime() < WORKER_ONLINE_MS,
+    },
     can_write: await (await import("./auth-context.server")).canWriteWorkspace(workspaceId, userId),
   };
 }
@@ -321,6 +340,9 @@ export async function failJob(jobId: string, error: string) {
 
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const TIMEOUT_MIN = 30;
+/** Video Template: batas menunggu mesin render, dan batas lama render setelah diambil. */
+const RENDER_QUEUE_MIN = 20;
+const RENDER_RUN_MIN = 10;
 
 /** Periksa satu pekerjaan di penyedia; bila selesai, unduh & simpan ke Media. Aman dipanggil berulang/bersamaan. */
 export async function processJob(jobId: string): Promise<void> {
@@ -330,6 +352,15 @@ export async function processJob(jobId: string): Promise<void> {
   if (j.status === "saving") {
     // Proses penyimpanan terputus (mis. server restart saat mengunduh) → kembalikan kredit setelah batas waktu.
     if (ageMin > TIMEOUT_MIN) await failJob(jobId, "Penyimpanan hasil terputus");
+    return;
+  }
+  if (j.provider === "render") {
+    // Video Template: dikerjakan mesin render (ai-templates.server.ts); di sini hanya batas waktu.
+    const claimedMin = j.claimed_at ? (Date.now() - new Date(j.claimed_at).getTime()) / 60_000 : 0;
+    if (j.status === "queued" && ageMin > RENDER_QUEUE_MIN)
+      await failJob(jobId, "Mesin render tidak tersedia");
+    else if (j.status === "processing" && claimedMin > RENDER_RUN_MIN)
+      await failJob(jobId, "Render melewati batas waktu");
     return;
   }
   if (j.status === "queued") {
@@ -377,7 +408,12 @@ async function claim(jobId: string) {
 async function saveVideo(j: Row, videoUrl: string): Promise<string> {
   const res = await fetch(videoUrl, { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Error(`unduh HTTP ${res.status}`);
-  const bytes = Buffer.from(await res.arrayBuffer());
+  return saveVideoBytes(j, Buffer.from(await res.arrayBuffer()));
+}
+
+/** Simpan MP4 ke Media workspace (kuota berlaku). Video Template tidak diberi label AI. */
+export async function saveVideoBytes(j: Row, bytes: Buffer): Promise<string> {
+  const isTemplate = j.provider === "render";
   if (bytes.length === 0 || bytes.length > MAX_VIDEO_BYTES)
     throw new Error("ukuran video tidak valid");
   const { assertMediaQuota } = await import("./qalling-quota.server");
@@ -385,13 +421,13 @@ async function saveVideo(j: Row, videoUrl: string): Promise<string> {
   const { buildFilePath, saveWorkspaceFile, MEDIA_FOLDER } = await import("./files.server");
   const mediaId = uuid();
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-  const name = `Video AI ${j.style} ${stamp}.mp4`;
+  const name = `${isTemplate ? "Video Template" : "Video AI"} ${j.style} ${stamp}.mp4`;
   const path = buildFilePath(MEDIA_FOLDER, name, mediaId);
   await saveWorkspaceFile(path, bytes);
   await execute(
     `INSERT INTO crm_media (id, workspace_id, name, file_path, mime_type, size_bytes, folder, created_by, ai_generated)
-     VALUES (?, ?, ?, ?, 'video/mp4', ?, 'Studio AI', ?, 1)`,
-    [mediaId, j.workspace_id, name, path, bytes.length, j.user_id],
+     VALUES (?, ?, ?, ?, 'video/mp4', ?, 'Studio AI', ?, ?)`,
+    [mediaId, j.workspace_id, name, path, bytes.length, j.user_id, isTemplate ? 0 : 1],
   );
   return mediaId;
 }

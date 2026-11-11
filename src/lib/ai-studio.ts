@@ -181,7 +181,8 @@ export type AiJobStatus = "queued" | "processing" | "saving" | "done" | "failed"
 export interface AiJobView {
   id: string;
   status: AiJobStatus;
-  tier: AiTier;
+  /** hemat | standar | premium, atau "template" untuk video Template. */
+  tier: AiTier | "template";
   style: string;
   style_label: string;
   style_label_en: string;
@@ -217,5 +218,7 @@ export interface StudioAccess {
   used_today: number;
   tiers: { tier: AiTier; credits_5s: number; credits_10s: number }[];
   styles: StyleView[];
+  /** Tingkat Template (tanpa AI): tersedia?, harga kredit, mesin render terhubung? */
+  template: { available: boolean; credits: number; worker_online: boolean };
   can_write: boolean;
 }
