@@ -55,6 +55,7 @@ import { XproMyTasksView } from "@/components/app/XproTasks";
 import { XproBacklogView } from "@/components/app/XproBacklog";
 import { XproKanbanView } from "@/components/app/XproKanban";
 import { XproWorkloadView } from "@/components/app/XproWorkload";
+import { XproRoadmapView } from "@/components/app/XproRoadmap";
 
 /**
  * Ronde 33 — modul add-on **XPro** (Proyek & Kontrak, Milestone & Tugas, RAB,
@@ -1549,6 +1550,7 @@ export function XproView({
   submoduleId: string;
   workspaceId: string;
 }) {
+  if (submoduleId === "roadmap") return <XproRoadmapView workspaceId={workspaceId} />;
   if (submoduleId === "my-tasks") return <XproMyTasksView workspaceId={workspaceId} />;
   if (submoduleId === "backlog") return <XproBacklogView workspaceId={workspaceId} />;
   if (submoduleId === "kanban") return <XproKanbanView workspaceId={workspaceId} />;

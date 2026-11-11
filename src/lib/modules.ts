@@ -80,6 +80,7 @@ import {
   UserCog,
   CircleDot,
   type LucideIcon,
+  ChartGantt,
 } from "lucide-react";
 
 export interface SubModule {
@@ -452,6 +453,7 @@ const MODULE_DEFS: AppModule[] = [
     addon: "xpro",
     submodules: [
       // Ronde 36 (BS New 11): Kanban untuk semua penerima tugas; sisanya khusus owner/admin.
+      m("roadmap", "Roadmap", "Roadmap"),
       s("my-tasks", "My Tasks", "Tugas Saya"),
       m("backlog", "Backlog & Sprints", "Backlog & Sprint"),
       s("kanban", "Kanban Tasks", "Kanban Tugas"),
@@ -544,6 +546,7 @@ const SUB_ICONS: Record<string, LucideIcon> = {
   shipping: Truck,
   wallet: Wallet,
   settings: Settings2,
+  roadmap: ChartGantt,
   "my-tasks": ListTodo,
   backlog: Inbox,
   kanban: KanbanSquare,

@@ -63,6 +63,26 @@ export async function hasWorkspaceRole(
   );
 }
 
+/**
+ * Pengelola workspace (menu Tim, Pengaturan, Tagihan, Backup): pemilik tenant, owner, atau admin
+ * TANPA peran kustom. Anggota dengan peran kustom (walau berdasar admin) hanya mendapat akses
+ * modul yang dicentang di perannya, bukan pengelolaan workspace.
+ */
+export async function isWorkspaceManager(workspaceId: string, userId: string): Promise<boolean> {
+  const m = await executeOne<{ role: string; custom_role_id: string | null }>(
+    "SELECT role, custom_role_id FROM workspace_members WHERE workspace_id = ? AND user_id = ? LIMIT 1",
+    [workspaceId, userId],
+  );
+  if (m?.role === "owner") return true;
+  if (m?.role === "admin" && !m.custom_role_id) return true;
+  return (
+    (await count(
+      "SELECT COUNT(*) AS c FROM workspaces w JOIN tenants t ON t.id = w.tenant_id WHERE w.id = ? AND t.owner_id = ?",
+      [workspaceId, userId],
+    )) > 0
+  );
+}
+
 export async function ownsTenant(tenantId: string, userId: string): Promise<boolean> {
   return (
     (await count("SELECT COUNT(*) AS c FROM tenants WHERE id = ? AND owner_id = ?", [tenantId, userId])) > 0

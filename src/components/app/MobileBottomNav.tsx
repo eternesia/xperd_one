@@ -56,6 +56,7 @@ export function MobileBottomNav({ workspaceId }: { workspaceId: string }) {
     canViewModule,
     canEditSubmodule,
     workspaceRole,
+    isWorkspaceManager,
   } = useApp();
   const [moreOpen, setMoreOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -75,7 +76,7 @@ export function MobileBottomNav({ workspaceId }: { workspaceId: string }) {
     [canViewModule, hasAddon, addonsLoading],
   );
   // Sama dengan beranda: Tim/Pengaturan/Billing hanya untuk pengelola workspace.
-  const isManager = workspaceRole === "owner" || workspaceRole === "admin";
+  const isManager = isWorkspaceManager;
   const quickDocs = QUICK_DOCS.filter((d) => canEditSubmodule(d.moduleId, d.submoduleId));
 
   const tabs = [

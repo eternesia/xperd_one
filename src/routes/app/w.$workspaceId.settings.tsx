@@ -1,3 +1,4 @@
+import { ManagerOnly } from "@/components/app/ManagerOnly";
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft, FileImage, FileText, Loader2, Save, Upload } from "lucide-react";
@@ -21,7 +22,7 @@ import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/app/w/$workspaceId/settings")({
-  component: SettingsPage,
+  component: GuardedSettingsPage,
 });
 
 const MONTHS = [
@@ -694,4 +695,12 @@ function previewHtml(template: DocTemplate, companyName: string, lang: string, l
       noLines: "-",
     },
   });
+}
+function GuardedSettingsPage() {
+  const { workspaceId } = Route.useParams();
+  return (
+    <ManagerOnly workspaceId={workspaceId}>
+      <SettingsPage />
+    </ManagerOnly>
+  );
 }

@@ -69,6 +69,10 @@ interface AppContextValue {
   activeWorkspace: Workspace | null;
   /** #58 (BS New 3): peran pada workspace aktif + izin per modul/submodul. */
   workspaceRole: WorkspaceRole | null;
+  /** Nama peran kustom anggota (null = peran bawaan). */
+  customRole: string | null;
+  /** Boleh membuka Tim, Pengaturan, Tagihan & Paket, Backup: owner, atau admin tanpa peran kustom. */
+  isWorkspaceManager: boolean;
   accessLoading: boolean;
   /** Entitlement add-on workspace aktif (tier + opsi + override); `{}` bila tidak ada add-on aktif. */
   entitlements: Entitlements;
@@ -93,6 +97,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   // #58: peran + izin per kunci akses (`module` atau `module/submodule`).
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
+  const [customRole, setCustomRole] = useState<string | null>(null);
   const [roleAccess, setRoleAccess] = useState<Map<string, { canView: boolean; canEdit: boolean }>>(
     new Map(),
   );
@@ -164,6 +169,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async function loadAccess() {
       if (!userId || !activeId) {
         setWorkspaceRole(null);
+        setCustomRole(null);
         setRoleAccess(new Map());
         setAccessLoading(false);
         return;
@@ -173,6 +179,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const result = await getWorkspaceAccess({ data: { workspaceId: activeId } });
         if (cancelled) return;
         setWorkspaceRole(result?.role ?? null);
+        setCustomRole(result?.custom_role ?? null);
         setRoleAccess(
           new Map(
             (result?.access ?? []).map((row) => [
@@ -185,6 +192,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         // Gagal memuat izin → biarkan tampil (jangan mengunci seluruh aplikasi).
         setWorkspaceRole(null);
+        setCustomRole(null);
         setRoleAccess(new Map());
       } finally {
         if (!cancelled) setAccessLoading(false);
@@ -219,6 +227,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workspaces,
       activeWorkspace: workspaces.find((w) => w.id === activeId) ?? null,
       workspaceRole,
+      customRole,
+      isWorkspaceManager: isOwner || (workspaceRole === "admin" && !customRole),
       accessLoading: accessLoading || entitlementsLoading,
       entitlements,
       refreshEntitlements,
@@ -251,6 +261,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     workspaces,
     activeId,
     workspaceRole,
+    customRole,
     accessLoading,
     entitlements,
     entitlementsLoading,
