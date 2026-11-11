@@ -154,9 +154,26 @@ export const createWalletTopup = createServerFn({ method: "POST" })
     if (data.purchase) {
       if (gateway.provider === "manual_transfer")
         throw new Error("Bayar paket langsung hanya lewat QRIS atau kartu.");
-      const { isTenantOwner } = await import("@/lib/billing-wallet.server");
-      if (!(await isTenantOwner(data.tenantId, context.userId)))
-        throw new Error("Hanya pemilik tenant yang dapat membeli langganan.");
+      if (data.purchase.kind === "tier") {
+        const { isTenantOwner } = await import("@/lib/billing-wallet.server");
+        if (!(await isTenantOwner(data.tenantId, context.userId)))
+          throw new Error("Hanya pemilik tenant yang dapat membeli langganan.");
+      }
+    }
+    // Paket kredit Studio AI: harga dari server, nominal harus persis harga paket (sekali bayar → kredit masuk).
+    let purchaseIntent: Record<string, unknown> | undefined = data.purchase;
+    if (data.purchase?.kind === "ai_credits") {
+      const { getStudioSettings } = await import("@/lib/ai-studio.server");
+      const { hasRole } = await import("@/lib/auth-context.server");
+      if (!(await getStudioSettings()).enabled && !(await hasRole(context.userId, "admin")))
+        throw new Error("Studio AI belum tersedia.");
+      const { getPacks } = await import("@/lib/ai-credits.server");
+      const credits = data.purchase.credits;
+      const pack = (await getPacks()).find((p) => p.credits === credits);
+      if (!pack) throw new Error("Paket kredit tidak tersedia.");
+      if (data.amount !== pack.price_idr)
+        throw new Error("Harga paket berubah. Muat ulang halaman lalu coba lagi.");
+      purchaseIntent = { kind: "ai_credits", credits: pack.credits, price_idr: pack.price_idr };
     }
     // DOKU: tujuan kembali browser hanya halaman billing; tidak pernah menyelesaikan saldo.
     let returnUrl: string | undefined;
@@ -174,7 +191,8 @@ export const createWalletTopup = createServerFn({ method: "POST" })
     if (gateway.provider === "midtrans" && !key)
       throw new Error("Pembayaran otomatis belum dikonfigurasi admin.");
     const s = await walletGetSettings();
-    validateTopupAmount(data.amount, s.min_topup_idr, s.max_topup_idr);
+    const directCredits = purchaseIntent?.kind === "ai_credits";
+    validateTopupAmount(data.amount, directCredits ? 1 : s.min_topup_idr, s.max_topup_idr);
     let topup;
     try {
       topup = await walletCreateTopup({
@@ -184,6 +202,7 @@ export const createWalletTopup = createServerFn({ method: "POST" })
         idem: data.idempotencyKey,
         actor: context.userId,
         note: data.note,
+        allowBelowMin: directCredits,
       });
     } catch (e) {
       throw new Error(
@@ -195,7 +214,7 @@ export const createWalletTopup = createServerFn({ method: "POST" })
     if (data.purchase)
       await execute(
         "UPDATE topups SET purchase_intent = ? WHERE id = ? AND purchase_intent IS NULL AND status = 'pending'",
-        [JSON.stringify(data.purchase), topup.id],
+        [JSON.stringify(purchaseIntent), topup.id],
       );
     if (dokuModule && dokuCredentials && !topup.payment_url && topup.status === "pending") {
       const reference = `WAL-${topup.id}`;

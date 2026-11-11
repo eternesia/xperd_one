@@ -21,14 +21,21 @@ import {
 import {
   AI_PROVIDERS,
   AI_TIERS,
-  CREDIT_IDR,
   STYLE_LABELS,
   TIER_LABELS,
   type AiStyle,
   type AiTier,
+  type CreditPack,
   type TierConfig,
+  minCreditValue,
+  perCredit,
 } from "@/lib/ai-studio";
-import { adminGetStudio, adminProcessJobs, adminSaveStudio } from "@/lib/ai-studio.functions";
+import {
+  adminGetStudio,
+  adminGrantCredits,
+  adminProcessJobs,
+  adminSaveStudio,
+} from "@/lib/ai-studio.functions";
 
 export const Route = createFileRoute("/app-admin/ai-studio")({
   head: () => ({ meta: [{ title: "Studio AI | XPERD Admin" }] }),
@@ -55,6 +62,9 @@ function StudioAdmin() {
   });
   const [dailyLimit, setDailyLimit] = useState(10);
   const [usdIdr, setUsdIdr] = useState(16500);
+  const [packs, setPacks] = useState<CreditPack[]>([]);
+  const [grant, setGrant] = useState({ email: "", credits: 10, note: "" });
+  const grantFn = useServerFn(adminGrantCredits);
 
   useEffect(() => {
     if (!q.data) return;
@@ -70,6 +80,7 @@ function StudioAdmin() {
     );
     setDailyLimit(q.data.daily_limit);
     setUsdIdr(q.data.usd_idr);
+    setPacks(q.data.packs);
   }, [q.data]);
 
   const save = useMutation({
@@ -97,6 +108,7 @@ function StudioAdmin() {
           tiers: withExtra,
           dailyLimit,
           usdIdr,
+          packs: packs.filter((p) => p.credits > 0 && p.price_idr > 0),
           ...opts,
         },
       });
@@ -106,6 +118,23 @@ function StudioAdmin() {
       setAtlasKey("");
       qc.invalidateQueries({ queryKey: ["admin-ai-studio"] });
       toast.success("Pengaturan Studio AI disimpan");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const giveCredits = useMutation({
+    mutationFn: () =>
+      grantFn({
+        data: {
+          email: grant.email,
+          credits: grant.credits,
+          note: grant.note,
+          idempotencyKey: crypto.randomUUID(),
+        },
+      }),
+    onSuccess: (r) => {
+      toast.success(`${r.tenant}: saldo kredit sekarang ${r.balance}`);
+      setGrant({ email: "", credits: 10, note: "" });
+      qc.invalidateQueries({ queryKey: ["admin-ai-studio"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -124,14 +153,17 @@ function StudioAdmin() {
   if (q.isLoading || !tiers) return <p className="text-sm text-muted-foreground">Memuat…</p>;
   if (q.error) return <p className="text-sm text-destructive">{(q.error as Error).message}</p>;
   const d = q.data!;
-  const margin = d.totals30d.revenue_idr - d.totals30d.cost_idr;
+  // Nilai kredit terendah (paket termurah per kredit) → margin per video yang aman.
+  const creditValue = minCreditValue(packs);
+  const margin = d.totals30d.sales_idr - d.totals30d.cost_idr;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Studio AI · Foto → Video</h1>
         <p className="text-sm text-muted-foreground">
-          Penyedia, harga kredit per tingkat, dan laporan pemakaian. 1 kredit = {rp(CREDIT_IDR)}.
+          Penyedia, paket kredit, harga per video, dan laporan. Nilai kredit terendah{" "}
+          {rp(creditValue)} (dari paket termurah per kredit).
         </p>
       </div>
 
@@ -149,7 +181,7 @@ function StudioAdmin() {
             <p className="text-sm text-muted-foreground">
               Saat nonaktif, pengguna hanya melihat tombol “segera hadir” (uji minat). Super Admin
               tetap bisa membuat video dari menu Media di workspace-nya sendiri untuk uji kualitas;
-              kredit tetap dipotong dari saldo workspace tersebut.
+              kredit dipotong dari saldo kredit workspace tersebut (beri kredit bonus di bawah).
             </p>
           </div>
           <label className="flex items-center gap-2 text-sm">
@@ -187,12 +219,69 @@ function StudioAdmin() {
       </Card>
 
       <Card>
+        <CardContent className="space-y-3 p-4">
+          <div>
+            <p className="font-semibold">Paket kredit</p>
+            <p className="text-sm text-muted-foreground">
+              Dibeli pengguna dari saldo Qalling atau dibayar langsung (QRIS/kartu, kredit masuk
+              otomatis setelah lunas). Kredit tidak hangus.
+            </p>
+          </div>
+          {packs.map((p, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] items-end gap-2">
+              <Field label="Kredit">
+                <NumInput
+                  value={p.credits}
+                  onChange={(v) =>
+                    setPacks((x) => x.map((y, j) => (j === i ? { ...y, credits: v } : y)))
+                  }
+                />
+              </Field>
+              <Field label="Harga (Rp)">
+                <NumInput
+                  value={p.price_idr}
+                  onChange={(v) =>
+                    setPacks((x) => x.map((y, j) => (j === i ? { ...y, price_idr: v } : y)))
+                  }
+                />
+              </Field>
+              <p className="pb-2 text-xs text-muted-foreground">
+                {p.credits > 0 ? `${rp(perCredit(p))}/kredit` : "—"}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={packs.length <= 1}
+                onClick={() => setPacks((x) => x.filter((_, j) => j !== i))}
+              >
+                Hapus
+              </Button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            {packs.length < 8 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPacks((x) => [...x, { credits: 0, price_idr: 0 }])}
+              >
+                Tambah paket
+              </Button>
+            )}
+            <Button size="sm" onClick={() => save.mutate(undefined)} disabled={save.isPending}>
+              Simpan paket
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="space-y-4 p-4">
-          <p className="font-semibold">Tingkat & harga</p>
+          <p className="font-semibold">Tingkat & harga per video (kredit)</p>
           {AI_TIERS.map((t) => {
             const c = tiers[t];
             const cost5 = c.cost_usd_per_s * 5 * usdIdr;
-            const m5 = c.credits_5s * CREDIT_IDR - cost5;
+            const m5 = c.credits_5s * creditValue - cost5;
             return (
               <div key={t} className="space-y-3 rounded-2xl border p-3">
                 <div className="flex items-center justify-between">
@@ -256,7 +345,11 @@ function StudioAdmin() {
                     <p className="pt-2 text-sm">
                       {rp(m5)}{" "}
                       <span className="text-muted-foreground">
-                        ({c.credits_5s ? Math.round((m5 / (c.credits_5s * CREDIT_IDR)) * 100) : 0}%)
+                        (
+                        {c.credits_5s && creditValue
+                          ? Math.round((m5 / (c.credits_5s * creditValue)) * 100)
+                          : 0}
+                        %)
                       </span>
                     </p>
                   </Field>
@@ -288,13 +381,57 @@ function StudioAdmin() {
       <div className="grid gap-3 sm:grid-cols-4">
         <Stat label="Video (30 hari)" value={String(d.totals30d.jobs)} />
         <Stat label="Berhasil / gagal" value={`${d.totals30d.done} / ${d.totals30d.failed}`} />
-        <Stat label="Pendapatan kredit" value={rp(d.totals30d.revenue_idr)} />
-        <Stat label="Margin (perkiraan)" value={rp(margin)} />
+        <Stat
+          label="Penjualan paket"
+          value={`${rp(d.totals30d.sales_idr)} · ${d.totals30d.packs_sold}×`}
+        />
+        <Stat label="Penjualan − biaya penyedia" value={rp(margin)} />
       </div>
       <p className="-mt-3 text-xs text-muted-foreground">
-        Tanpa video uji Super Admin. Biaya = perkiraan dari tarif per detik; cocokkan dengan tagihan
-        penyedia.
+        30 hari, tanpa video uji dan pembelian Super Admin. Kredit terpakai{" "}
+        {d.totals30d.credits_used} dari {d.totals30d.credits_sold} terjual; kredit beredar di semua
+        tenant {d.credits_outstanding}. Biaya = perkiraan dari tarif per detik, cocokkan dengan
+        tagihan penyedia.
       </p>
+
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <div>
+            <p className="font-semibold">Beri kredit bonus</p>
+            <p className="text-sm text-muted-foreground">
+              Untuk uji coba, promosi, atau kompensasi. Angka negatif untuk mengurangi.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto] sm:items-end">
+            <Field label="Email pengguna">
+              <Input
+                value={grant.email}
+                onChange={(e) => setGrant((g) => ({ ...g, email: e.target.value }))}
+                placeholder="nama@contoh.id"
+              />
+            </Field>
+            <Field label="Kredit">
+              <NumInput
+                value={grant.credits}
+                onChange={(v) => setGrant((g) => ({ ...g, credits: v }))}
+              />
+            </Field>
+            <Field label="Catatan">
+              <Input
+                value={grant.note}
+                onChange={(e) => setGrant((g) => ({ ...g, note: e.target.value }))}
+                placeholder="mis. kredit uji coba"
+              />
+            </Field>
+            <Button
+              disabled={!grant.email || !grant.credits || giveCredits.isPending}
+              onClick={() => giveCredits.mutate()}
+            >
+              Beri kredit
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="space-y-3 p-4">

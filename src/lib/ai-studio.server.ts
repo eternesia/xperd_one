@@ -1,8 +1,8 @@
 /**
  * Studio AI Qalling — inti server.
  *  - Saklar `ai_studio_settings.enabled` (bawaan OFF). Saat OFF hanya Super Admin yang bisa memakai (mode uji).
- *  - Kredit dipotong lewat buku besar wallet (`walletPostEntryOn`, kunci idempotensi `ai-job:<id>`),
- *    dikembalikan otomatis (`ai-job:<id>:refund`) bila pembuatan gagal.
+ *  - Video memotong saldo kredit AI (`ai-credits.server.ts`, kunci `ai-job:<id>`), dikembalikan otomatis
+ *    (`ai-job:<id>:refund`) bila gagal. Pekerjaan lama (`charge_source = 'wallet'`) di-refund ke saldo Rupiah.
  *  - Hasil diunduh dari penyedia lalu disimpan ke Media workspace (kuota penyimpanan berlaku), label AI.
  */
 import { execute, executeOne, transaction, uuid } from "@/integrations/mysql/pool";
@@ -10,7 +10,6 @@ import { execute, executeOne, transaction, uuid } from "@/integrations/mysql/poo
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 import {
   AI_TIERS,
-  CREDIT_IDR,
   DEFAULT_TIERS,
   STYLE_PROMPTS,
   tierCredits,
@@ -89,16 +88,31 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
     credits_10s: s.tiers[t].credits_10s,
   }));
   if (mode === "off")
-    return { available: false, mode, balance_idr: 0, daily_limit: 0, used_today: 0, tiers: [] };
+    return {
+      available: false,
+      mode,
+      credits: 0,
+      balance_idr: 0,
+      can_buy: false,
+      packs: [],
+      daily_limit: 0,
+      used_today: 0,
+      tiers: [],
+    };
   const tenantId = await workspaceTenant(workspaceId);
   const w = await executeOne<{ balance_idr: number }>(
     "SELECT balance_idr FROM wallet_accounts WHERE tenant_id = ?",
     [tenantId],
   );
+  const { getCredits, getPacks } = await import("./ai-credits.server");
+  const { canManageTenantWallet } = await import("./wallet.server");
   return {
     available: true,
     mode,
+    credits: await getCredits(tenantId),
     balance_idr: Number(w?.balance_idr ?? 0),
+    can_buy: await canManageTenantWallet(tenantId, userId),
+    packs: await getPacks(),
     daily_limit: s.daily_limit,
     used_today: await usedToday(workspaceId),
     tiers,
@@ -179,7 +193,6 @@ export async function createVideoJob(i: CreateJobInput) {
 
   const tenantId = await workspaceTenant(i.workspaceId);
   const credits = tierCredits(cfg, i.duration);
-  const amount = credits * CREDIT_IDR;
   const prompt = await buildPrompt(i.style, i.note);
   const id = uuid();
   const adminTest = access.mode === "admin_preview" ? 1 : 0;
@@ -187,8 +200,8 @@ export async function createVideoJob(i: CreateJobInput) {
   await transaction(async (conn) => {
     await conn.execute(
       `INSERT INTO ai_jobs (id, workspace_id, tenant_id, user_id, status, tier, provider, model, style, prompt, user_note,
-                            source_media_id, duration_s, aspect_ratio, credits, charged_idr, est_cost_usd, is_admin_test)
-       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            source_media_id, duration_s, aspect_ratio, credits, charged_idr, est_cost_usd, is_admin_test, charge_source)
+       VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'credits')`,
       [
         id,
         i.workspaceId,
@@ -204,28 +217,24 @@ export async function createVideoJob(i: CreateJobInput) {
         i.duration,
         i.aspectRatio,
         credits,
-        amount,
         Number((cfg.cost_usd_per_s * i.duration).toFixed(4)),
         adminTest,
       ],
     );
-    const { walletPostEntryOn } = await import("./wallet.server");
+    const { creditPostOn } = await import("./ai-credits.server");
     try {
-      await walletPostEntryOn(conn, {
+      await creditPostOn(conn, {
         tenantId,
-        type: "usage",
-        amount: -amount,
-        product: "qalling",
+        delta: -credits,
+        kind: "usage",
         ref: id,
         idem: `ai-job:${id}`,
-        description: `Studio AI: video ${i.duration} detik (${i.tier})`,
+        description: `Video ${i.duration} detik (${i.tier})`,
         actor: i.userId,
       });
     } catch (e) {
-      if ((e as Error).message === "insufficient_balance")
-        throw new Error(
-          `Saldo tidak cukup. Butuh ${credits} kredit (Rp${amount.toLocaleString("id-ID")}).`,
-        );
+      if ((e as Error).message === "insufficient_credits")
+        throw new Error(`Kredit tidak cukup. Butuh ${credits} kredit, beli paket kredit dulu.`);
       throw e;
     }
   });
@@ -260,7 +269,19 @@ export async function failJob(jobId: string, error: string) {
     const [rows] = await conn.execute("SELECT * FROM ai_jobs WHERE id = ? FOR UPDATE", [jobId]);
     const j = (rows as Row[])[0];
     if (!j || j.status === "done" || j.status === "failed") return;
-    if (!Number(j.refunded) && Number(j.charged_idr) > 0) {
+    if (!Number(j.refunded) && j.charge_source === "credits" && Number(j.credits) > 0) {
+      const { creditPostOn } = await import("./ai-credits.server");
+      await creditPostOn(conn, {
+        tenantId: j.tenant_id,
+        delta: Number(j.credits),
+        kind: "refund",
+        ref: jobId,
+        idem: `ai-job:${jobId}:refund`,
+        description: "Pengembalian kredit (video gagal)",
+        actor: j.user_id,
+      });
+    } else if (!Number(j.refunded) && Number(j.charged_idr) > 0) {
+      // Pekerjaan lama yang dibayar dari saldo Rupiah.
       const { walletPostEntryOn } = await import("./wallet.server");
       await walletPostEntryOn(conn, {
         tenantId: j.tenant_id,

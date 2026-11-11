@@ -179,6 +179,8 @@ export async function walletCreateTopup(p: {
   idem: string;
   actor: string;
   note: string;
+  /** Pembayaran langsung paket kredit: nominal = harga paket, boleh di bawah minimum top-up. */
+  allowBelowMin?: boolean;
 }): Promise<TopupRow> {
   if (!(await canManageTenantWallet(p.tenantId, p.actor))) throw new Error("Forbidden");
   const same = (r: TopupRow) =>
@@ -194,7 +196,12 @@ export async function walletCreateTopup(p: {
     return prior;
   }
   const s = await walletGetSettings();
-  if (!Number.isInteger(p.amount) || p.amount < s.min_topup_idr || p.amount > s.max_topup_idr)
+  if (
+    !Number.isInteger(p.amount) ||
+    p.amount <= 0 ||
+    (!p.allowBelowMin && p.amount < s.min_topup_idr) ||
+    p.amount > s.max_topup_idr
+  )
     throw new Error("invalid_topup_amount");
   const g = await executeOne<{ id: string; provider: string }>(
     "SELECT id, provider FROM payment_gateways WHERE id = ? AND is_active = 1",
@@ -319,7 +326,13 @@ export async function applyTopupPurchase(topupId: string) {
       typeof row.purchase_intent === "string"
         ? JSON.parse(row.purchase_intent)
         : row.purchase_intent
-    ) as { kind?: string; itemId?: string };
+    ) as { kind?: string; itemId?: string; credits?: number; price_idr?: number };
+    if (intent.kind === "ai_credits") {
+      const { applyCreditIntent } = await import("./ai-credits.server");
+      await applyCreditIntent(topupId, row.tenant_id, row.created_by, intent);
+      await execute("UPDATE topups SET purchase_applied_at = NOW(6) WHERE id = ?", [topupId]);
+      return;
+    }
     if (intent.kind !== "tier" || !intent.itemId) return;
     const { billingQuote, billingCheckout } = await import("./addon-billing.server");
     const q = await billingQuote(row.tenant_id, "tier", intent.itemId, 1);

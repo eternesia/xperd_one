@@ -82,12 +82,14 @@ export const Route = createFileRoute("/api/workspace-files")({
           return new Response("File missing on disk", { status: 404 });
         }
 
-        const name = path.split("/").pop() ?? "file";
+        // `?download=1` → simpan sebagai berkas (tombol Download), nama tanpa awalan UUID.
+        const name = (path.split("/").pop() ?? "file").replace(/^[0-9a-f-]{36}-/i, "");
+        const disposition = url.searchParams.get("download") === "1" ? "attachment" : "inline";
         return new Response(new Uint8Array(bytes), {
           headers: {
             "content-type": mimeFromPath(path),
             "content-length": String(bytes.length),
-            "content-disposition": `inline; filename="${name.replace(/"/g, "")}"`,
+            "content-disposition": `${disposition}; filename="${name.replace(/"/g, "")}"`,
             "cache-control": "private, max-age=300",
           },
         });

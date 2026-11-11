@@ -26,6 +26,7 @@ import {
   PanelLeftOpen,
   Share2,
   Sparkles,
+  Wand2,
   LifeBuoy,
 } from "lucide-react";
 import {
@@ -52,6 +53,7 @@ import { useI18n } from "@/lib/i18n";
 import { findModule } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 import { QallingLogo } from "@/components/qalling/QallingLogo";
+import { useStudioAccess } from "@/components/qalling/AiStudio";
 
 export const Route = createFileRoute("/qalling/app")({
   ssr: false,
@@ -137,6 +139,9 @@ function QallingShell() {
       .catch(() => setAutoState("failed"));
   }, [loading, accessLoading, userId, workspaces.length, autoState, provision, refresh]);
 
+  // Studio AI: tampil di menu hanya bila tersedia (fitur ON, atau Super Admin saat mode uji).
+  const studio = useStudioAccess(activeWorkspace?.id);
+  const studioOn = studio.data?.available === true;
   const inboxUnread = useInboxUnread(
     activeWorkspace?.id ?? null,
     entitlements.qalling?.features?.inbox_dm === true,
@@ -380,7 +385,15 @@ function QallingShell() {
         <LayoutDashboard className="h-4 w-4 shrink-0" />
         <span className="qs-label">{id ? "Beranda" : "Home"}</span>
       </Link>
-      {navGroups.map((g) => section(g.key, g.label, g.ids))}
+      {navGroups.map((g) =>
+        section(
+          g.key,
+          g.label,
+          g.key === "content" && studioOn
+            ? [...g.ids, link("/qalling/app/studio", Wand2, "Studio AI")]
+            : g.ids,
+        ),
+      )}
     </nav>
   );
 
@@ -424,6 +437,8 @@ function QallingShell() {
                           },
                         );
                       });
+                    if (g.key === "content" && studioOn)
+                      rows.push(sheetRow("/qalling/app/studio", Wand2, "Studio AI"));
                     if (!rows.length) return null;
                     return (
                       <div key={g.key} className="pt-3">

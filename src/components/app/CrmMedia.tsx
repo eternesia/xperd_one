@@ -98,7 +98,7 @@ export function useCrmMedia(workspaceId: string) {
   });
 }
 
-function useUpload(workspaceId: string) {
+export function useUpload(workspaceId: string) {
   const qc = useQueryClient();
   const { lang } = useI18n();
   const id = lang === "id";
@@ -381,7 +381,7 @@ export function MediaLibraryView({ workspaceId }: { workspaceId: string }) {
               · {id ? "dipakai saat membuat postingan" : "reused when composing posts"}
             </span>
           </p>
-          <AiStudioEntry workspaceId={workspaceId} items={items} className="mt-2" />
+          <AiStudioEntry workspaceId={workspaceId} className="mt-2" />
         </div>
         <label
           className={cn(

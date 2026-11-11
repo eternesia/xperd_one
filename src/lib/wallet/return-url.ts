@@ -1,5 +1,7 @@
 // Only billing destinations are accepted; provider redirects never settle funds.
 export function walletReturnPath(pathname: string): string {
+  // Studio AI: kembali ke halaman Studio supaya kredit yang baru masuk langsung terlihat.
+  if (pathname === "/qalling/app/studio") return pathname;
   if (pathname === "/qalling/app" || pathname.startsWith("/qalling/app/"))
     return "/qalling/app/billing";
   const workspace = pathname.match(/^\/app\/w\/([0-9a-f-]{36})(?:\/|$)/i);
