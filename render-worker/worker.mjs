@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { prepare, renderTemplate } from "./lib.mjs";
+import { prepare, publicDir, renderTemplate } from "./lib.mjs";
 
 // http:// ke domain publik dialihkan ke https dan POST berubah jadi GET, jadi paksa https kecuali localhost.
 const BASE = (process.env.QALLING_URL || "")
@@ -14,7 +14,7 @@ const BASE = (process.env.QALLING_URL || "")
   .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 if (!/^https?:\/\//.test(BASE) || TOKEN.length < 20) {
   console.error("QALLING_URL dan WORKER_TOKEN wajib diisi.");
   process.exit(1);
@@ -48,12 +48,27 @@ async function imageDataUrl(url) {
 async function run(job) {
   const t0 = Date.now();
   const output = path.join(os.tmpdir(), `qalling-${job.id}.mp4`);
+  let audioFile;
   try {
     const image = job.image_url ? await imageDataUrl(job.image_url) : "";
     const items = [];
     for (const it of job.items || [])
       items.push({ image: await imageDataUrl(it.image_url), title: it.title, price: it.price });
-    await renderTemplate({ template: job.template, props: { ...job.props, image, items }, output });
+    // Narasi: diunduh ke folder publik bundel supaya bisa dibaca komposisi lewat staticFile().
+    let narration;
+    if (job.audio_ext) {
+      const res = await fetch(`${BASE}/api/public/render-worker/audio?job=${encodeURIComponent(job.id)}`, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) throw new Error(`unduh narasi HTTP ${res.status}`);
+      const ext = ["mp3", "m4a", "wav"].includes(job.audio_ext) ? job.audio_ext : "mp3";
+      narration = `narr/${job.id}.${ext}`;
+      audioFile = path.join(await publicDir(), narration);
+      fs.mkdirSync(path.dirname(audioFile), { recursive: true });
+      fs.writeFileSync(audioFile, Buffer.from(await res.arrayBuffer()));
+    }
+    await renderTemplate({ template: job.template, props: { ...job.props, image, items, narration }, output });
     const bytes = fs.readFileSync(output);
     // Berpotongan 512 KB: proxy (nginx) bawaan menolak body > 1 MB.
     const CHUNK = 512 * 1024;
@@ -74,6 +89,7 @@ async function run(job) {
     }).catch((x) => log("lapor gagal tidak terkirim:", x.message));
   } finally {
     fs.rmSync(output, { force: true });
+    if (audioFile) fs.rmSync(audioFile, { force: true });
   }
 }
 

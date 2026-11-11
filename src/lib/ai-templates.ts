@@ -89,6 +89,13 @@ export const catalogSeconds = (n: number) => Math.round(n * CATALOG.slide + CATA
 export const multiSeconds = (key: string, n: number) =>
   key === "motion" ? Math.round(3.5 + n * 2) : catalogSeconds(n);
 
+/** Narasi unggahan pengguna: batas durasi (detik); video memanjang mengikuti narasi. */
+export const NARRATION = {
+  maxSeconds: 60,
+  folder: "ai/narration",
+  accept: ".mp3,.m4a,.wav",
+} as const;
+
 export interface CatalogItem {
   media_id: string;
   title: string;
@@ -105,6 +112,8 @@ export interface TemplateText {
   items?: CatalogItem[];
   /** Efek suara mengikuti animasi. */
   sound?: boolean;
+  /** Path rekaman narasi (folder `ai/narration`). */
+  narration?: string;
 }
 
 /** Mesin render dianggap terhubung bila menghubungi dalam 2 menit terakhir. */

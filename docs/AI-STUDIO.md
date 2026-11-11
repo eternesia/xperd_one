@@ -89,7 +89,14 @@ Tidak ada biaya model per video; foto produk tampil persis aslinya. Bawaan 1 kre
   (tanpa foto, `source_media_id` kosong, migrasi 074); **Motion Grafis** (2–6 foto dalam adegan bergantian: kartu terbang,
   layar terbelah, bingkai penuh, sapuan warna, kolase penutup; 3,5 detik + 2 detik per foto). Butuh mesin render v1.3.0 ke atas.
 - **Efek suara** (bawaan aktif, bisa dimatikan per video): whoosh, pop, tik, denting yang mengikuti animasi. Suaranya
-  disintesis oleh `render-worker/sfx.mjs` saat mesin render mulai, jadi tidak ada berkas audio berlisensi. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
+  disintesis oleh `render-worker/sfx.mjs` saat mesin render mulai, jadi tidak ada berkas audio berlisensi.
+- **Narasi unggahan** (opsional): rekaman pengguna MP3/M4A/WAV maks. 60 detik dan 10 MB, disimpan di `ai/narration/`
+  (bukan pustaka Media). Video memanjang mengikuti narasi (+1 detik); template banyak foto merentangkan adegannya,
+  efek suara dikecilkan selama narasi. Mesin render mengunduhnya dari `GET /api/public/render-worker/audio?job=`.
+  Butuh mesin render v1.4.0. Berkas narasi belum dibersihkan otomatis.
+- **MCP**: `qalling_list_video_templates`, `qalling_create_template_video` (confirm=false menampilkan harga; confirm=true
+  memotong kredit), `qalling_get_video_job` (hasil `media_id` siap untuk `qalling_create_post`). Petunjuk server MCP juga
+  menjelaskan jalur kedua: agen yang bisa menjalankan kode membuat MP4 sendiri lalu mengunggahnya tanpa kredit. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
   komposisi di `render-worker` + entri di `ai-templates.ts` dengan kunci yang sama.
 - **Alur**: pengguna membuat → kredit dipotong, pekerjaan `ai_jobs` (`provider = 'render'`, `tier = 'template'`) berstatus
   `queued` → mesin render `POST /api/public/render-worker/claim` (Bearer token) → render → `…/complete?job=<id>` (body MP4)

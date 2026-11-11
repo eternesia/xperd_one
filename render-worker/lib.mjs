@@ -23,6 +23,11 @@ export async function prepare() {
   return serveUrl;
 }
 
+/** Folder berkas statis di dalam bundel (tempat narasi sementara diletakkan). */
+export async function publicDir() {
+  return path.join(await prepare(), "public");
+}
+
 /** Render satu video Template ke berkas MP4 (H.264, 1080p, 30 fps). */
 export async function renderTemplate({ template, props, output, onProgress }) {
   if (!TEMPLATE_IDS.includes(template)) throw new Error(`Template tidak dikenal: ${template}`);

@@ -189,6 +189,8 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
           .max(CATALOG.max)
           .default([]),
         sound: z.boolean().default(true),
+        narrationPath: z.string().max(300).nullable().default(null),
+        narrationSeconds: z.number().min(0).max(120).default(0),
         template: z.enum(TEMPLATE_KEYS),
         headline: z.string().trim().min(1).max(TEMPLATE_LIMITS.headline),
         subline: z.string().trim().max(TEMPLATE_LIMITS.subline).default(""),
@@ -209,6 +211,8 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
       sourceMediaId: data.sourceMediaId,
       items: data.items,
       sound: data.sound,
+      narrationPath: data.narrationPath,
+      narrationSeconds: data.narrationSeconds,
       template: data.template,
       aspectRatio: data.aspectRatio,
       seconds: data.seconds,
