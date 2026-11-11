@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { uploadFileChunked } from "@/lib/chunked-upload";
 import {
   AlertCircle,
   Check,
@@ -17,6 +18,7 @@ import {
   ImagePlus,
   Images,
   Loader2,
+  Mic,
   Play,
   QrCode,
   RefreshCw,
@@ -68,6 +70,7 @@ import {
 import {
   CATALOG,
   multiSeconds,
+  NARRATION,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -238,6 +241,49 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const [tplRatio, setTplRatio] = useState<(typeof TEMPLATE_RATIOS)[number]>("9:16");
   const [tplSeconds, setTplSeconds] = useState<number>(TEMPLATE_SECONDS);
   const [tplSound, setTplSound] = useState(true);
+  // Narasi unggahan pengguna: path di storage + durasi (detik) + URL lokal untuk didengar ulang.
+  const [narr, setNarr] = useState<{
+    path: string;
+    seconds: number;
+    url: string;
+    name: string;
+  } | null>(null);
+  const [narrBusy, setNarrBusy] = useState(false);
+  const narrInput = useRef<HTMLInputElement>(null);
+  const onNarration = async (file: File | undefined) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    try {
+      setNarrBusy(true);
+      const seconds = await new Promise<number>((ok, bad) => {
+        const a = new Audio();
+        a.preload = "metadata";
+        a.onloadedmetadata = () => ok(a.duration);
+        a.onerror = () =>
+          bad(new Error(pick("Cannot read this audio file", "Berkas suara tidak terbaca")));
+        a.src = url;
+      });
+      if (!Number.isFinite(seconds) || seconds <= 0)
+        throw new Error(pick("Cannot read this audio file", "Berkas suara tidak terbaca"));
+      if (seconds > NARRATION.maxSeconds + 0.5)
+        throw new Error(
+          pick(
+            `Narration is ${Math.round(seconds)} s; the maximum is ${NARRATION.maxSeconds} s`,
+            `Narasi ${Math.round(seconds)} detik; maksimal ${NARRATION.maxSeconds} detik`,
+          ),
+        );
+      const { path } = await uploadFileChunked({ workspaceId, folder: NARRATION.folder, file });
+      setNarr((old) => {
+        if (old) URL.revokeObjectURL(old.url);
+        return { path, seconds, url, name: file.name };
+      });
+    } catch (e) {
+      URL.revokeObjectURL(url);
+      toast.error((e as Error).message);
+    } finally {
+      setNarrBusy(false);
+    }
+  };
   const isTpl = mode === "template" && access.template.available;
   // Kebutuhan foto template terpilih: satu, beberapa (Slideshow Katalog), atau tanpa foto.
   const tplPhotos = isTpl ? (TEMPLATES.find((t) => t.key === tplKey)?.photos ?? "one") : "one";
@@ -340,6 +386,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     }))
                   : [],
               sound: tplSound,
+              narrationPath: narr?.path ?? null,
+              narrationSeconds: narr?.seconds ?? 0,
               template: tplKey,
               headline: tpl.headline.trim(),
               subline: tpl.subline.trim(),
@@ -897,6 +945,62 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                       </span>
                       <Switch checked={tplSound} onCheckedChange={setTplSound} />
                     </label>
+                    <div className="space-y-2 rounded-xl border p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm">
+                          {pick("Voice-over (optional)", "Narasi suara (opsional)")}
+                          <span className="block text-[11px] text-muted-foreground">
+                            {pick(
+                              `Your own recording, MP3/M4A/WAV, up to ${NARRATION.maxSeconds} seconds. The video lengthens to fit it.`,
+                              `Rekaman Anda sendiri, MP3/M4A/WAV, maksimal ${NARRATION.maxSeconds} detik. Video memanjang mengikutinya.`,
+                            )}
+                          </span>
+                        </span>
+                        {!narr && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="min-h-11 shrink-0 rounded-full"
+                            disabled={narrBusy}
+                            onClick={() => narrInput.current?.click()}
+                          >
+                            {narrBusy ? <Loader2 className="animate-spin" /> : <Mic />}
+                            {pick("Upload", "Unggah")}
+                          </Button>
+                        )}
+                      </div>
+                      {narr && (
+                        <div className="flex items-center gap-2">
+                          <audio controls src={narr.url} className="h-10 min-w-0 flex-1" />
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {Math.round(narr.seconds)} {pick("s", "dtk")}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-11 shrink-0"
+                            aria-label={pick("Remove voice-over", "Hapus narasi")}
+                            onClick={() => {
+                              URL.revokeObjectURL(narr.url);
+                              setNarr(null);
+                            }}
+                          >
+                            <X />
+                          </Button>
+                        </div>
+                      )}
+                      <input
+                        ref={narrInput}
+                        type="file"
+                        accept={NARRATION.accept}
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = "";
+                          void onNarration(f);
+                        }}
+                      />
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {pick(
                         "1080p. Same price for every duration. For 16:9, a landscape photo works best.",
@@ -1186,7 +1290,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                 view
                   ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
                   : isTpl
-                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplPhotos === "many" ? multiSeconds(tplKey, Math.max(items.length, CATALOG.min)) : tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
+                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${Math.max(tplPhotos === "many" ? multiSeconds(tplKey, Math.max(items.length, CATALOG.min)) : tplSeconds, narr ? Math.min(NARRATION.maxSeconds, Math.ceil(narr.seconds + 1)) : 0)} ${pick("sec", "detik")}, ${tplRatio}${narr ? `, ${pick("voice-over", "narasi")}` : ""}`
                     : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
@@ -1511,12 +1615,12 @@ function TemplatePreviewBody({
   if (template === "announce")
     return (
       <div
-        className={cn(wrap, "flex flex-col items-start justify-center")}
-        style={{ padding: "8cqw", background: accent, color: ink }}
+        className={cn(wrap, "flex flex-col justify-center")}
+        style={{ padding: "8%", background: accent, color: ink }}
       >
         {text.badge && (
           <span
-            className="rounded-full font-bold"
+            className="self-start rounded-full font-bold"
             style={{
               background: ink === "#FFFFFF" ? "#fff" : "#111827",
               color: ink === "#FFFFFF" ? "#111827" : "#fff",
@@ -1532,6 +1636,7 @@ function TemplatePreviewBody({
           {head}
         </p>
         <span
+          className="self-start"
           style={{
             width: "18cqw",
             height: "1.2cqw",
@@ -1543,7 +1648,7 @@ function TemplatePreviewBody({
         <p style={{ fontSize: "4.4cqw", marginTop: "3.2cqw", opacity: 0.85 }}>{text.subline}</p>
         {text.cta && (
           <span
-            className="rounded-full font-semibold"
+            className="self-start rounded-full font-semibold"
             style={{
               fontSize: "4cqw",
               marginTop: "4.6cqw",
@@ -1600,7 +1705,8 @@ function TemplatePreviewBody({
       <div
         className={cn(wrap, "flex flex-col justify-center text-white")}
         style={{
-          padding: "7.5cqw",
+          // Persen, bukan cqw: padding elemen kontainer tidak bisa diukur dari kontainernya sendiri.
+          padding: "7.5%",
           background:
             "linear-gradient(90deg, rgba(8,12,28,.82), rgba(8,12,28,.45) 55%, rgba(8,12,28,.15))",
         }}

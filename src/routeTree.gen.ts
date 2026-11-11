@@ -101,6 +101,7 @@ import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
 import { Route as ApiPublicMetaCallbackRouteImport } from './routes/api/public/meta/callback'
 import { Route as ApiPublicMetaWebhookRouteImport } from './routes/api/public/meta/webhook'
+import { Route as ApiPublicRenderWorkerAudioRouteImport } from './routes/api/public/render-worker/audio'
 import { Route as ApiPublicRenderWorkerClaimRouteImport } from './routes/api/public/render-worker/claim'
 import { Route as ApiPublicRenderWorkerCompleteRouteImport } from './routes/api/public/render-worker/complete'
 import { Route as ApiPublicRenderWorkerFailRouteImport } from './routes/api/public/render-worker/fail'
@@ -587,6 +588,12 @@ const ApiPublicMetaWebhookRoute = ApiPublicMetaWebhookRouteImport.update({
   path: '/api/public/meta/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRenderWorkerAudioRoute =
+  ApiPublicRenderWorkerAudioRouteImport.update({
+    id: '/api/public/render-worker/audio',
+    path: '/api/public/render-worker/audio',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicRenderWorkerClaimRoute =
   ApiPublicRenderWorkerClaimRouteImport.update({
     id: '/api/public/render-worker/claim',
@@ -787,6 +794,7 @@ export interface FileRoutesByFullPath {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/audio': typeof ApiPublicRenderWorkerAudioRoute
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
@@ -895,6 +903,7 @@ export interface FileRoutesByTo {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/audio': typeof ApiPublicRenderWorkerAudioRoute
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
@@ -1008,6 +1017,7 @@ export interface FileRoutesById {
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
   '/api/public/meta/callback': typeof ApiPublicMetaCallbackRoute
   '/api/public/meta/webhook': typeof ApiPublicMetaWebhookRoute
+  '/api/public/render-worker/audio': typeof ApiPublicRenderWorkerAudioRoute
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
@@ -1122,6 +1132,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/audio'
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
@@ -1230,6 +1241,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/audio'
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
@@ -1342,6 +1354,7 @@ export interface FileRouteTypes {
     | '/api/public/jobs/subscription-renewal'
     | '/api/public/meta/callback'
     | '/api/public/meta/webhook'
+    | '/api/public/render-worker/audio'
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
@@ -1406,6 +1419,7 @@ export interface RootRouteChildren {
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
   ApiPublicMetaCallbackRoute: typeof ApiPublicMetaCallbackRoute
   ApiPublicMetaWebhookRoute: typeof ApiPublicMetaWebhookRoute
+  ApiPublicRenderWorkerAudioRoute: typeof ApiPublicRenderWorkerAudioRoute
   ApiPublicRenderWorkerClaimRoute: typeof ApiPublicRenderWorkerClaimRoute
   ApiPublicRenderWorkerCompleteRoute: typeof ApiPublicRenderWorkerCompleteRoute
   ApiPublicRenderWorkerFailRoute: typeof ApiPublicRenderWorkerFailRoute
@@ -2063,6 +2077,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicMetaWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/render-worker/audio': {
+      id: '/api/public/render-worker/audio'
+      path: '/api/public/render-worker/audio'
+      fullPath: '/api/public/render-worker/audio'
+      preLoaderRoute: typeof ApiPublicRenderWorkerAudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/render-worker/claim': {
       id: '/api/public/render-worker/claim'
       path: '/api/public/render-worker/claim'
@@ -2438,6 +2459,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicJobsSubscriptionRenewalRoute: ApiPublicJobsSubscriptionRenewalRoute,
   ApiPublicMetaCallbackRoute: ApiPublicMetaCallbackRoute,
   ApiPublicMetaWebhookRoute: ApiPublicMetaWebhookRoute,
+  ApiPublicRenderWorkerAudioRoute: ApiPublicRenderWorkerAudioRoute,
   ApiPublicRenderWorkerClaimRoute: ApiPublicRenderWorkerClaimRoute,
   ApiPublicRenderWorkerCompleteRoute: ApiPublicRenderWorkerCompleteRoute,
   ApiPublicRenderWorkerFailRoute: ApiPublicRenderWorkerFailRoute,

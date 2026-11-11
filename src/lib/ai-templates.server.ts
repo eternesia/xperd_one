@@ -10,6 +10,7 @@ import { execute, executeOne, result, transaction, uuid } from "@/integrations/m
 import {
   CATALOG,
   multiSeconds,
+  NARRATION,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -28,6 +29,8 @@ export interface CreateTemplateInput {
   sourceMediaId: string | null;
   items?: { mediaId: string; title: string; price: string }[];
   sound?: boolean;
+  narrationPath?: string | null;
+  narrationSeconds?: number;
   template: string;
   text: TemplateText;
   aspectRatio: string;
@@ -96,6 +99,20 @@ export async function createTemplateJob(i: CreateTemplateInput) {
   if (BLOCKED.test(`${text.headline} ${text.subline} ${text.badge} ${text.cta}`))
     throw new Error("Teks mengandung kata yang tidak diizinkan");
 
+  if (i.narrationPath) {
+    if (!/^ai\/narration\/[0-9a-f-]{36}-[^/]+\.(mp3|m4a|wav)$/i.test(i.narrationPath))
+      throw new Error("Berkas narasi tidak valid");
+    const { readWorkspaceFile } = await import("./files.server");
+    await readWorkspaceFile(i.narrationPath).catch(() => {
+      throw new Error("Berkas narasi tidak ditemukan, unggah ulang");
+    });
+    const len = Number(i.narrationSeconds) || 0;
+    if (len <= 0 || len > NARRATION.maxSeconds + 0.5)
+      throw new Error(`Narasi maksimal ${NARRATION.maxSeconds} detik`);
+    text.narration = i.narrationPath;
+    // Video memanjang mengikuti narasi (+1 detik jeda di akhir).
+    seconds = Math.max(seconds, Math.min(NARRATION.maxSeconds, Math.ceil(len + 1)));
+  }
   const { assertMediaQuota } = await import("./qalling-quota.server");
   await assertMediaQuota(i.workspaceId, { size_bytes: 3_000_000, mime_type: "video/mp4" });
 
@@ -188,7 +205,7 @@ export async function claimRenderJob(origin: string, info: string) {
     );
     if (!r.affectedRows) continue; // diambil mesin lain — coba pekerjaan berikutnya
     const { signMediaUrl } = await import("./crm-media.server");
-    const { items, ...text } = (
+    const { items, narration, ...text } = (
       typeof j.prompt === "string" ? JSON.parse(j.prompt) : j.prompt
     ) as TemplateText;
     // Slideshow Katalog: tautan bertanda tangan untuk tiap foto.
@@ -210,6 +227,7 @@ export async function claimRenderJob(origin: string, info: string) {
       template: String(j.model),
       image_url: j.file_path ? signMediaUrl(origin, String(j.file_path), 3600) : null,
       items: slides,
+      audio_ext: narration ? (narration.split(".").pop() ?? "mp3").toLowerCase() : null,
       props: {
         ...text,
         ratio: String(j.aspect_ratio),
@@ -218,6 +236,19 @@ export async function claimRenderJob(origin: string, info: string) {
     };
   }
   return null;
+}
+
+/** Rekaman narasi untuk pekerjaan yang sedang dirender (diunduh mesin render). */
+export async function renderJobAudio(jobId: string) {
+  const j = await executeOne<{ prompt: unknown }>(
+    "SELECT prompt FROM ai_jobs WHERE id = ? AND provider = 'render' AND status = 'processing'",
+    [jobId],
+  );
+  if (!j) return null;
+  const text = (typeof j.prompt === "string" ? JSON.parse(j.prompt) : j.prompt) as TemplateText;
+  if (!text.narration) return null;
+  const { readWorkspaceFile, mimeFromPath } = await import("./files.server");
+  return { bytes: await readWorkspaceFile(text.narration), mime: mimeFromPath(text.narration) };
 }
 
 /** Terima MP4 dari mesin render → simpan ke Media. Aman bila dipanggil ganda. */

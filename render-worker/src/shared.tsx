@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   Audio,
   continueRender,
+  getInputProps,
   delayRender,
   Easing,
   Img,
@@ -38,6 +39,8 @@ export interface TemplateProps {
   items?: { image: string; title: string; price: string }[];
   /** Efek suara (whoosh, pop, denting) mengikuti animasi. */
   sound?: boolean;
+  /** Berkas narasi di folder publik bundel (mis. `narr/<id>.mp3`). */
+  narration?: string;
 }
 
 export type SfxName = "whoosh" | "pop" | "tick" | "rise" | "thud" | "ding";
@@ -51,7 +54,11 @@ export const Sfx: React.FC<{ on?: boolean; name: SfxName; at: number; volume?: n
 }) =>
   on ? (
     <Sequence from={Math.max(0, Math.round(at))} layout="none">
-      <Audio src={staticFile(`sfx/${name}.wav`)} volume={volume} />
+      {/* Saat ada narasi, efek suara dikecilkan supaya suara orangnya jelas. */}
+      <Audio
+        src={staticFile(`sfx/${name}.wav`)}
+        volume={volume * ((getInputProps() as { narration?: string }).narration ? 0.3 : 1)}
+      />
     </Sequence>
   ) : null;
 
@@ -62,8 +69,11 @@ export const sizeOf = (ratio: string) =>
       ? { width: 1920, height: 1080 }
       : { width: 1080, height: 1920 };
 
-export const framesOf = (seconds?: number) =>
-  (SECONDS.includes(Number(seconds)) ? Number(seconds) : 6) * FPS;
+/** Durasi dalam frame; 3–61 detik (narasi bisa memanjangkan video di luar pilihan 6/10/15). */
+export const framesOf = (seconds?: number) => {
+  const s = Number(seconds);
+  return Math.round((Number.isFinite(s) && s >= 3 ? Math.min(61, s) : 6) * FPS);
+};
 
 /**
  * Pengali waktu muncul: video lebih panjang memunculkan teks sedikit lebih lambat (maks 1,5×),

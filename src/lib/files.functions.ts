@@ -42,14 +42,22 @@ async function saveUploadedBytes(
     MEDIA_FOLDER,
     MEDIA_MAX_UPLOAD_BYTES,
     MEDIA_UPLOAD_EXT,
+    NARRATION_EXT,
+    NARRATION_FOLDER,
+    NARRATION_MAX_BYTES,
   } = await import("@/lib/files.server");
   const isMedia = input.folder === MEDIA_FOLDER;
+  const isNarration = input.folder === NARRATION_FOLDER;
 
   const ext = input.fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (!(isMedia ? MEDIA_UPLOAD_EXT : ALLOWED_UPLOAD_EXT).includes(ext))
-    throw new Error(`Jenis berkas .${ext} tidak diizinkan`);
+  const allowed = isNarration ? NARRATION_EXT : isMedia ? MEDIA_UPLOAD_EXT : ALLOWED_UPLOAD_EXT;
+  if (!allowed.includes(ext)) throw new Error(`Jenis berkas .${ext} tidak diizinkan`);
 
-  const maxBytes = isMedia ? MEDIA_MAX_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
+  const maxBytes = isNarration
+    ? NARRATION_MAX_BYTES
+    : isMedia
+      ? MEDIA_MAX_UPLOAD_BYTES
+      : MAX_UPLOAD_BYTES;
   if (bytes.length > maxBytes) {
     throw new Error(`Ukuran berkas melebihi ${Math.round(maxBytes / 1024 / 1024)} MB`);
   }

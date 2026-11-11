@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Photo, Sfx, SLIDE, useFonts, useOutro, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, SLIDE, SLIDE_OUTRO, useFonts, useOutro, type TemplateProps } from "../shared";
 
 const FADE = 10;
 
@@ -14,9 +14,9 @@ const Slide: React.FC<{
   flip: boolean;
 }> = ({ item, accent, tall, pad, first, flip }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const opacity = first ? 1 : interpolate(frame, [0, FADE], [0, 1], { extrapolateRight: "clamp" });
-  const zoom = interpolate(frame, [0, SLIDE + FADE], flip ? [1.14, 1.03] : [1.03, 1.14]);
+  const zoom = interpolate(frame, [0, durationInFrames], flip ? [1.14, 1.03] : [1.03, 1.14]);
   const rise = spring({ frame: frame - 8, fps, config: { damping: 200, mass: 0.7 } });
   const pop = spring({ frame: frame - 20, fps, config: { damping: 11, mass: 0.6 } });
   const ink = onAccent(accent);
@@ -75,13 +75,15 @@ const Slide: React.FC<{
 export const Catalog: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, items = [], sound }) => {
   useFonts();
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const out = useOutro();
   const tall = ratio === "9:16";
   const pad = tall ? 80 : 64;
   const ink = onAccent(accent);
-  const end = items.length * SLIDE;
-  const active = Math.min(items.length - 1, Math.floor(frame / SLIDE));
+  // Lama tiap foto; lebih panjang dari bawaan bila video dipanjangkan mengikuti narasi.
+  const slide = Math.max(SLIDE, Math.floor((durationInFrames - SLIDE_OUTRO) / Math.max(1, items.length)));
+  const end = items.length * slide;
+  const active = Math.min(items.length - 1, Math.floor(frame / slide));
   const closing = interpolate(frame, [end, end + FADE], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const big = spring({ frame: frame - end - 6, fps, config: { damping: 200, mass: 0.7 } });
   const call = spring({ frame: frame - end - 20, fps, config: { damping: 200, mass: 0.7 } });
@@ -89,13 +91,13 @@ export const Catalog: React.FC<TemplateProps> = ({ headline, cta, accent, ratio,
     <AbsoluteFill style={{ background: "#0b1020", fontFamily: FONT, opacity: out }}>
       {items.map((item, i) => (
         <React.Fragment key={`s${i}`}>
-          <Sfx on={sound} name="whoosh" at={i * SLIDE} />
-          {item.price ? <Sfx on={sound} name="pop" at={i * SLIDE + 20} /> : null}
+          <Sfx on={sound} name="whoosh" at={i * slide} />
+          {item.price ? <Sfx on={sound} name="pop" at={i * slide + 20} /> : null}
         </React.Fragment>
       ))}
       <Sfx on={sound} name="ding" at={end + 4} />
       {items.map((item, i) => (
-        <Sequence key={i} from={i * SLIDE} durationInFrames={SLIDE + FADE} layout="none">
+        <Sequence key={i} from={i * slide} durationInFrames={slide + FADE} layout="none">
           <Slide item={item} accent={accent} tall={tall} pad={pad} first={i === 0} flip={i % 2 === 1} />
         </Sequence>
       ))}

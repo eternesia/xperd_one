@@ -2,7 +2,7 @@ import "@fontsource/poppins/500.css";
 import "@fontsource/poppins/600.css";
 import "@fontsource/poppins/700.css";
 import React from "react";
-import { Composition } from "remotion";
+import { Audio, Composition, Sequence, staticFile } from "remotion";
 import { Promo } from "./templates/Promo";
 import { Showcase } from "./templates/Showcase";
 import { Story } from "./templates/Story";
@@ -23,13 +23,28 @@ const defaults: TemplateProps = {
 
 const TEMPLATES = { promo: Promo, showcase: Showcase, story: Story, catalog: Catalog, announce: Announce, motion: Motion } as const;
 
+/** Bungkus template dengan trek narasi (bila ada), mulai sedikit setelah video dibuka. */
+const withNarration = (Comp: React.FC<TemplateProps>): React.FC<TemplateProps> => {
+  const Wrapped: React.FC<TemplateProps> = (props) => (
+    <>
+      <Comp {...props} />
+      {props.narration ? (
+        <Sequence from={9} layout="none">
+          <Audio src={staticFile(props.narration)} />
+        </Sequence>
+      ) : null}
+    </>
+  );
+  return Wrapped;
+};
+
 export const Root: React.FC = () => (
   <>
     {Object.entries(TEMPLATES).map(([id, Comp]) => (
       <Composition
         key={id}
         id={id}
-        component={Comp as React.FC<Record<string, unknown>>}
+        component={withNarration(Comp as React.FC<TemplateProps>) as unknown as React.FC<Record<string, unknown>>}
         fps={FPS}
         durationInFrames={DURATION}
         width={1080}
@@ -38,12 +53,18 @@ export const Root: React.FC = () => (
         calculateMetadata={({ props }) => {
           const p = props as unknown as TemplateProps;
           const n = p.items?.length ?? 0;
-          const durationInFrames =
+          const natural =
             id === "catalog" && n
               ? n * SLIDE + SLIDE_OUTRO
               : id === "motion" && n
                 ? MG.intro + n * MG.scene + MG.outro
-                : framesOf(p.seconds);
+                : 0;
+          // Template banyak foto: durasi alami, dipanjangkan bila narasinya lebih lama.
+          const durationInFrames = natural
+            ? p.narration
+              ? Math.max(natural, framesOf(p.seconds))
+              : natural
+            : framesOf(p.seconds);
           return { ...sizeOf(p.ratio), durationInFrames };
         }}
       />

@@ -150,9 +150,9 @@ const CardScene: React.FC<Scene> = ({ item, n, accent, ink, tall, wide }) => {
 /** Adegan B: layar terbelah. Foto terbuka seperti tirai, panel gelap berisi nomor dan teks. */
 const SplitScene: React.FC<Scene> = ({ item, n, accent, tall, wide }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { width, height, durationInFrames } = useVideoConfig();
   const s = useIn(0, { damping: 200, mass: 0.9 });
-  const zoom = interpolate(frame, [0, MG.scene], [1.18, 1.05]);
+  const zoom = interpolate(frame, [0, durationInFrames], [1.18, 1.05]);
   const pad = tall ? 80 : wide ? 110 : 60;
   const photo: React.CSSProperties = tall
     ? { left: 0, right: 0, top: 0, height: height * 0.58, clipPath: `inset(0 0 ${(1 - s) * 100}% 0)` }
@@ -187,10 +187,10 @@ const SplitScene: React.FC<Scene> = ({ item, n, accent, tall, wide }) => {
 /** Adegan C: foto penuh dengan bingkai yang mengecil masuk dan pita teks yang meluncur dari kiri. */
 const FullScene: React.FC<Scene> = ({ item, accent, ink, tall, wide }) => {
   const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
+  const { width, height, durationInFrames } = useVideoConfig();
   const s = useIn(4, { damping: 200, mass: 0.8 });
   const bar = useIn(12, { damping: 18, mass: 0.8 });
-  const zoom = interpolate(frame, [0, MG.scene], [1.04, 1.16]);
+  const zoom = interpolate(frame, [0, durationInFrames], [1.04, 1.16]);
   const inset = Math.min(width, height) * 0.045;
   return (
     <AbsoluteFill style={{ background: DARK, overflow: "hidden" }}>
@@ -325,7 +325,10 @@ export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, 
   const tall = ratio === "9:16";
   const wide = ratio === "16:9";
   const ink = onAccent(accent);
-  const cuts = items.map((_, i) => MG.intro + i * MG.scene).concat(MG.intro + items.length * MG.scene);
+  const { durationInFrames } = useVideoConfig();
+  // Lama tiap adegan; lebih panjang dari bawaan bila video dipanjangkan mengikuti narasi.
+  const scene = Math.max(MG.scene, Math.floor((durationInFrames - MG.intro - MG.outro) / Math.max(1, items.length)));
+  const cuts = items.map((_, i) => MG.intro + i * scene).concat(MG.intro + items.length * scene);
   const wipeColor = accent === DARK || accent === "#111827" ? "#fff" : DARK;
   return (
     <AbsoluteFill style={{ background: DARK, fontFamily: FONT, opacity: out }}>
@@ -336,7 +339,7 @@ export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, 
       {items.map((item, i) => {
         const Comp = SCENES[i % SCENES.length];
         return (
-          <Sequence key={i} from={cuts[i]} durationInFrames={MG.scene} layout="none">
+          <Sequence key={i} from={cuts[i]} durationInFrames={scene} layout="none">
             <Comp item={item} n={i + 1} accent={accent} ink={ink} tall={tall} wide={wide} />
           </Sequence>
         );
