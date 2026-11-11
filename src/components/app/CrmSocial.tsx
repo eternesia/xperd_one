@@ -60,6 +60,7 @@ import { accountsFull } from "@/lib/qalling-quota";
 import { CRM_SOCIAL_PLATFORMS } from "@/lib/crm";
 import { cn } from "@/lib/utils";
 import { AiVideoInterest } from "@/components/qalling/AiVideoInterest";
+import { AiStudioEntry } from "@/components/qalling/AiStudio";
 import { TablePager } from "@/components/app/admin-table";
 import { getMetaSettings, publishPostNow, startMetaConnect } from "@/lib/meta-social.functions";
 import {
@@ -143,6 +144,9 @@ type Post = {
 
 const platformLabel = (id: string) => CRM_SOCIAL_PLATFORMS.find((p) => p.id === id)?.label ?? id;
 
+export function useSocialAccounts(workspaceId: string) {
+  return useAccounts(workspaceId);
+}
 function useAccounts(workspaceId: string) {
   return useQuery({
     queryKey: ["crm-social-accounts", workspaceId],
@@ -640,36 +644,6 @@ type Draft = {
   permalinks?: string[];
 };
 
-const PLATFORM_DOT: Record<string, string> = {
-  instagram: "bg-gold",
-  facebook: "bg-navy",
-  tiktok: "bg-foreground",
-  threads: "bg-muted-foreground",
-  linkedin: "bg-navy",
-  x: "bg-foreground",
-};
-
-function AccountChip({ a, active, onClick }: { a: Account; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors",
-        active
-          ? "border-gold bg-gold/15 font-medium"
-          : "border-border text-muted-foreground hover:bg-secondary",
-      )}
-    >
-      <span
-        className={cn("h-2 w-2 rounded-full", PLATFORM_DOT[a.platform] ?? "bg-muted-foreground")}
-      />
-      {platformLabel(a.platform)} · {a.handle ? `@${a.handle.replace(/^@/, "")}` : a.account_name}
-      {active && <CheckCircle2 className="h-3 w-3 text-gold" />}
-    </button>
-  );
-}
-
 /** Navigates to a sibling CRM submodule in both the ERP and Qalling shells. */
 function useGoSub() {
   const router = useRouter();
@@ -714,6 +688,114 @@ export function AccountAvatar({
         (fallback ?? (name || "?").charAt(0).toUpperCase())
       )}
     </span>
+  );
+}
+
+/**
+ * Pilihan akun berupa avatar bulat (lencana platform di sudut, nama di bawah). Dipakai di composer
+ * desktop & HP dan panel Posting Studio AI, supaya banyak akun tetap rapi dalam satu grid.
+ */
+export function AccountPicker({
+  accounts,
+  selected,
+  onChange,
+  onNewAccount,
+  size = "md",
+}: {
+  accounts: {
+    id: string;
+    platform: string;
+    account_name: string;
+    handle: string | null;
+    avatar_url?: string | null;
+  }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  onNewAccount?: () => void;
+  size?: "md" | "lg";
+}) {
+  const { lang } = useI18n();
+  const id = lang === "id";
+  const box = size === "lg" ? "size-14 text-lg" : "size-12 text-base";
+  const col = size === "lg" ? "w-16" : "w-[60px]";
+  const all = accounts.length > 0 && selected.length === accounts.length;
+  return (
+    <div className="space-y-2">
+      {accounts.length > 1 && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {selected.length}/{accounts.length} {id ? "akun dipilih" : "accounts selected"}
+          </span>
+          <button
+            type="button"
+            className="font-medium text-foreground underline-offset-2 hover:underline"
+            onClick={() => onChange(all ? [] : accounts.map((a) => a.id))}
+          >
+            {all ? (id ? "Kosongkan" : "Clear") : id ? "Pilih semua" : "Select all"}
+          </button>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-x-3 gap-y-2">
+        {accounts.map((a) => {
+          const on = selected.includes(a.id);
+          const name = a.handle ? a.handle.replace(/^@/, "") : a.account_name;
+          return (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() =>
+                onChange(on ? selected.filter((x) => x !== a.id) : [...selected, a.id])
+              }
+              className={cn("flex flex-col items-center gap-1", col)}
+              aria-pressed={on}
+              aria-label={`${platformLabel(a.platform)} ${name}`}
+              title={`${platformLabel(a.platform)} · ${name}`}
+            >
+              <span
+                className={cn(
+                  "relative grid place-items-center rounded-full font-semibold transition",
+                  box,
+                  on
+                    ? "ring-[3px] ring-primary ring-offset-2 ring-offset-background"
+                    : "opacity-45 hover:opacity-80",
+                )}
+              >
+                <AccountAvatar src={a.avatar_url} name={name} className={box} />
+                <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border-2 border-background bg-background">
+                  <SocialIcon platform={a.platform} className="size-3.5" />
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "w-full truncate text-center text-[11px]",
+                  !on && "text-muted-foreground",
+                )}
+              >
+                {name}
+              </span>
+            </button>
+          );
+        })}
+        {onNewAccount && (
+          <button
+            type="button"
+            onClick={onNewAccount}
+            className={cn("flex flex-col items-center gap-1", col)}
+            aria-label={id ? "Akun baru" : "New account"}
+          >
+            <span
+              className={cn(
+                "grid place-items-center rounded-full border-2 border-dashed border-border text-muted-foreground",
+                box,
+              )}
+            >
+              <Plus className="size-5" />
+            </span>
+            <span className="text-[11px] text-muted-foreground">{id ? "Tambah" : "Add"}</span>
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1652,33 +1734,12 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                   </div>
                 )}
                 <AdminField label={id ? "Posting ke akun" : "Post to accounts"}>
-                  <div className="flex flex-wrap gap-2">
-                    {accounts.map((a) => {
-                      const on = editing.account_ids.includes(a.id);
-                      return (
-                        <AccountChip
-                          key={a.id}
-                          a={a}
-                          active={on}
-                          onClick={() =>
-                            setEditing({
-                              ...editing,
-                              account_ids: on
-                                ? editing.account_ids.filter((x) => x !== a.id)
-                                : [...editing.account_ids, a.id],
-                            })
-                          }
-                        />
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => goSub("social-accounts")}
-                      className="flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-secondary"
-                    >
-                      <Plus className="h-3 w-3" /> {id ? "Akun baru" : "New account"}
-                    </button>
-                  </div>
+                  <AccountPicker
+                    accounts={accounts}
+                    selected={editing.account_ids}
+                    onChange={(ids) => setEditing({ ...editing, account_ids: ids })}
+                    onNewAccount={() => goSub("social-accounts")}
+                  />
                 </AdminField>
                 <AdminField label="Caption">
                   <Textarea
@@ -1702,7 +1763,9 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                   </p>
                 </AdminField>
                 <AdminField label={id ? "Media" : "Media"}>
-                  <AiVideoInterest workspaceId={workspaceId} className="mb-2" />
+                  <div>
+                    <AiStudioEntry workspaceId={workspaceId} />
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {editing.media_paths.map((path) => {
                       const m = mediaUrl.get(path);

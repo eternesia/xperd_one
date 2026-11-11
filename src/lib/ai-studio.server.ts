@@ -10,10 +10,10 @@ import { execute, executeOne, transaction, uuid } from "@/integrations/mysql/poo
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 import {
   AI_TIERS,
+  DEFAULT_STYLES,
   DEFAULT_TIERS,
-  STYLE_PROMPTS,
   tierCredits,
-  type AiStyle,
+  type StyleConfig,
   type AiTier,
   type StudioAccess,
   type TierConfig,
@@ -25,6 +25,7 @@ export interface StudioSettings {
   fal_api_key: string | null;
   atlas_api_key: string | null;
   tiers: Record<AiTier, TierConfig>;
+  styles: StyleConfig[];
   daily_limit: number;
   usd_idr: number;
 }
@@ -47,9 +48,16 @@ export async function getStudioSettings(): Promise<StudioSettings> {
     fal_api_key: (r?.fal_api_key as string) || null,
     atlas_api_key: (r?.atlas_api_key as string) || null,
     tiers,
+    styles: parseStyles(r?.styles),
     daily_limit: Number(r?.daily_limit ?? 10),
     usd_idr: Number(r?.usd_idr ?? 16500),
   };
+}
+
+function parseStyles(raw: unknown): StyleConfig[] {
+  const saved = (raw ? parseJson(raw) : null) as StyleConfig[] | null;
+  const ok = (saved ?? []).filter((x) => x?.key && x?.name && x?.prompt);
+  return ok.length ? ok : DEFAULT_STYLES;
 }
 
 const providerKey = (s: StudioSettings, p: string) =>
@@ -98,6 +106,8 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
       daily_limit: 0,
       used_today: 0,
       tiers: [],
+      styles: [],
+      can_write: false,
     };
   const tenantId = await workspaceTenant(workspaceId);
   const w = await executeOne<{ balance_idr: number }>(
@@ -116,6 +126,10 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
     daily_limit: s.daily_limit,
     used_today: await usedToday(workspaceId),
     tiers,
+    styles: s.styles
+      .filter((x) => x.enabled)
+      .map(({ key, name, name_en, hint, hint_en }) => ({ key, name, name_en, hint, hint_en })),
+    can_write: await (await import("./auth-context.server")).canWriteWorkspace(workspaceId, userId),
   };
 }
 
@@ -143,8 +157,8 @@ async function translateNote(note: string): Promise<string> {
   }
 }
 
-async function buildPrompt(style: AiStyle, note?: string | null): Promise<string> {
-  const parts = [STYLE_PROMPTS[style]];
+async function buildPrompt(stylePrompt: string, note?: string | null): Promise<string> {
+  const parts = [stylePrompt];
   if (note) parts.push(await translateNote(note));
   parts.push("keep the product's shape, logo and printed text exactly as in the photo");
   return parts.join(". ");
@@ -156,7 +170,7 @@ export interface CreateJobInput {
   workspaceId: string;
   userId: string;
   sourceMediaId: string;
-  style: AiStyle;
+  style: string;
   note?: string;
   tier: AiTier;
   duration: number;
@@ -172,6 +186,8 @@ export async function createVideoJob(i: CreateJobInput) {
   const s = await getStudioSettings();
   const cfg = s.tiers[i.tier];
   if (!cfg?.enabled) throw new Error("Tingkat ini belum dibuka");
+  const styleCfg = s.styles.find((x) => x.key === i.style && x.enabled);
+  if (!styleCfg) throw new Error("Gaya ini tidak tersedia lagi. Pilih gaya lain.");
   const key = providerKey(s, cfg.provider);
   if (!key) throw new Error(`API key ${cfg.provider} belum diisi di Super Admin`);
   if (access.used_today >= s.daily_limit)
@@ -193,7 +209,7 @@ export async function createVideoJob(i: CreateJobInput) {
 
   const tenantId = await workspaceTenant(i.workspaceId);
   const credits = tierCredits(cfg, i.duration);
-  const prompt = await buildPrompt(i.style, i.note);
+  const prompt = await buildPrompt(styleCfg.prompt, i.note);
   const id = uuid();
   const adminTest = access.mode === "admin_preview" ? 1 : 0;
 

@@ -63,3 +63,17 @@ dengan param `image`). Parameter khusus model ditambahkan lewat kolom JSON "Para
 ## Keputusan yang masih terbuka
 1. Penyedia utama (setelah uji kualitas). 2. Tingkat yang dibuka di awal. 3. Siapa yang boleh memakai
 (saat ini: semua anggota workspace dengan saldo; belum ada video gratis untuk pengguna baru). 4. Kapan dibuka.
+
+## Desain halaman (migrasi 071)
+- Tab **Buat video** dan **Riwayat**. Panel kiri: foto terpilih + 5 terbaru, "Pilih dari Media" (pemilih besar dengan
+  pencarian, folder, muat bertahap), gaya, arahan (maks. 500 karakter), format, kualitas; tombol Buat video selalu terlihat.
+- **Gaya gerakan**: bawaan diatur di Super Admin → Studio AI → Gaya gerakan bawaan (`ai_studio_settings.styles`: kunci,
+  nama, keterangan, prompt Inggris, aktif). Prompt tidak dikirim ke browser pengguna. **Gaya saya** per workspace
+  (`ai_user_styles`, maks. 30) = gaya bawaan + arahan tersimpan.
+- **Riwayat**: `listAiJobs` berhalaman (12 per muat), filter Selesai/Diproses/Gagal, cari nama foto, gaya, atau arahan.
+  Baris "Video terbaru" di tab Buat tidak menampilkan yang gagal.
+- **Posting dari Studio**: tombol Posting di panggung dan kartu riwayat → pilih akun (avatar bulat, `AccountPicker`),
+  caption, "Posting sekarang" (`publishPostNow`) atau "Jadwalkan"; memakai tabel & mesin posting yang sama dengan menu Posting.
+- **Memuat**: garis memuat di atas halaman, placeholder berdenyut untuk foto/kartu, gambar lazy; video hanya diunduh saat
+  dibuka di panggung (indikator "Memuat video"), kartu memakai foto sumber sebagai sampul.
+- Harga tidak lagi tampil di halaman; tautan "Lihat harga" membuka dialog paket & kredit per video.
