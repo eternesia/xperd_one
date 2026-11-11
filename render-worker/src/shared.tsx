@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import {
+  Audio,
   continueRender,
   delayRender,
   Easing,
   Img,
   interpolate,
+  Sequence,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -13,6 +16,11 @@ import {
 export const FPS = 30;
 export const DURATION = 180; // 6 detik (bawaan)
 export const SECONDS = [6, 10, 15];
+/** Slideshow Katalog: frame per foto dan frame penutup. */
+export const SLIDE = 75;
+export const SLIDE_OUTRO = 60;
+/** Motion Grafis: frame pembuka, per foto, dan penutup. */
+export const MG = { intro: 45, scene: 60, outro: 60 };
 
 export interface TemplateProps {
   /** Foto produk (data URL atau URL). */
@@ -26,7 +34,26 @@ export interface TemplateProps {
   ratio: "9:16" | "1:1" | "16:9";
   /** Durasi video: 6, 10, atau 15 detik (bawaan 6). */
   seconds?: number;
+  /** Slideshow Katalog: foto + nama + harga per slide. */
+  items?: { image: string; title: string; price: string }[];
+  /** Efek suara (whoosh, pop, denting) mengikuti animasi. */
+  sound?: boolean;
 }
+
+export type SfxName = "whoosh" | "pop" | "tick" | "rise" | "thud" | "ding";
+
+/** Putar satu efek suara mulai frame `at` (berkas disintesis oleh `sfx.mjs`). */
+export const Sfx: React.FC<{ on?: boolean; name: SfxName; at: number; volume?: number }> = ({
+  on,
+  name,
+  at,
+  volume = 0.9,
+}) =>
+  on ? (
+    <Sequence from={Math.max(0, Math.round(at))} layout="none">
+      <Audio src={staticFile(`sfx/${name}.wav`)} volume={volume} />
+    </Sequence>
+  ) : null;
 
 export const sizeOf = (ratio: string) =>
   ratio === "1:1"

@@ -8,6 +8,8 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { execute, executeOne, result, transaction, uuid } from "@/integrations/mysql/pool";
 import {
+  CATALOG,
+  multiSeconds,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -23,7 +25,9 @@ const BLOCKED = /\b(nude|naked|nsfw|porn|sex|bugil|telanjang|porno)\b/i;
 export interface CreateTemplateInput {
   workspaceId: string;
   userId: string;
-  sourceMediaId: string;
+  sourceMediaId: string | null;
+  items?: { mediaId: string; title: string; price: string }[];
+  sound?: boolean;
   template: string;
   text: TemplateText;
   aspectRatio: string;
@@ -53,21 +57,45 @@ export async function createTemplateJob(i: CreateTemplateInput) {
       : TEMPLATE_ACCENTS[0],
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
+  text.sound = i.sound !== false;
   if (!(TEMPLATE_RATIOS as readonly string[]).includes(i.aspectRatio))
     throw new Error("Rasio tidak didukung");
-  const seconds = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
+  let seconds = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
     ? (i.seconds as number)
     : TEMPLATE_SECONDS;
+
+  const okPhoto = async (mediaId: string) => {
+    const m = await executeOne<{ id: string; mime_type: string | null }>(
+      "SELECT id, mime_type FROM crm_media WHERE id = ? AND workspace_id = ?",
+      [mediaId, i.workspaceId],
+    );
+    if (!m) throw new Error("Foto tidak ditemukan di Media workspace ini");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(m.mime_type ?? ""))
+      throw new Error("Pilih foto JPG, PNG, atau WebP");
+    return m.id;
+  };
+  let sourceId: string | null = null;
+  if (tpl.photos === "many") {
+    const items = (i.items ?? []).slice(0, CATALOG.max);
+    if (items.length < CATALOG.min) throw new Error(`Pilih minimal ${CATALOG.min} foto`);
+    text.items = [];
+    for (const it of items) {
+      const title = it.title.trim().slice(0, CATALOG.title);
+      const price = it.price.trim().slice(0, CATALOG.price);
+      if (!title && tpl.key === "catalog") throw new Error("Nama tiap foto wajib diisi");
+      if (BLOCKED.test(`${title} ${price}`))
+        throw new Error("Teks mengandung kata yang tidak diizinkan");
+      text.items.push({ media_id: await okPhoto(it.mediaId), title, price });
+    }
+    sourceId = text.items[0].media_id;
+    seconds = multiSeconds(tpl.key, text.items.length);
+  } else if (tpl.photos === "one") {
+    if (!i.sourceMediaId) throw new Error("Pilih foto dulu");
+    sourceId = await okPhoto(i.sourceMediaId);
+  }
   if (BLOCKED.test(`${text.headline} ${text.subline} ${text.badge} ${text.cta}`))
     throw new Error("Teks mengandung kata yang tidak diizinkan");
 
-  const media = await executeOne<{ id: string; mime_type: string | null }>(
-    "SELECT id, mime_type FROM crm_media WHERE id = ? AND workspace_id = ?",
-    [i.sourceMediaId, i.workspaceId],
-  );
-  if (!media) throw new Error("Foto tidak ditemukan di Media workspace ini");
-  if (!["image/jpeg", "image/png", "image/webp"].includes(media.mime_type ?? ""))
-    throw new Error("Pilih foto JPG, PNG, atau WebP");
   const { assertMediaQuota } = await import("./qalling-quota.server");
   await assertMediaQuota(i.workspaceId, { size_bytes: 3_000_000, mime_type: "video/mp4" });
 
@@ -88,7 +116,7 @@ export async function createTemplateJob(i: CreateTemplateInput) {
         tpl.key,
         JSON.stringify(text),
         text.headline,
-        media.id,
+        sourceId,
         seconds,
         i.aspectRatio,
         credits,
@@ -149,7 +177,7 @@ export async function claimRenderJob(origin: string, info: string) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const j = await executeOne<Record<string, unknown>>(
       `SELECT j.id, j.model, j.prompt, j.aspect_ratio, j.duration_s, m.file_path
-         FROM ai_jobs j JOIN crm_media m ON m.id = j.source_media_id
+         FROM ai_jobs j LEFT JOIN crm_media m ON m.id = j.source_media_id
         WHERE j.provider = 'render' AND j.status = 'queued'
         ORDER BY j.created_at LIMIT 1`,
     );
@@ -160,11 +188,28 @@ export async function claimRenderJob(origin: string, info: string) {
     );
     if (!r.affectedRows) continue; // diambil mesin lain — coba pekerjaan berikutnya
     const { signMediaUrl } = await import("./crm-media.server");
-    const text = (typeof j.prompt === "string" ? JSON.parse(j.prompt) : j.prompt) as TemplateText;
+    const { items, ...text } = (
+      typeof j.prompt === "string" ? JSON.parse(j.prompt) : j.prompt
+    ) as TemplateText;
+    // Slideshow Katalog: tautan bertanda tangan untuk tiap foto.
+    const slides: { image_url: string; title: string; price: string }[] = [];
+    for (const it of items ?? []) {
+      const m = await executeOne<{ file_path: string }>(
+        "SELECT file_path FROM crm_media WHERE id = ?",
+        [it.media_id],
+      );
+      if (m)
+        slides.push({
+          image_url: signMediaUrl(origin, m.file_path, 3600),
+          title: it.title,
+          price: it.price,
+        });
+    }
     return {
       id: String(j.id),
       template: String(j.model),
-      image_url: signMediaUrl(origin, String(j.file_path), 3600),
+      image_url: j.file_path ? signMediaUrl(origin, String(j.file_path), 3600) : null,
+      items: slides,
       props: {
         ...text,
         ratio: String(j.aspect_ratio),

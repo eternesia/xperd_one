@@ -1,9 +1,9 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Photo, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
 
 /** Sorotan Produk: latar warna merek, foto dalam kartu yang melayang pelan, judul di atas, harga & ajakan di bawah. */
-export const Showcase: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio }) => {
+export const Showcase: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio, sound }) => {
   useFonts();
   const frame = useCurrentFrame();
   const out = useOutro();
@@ -24,6 +24,9 @@ export const Showcase: React.FC<TemplateProps> = ({ image, headline, subline, ba
   const glow = interpolate(frame, [0, durationInFrames], [0.9, 1.15]);
   return (
     <AbsoluteFill style={{ background: accent, fontFamily: FONT, opacity: out, overflow: "hidden" }}>
+      <Sfx on={sound} name="whoosh" at={2} />
+      {badge ? <Sfx on={sound} name="pop" at={at(60)} /> : null}
+      {cta ? <Sfx on={sound} name="tick" at={at(90)} /> : null}
       <div
         style={{
           position: "absolute",

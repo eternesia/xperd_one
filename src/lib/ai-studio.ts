@@ -193,7 +193,7 @@ export interface AiJobView {
   refunded: boolean;
   error: string | null;
   result_media_id: string | null;
-  source_media_id: string;
+  source_media_id: string | null;
   result_path: string | null;
   result_name: string | null;
   source_path: string | null;

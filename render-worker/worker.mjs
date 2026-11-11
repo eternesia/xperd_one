@@ -14,7 +14,7 @@ const BASE = (process.env.QALLING_URL || "")
   .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
-const VERSION = "1.1.0";
+const VERSION = "1.3.0";
 if (!/^https?:\/\//.test(BASE) || TOKEN.length < 20) {
   console.error("QALLING_URL dan WORKER_TOKEN wajib diisi.");
   process.exit(1);
@@ -49,8 +49,11 @@ async function run(job) {
   const t0 = Date.now();
   const output = path.join(os.tmpdir(), `qalling-${job.id}.mp4`);
   try {
-    const image = await imageDataUrl(job.image_url);
-    await renderTemplate({ template: job.template, props: { ...job.props, image }, output });
+    const image = job.image_url ? await imageDataUrl(job.image_url) : "";
+    const items = [];
+    for (const it of job.items || [])
+      items.push({ image: await imageDataUrl(it.image_url), title: it.title, price: it.price });
+    await renderTemplate({ template: job.template, props: { ...job.props, image, items }, output });
     const bytes = fs.readFileSync(output);
     // Berpotongan 512 KB: proxy (nginx) bawaan menolak body > 1 MB.
     const CHUNK = 512 * 1024;
