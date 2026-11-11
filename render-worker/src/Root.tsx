@@ -8,7 +8,8 @@ import { Showcase } from "./templates/Showcase";
 import { Story } from "./templates/Story";
 import { Catalog } from "./templates/Catalog";
 import { Announce } from "./templates/Announce";
-import { FPS, DURATION, framesOf, sizeOf, SLIDE, SLIDE_OUTRO, type TemplateProps } from "./shared";
+import { Motion } from "./templates/Motion";
+import { FPS, DURATION, framesOf, sizeOf, MG, SLIDE, SLIDE_OUTRO, type TemplateProps } from "./shared";
 
 const defaults: TemplateProps = {
   image: "",
@@ -20,7 +21,7 @@ const defaults: TemplateProps = {
   ratio: "9:16",
 };
 
-const TEMPLATES = { promo: Promo, showcase: Showcase, story: Story, catalog: Catalog, announce: Announce } as const;
+const TEMPLATES = { promo: Promo, showcase: Showcase, story: Story, catalog: Catalog, announce: Announce, motion: Motion } as const;
 
 export const Root: React.FC = () => (
   <>
@@ -38,7 +39,11 @@ export const Root: React.FC = () => (
           const p = props as unknown as TemplateProps;
           const n = p.items?.length ?? 0;
           const durationInFrames =
-            id === "catalog" && n ? n * SLIDE + SLIDE_OUTRO : framesOf(p.seconds);
+            id === "catalog" && n
+              ? n * SLIDE + SLIDE_OUTRO
+              : id === "motion" && n
+                ? MG.intro + n * MG.scene + MG.outro
+                : framesOf(p.seconds);
           return { ...sizeOf(p.ratio), durationInFrames };
         }}
       />

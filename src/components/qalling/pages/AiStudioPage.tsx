@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrmMedia, useUpload } from "@/components/app/CrmMedia";
@@ -66,7 +67,7 @@ import {
 } from "@/lib/ai-studio.functions";
 import {
   CATALOG,
-  catalogSeconds,
+  multiSeconds,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -236,6 +237,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const [accent, setAccent] = useState<string>(TEMPLATE_ACCENTS[0]);
   const [tplRatio, setTplRatio] = useState<(typeof TEMPLATE_RATIOS)[number]>("9:16");
   const [tplSeconds, setTplSeconds] = useState<number>(TEMPLATE_SECONDS);
+  const [tplSound, setTplSound] = useState(true);
   const isTpl = mode === "template" && access.template.available;
   // Kebutuhan foto template terpilih: satu, beberapa (Slideshow Katalog), atau tanpa foto.
   const tplPhotos = isTpl ? (TEMPLATES.find((t) => t.key === tplKey)?.photos ?? "one") : "one";
@@ -337,6 +339,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                       price: i.price.trim(),
                     }))
                   : [],
+              sound: tplSound,
               template: tplKey,
               headline: tpl.headline.trim(),
               subline: tpl.subline.trim(),
@@ -390,7 +393,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const blocker =
     tplPhotos === "many" && items.length < CATALOG.min
       ? pick(`Add at least ${CATALOG.min} photos`, `Tambahkan minimal ${CATALOG.min} foto`)
-      : tplPhotos === "many" && items.some((i) => !i.title.trim())
+      : tplKey === "catalog" && tplPhotos === "many" && items.some((i) => !i.title.trim())
         ? pick("Name every photo first", "Isi nama tiap foto dulu")
         : tplPhotos !== "none" && !source
           ? pick("Choose a photo first", "Pilih foto dulu")
@@ -699,7 +702,11 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         <Input
                           className="h-11 min-w-0 flex-[2]"
                           aria-label={pick(`Name of photo ${n + 1}`, `Nama foto ${n + 1}`)}
-                          placeholder={pick("Product name", "Nama produk")}
+                          placeholder={
+                            tplKey === "motion"
+                              ? pick("Text (optional)", "Teks (opsional)")
+                              : pick("Product name", "Nama produk")
+                          }
                           maxLength={CATALOG.title}
                           value={it.title}
                           onChange={(e) =>
@@ -711,7 +718,9 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         <Input
                           className="h-11 min-w-0 flex-1"
                           aria-label={pick(`Price of photo ${n + 1}`, `Harga foto ${n + 1}`)}
-                          placeholder={pick("Price", "Harga")}
+                          placeholder={
+                            tplKey === "motion" ? pick("Label", "Label") : pick("Price", "Harga")
+                          }
                           maxLength={CATALOG.price}
                           value={it.price}
                           onChange={(e) =>
@@ -861,8 +870,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     {tplPhotos === "many" ? (
                       <p className="text-xs text-muted-foreground">
                         {pick(
-                          `Length follows the number of photos: about ${catalogSeconds(Math.max(items.length, CATALOG.min))} seconds.`,
-                          `Durasi mengikuti jumlah foto: sekitar ${catalogSeconds(Math.max(items.length, CATALOG.min))} detik.`,
+                          `Length follows the number of photos: about ${multiSeconds(tplKey, Math.max(items.length, CATALOG.min))} seconds.`,
+                          `Durasi mengikuti jumlah foto: sekitar ${multiSeconds(tplKey, Math.max(items.length, CATALOG.min))} detik.`,
                         )}
                       </p>
                     ) : (
@@ -876,6 +885,18 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         onChange={(v) => setTplSeconds(Number(v))}
                       />
                     )}
+                    <label className="flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3">
+                      <span className="text-sm">
+                        {pick("Sound effects", "Efek suara")}
+                        <span className="block text-[11px] text-muted-foreground">
+                          {pick(
+                            "Whoosh, pop and chime sounds that follow the animation",
+                            "Bunyi whoosh, pop, dan denting yang mengikuti animasi",
+                          )}
+                        </span>
+                      </span>
+                      <Switch checked={tplSound} onCheckedChange={setTplSound} />
+                    </label>
                     <p className="text-xs text-muted-foreground">
                       {pick(
                         "1080p. Same price for every duration. For 16:9, a landscape photo works best.",
@@ -1165,7 +1186,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                 view
                   ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
                   : isTpl
-                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplPhotos === "many" ? catalogSeconds(Math.max(items.length, CATALOG.min)) : tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
+                    ? `Template ${TEMPLATES.find((t) => t.key === tplKey)?.[lang === "id" ? "name" : "name_en"] ?? ""}, ${tplPhotos === "many" ? multiSeconds(tplKey, Math.max(items.length, CATALOG.min)) : tplSeconds} ${pick("sec", "detik")}, ${tplRatio}`
                     : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
@@ -1369,6 +1390,19 @@ function TemplateSketch({ template, accent }: { template: string; accent: string
           </span>
         </>
       )}
+      {template === "motion" && (
+        <span className="absolute inset-0" style={{ background: accent }}>
+          <span className="absolute -left-2 top-1/2 h-3 w-[120%] -rotate-12 bg-white/15" />
+          <span className="absolute right-2 top-2 h-[62%] w-[40%] rotate-6 rounded-md bg-white/90 shadow" />
+          <span className="absolute bottom-2 left-2 w-[42%] space-y-1">
+            <span className="block h-1.5 rounded-full" style={{ background: onAccent(accent) }} />
+            <span
+              className="block h-1 w-[70%] rounded-full opacity-60"
+              style={{ background: onAccent(accent) }}
+            />
+          </span>
+        </span>
+      )}
       {template === "announce" && (
         <span
           className="absolute inset-0 flex flex-col justify-center gap-1 px-2.5"
@@ -1522,7 +1556,7 @@ function TemplatePreviewBody({
         )}
       </div>
     );
-  if (template === "catalog")
+  if (template === "catalog" || template === "motion")
     return (
       <div
         className={cn(wrap, "text-white")}

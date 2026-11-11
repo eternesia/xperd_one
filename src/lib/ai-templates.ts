@@ -3,7 +3,7 @@
  * (`render-worker/`), tanpa model AI. Kunci template harus sama dengan komposisi di `render-worker/src/Root.tsx`.
  */
 export interface TemplateDef {
-  key: "promo" | "showcase" | "story" | "catalog" | "announce";
+  key: "promo" | "showcase" | "story" | "catalog" | "announce" | "motion";
   /** Kebutuhan foto: satu, beberapa (slideshow), atau tanpa foto. */
   photos: "one" | "many" | "none";
   name: string;
@@ -46,6 +46,15 @@ export const TEMPLATES: TemplateDef[] = [
     hint_en: "2 to 6 photos in turn, each with its name and price",
   },
   {
+    key: "motion",
+    photos: "many",
+    name: "Motion Grafis",
+    name_en: "Motion Graphics",
+    hint: "2 sampai 6 foto dalam adegan dinamis: kartu terbang, layar terbelah, sapuan warna, kolase penutup",
+    hint_en:
+      "2 to 6 photos in dynamic scenes: flying cards, split screens, colour wipes, closing collage",
+  },
+  {
     key: "announce",
     photos: "none",
     name: "Pengumuman Teks",
@@ -76,6 +85,9 @@ export const TEMPLATE_RATIOS = ["9:16", "1:1", "16:9"] as const;
 /** Slideshow Katalog: jumlah foto, batas teks per foto, dan lama tiap foto + penutup (detik). */
 export const CATALOG = { min: 2, max: 6, title: 30, price: 18, slide: 2.5, outro: 2 } as const;
 export const catalogSeconds = (n: number) => Math.round(n * CATALOG.slide + CATALOG.outro);
+/** Durasi (detik) template banyak foto. Motion Grafis: pembuka 1,5 + 2 per foto + penutup 2. */
+export const multiSeconds = (key: string, n: number) =>
+  key === "motion" ? Math.round(3.5 + n * 2) : catalogSeconds(n);
 
 export interface CatalogItem {
   media_id: string;
@@ -89,8 +101,10 @@ export interface TemplateText {
   badge: string;
   cta: string;
   accent: string;
-  /** Hanya Slideshow Katalog. */
+  /** Template banyak foto (Slideshow Katalog, Motion Grafis). */
   items?: CatalogItem[];
+  /** Efek suara mengikuti animasi. */
+  sound?: boolean;
 }
 
 /** Mesin render dianggap terhubung bila menghubungi dalam 2 menit terakhir. */

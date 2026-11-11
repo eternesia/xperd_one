@@ -182,12 +182,13 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
           .array(
             z.object({
               mediaId: z.string().uuid(),
-              title: z.string().trim().min(1).max(CATALOG.title),
+              title: z.string().trim().max(CATALOG.title).default(""),
               price: z.string().trim().max(CATALOG.price).default(""),
             }),
           )
           .max(CATALOG.max)
           .default([]),
+        sound: z.boolean().default(true),
         template: z.enum(TEMPLATE_KEYS),
         headline: z.string().trim().min(1).max(TEMPLATE_LIMITS.headline),
         subline: z.string().trim().max(TEMPLATE_LIMITS.subline).default(""),
@@ -207,6 +208,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
       userId: context.userId,
       sourceMediaId: data.sourceMediaId,
       items: data.items,
+      sound: data.sound,
       template: data.template,
       aspectRatio: data.aspectRatio,
       seconds: data.seconds,

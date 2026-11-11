@@ -1,9 +1,9 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Photo, useFonts, useKenBurns, useOutro, usePace, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, useFonts, useKenBurns, useOutro, usePace, useRise, type TemplateProps } from "../shared";
 
 /** Cerita Bertahap: foto bergeser pelan, lalu teks muncul satu per satu dengan garis aksen. Cocok untuk pengumuman. */
-export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio }) => {
+export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio, sound }) => {
   useFonts();
   const frame = useCurrentFrame();
   const out = useOutro();
@@ -22,6 +22,10 @@ export const Story: React.FC<TemplateProps> = ({ image, headline, subline, badge
   const ink = onAccent(accent);
   return (
     <AbsoluteFill style={{ background: "#0b1020", fontFamily: FONT, opacity: out }}>
+      <Sfx on={sound} name="rise" at={at(8)} volume={0.4} />
+      <Sfx on={sound} name="whoosh" at={at(30)} />
+      {subline ? <Sfx on={sound} name="tick" at={at(70)} /> : null}
+      {cta ? <Sfx on={sound} name="pop" at={at(108)} /> : null}
       <AbsoluteFill style={{ transform: `scale(${zoom}) translateX(${pan}px)` }}>
         <Photo src={image} />
       </AbsoluteFill>

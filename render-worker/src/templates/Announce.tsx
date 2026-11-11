@@ -1,9 +1,9 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
 
 /** Pengumuman Teks: tanpa foto. Judul muncul kata demi kata di atas warna merek dengan bentuk yang bergerak pelan. */
-export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, cta, accent, ratio }) => {
+export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, cta, accent, ratio, sound }) => {
   useFonts();
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -27,6 +27,12 @@ export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, ct
   const size = wide ? fit(headline, 150, 22) : tall ? fit(headline, 150, 20) : fit(headline, 128, 24);
   return (
     <AbsoluteFill style={{ background: accent, fontFamily: FONT, opacity: out, overflow: "hidden" }}>
+      {badge ? <Sfx on={sound} name="pop" at={at(6)} /> : null}
+      {words.map((_, i) => (
+        <Sfx key={i} on={sound} name="tick" at={start + i * step} volume={0.45} />
+      ))}
+      <Sfx on={sound} name="whoosh" at={after} />
+      {cta ? <Sfx on={sound} name="ding" at={after + at(26)} volume={0.5} /> : null}
       <div
         style={{
           position: "absolute",

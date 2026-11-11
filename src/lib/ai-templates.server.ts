@@ -9,7 +9,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { execute, executeOne, result, transaction, uuid } from "@/integrations/mysql/pool";
 import {
   CATALOG,
-  catalogSeconds,
+  multiSeconds,
   TEMPLATE_ACCENTS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
@@ -27,6 +27,7 @@ export interface CreateTemplateInput {
   userId: string;
   sourceMediaId: string | null;
   items?: { mediaId: string; title: string; price: string }[];
+  sound?: boolean;
   template: string;
   text: TemplateText;
   aspectRatio: string;
@@ -56,6 +57,7 @@ export async function createTemplateJob(i: CreateTemplateInput) {
       : TEMPLATE_ACCENTS[0],
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
+  text.sound = i.sound !== false;
   if (!(TEMPLATE_RATIOS as readonly string[]).includes(i.aspectRatio))
     throw new Error("Rasio tidak didukung");
   let seconds = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
@@ -80,13 +82,13 @@ export async function createTemplateJob(i: CreateTemplateInput) {
     for (const it of items) {
       const title = it.title.trim().slice(0, CATALOG.title);
       const price = it.price.trim().slice(0, CATALOG.price);
-      if (!title) throw new Error("Nama tiap foto wajib diisi");
+      if (!title && tpl.key === "catalog") throw new Error("Nama tiap foto wajib diisi");
       if (BLOCKED.test(`${title} ${price}`))
         throw new Error("Teks mengandung kata yang tidak diizinkan");
       text.items.push({ media_id: await okPhoto(it.mediaId), title, price });
     }
     sourceId = text.items[0].media_id;
-    seconds = catalogSeconds(text.items.length);
+    seconds = multiSeconds(tpl.key, text.items.length);
   } else if (tpl.photos === "one") {
     if (!i.sourceMediaId) throw new Error("Pilih foto dulu");
     sourceId = await okPhoto(i.sourceMediaId);

@@ -86,7 +86,10 @@ Tidak ada biaya model per video; foto produk tampil persis aslinya. Bawaan 1 kre
 - **Template** (`src/lib/ai-templates.ts`, komposisi di `render-worker/src/templates/`): Promo Harga, Sorotan Produk,
   Cerita Bertahap (satu foto); **Slideshow Katalog** (2–6 foto, nama + harga per foto, durasi otomatis
   2,5 detik per foto + 2 detik penutup; daftar foto disimpan di `ai_jobs.prompt.items`); **Pengumuman Teks**
-  (tanpa foto, `source_media_id` kosong, migrasi 074). Dua yang terakhir butuh mesin render v1.2.0 ke atas. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
+  (tanpa foto, `source_media_id` kosong, migrasi 074); **Motion Grafis** (2–6 foto dalam adegan bergantian: kartu terbang,
+  layar terbelah, bingkai penuh, sapuan warna, kolase penutup; 3,5 detik + 2 detik per foto). Butuh mesin render v1.3.0 ke atas.
+- **Efek suara** (bawaan aktif, bisa dimatikan per video): whoosh, pop, tik, denting yang mengikuti animasi. Suaranya
+  disintesis oleh `render-worker/sfx.mjs` saat mesin render mulai, jadi tidak ada berkas audio berlisensi. Isian: judul (wajib), keterangan, harga/promo, ajakan, warna aksen. Menambah template = tambah
   komposisi di `render-worker` + entri di `ai-templates.ts` dengan kunci yang sama.
 - **Alur**: pengguna membuat → kredit dipotong, pekerjaan `ai_jobs` (`provider = 'render'`, `tier = 'template'`) berstatus
   `queued` → mesin render `POST /api/public/render-worker/claim` (Bearer token) → render → `…/complete?job=<id>` (body MP4)
