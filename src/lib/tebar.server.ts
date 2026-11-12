@@ -3,6 +3,7 @@ import { executeOne } from "@/integrations/mysql/pool";
 import { targetEnhancementOptions, type FirstCommentOutcome } from "./post-enhancements";
 import { mergePlatformOptions, type PlatformOptions } from "./platform-options";
 import { accountPagePath, normalizeAccountPage } from "./tebar-account-page";
+import { checkCaption, splitForThreads } from "./caption-limits";
 
 /** Basis API Tebar; dapat ditimpa (`TEBAR_API_BASE`) untuk server tiruan saat uji. */
 export const TEBAR_API = (process.env.TEBAR_API_BASE ?? "https://api.tebar.app/v1").replace(
@@ -52,7 +53,11 @@ export async function tebarFetch(apiKey: string, path: string, init: RequestInit
       json?.message ??
       `Tebar error ${res.status}`;
     const code = typeof err === "object" ? err?.code : json?.code;
-    throw new Error(code && !String(msg).includes(code) ? `${msg} (${code})` : String(msg));
+    const e = new Error(
+      code && !String(msg).includes(code) ? `${msg} (${code})` : String(msg),
+    ) as Error & { status?: number };
+    e.status = res.status;
+    throw e;
   }
   return json;
 }
@@ -159,6 +164,98 @@ export async function publishTebar(
   }
   const targets: TebarPublishTarget[] = [];
   const postIds: string[] = [];
+  const opts = enhancements?.platformOptions ?? null;
+
+  /** Satu POST /posts untuk sekelompok akun dengan teks yang sama. */
+  const send = async (
+    profile: string,
+    accs: string[],
+    text: string,
+    mediaIds: string[],
+    coverId: string | undefined,
+    idemKey: string,
+    threadParts?: string[],
+  ) => {
+    const body: Record<string, unknown> = {
+      content: text,
+      targets: accs.map((account_id) => {
+        const platform = enhancements?.platforms[account_id] ?? "";
+        const base = enhancements
+          ? targetEnhancementOptions(
+              platform,
+              enhancements.firstComment,
+              coverId,
+              enhancements.title,
+            )
+          : {};
+        const options: Record<string, unknown> = enhancements
+          ? mergePlatformOptions(platform, base, opts)
+          : base;
+        if (threadParts?.length) options.thread = threadParts;
+        return { account_id, ...(Object.keys(options).length ? { options } : {}) };
+      }),
+    };
+    if (mediaIds.length) body.media_ids = mediaIds;
+    const r = await tebarFetch(apiKey, "/posts", {
+      method: "POST",
+      headers: { ...profileHeader(profile || null), "Idempotency-Key": idemKey },
+      body: JSON.stringify(body),
+    });
+    const p = r.data ?? r;
+    const pid = String(p.id ?? "");
+    if (!pid) throw new Error("Respons pengiriman belum dapat dikonfirmasi; jangan kirim ulang");
+    postIds.push(pid);
+    const tg = new Map<string, any>(
+      (Array.isArray(p.targets) ? p.targets : []).map((t: any) => [String(t.account_id), t]),
+    );
+    for (const a of accs) {
+      const t = tg.get(a);
+      const failed = t?.status === "failed";
+      targets.push({
+        account_id: a,
+        ok: !failed,
+        pending: !failed && t?.status !== "published",
+        post_id: pid,
+        ...(t?.first_comment ? { first_comment: t.first_comment as FirstCommentOutcome } : {}),
+        ...(t?.permalink ? { permalink: t.permalink } : {}),
+        ...(failed ? { error: String(t?.error?.message ?? t?.error_code ?? "Gagal") } : {}),
+      });
+    }
+  };
+
+  /**
+   * Kirim satu kelompok; bila Tebar menolak SELURUH permintaan karena validasi (400/422 — belum
+   * ada yang terbit), ulangi per akun agar satu akun bermasalah tidak menggagalkan akun lain.
+   */
+  const sendIsolated = async (
+    profile: string,
+    accs: string[],
+    text: string,
+    mediaIds: string[],
+    coverId: string | undefined,
+    idemKey: string,
+    threadParts?: string[],
+  ) => {
+    try {
+      await send(profile, accs, text, mediaIds, coverId, idemKey, threadParts);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (accs.length > 1 && (status === 400 || status === 422)) {
+        for (const a of accs) {
+          try {
+            await send(profile, [a], text, mediaIds, coverId, `${idemKey}-${a}`, threadParts);
+          } catch (e2) {
+            targets.push({ account_id: a, ok: false, error: (e2 as Error).message });
+          }
+        }
+      } else {
+        accs.forEach((a) =>
+          targets.push({ account_id: a, ok: false, error: (e as Error).message }),
+        );
+      }
+    }
+  };
+
   for (const [profile, accs] of groups) {
     try {
       const mediaIds: string[] = [];
@@ -167,58 +264,36 @@ export async function publishTebar(
       const coverId = enhancements?.coverUrl
         ? await uploadTebarMedia(apiKey, enhancements.coverUrl, profile || null)
         : undefined;
-      const body: Record<string, unknown> = {
-        content,
-        targets: accs.map((account_id) => {
-          const base = enhancements
-            ? targetEnhancementOptions(
-                enhancements.platforms[account_id],
-                enhancements.firstComment,
-                coverId,
-                enhancements.title,
-              )
-            : {};
-          const options = enhancements
-            ? mergePlatformOptions(
-                enhancements.platforms[account_id],
-                base,
-                enhancements.platformOptions,
-              )
-            : base;
-          return { account_id, ...(Object.keys(options).length ? { options } : {}) };
-        }),
-      };
-      if (mediaIds.length) body.media_ids = mediaIds;
-      const r = await tebarFetch(apiKey, "/posts", {
-        method: "POST",
-        headers: {
-          ...profileHeader(profile || null),
-          "Idempotency-Key": `xperd-${postId}-${profile || "default"}`,
-        },
-        body: JSON.stringify(body),
-      });
-      const p = r.data ?? r;
-      const pid = String(p.id ?? "");
-      if (!pid) throw new Error("Respons pengiriman belum dapat dikonfirmasi; jangan kirim ulang");
-      postIds.push(pid);
-      const tg = new Map<string, any>(
-        (Array.isArray(p.targets) ? p.targets : []).map((t: any) => [String(t.account_id), t]),
-      );
+      // Batas caption per platform: yang melebihi gagal sendiri; Threads panjang → utas.
+      const main: string[] = [];
+      const threads: string[] = [];
       for (const a of accs) {
-        const t = tg.get(a);
-        const failed = t?.status === "failed";
-        targets.push({
-          account_id: a,
-          ok: !failed,
-          pending: !failed && t?.status !== "published",
-          post_id: pid,
-          ...(t?.first_comment ? { first_comment: t.first_comment as FirstCommentOutcome } : {}),
-          ...(t?.permalink ? { permalink: t.permalink } : {}),
-          ...(failed ? { error: String(t?.error?.message ?? t?.error_code ?? "Gagal") } : {}),
+        const v = checkCaption(enhancements?.platforms[a] ?? "", content, {
+          hasMedia: mediaIds.length > 0,
+          threadsCustomParts: !!opts?.threads?.thread?.length,
         });
+        if (v && !v.ok) targets.push({ account_id: a, ok: false, error: v.error });
+        else if (v && "threadParts" in v) threads.push(a);
+        else main.push(a);
+      }
+      const key = `xperd-${postId}-${profile || "default"}`;
+      if (main.length) await sendIsolated(profile, main, content, mediaIds, coverId, key);
+      if (threads.length) {
+        const parts = splitForThreads(content) ?? [content];
+        await sendIsolated(
+          profile,
+          threads,
+          parts[0],
+          mediaIds,
+          coverId,
+          `${key}-threads`,
+          parts.slice(1),
+        );
       }
     } catch (e) {
-      accs.forEach((a) => targets.push({ account_id: a, ok: false, error: (e as Error).message }));
+      accs
+        .filter((a) => !targets.some((t) => t.account_id === a))
+        .forEach((a) => targets.push({ account_id: a, ok: false, error: (e as Error).message }));
     }
   }
   return { postIds, targets };

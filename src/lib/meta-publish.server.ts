@@ -11,6 +11,7 @@ import { signMediaUrl } from "./crm-media.server";
 import { workspaceHasQalling } from "./social-interactions.server";
 import { deliveryStatus } from "./post-delivery-rules";
 import { parsePlatformOptions, validatePlatformOptions } from "./platform-options";
+import { checkCaption } from "./caption-limits";
 import { validateEnhancements, type FirstCommentOutcome } from "./post-enhancements";
 
 /** Basis Graph API; bisa ditimpa (`META_GRAPH_BASE`) untuk server tiruan saat uji. */
@@ -182,6 +183,11 @@ export async function publishPost(
     }
   }
   for (const a of accounts.filter((x) => x.source !== "tebar")) {
+    const capCheck = checkCaption(a.platform, caption, { hasMedia: !!firstMedia });
+    if (capCheck && !capCheck.ok) {
+      results.push({ account_id: a.id, ok: false, error: capCheck.error });
+      continue;
+    }
     const token = tokenOf.get(a.id);
     if (a.source !== "meta" || !token || !a.external_id) {
       results.push({ account_id: a.id, ok: false, error: "Account is not connected via Meta" });

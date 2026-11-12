@@ -1,3 +1,5 @@
+import { CaptionLimitHints } from "@/components/app/CaptionLimitHints";
+import { checkCaption } from "@/lib/caption-limits";
 import { useEffect, useMemo, useState } from "react";
 import { validateScheduleTime } from "@/lib/post-delivery-rules";
 import {
@@ -977,6 +979,15 @@ function MobileComposer({
             </span>
           </div>
         </div>
+        <CaptionLimitHints
+          className="mt-2"
+          platforms={accounts
+            .filter((a) => editing.account_ids.includes(a.id))
+            .map((a) => a.platform)}
+          caption={editing.caption}
+          hasMedia={editing.media_paths.length > 0 || !!editing.media_url.trim()}
+          lang={id ? "id" : "en"}
+        />
 
         {more && (
           <div className="mt-3 space-y-3 rounded-2xl border p-3">
@@ -1204,6 +1215,26 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
           ? `${[...new Set(needs.map((a) => platformLabel(a.platform)))].join(", ")} wajib memakai gambar/video`
           : `${[...new Set(needs.map((a) => platformLabel(a.platform)))].join(", ")} requires an image/video`,
       );
+    // Peringatan batas caption per platform SEBELUM dijadwalkan (bukan saat jam tayang).
+    const over = [
+      ...new Set(accounts.filter((a) => d.account_ids.includes(a.id)).map((a) => a.platform)),
+    ]
+      .map((p) => checkCaption(p, d.caption, { hasMedia }))
+      .filter((v): v is Extract<NonNullable<typeof v>, { ok: false }> => !!v && !v.ok);
+    if (over.length) {
+      const all =
+        over.length ===
+        new Set(accounts.filter((a) => d.account_ids.includes(a.id)).map((a) => a.platform)).size;
+      const list = over.map((v) => `• ${v.error}`).join("\n");
+      if (all) throw new Error(over.map((v) => v.error).join("; "));
+      const proceed = window.confirm(
+        id
+          ? `${list}\n\nAkun tersebut akan gagal, akun lain tetap terbit. Lanjutkan? (Batal untuk menyunting caption)`
+          : `${list}\n\nThose accounts will fail; the others still publish. Continue? (Cancel to edit the caption)`,
+      );
+      if (!proceed)
+        throw new Error(id ? "Sunting caption terlebih dahulu" : "Edit the caption first");
+    }
   };
 
   const persist = async (d: Draft, status: string, immediate = false) => {
@@ -1386,8 +1417,6 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
     );
   }
 
-  const xSelected =
-    !!editing && accounts.some((a) => a.platform === "x" && editing.account_ids.includes(a.id));
   const previewAcc = editing ? accounts.find((a) => editing.account_ids.includes(a.id)) : undefined;
   const previewMedia = editing
     ? firstThumb({ media_paths: editing.media_paths, media_url: editing.media_url || null })
@@ -1752,15 +1781,17 @@ export function PostSchedulerView({ workspaceId }: { workspaceId: string }) {
                         : "Write your caption, hashtags and call to action…"
                     }
                   />
-                  <p
-                    className={cn(
-                      "mt-1 text-right text-[11px] text-muted-foreground",
-                      xSelected && editing.caption.length > 280 && "text-destructive",
-                    )}
-                  >
-                    {editing.caption.length}
-                    {xSelected ? " / 280 (X)" : ""}
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-start justify-between gap-2">
+                    <CaptionLimitHints
+                      platforms={selectedAccounts.map((a) => a.platform)}
+                      caption={editing.caption}
+                      hasMedia={editing.media_paths.length > 0 || !!editing.media_url.trim()}
+                      lang={id ? "id" : "en"}
+                    />
+                    <p className="ml-auto text-[11px] text-muted-foreground">
+                      {editing.caption.length}
+                    </p>
+                  </div>
                 </AdminField>
                 <AdminField label={id ? "Media" : "Media"}>
                   <div>

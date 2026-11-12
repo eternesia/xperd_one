@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import { assertQallingAccess, getTokenUser, requireAuth } from "../db";
 import { json } from "../qalling-common";
 import { MEDIA_HOSTS } from "../qalling-rules";
+import { CAPTION_RULES } from "../../caption-limits";
 
 export default defineTool({
   name: "qalling_get_platform_rules",
@@ -21,6 +22,16 @@ export default defineTool({
     const policy = await loadMediaPolicy();
     return json({
       caption_max_chars: 5000,
+      caption_max_chars_per_platform: Object.fromEntries(
+        Object.entries(CAPTION_RULES)
+          .filter(([k]) => k !== "twitter")
+          .map(([k, r]) => [
+            k,
+            r.maxWithMedia ? { text_only: r.max, with_media: r.maxWithMedia } : r.max,
+          ]),
+      ),
+      caption_rules_note:
+        "Limits are checked per platform: an account whose limit is exceeded fails on its own, the other accounts still publish. X counts links as 23 and emojis/CJK as 2; YouTube counts bytes. Threads captions over 500 characters are split automatically into a thread (up to 11 parts) unless platform_options.threads.thread is set. Create/update responses include caption_warnings.",
       max_attachments: 10,
       carousel: "Multiple attachments must all be images (a video must be posted alone).",
       platforms_requiring_media: ["instagram", "tiktok", "youtube", "pinterest"],

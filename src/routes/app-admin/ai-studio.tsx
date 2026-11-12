@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { SignupBonusAdmin } from "@/components/app/SignupBonusAdmin";
+import { TemplateSamplesAdmin } from "@/components/app/TemplateSamplesAdmin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -614,6 +615,7 @@ function StudioAdmin() {
         </TabsContent>
 
         <TabsContent value="template" className="space-y-6">
+          <TemplateSamplesAdmin />
           <Card>
             <CardContent className="space-y-4 p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">

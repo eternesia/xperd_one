@@ -1,3 +1,4 @@
+import { captionWarnings } from "../../caption-limits";
 import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
 import { assertQallingSection, getTokenUser, requireAuth } from "../db";
@@ -194,6 +195,14 @@ export default defineTool({
         scheduled_at: when ?? iso(p.scheduled_at),
         account_ids: accountIds,
         media_ids: media.map((m) => m.id),
+        caption_warnings: captionWarnings(
+          accounts.map((x) => x.platform),
+          caption,
+          {
+            hasMedia: media.length > 0,
+            threadsCustomParts: !!effectiveOptions?.threads?.thread?.length,
+          },
+        ),
       });
     } catch (e) {
       if (a.media_ids) await cleanup();

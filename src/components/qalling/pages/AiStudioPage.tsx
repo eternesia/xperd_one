@@ -1,3 +1,4 @@
+import { TemplateSampleDialog, useTemplateSamples } from "@/components/qalling/TemplateSamples";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -27,6 +28,7 @@ import {
   Send,
   Trash2,
   Wallet,
+  PlayCircle,
   Wand2,
   X,
 } from "lucide-react";
@@ -239,6 +241,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   // Studio Video: hanya mode Template (Video AI disembunyikan; kodenya tetap untuk dipakai lagi nanti).
   const mode = "template" as "ai" | "template";
   const [tplKey, setTplKey] = useState<string>(TEMPLATES[0].key);
+  const [sampleOpen, setSampleOpen] = useState(false);
+  const { data: samples = {} } = useTemplateSamples();
   const [tpl, setTpl] = useState({ headline: "", subline: "", badge: "", cta: "" });
   // Warna & rasio otomatis dari foto pertama (pratinjau); hasil akhir dihitung ulang oleh mesin render.
   const [accent, setAccent] = useState<string>("#F5B301");
@@ -777,16 +781,60 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                           )}
                           onClick={() => setTplKey(t.key)}
                         >
-                          <TemplateSketch template={t.key} accent={accent} />
+                          <span className="relative block">
+                            <TemplateSketch template={t.key} accent={accent} />
+                            {samples[t.key] && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                title={pick("See sample", "Lihat contoh")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTplKey(t.key);
+                                  setSampleOpen(true);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.stopPropagation();
+                                    setTplKey(t.key);
+                                    setSampleOpen(true);
+                                  }
+                                }}
+                                className="absolute bottom-1 right-1 grid size-6 place-items-center rounded-full bg-black/60 text-white"
+                              >
+                                <PlayCircle className="size-4" />
+                              </span>
+                            )}
+                          </span>
                           <span className="block px-0.5 leading-tight">
                             {lang === "id" ? t.name : t.name_en}
                           </span>
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {lang === "id" ? tplDef.hint : tplDef.hint_en}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {lang === "id" ? tplDef.hint : tplDef.hint_en}
+                      </p>
+                      {Object.keys(samples).length > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSampleOpen(true)}
+                        >
+                          <PlayCircle />
+                          {pick("See sample video", "Lihat contoh video")}
+                        </Button>
+                      )}
+                    </div>
+                    <TemplateSampleDialog
+                      open={sampleOpen}
+                      initialKey={tplKey}
+                      lang={lang === "id" ? "id" : "en"}
+                      onClose={() => setSampleOpen(false)}
+                      onUse={setTplKey}
+                    />
                   </section>
 
                   <section className="space-y-3">
