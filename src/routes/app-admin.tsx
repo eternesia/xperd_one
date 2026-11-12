@@ -24,6 +24,7 @@ import {
   Sparkles,
   Wand2,
   Inbox,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -171,6 +172,9 @@ function AdminLayout() {
           Help Desk
         </NavItem>
         <Group>Sistem</Group>
+        <NavItem to="/app-admin/health" icon={<Activity className="h-4 w-4" />}>
+          Kesehatan Sistem
+        </NavItem>
         <Link
           to="/app-admin/auth-settings"
           className={cn(

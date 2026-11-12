@@ -35,6 +35,7 @@ import { Route as AppAdminAuthSettingsRouteImport } from './routes/app-admin/aut
 import { Route as AppAdminContentRouteImport } from './routes/app-admin/content'
 import { Route as AppAdminEmailRouteImport } from './routes/app-admin/email'
 import { Route as AppAdminGrantsRouteImport } from './routes/app-admin/grants'
+import { Route as AppAdminHealthRouteImport } from './routes/app-admin/health'
 import { Route as AppAdminInterestRouteImport } from './routes/app-admin/interest'
 import { Route as AppAdminInvoicesRouteImport } from './routes/app-admin/invoices'
 import { Route as AppAdminKirimdevRouteImport } from './routes/app-admin/kirimdev'
@@ -251,6 +252,11 @@ const AppAdminEmailRoute = AppAdminEmailRouteImport.update({
 const AppAdminGrantsRoute = AppAdminGrantsRouteImport.update({
   id: '/grants',
   path: '/grants',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminHealthRoute = AppAdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminInterestRoute = AppAdminInterestRouteImport.update({
@@ -727,6 +733,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
+  '/app-admin/health': typeof AppAdminHealthRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -837,6 +844,7 @@ export interface FileRoutesByTo {
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
+  '/app-admin/health': typeof AppAdminHealthRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -949,6 +957,7 @@ export interface FileRoutesById {
   '/app-admin/content': typeof AppAdminContentRoute
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
+  '/app-admin/health': typeof AppAdminHealthRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -1065,6 +1074,7 @@ export interface FileRouteTypes {
     | '/app-admin/content'
     | '/app-admin/email'
     | '/app-admin/grants'
+    | '/app-admin/health'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1175,6 +1185,7 @@ export interface FileRouteTypes {
     | '/app-admin/content'
     | '/app-admin/email'
     | '/app-admin/grants'
+    | '/app-admin/health'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1286,6 +1297,7 @@ export interface FileRouteTypes {
     | '/app-admin/content'
     | '/app-admin/email'
     | '/app-admin/grants'
+    | '/app-admin/health'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1613,6 +1625,13 @@ declare module '@tanstack/react-router' {
       path: '/grants'
       fullPath: '/app-admin/grants'
       preLoaderRoute: typeof AppAdminGrantsRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/app-admin/health': {
+      id: '/app-admin/health'
+      path: '/health'
+      fullPath: '/app-admin/health'
+      preLoaderRoute: typeof AppAdminHealthRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/app-admin/interest': {
@@ -2316,6 +2335,7 @@ interface AppAdminRouteChildren {
   AppAdminContentRoute: typeof AppAdminContentRoute
   AppAdminEmailRoute: typeof AppAdminEmailRoute
   AppAdminGrantsRoute: typeof AppAdminGrantsRoute
+  AppAdminHealthRoute: typeof AppAdminHealthRoute
   AppAdminInterestRoute: typeof AppAdminInterestRoute
   AppAdminInvoicesRoute: typeof AppAdminInvoicesRoute
   AppAdminKirimdevRoute: typeof AppAdminKirimdevRoute
@@ -2343,6 +2363,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminContentRoute: AppAdminContentRoute,
   AppAdminEmailRoute: AppAdminEmailRoute,
   AppAdminGrantsRoute: AppAdminGrantsRoute,
+  AppAdminHealthRoute: AppAdminHealthRoute,
   AppAdminInterestRoute: AppAdminInterestRoute,
   AppAdminInvoicesRoute: AppAdminInvoicesRoute,
   AppAdminKirimdevRoute: AppAdminKirimdevRoute,
