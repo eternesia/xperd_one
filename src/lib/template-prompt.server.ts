@@ -43,28 +43,76 @@ Dari perintah pengguna, tulis teks untuk video template. Balas HANYA JSON tanpa 
  "mood": salah satu "energetic"|"upbeat"|"corporate"|"calm"|"cinematic"|"chill" (suasana musik latar)}
 Gunakan bahasa perintah pengguna. Jangan mengarang harga, tanggal, alamat, atau kontak yang tidak disebut.`;
 
-async function draftWithLlm(cfg: TextLlmConfig, prompt: string, template: string) {
+/** Ambil objek JSON pertama dari jawaban model (boleh dibungkus ```json … ```). */
+function parseJson(text: string) {
+  const json = /\{[\s\S]*\}/.exec(text)?.[0];
+  if (!json) {
+    const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120);
+    throw new Error(
+      snippet
+        ? `Jawaban AI tidak berformat JSON: “${snippet}”`
+        : "Jawaban AI kosong (coba model lain atau naikkan batas token)",
+    );
+  }
+  return JSON.parse(json) as Record<string, unknown>;
+}
+
+/** Anthropic: pakai Messages API asli (lebih andal daripada lapisan kompatibel OpenAI). */
+async function callAnthropic(cfg: TextLlmConfig, user: string): Promise<string> {
+  const res = await fetch(`${cfg.base_url.replace(/\/+$/, "")}/messages`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": cfg.api_key,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: cfg.model,
+      max_tokens: 1024,
+      system: SYSTEM,
+      messages: [{ role: "user", content: user }],
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    content?: { type: string; text?: string }[];
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(body.error?.message ?? `Anthropic HTTP ${res.status}`);
+  return (body.content ?? [])
+    .filter((c) => c.type === "text")
+    .map((c) => c.text ?? "")
+    .join("");
+}
+
+async function callOpenAiCompatible(cfg: TextLlmConfig, user: string): Promise<string> {
   const { generateText } = await import("ai");
   const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
   const provider = createOpenAICompatible({
     name: "studio-text",
     baseURL: cfg.base_url.replace(/\/+$/, ""),
     apiKey: cfg.api_key,
-    // Anthropic (endpoint kompatibel OpenAI) juga menerima header ini.
-    headers: { "anthropic-version": "2023-06-01" },
   });
-  const tpl = TEMPLATES.find((t) => t.key === template);
   const { text } = await generateText({
     model: provider(cfg.model),
     system: SYSTEM,
-    prompt: `Template: ${tpl?.name ?? template} (${tpl?.hint ?? ""}).\nPerintah: ${prompt}`,
-    maxOutputTokens: 300,
+    prompt: user,
+    maxOutputTokens: 1024,
     maxRetries: 0,
-    abortSignal: AbortSignal.timeout(15_000),
+    abortSignal: AbortSignal.timeout(20_000),
   });
-  const json = /\{[\s\S]*\}/.exec(text)?.[0];
-  if (!json) throw new Error("Jawaban AI tidak berformat JSON");
-  return normalizeDraft(JSON.parse(json), prompt);
+  return text;
+}
+
+const isAnthropic = (url: string) => /^https:\/\/api\.anthropic\.com(\/|$)/i.test(url);
+
+async function draftWithLlm(cfg: TextLlmConfig, prompt: string, template: string) {
+  const tpl = TEMPLATES.find((t) => t.key === template);
+  const user = `Template: ${tpl?.name ?? template} (${tpl?.hint ?? ""}).\nPerintah: ${prompt}`;
+  const text = isAnthropic(cfg.base_url)
+    ? await callAnthropic(cfg, user)
+    : await callOpenAiCompatible(cfg, user);
+  return normalizeDraft(parseJson(text), prompt);
 }
 
 /** Batas sederhana per workspace: 30 perintah / jam (memori proses). */
