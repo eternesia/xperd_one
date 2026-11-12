@@ -4,7 +4,7 @@
  */
 export interface TemplateDef {
   key: "steps" | "motion" | "promo" | "showcase" | "catalog" | "story" | "announce";
-  /** Foto wajib (1–8) atau opsional (0–8, untuk Pengumuman). */
+  /** Foto wajib (1–10) atau opsional (0–10, untuk Pengumuman). */
   photos: "required" | "optional";
   name: string;
   name_en: string;
@@ -82,7 +82,7 @@ export const TEMPLATE_ACCENTS = [
   "#FFFFFF",
 ] as const;
 
-export const TEMPLATE_LIMITS = { headline: 40, subline: 70, badge: 18, cta: 24 } as const;
+export const TEMPLATE_LIMITS = { headline: 40, subline: 70, badge: 18, cta: 28 } as const;
 /** Durasi bawaan; pilihan lengkap di TEMPLATE_DURATIONS. */
 export const TEMPLATE_SECONDS = 10;
 export const TEMPLATE_DURATIONS = [8, 10, 15, 20, 30, 45, 60] as const;
@@ -90,7 +90,7 @@ export const TEMPLATE_DURATIONS = [8, 10, 15, 20, 30, 45, 60] as const;
 export const TEMPLATE_RATIOS = ["auto", "9:16", "1:1", "16:9"] as const;
 
 /** Foto per video dan batas teks per foto. */
-export const PHOTOS = { max: 8, title: 40, label: 24 } as const;
+export const PHOTOS = { max: 10, title: 40, label: 24 } as const;
 
 /**
  * Durasi minimum (detik) supaya tiap foto sempat terbaca; harus sama dengan `minimumFrames`

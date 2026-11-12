@@ -4,7 +4,7 @@
  * Berkas ini murni (tanpa API): pengurai aturan sederhana untuk bahasa Indonesia, dipakai bila
  * asisten AI (LLM) belum diatur Super Admin atau sedang gagal.
  */
-import { TEMPLATE_LIMITS, type MusicMood } from "./ai-templates";
+import { PHOTOS, TEMPLATE_LIMITS, type MusicMood } from "./ai-templates";
 
 export interface DraftText {
   headline: string;
@@ -12,6 +12,68 @@ export interface DraftText {
   badge: string;
   cta: string;
   mood: MusicMood | "auto";
+  /** Teks per foto, berurutan (judul + label); kosong = tidak diubah. */
+  items: { title: string; label: string }[];
+}
+
+/**
+ * Teks mana yang benar-benar tampil di tiap template — dipakai untuk mengarahkan AI dan memberi
+ * tahu pengguna. `itemLabel` = arti label per foto.
+ */
+export const TEMPLATE_TEXT_USE: Record<
+  string,
+  { fields: ("headline" | "subline" | "badge" | "cta")[]; itemTitle: string; itemLabel: string }
+> = {
+  motion: {
+    fields: ["headline", "cta"],
+    itemTitle: "nama fitur/produk di foto",
+    itemLabel: "harga atau keterangan singkat",
+  },
+  catalog: { fields: ["headline", "cta"], itemTitle: "nama produk", itemLabel: "harga" },
+  steps: {
+    fields: ["headline", "subline", "badge", "cta"],
+    itemTitle: "judul langkah",
+    itemLabel: "label langkah (mis. LANGKAH 1 / nama tahap)",
+  },
+  promo: {
+    fields: ["headline", "subline", "badge", "cta"],
+    itemTitle: "judul adegan",
+    itemLabel: "lencana adegan (harga/promo)",
+  },
+  showcase: {
+    fields: ["headline", "subline", "badge", "cta"],
+    itemTitle: "judul adegan",
+    itemLabel: "lencana adegan",
+  },
+  story: {
+    fields: ["headline", "subline", "badge", "cta"],
+    itemTitle: "kalimat cerita adegan",
+    itemLabel: "lencana adegan",
+  },
+  announce: {
+    fields: ["headline", "subline", "badge", "cta"],
+    itemTitle: "judul adegan",
+    itemLabel: "lencana adegan",
+  },
+};
+
+/** Pecah perintah berisi daftar (baris / nomor / poin) menjadi teks per foto bila jumlahnya pas. */
+const DIRECTIVE = /^(gunakan|pakai|tambahkan|tambah|buat|bikin|dominasi|warna|musik|transisi|durasi|font|gaya|tone|nuansa)\b/i;
+
+export function itemsFromList(prompt: string, n: number): DraftText["items"] {
+  if (n < 1) return [];
+  const raw = prompt.split(/\n+/).map((l) => l.trim());
+  // Utamakan daftar bernomor; selain itu poin "-"/"•". Instruksi gaya (warna, musik, transisi) diabaikan.
+  const numbered = raw.filter((l) => /^\d{1,2}[.)]\s/.test(l));
+  const bullets = raw.filter((l) => /^[-•*]\s/.test(l));
+  const lines = (numbered.length >= Math.min(2, n) ? numbered : bullets)
+    .map((l) => l.replace(/^(?:\d{1,2}[.)]|[-•*])\s*/, "").trim())
+    .filter((l) => l.length > 2 && !DIRECTIVE.test(l));
+  if (!lines.length) return [];
+  return lines.slice(0, n).map((l) => {
+    const [a, b] = l.split(/\s[–—-]\s|:\s/);
+    return { title: clip(first(a ?? l), PHOTOS.title), label: clip(first(b ?? ""), PHOTOS.label) };
+  });
 }
 
 /** Potong di batas kata tanpa melebihi `max` karakter. */
@@ -67,8 +129,13 @@ export function guessMood(prompt: string): DraftText["mood"] {
 }
 
 /** Pengurai aturan: cukup baik untuk perintah singkat; LLM menghasilkan teks yang lebih luwes. */
-export function draftFromRules(prompt: string): DraftText {
-  let rest = ` ${prompt.replace(/\s+/g, " ").trim()} `;
+export function draftFromRules(prompt: string, photos = 0): DraftText {
+  // Hanya baris pertama/paragraf sebelum daftar yang dipakai untuk judul & ajakan.
+  const intro = prompt
+    .split(/\n+/)
+    .filter((l) => !/^\s*(?:\d{1,2}[.)]|[-•*])\s/.test(l))
+    .join("\n");
+  let rest = ` ${(intro || prompt).replace(/[ \t]+/g, " ").trim()} `;
   const take = (re: RegExp) => {
     const m = re.exec(rest);
     if (!m) return "";
@@ -151,6 +218,7 @@ export function draftFromRules(prompt: string): DraftText {
     badge: clip(badge, TEMPLATE_LIMITS.badge),
     cta: clip(cta, TEMPLATE_LIMITS.cta),
     mood: guessMood(prompt),
+    items: itemsFromList(prompt, photos),
   };
 }
 
@@ -158,6 +226,7 @@ export function draftFromRules(prompt: string): DraftText {
 export function normalizeDraft(
   raw: Partial<Record<keyof DraftText, unknown>>,
   prompt: string,
+  photos = 0,
 ): DraftText {
   const s = (v: unknown) => (typeof v === "string" ? v.replace(/["“”]/g, "").trim() : "");
   const moods = ["energetic", "upbeat", "corporate", "calm", "cinematic", "chill"];
@@ -168,5 +237,12 @@ export function normalizeDraft(
     badge: clip(s(raw.badge), TEMPLATE_LIMITS.badge),
     cta: clip(s(raw.cta), TEMPLATE_LIMITS.cta),
     mood: moods.includes(mood) ? (mood as MusicMood) : guessMood(prompt),
+    items: (Array.isArray(raw.items) ? raw.items : []).slice(0, photos).map((it: unknown) => {
+      const o = (it ?? {}) as Record<string, unknown>;
+      return {
+        title: clip(s(o.title), PHOTOS.title),
+        label: clip(s(o.label ?? o.price), PHOTOS.label),
+      };
+    }),
   };
 }

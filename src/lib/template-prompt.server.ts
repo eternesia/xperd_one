@@ -4,8 +4,13 @@
  * Gratis untuk pengguna (biaya token sangat kecil, ±Rp1 per perintah dengan model kecil).
  */
 import { executeOne, execute } from "@/integrations/mysql/pool";
-import { TEMPLATES, TEMPLATE_LIMITS } from "@/lib/ai-templates";
-import { draftFromRules, normalizeDraft, type DraftText } from "@/lib/template-prompt";
+import { PHOTOS, TEMPLATES, TEMPLATE_LIMITS } from "@/lib/ai-templates";
+import {
+  TEMPLATE_TEXT_USE,
+  draftFromRules,
+  normalizeDraft,
+  type DraftText,
+} from "@/lib/template-prompt";
 
 export interface TextLlmConfig {
   base_url: string;
@@ -34,14 +39,19 @@ export async function saveTextLlm(cfg: TextLlmConfig | null, keepKey: boolean) {
   ]);
 }
 
-const SYSTEM = `Kamu copywriter video promosi pendek untuk UMKM Indonesia.
-Dari perintah pengguna, tulis teks untuk video template. Balas HANYA JSON tanpa penjelasan:
-{"headline": string (maks ${TEMPLATE_LIMITS.headline} karakter, inti pesan, menarik),
- "subline": string (maks ${TEMPLATE_LIMITS.subline} karakter, pelengkap/keterangan; boleh kosong),
- "badge": string (maks ${TEMPLATE_LIMITS.badge} karakter, mis. "Diskon 20%", "Rp99rb", "Baru"; kosong bila tidak ada),
- "cta": string (maks ${TEMPLATE_LIMITS.cta} karakter, ajakan bertindak, mis. "Pesan via WhatsApp"; kosong bila tidak ada),
- "mood": salah satu "energetic"|"upbeat"|"corporate"|"calm"|"cinematic"|"chill" (suasana musik latar)}
-Gunakan bahasa perintah pengguna. Jangan mengarang harga, tanggal, alamat, atau kontak yang tidak disebut.`;
+const SYSTEM = `Kamu copywriter & sutradara video promosi pendek untuk UMKM Indonesia.
+Pengguna memberi perintah/brief dan (bila ada) foto-foto berurutan untuk satu video template.
+Tulis teks yang TAMPIL di video. Balas HANYA satu objek JSON tanpa penjelasan:
+{"headline": string (maks ${TEMPLATE_LIMITS.headline} karakter; judul pembuka/penutup video),
+ "subline": string (maks ${TEMPLATE_LIMITS.subline} karakter; boleh kosong),
+ "badge": string (maks ${TEMPLATE_LIMITS.badge} karakter, mis. "Diskon 20%", "Rp99rb", "Baru"; kosong bila tidak relevan),
+ "cta": string (maks ${TEMPLATE_LIMITS.cta} karakter; ajakan di akhir, mis. "Coba gratis di qalling.id"),
+ "items": [{"title": string (maks ${PHOTOS.title} karakter), "label": string (maks ${PHOTOS.label} karakter)}] — TEPAT satu per foto, sesuai urutan foto dan isi fotonya,
+ "accent": string warna hex "#RRGGBB" HANYA bila pengguna meminta warna tertentu, selain itu "",
+ "mood": salah satu "energetic"|"upbeat"|"corporate"|"calm"|"cinematic"|"chill" (musik latar; "electro"/"EDM" → "energetic")}
+Aturan: pakai bahasa pengguna; teks pendek, padat, enak dibaca di layar HP; jangan mengarang harga, tanggal,
+alamat, atau kontak yang tidak disebut. Instruksi yang tidak bisa dipenuhi template (gaya transisi, kamera)
+abaikan saja.`;
 
 /** Ambil objek JSON pertama dari jawaban model (boleh dibungkus ```json … ```). */
 function parseJson(text: string) {
@@ -58,7 +68,19 @@ function parseJson(text: string) {
 }
 
 /** Anthropic: pakai Messages API asli (lebih andal daripada lapisan kompatibel OpenAI). */
-async function callAnthropic(cfg: TextLlmConfig, user: string): Promise<string> {
+async function callAnthropic(
+  cfg: TextLlmConfig,
+  user: string,
+  imageUrls: string[] = [],
+): Promise<string> {
+  // Foto dikirim sebagai URL bertanda tangan (berlaku 10 menit) agar teks per foto sesuai isinya.
+  const content = [
+    ...imageUrls.flatMap((url, i) => [
+      { type: "text", text: `Foto ${i + 1}:` },
+      { type: "image", source: { type: "url", url } },
+    ]),
+    { type: "text", text: user },
+  ];
   const res = await fetch(`${cfg.base_url.replace(/\/+$/, "")}/messages`, {
     method: "POST",
     headers: {
@@ -70,7 +92,7 @@ async function callAnthropic(cfg: TextLlmConfig, user: string): Promise<string> 
       model: cfg.model,
       max_tokens: 1024,
       system: SYSTEM,
-      messages: [{ role: "user", content: user }],
+      messages: [{ role: "user", content }],
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -106,13 +128,42 @@ async function callOpenAiCompatible(cfg: TextLlmConfig, user: string): Promise<s
 
 const isAnthropic = (url: string) => /^https:\/\/api\.anthropic\.com(\/|$)/i.test(url);
 
-async function draftWithLlm(cfg: TextLlmConfig, prompt: string, template: string) {
+function userMessage(prompt: string, template: string, photos: number) {
   const tpl = TEMPLATES.find((t) => t.key === template);
-  const user = `Template: ${tpl?.name ?? template} (${tpl?.hint ?? ""}).\nPerintah: ${prompt}`;
-  const text = isAnthropic(cfg.base_url)
-    ? await callAnthropic(cfg, user)
-    : await callOpenAiCompatible(cfg, user);
-  return normalizeDraft(parseJson(text), prompt);
+  const use = TEMPLATE_TEXT_USE[template];
+  return [
+    `Template: ${tpl?.name ?? template} — ${tpl?.hint ?? ""}.`,
+    use
+      ? `Di template ini yang tampil: ${use.fields.join(", ")}; per foto: title = ${use.itemTitle}, label = ${use.itemLabel}.`
+      : "",
+    `Jumlah foto: ${photos}${photos ? ` → isi "items" dengan tepat ${photos} entri.` : ' → "items": [].'}`,
+    `Perintah pengguna:\n${prompt}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function draftWithLlm(
+  cfg: TextLlmConfig,
+  prompt: string,
+  template: string,
+  imageUrls: string[] = [],
+  photos = imageUrls.length,
+) {
+  const user = userMessage(prompt, template, photos);
+  let text: string;
+  if (isAnthropic(cfg.base_url)) {
+    try {
+      text = await callAnthropic(cfg, user, imageUrls);
+    } catch (e) {
+      // Foto tidak bisa diambil penyedia (mis. URL lokal) → ulangi tanpa foto.
+      if (!imageUrls.length) throw e;
+      console.warn("[studio] kirim foto ke AI gagal, ulang tanpa foto:", (e as Error).message);
+      text = await callAnthropic(cfg, user);
+    }
+  } else text = await callOpenAiCompatible(cfg, user);
+  const raw = parseJson(text);
+  return { ...normalizeDraft(raw, prompt, photos), accent: raw.accent };
 }
 
 /** Batas sederhana per workspace: 30 perintah / jam (memori proses). */
@@ -125,22 +176,63 @@ function rateLimit(workspaceId: string) {
   hits.set(workspaceId, list);
 }
 
+export type DraftResult = DraftText & {
+  accent: string | null;
+  source: "ai" | "rules";
+  /** Penjelasan singkat bila AI tidak dipakai (untuk pengguna). */
+  notice: string | null;
+};
+
 export async function draftTemplateText(
   workspaceId: string,
   prompt: string,
   template: string,
-): Promise<DraftText & { source: "ai" | "rules" }> {
+  mediaIds: string[] = [],
+): Promise<DraftResult> {
   rateLimit(workspaceId);
+  const photos = mediaIds.length;
   const cfg = await loadTextLlm();
+  let notice: string | null = "Asisten AI belum diaktifkan; teks disusun dengan aturan sederhana.";
   if (cfg) {
     try {
-      const d = await draftWithLlm(cfg, prompt, template);
-      if (d.headline) return { ...d, source: "ai" };
+      const imageUrls = await photoUrls(workspaceId, mediaIds);
+      const d = await draftWithLlm(cfg, prompt, template, imageUrls, photos);
+      if (d.headline) {
+        const raw = d as DraftText & { accent?: unknown };
+        return { ...d, accent: normalizeAccent(raw.accent), source: "ai", notice: null };
+      }
+      notice = "AI tidak memberi judul; teks disusun dengan aturan sederhana.";
     } catch (e) {
       console.warn("[studio] asisten teks gagal, pakai aturan:", (e as Error).message);
+      notice = "Asisten AI sedang tidak bisa dihubungi; teks disusun dengan aturan sederhana.";
     }
   }
-  return { ...draftFromRules(prompt), source: "rules" };
+  return { ...draftFromRules(prompt, photos), accent: null, source: "rules", notice };
+}
+
+const normalizeAccent = (v: unknown) =>
+  typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toUpperCase() : null;
+
+/** URL bertanda tangan (10 menit) untuk foto milik workspace, sesuai urutan. */
+async function photoUrls(workspaceId: string, mediaIds: string[]) {
+  if (!mediaIds.length) return [];
+  const { signMediaUrl, publicOrigin } = await import("@/lib/crm-media.server");
+  let origin: string;
+  try {
+    origin = publicOrigin();
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  for (const id of mediaIds.slice(0, PHOTOS.max)) {
+    const m = await executeOne<{ file_path: string; mime_type: string | null }>(
+      "SELECT file_path, mime_type FROM crm_media WHERE id = ? AND workspace_id = ?",
+      [id, workspaceId],
+    );
+    if (m && /^image\/(jpeg|png|webp|gif)$/.test(m.mime_type ?? ""))
+      out.push(signMediaUrl(origin, m.file_path, 600));
+  }
+  return out;
 }
 
 /** Uji koneksi dari Super Admin. */
@@ -148,8 +240,11 @@ export async function testTextLlm(cfg: TextLlmConfig) {
   const t0 = Date.now();
   const d = await draftWithLlm(
     cfg,
-    "Video promo kopi susu gula aren, diskon 20% minggu ini",
+    "Video promo kopi susu gula aren, diskon 20% minggu ini, ajak pesan via WhatsApp",
     "promo",
   );
-  return { ms: Date.now() - t0, sample: d };
+  return {
+    ms: Date.now() - t0,
+    sample: { headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta },
+  };
 }

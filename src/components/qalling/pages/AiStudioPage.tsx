@@ -1,5 +1,5 @@
 import { TemplateSampleDialog, useTemplateSamples } from "@/components/qalling/TemplateSamples";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   useInfiniteQuery,
@@ -45,6 +45,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TEMPLATE_TEXT_USE } from "@/lib/template-prompt";
 import { useCrmMedia, useUpload } from "@/components/app/CrmMedia";
 import { AccountPicker, useSocialAccounts } from "@/components/app/CrmSocial";
 import { AiVideoInterest } from "@/components/qalling/AiVideoInterest";
@@ -250,7 +251,11 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   // Mode perintah: pengguna menulis perintah; teks disusun otomatis (bisa disunting).
   const [prompt, setPrompt] = useState("");
   const [draftedFor, setDraftedFor] = useState<string | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
+  const [draftInfo, setDraftInfo] = useState<{
+    source: "ai" | "rules";
+    notice: string | null;
+    accent: string | null;
+  } | null>(null);
   const [mood, setMood] = useState<string>("auto");
   // Format video: pilihan eksplisit (Reels/Shorts/TikTok, Feed, YouTube) atau ikuti foto.
   const [fmt, setFmt] = useState<"auto" | "9:16" | "1:1" | "16:9">("9:16");
@@ -307,7 +312,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const isTplMode = isTpl;
   const tplDef = TEMPLATES.find((t) => t.key === tplKey) ?? TEMPLATES[0];
   const tplPhotos = tplDef.photos;
-  // Foto terpilih, berurutan (1–8), masing-masing dengan teks dan label opsional.
+  // Foto terpilih, berurutan (1–10), masing-masing dengan teks dan label opsional.
   const [items, setItems] = useState<{ id: string; title: string; price: string }[]>([]);
   const addItem = (id: string) =>
     setItems((x) =>
@@ -407,35 +412,57 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const selected = photos.find((p) => p.id === source) ?? null;
   const curStyle = access.styles.find((s) => s.key === style) ?? access.styles[0];
 
+  /** Kunci susunan: perintah + template + urutan foto. Berubah → disusun ulang saat membuat video. */
+  const draftKey = `${tplKey}|${items.map((i) => i.id).join(",")}|${prompt.trim()}`;
   const draft = useMutation({
-    mutationFn: (text: string) =>
-      draftTemplateTextFn({ data: { workspaceId, prompt: text, template: tplKey } }),
-    onSuccess: (d, text) => {
+    mutationFn: (key: string) =>
+      draftTemplateTextFn({
+        data: {
+          workspaceId,
+          prompt: prompt.trim(),
+          template: tplKey,
+          mediaIds: items.map((i) => i.id),
+        },
+      }).then((d) => ({ d, key })),
+    onSuccess: ({ d, key }) => {
       setTpl({ headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta });
+      // Teks per foto dari AI (sesuai isi tiap foto) menggantikan teks lama.
+      if (d.items.length)
+        setItems((list) =>
+          list.map((it, i) =>
+            d.items[i] ? { ...it, title: d.items[i].title, price: d.items[i].label } : it,
+          ),
+        );
       if (d.mood !== "auto") setMood(d.mood);
-      setDraftedFor(text);
-      setManualOpen(true);
+      setDraftInfo({ source: d.source, notice: d.notice, accent: d.accent });
+      setDraftedFor(key);
     },
     onError: (e: Error) => toast.error(e.message),
   });
-  /** Perintah berubah sejak terakhir disusun → susun ulang sebelum membuat video. */
-  const needsDraft = isTplMode && !!prompt.trim() && draftedFor !== prompt.trim();
+  /** Perintah/foto/template berubah sejak terakhir disusun → susun ulang sebelum membuat video. */
+  const needsDraft = isTplMode && !!prompt.trim() && draftedFor !== draftKey;
 
   const create = useMutation({
     mutationFn: async (): Promise<unknown> => {
       let text = tpl;
+      let photoText = items;
+      let accentPick = draftInfo?.accent ?? null;
       if (isTpl && needsDraft) {
-        const d = await draft.mutateAsync(prompt.trim());
+        const { d } = await draft.mutateAsync(draftKey);
         text = { headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta };
+        photoText = items.map((it, i) =>
+          d.items[i] ? { ...it, title: d.items[i].title, price: d.items[i].label } : it,
+        );
+        accentPick = d.accent;
       }
       if (isTpl && !text.headline.trim())
-        throw new Error(pick("Write a prompt or a title first", "Tulis perintah atau judul dulu"));
+        throw new Error(pick("Write what the video should say first", "Tulis perintah dulu"));
       return isTpl
         ? createTemplateVideo({
             data: {
               workspaceId,
               sourceMediaId: null,
-              items: items.map((i) => ({
+              items: photoText.map((i) => ({
                 mediaId: i.id,
                 title: i.title.trim(),
                 price: i.price.trim(),
@@ -448,7 +475,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               subline: text.subline.trim(),
               badge: text.badge.trim(),
               cta: text.cta.trim(),
-              accent: "auto",
+              accent: accentPick ?? "auto",
               aspectRatio: fmt,
               seconds: tplSeconds,
               mood: mood as "auto",
@@ -500,8 +527,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     ? pick("Studio Video is not available yet", "Studio Video belum tersedia")
     : tplPhotos === "required" && !items.length
       ? pick("Add at least one photo", "Tambahkan minimal 1 foto")
-      : isTpl && !tpl.headline.trim() && !prompt.trim()
-        ? pick("Write a prompt or a title first", "Tulis perintah atau judul dulu")
+      : isTpl && !prompt.trim()
+        ? pick("Write what the video should say first", "Tulis perintah dulu")
         : !isTpl && !curStyle
           ? pick("Choose a style", "Pilih gaya")
           : !consent
@@ -928,12 +955,12 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         {pick("What should the video say?", "Mau videonya bilang apa?")}
                       </h2>
                       <span className="text-[11px] tabular-nums text-muted-foreground">
-                        {prompt.length}/600
+                        {prompt.length}/2000
                       </span>
                     </div>
                     <Textarea
-                      rows={3}
-                      maxLength={600}
+                      rows={4}
+                      maxLength={2000}
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder={pick(
@@ -945,8 +972,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">
                         {pick(
-                          "Title, description, badge, call to action and music are arranged for you. Free.",
-                          "Judul, keterangan, lencana, ajakan, dan musik disusun otomatis. Gratis.",
+                          "Write a brief; titles, text for each photo, call to action, colour and music are arranged by AI from your words and photos. Free.",
+                          "Tulis brief-nya; judul, teks tiap foto, ajakan, warna, dan musik disusun AI dari perintah dan foto Anda. Gratis.",
                         )}
                       </p>
                       <Button
@@ -955,7 +982,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         variant="outline"
                         className="rounded-full"
                         disabled={!prompt.trim() || prompt.trim().length < 3 || draft.isPending}
-                        onClick={() => draft.mutate(prompt.trim())}
+                        onClick={() => draft.mutate(draftKey)}
                       >
                         {draft.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />}
                         {draftedFor
@@ -963,63 +990,85 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                           : pick("Arrange text", "Susun teks")}
                       </Button>
                     </div>
-                    <details
-                      open={manualOpen}
-                      onToggle={(e) => setManualOpen((e.target as HTMLDetailsElement).open)}
-                      className="rounded-xl border p-3"
-                    >
-                      <summary className="cursor-pointer text-sm">
-                        {tpl.headline
-                          ? pick("Text used (editable)", "Teks yang dipakai (bisa diedit)")
-                          : pick("Or fill in the text yourself", "Atau isi teks sendiri")}
-                        {tpl.headline && !manualOpen && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            “{tpl.headline}”
-                          </span>
+                    {draftedFor && (
+                      <div
+                        className={cn(
+                          "space-y-2 rounded-xl border p-3 text-sm",
+                          draftedFor !== draftKey && "opacity-60",
                         )}
-                      </summary>
-                      <div className="mt-3 space-y-3">
-                        {(
-                          [
-                            ["headline", pick("Title", "Judul"), "Production Management"],
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium">
+                            {pick("Text on the video", "Teks di video")}
+                          </span>
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[11px]",
+                              draftInfo?.source === "ai"
+                                ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                                : "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+                            )}
+                          >
+                            {draftInfo?.source === "ai"
+                              ? pick("Arranged by AI", "Disusun AI")
+                              : pick("Simple rules (no AI)", "Aturan sederhana (tanpa AI)")}
+                          </span>
+                        </div>
+                        {draftedFor !== draftKey && (
+                          <p className="text-xs text-muted-foreground">
+                            {pick(
+                              "Prompt or photos changed — the text is rearranged when you create the video.",
+                              "Perintah atau foto berubah — teks disusun ulang saat membuat video.",
+                            )}
+                          </p>
+                        )}
+                        {draftInfo?.notice && (
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            {draftInfo.notice}
+                          </p>
+                        )}
+                        <dl className="grid grid-cols-[6.5rem_1fr] gap-x-2 gap-y-1 text-[13px]">
+                          {(
                             [
-                              "subline",
-                              pick("Description (optional)", "Keterangan (opsional)"),
-                              pick("From raw material to report", "Dari bahan baku sampai laporan"),
-                            ],
-                            [
-                              "badge",
-                              pick("Badge (optional)", "Lencana (opsional)"),
-                              pick("Brand, price or promo", "Merek, harga, atau promo"),
-                            ],
-                            [
-                              "cta",
-                              pick("Call to action (optional)", "Ajakan (opsional)"),
-                              pick("Try it at xperd.id", "Coba di xperd.id"),
-                            ],
-                          ] as const
-                        ).map(([k, label, ph]) => (
-                          <div key={k}>
-                            <div className="mb-1 flex items-baseline justify-between">
-                              <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
-                                {label}
-                              </label>
-                              <span className="text-[11px] tabular-nums text-muted-foreground">
-                                {tpl[k].length}/{TEMPLATE_LIMITS[k]}
-                              </span>
-                            </div>
-                            <Input
-                              id={`tpl-${k}`}
-                              className="h-11"
-                              maxLength={TEMPLATE_LIMITS[k]}
-                              value={tpl[k]}
-                              placeholder={`${pick("e.g.", "mis.")} ${ph}`}
-                              onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
-                            />
-                          </div>
-                        ))}
+                              ["headline", pick("Title", "Judul")],
+                              ["subline", pick("Description", "Keterangan")],
+                              ["badge", pick("Badge", "Lencana")],
+                              ["cta", pick("Call to action", "Ajakan")],
+                            ] as const
+                          )
+                            .filter(
+                              ([k]) =>
+                                tpl[k] && (TEMPLATE_TEXT_USE[tplKey]?.fields ?? []).includes(k),
+                            )
+                            .map(([k, label]) => (
+                              <Fragment key={k}>
+                                <dt className="text-muted-foreground">{label}</dt>
+                                <dd className="min-w-0 break-words">{tpl[k]}</dd>
+                              </Fragment>
+                            ))}
+                          {draftInfo?.accent && (
+                            <>
+                              <dt className="text-muted-foreground">{pick("Colour", "Warna")}</dt>
+                              <dd className="flex items-center gap-1.5">
+                                <span
+                                  className="size-3.5 rounded-full ring-1 ring-black/10"
+                                  style={{ background: draftInfo.accent }}
+                                />
+                                {draftInfo.accent}
+                              </dd>
+                            </>
+                          )}
+                        </dl>
+                        {items.some((it) => it.title || it.price) && (
+                          <p className="text-xs text-muted-foreground">
+                            {pick(
+                              "Text for each photo is shown (and editable) in the photo list above.",
+                              "Teks tiap foto tampil (dan bisa diedit) di daftar foto di atas.",
+                            )}
+                          </p>
+                        )}
                       </div>
-                    </details>
+                    )}
                   </section>
 
                   <section className="space-y-3">

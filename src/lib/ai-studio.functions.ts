@@ -810,8 +810,9 @@ export const draftTemplateTextFn = createServerFn({ method: "POST" })
     z
       .object({
         workspaceId: z.string().uuid(),
-        prompt: z.string().trim().min(3).max(600),
+        prompt: z.string().trim().min(3).max(2000),
         template: z.enum(TEMPLATE_KEYS),
+        mediaIds: z.array(z.string().min(1).max(64)).max(PHOTOS.max).default([]),
       })
       .parse(v),
   )
@@ -820,7 +821,7 @@ export const draftTemplateTextFn = createServerFn({ method: "POST" })
     if (!(await canWriteWorkspace(data.workspaceId, context.userId)))
       throw new Error("Akses ditolak");
     const { draftTemplateText } = await import("./template-prompt.server");
-    return draftTemplateText(data.workspaceId, data.prompt, data.template);
+    return draftTemplateText(data.workspaceId, data.prompt, data.template, data.mediaIds);
   });
 
 const llmSchema = z.object({

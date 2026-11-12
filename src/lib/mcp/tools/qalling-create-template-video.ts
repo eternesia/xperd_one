@@ -15,7 +15,7 @@ export default defineTool({
       .describe("Template key from qalling_list_video_templates."),
     media_ids: z
       .array(z.string().uuid())
-      .max(8)
+      .max(10)
       .default([])
       .describe(
         "Image media ids from qalling_list_media, in order: 1 to 8 for every template (announce: 0 to 8, used as background).",
@@ -35,7 +35,7 @@ export default defineTool({
             .describe("Price, step name or short label for this photo."),
         }),
       )
-      .max(8)
+      .max(10)
       .default([])
       .describe("Optional text per photo, same order as media_ids."),
     headline: z.string().min(1).max(40).describe("Main title (required)."),
@@ -79,7 +79,7 @@ export default defineTool({
     const tpl = TEMPLATES.find((t) => t.key === a.template);
     if (!tpl) throw new ToolError("Unknown template.");
     if (tpl.photos === "required" && !a.media_ids.length)
-      throw new ToolError(`Template ${a.template} needs 1 to 8 photos in media_ids.`);
+      throw new ToolError(`Template ${a.template} needs 1 to 10 photos in media_ids.`);
 
     const { studioAccess } = await import("@/lib/ai-studio.server");
     const access = await studioAccess(a.workspace_id, userId);

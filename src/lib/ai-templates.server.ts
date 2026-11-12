@@ -81,7 +81,7 @@ export async function createTemplateJob(i: CreateTemplateInput) {
       throw new Error("Pilih foto JPG, PNG, atau WebP");
     return m.id;
   };
-  // Semua template menerima 1–8 foto berurutan (Pengumuman: 0–8). `sourceMediaId` lama = satu foto.
+  // Semua template menerima 1–10 foto berurutan (Pengumuman: 0–10). `sourceMediaId` lama = satu foto.
   const raw = (i.items ?? []).length
     ? (i.items ?? [])
     : i.sourceMediaId
