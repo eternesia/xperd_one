@@ -8,15 +8,15 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { execute, executeOne, result, transaction, uuid } from "@/integrations/mysql/pool";
 import {
-  CATALOG,
-  multiSeconds,
+  finalSeconds,
   NARRATION,
-  TEMPLATE_ACCENTS,
+  PHOTOS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
   TEMPLATE_RATIOS,
   TEMPLATE_SECONDS,
   TEMPLATES,
+  templateCredits,
   type TemplateText,
 } from "./ai-templates";
 
@@ -55,15 +55,14 @@ export async function createTemplateJob(i: CreateTemplateInput) {
     subline: i.text.subline.trim().slice(0, TEMPLATE_LIMITS.subline),
     badge: i.text.badge.trim().slice(0, TEMPLATE_LIMITS.badge),
     cta: i.text.cta.trim().slice(0, TEMPLATE_LIMITS.cta),
-    accent: (TEMPLATE_ACCENTS as readonly string[]).includes(i.text.accent)
-      ? i.text.accent
-      : TEMPLATE_ACCENTS[0],
+    // "auto" = warna dari foto (dihitung mesin render); warna tegas tetap boleh (mis. lewat MCP).
+    accent: /^#[0-9A-Fa-f]{6}$/.test(i.text.accent) ? i.text.accent : "auto",
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
   text.sound = i.sound !== false;
   if (!(TEMPLATE_RATIOS as readonly string[]).includes(i.aspectRatio))
     throw new Error("Rasio tidak didukung");
-  let seconds = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
+  const chosen = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
     ? (i.seconds as number)
     : TEMPLATE_SECONDS;
 
@@ -77,25 +76,23 @@ export async function createTemplateJob(i: CreateTemplateInput) {
       throw new Error("Pilih foto JPG, PNG, atau WebP");
     return m.id;
   };
-  let sourceId: string | null = null;
-  if (tpl.photos === "many") {
-    const items = (i.items ?? []).slice(0, CATALOG.max);
-    if (items.length < CATALOG.min) throw new Error(`Pilih minimal ${CATALOG.min} foto`);
-    text.items = [];
-    for (const it of items) {
-      const title = it.title.trim().slice(0, CATALOG.title);
-      const price = it.price.trim().slice(0, CATALOG.price);
-      if (!title && tpl.key === "catalog") throw new Error("Nama tiap foto wajib diisi");
-      if (BLOCKED.test(`${title} ${price}`))
-        throw new Error("Teks mengandung kata yang tidak diizinkan");
-      text.items.push({ media_id: await okPhoto(it.mediaId), title, price });
-    }
-    sourceId = text.items[0].media_id;
-    seconds = multiSeconds(tpl.key, text.items.length);
-  } else if (tpl.photos === "one") {
-    if (!i.sourceMediaId) throw new Error("Pilih foto dulu");
-    sourceId = await okPhoto(i.sourceMediaId);
+  // Semua template menerima 1–8 foto berurutan (Pengumuman: 0–8). `sourceMediaId` lama = satu foto.
+  const raw = (i.items ?? []).length
+    ? (i.items ?? [])
+    : i.sourceMediaId
+      ? [{ mediaId: i.sourceMediaId, title: "", price: "" }]
+      : [];
+  if (raw.length > PHOTOS.max) throw new Error(`Maksimal ${PHOTOS.max} foto`);
+  if (!raw.length && tpl.photos === "required") throw new Error("Pilih minimal 1 foto");
+  text.items = [];
+  for (const it of raw) {
+    const title = it.title.trim().slice(0, PHOTOS.title);
+    const price = it.price.trim().slice(0, PHOTOS.label);
+    if (BLOCKED.test(`${title} ${price}`))
+      throw new Error("Teks mengandung kata yang tidak diizinkan");
+    text.items.push({ media_id: await okPhoto(it.mediaId), title, price });
   }
+  const sourceId = text.items[0]?.media_id ?? null;
   if (BLOCKED.test(`${text.headline} ${text.subline} ${text.badge} ${text.cta}`))
     throw new Error("Teks mengandung kata yang tidak diizinkan");
 
@@ -110,14 +107,19 @@ export async function createTemplateJob(i: CreateTemplateInput) {
     if (len <= 0 || len > NARRATION.maxSeconds + 0.5)
       throw new Error(`Narasi maksimal ${NARRATION.maxSeconds} detik`);
     text.narration = i.narrationPath;
-    // Video memanjang mengikuti narasi (+1 detik jeda di akhir).
-    seconds = Math.max(seconds, Math.min(NARRATION.maxSeconds, Math.ceil(len + 1)));
   }
+  // Durasi akhir: pilihan pengguna, dipanjangkan oleh jumlah foto atau narasi; harga mengikuti durasi akhir.
+  const seconds = finalSeconds(
+    tpl.key,
+    text.items.length,
+    chosen,
+    text.narration ? Number(i.narrationSeconds) || 0 : 0,
+  );
   const { assertMediaQuota } = await import("./qalling-quota.server");
   await assertMediaQuota(i.workspaceId, { size_bytes: 3_000_000, mime_type: "video/mp4" });
 
   const tenantId = await workspaceTenant(i.workspaceId);
-  const credits = s.template_credits;
+  const credits = templateCredits(s.template_prices, seconds);
   const id = uuid();
   await transaction(async (conn) => {
     await conn.execute(

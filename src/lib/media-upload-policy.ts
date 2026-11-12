@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const mediaUploadSchema = z.object({
   photo_mb: z.number().int().min(1).max(50),
-  video_mb: z.number().int().min(1).max(50),
+  video_mb: z.number().int().min(1).max(500),
   image_quality: z.number().int().min(85).max(100),
   image_max_edge: z.number().int().min(1920).max(4096),
   compress_images: z.boolean(),
@@ -11,7 +11,7 @@ export const mediaUploadSchema = z.object({
 });
 export type MediaUploadPolicy = z.infer<typeof mediaUploadSchema>;
 export const DEFAULT_MEDIA_POLICY: MediaUploadPolicy = {
-  photo_mb: 5, video_mb: 20, image_quality: 92, image_max_edge: 2560,
+  photo_mb: 5, video_mb: 100, image_quality: 92, image_max_edge: 2560,
   compress_images: true, compress_videos: true, video_mbps: 10,
 };
 export function validateMediaFile(

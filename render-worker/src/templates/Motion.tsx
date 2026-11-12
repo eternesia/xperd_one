@@ -1,11 +1,12 @@
 import React from "react";
 import { AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, MG, onAccent, Photo, Sfx, useFonts, useOutro, type TemplateProps } from "../shared";
+import { FONT, fit, MG, onAccent, Photo, Sfx, useFonts, useOutro, type TemplateProps, DARK } from "../shared";
 
 type Item = { image: string; title: string; price: string };
+const Dark = React.createContext(DARK);
+const useDark = () => React.useContext(Dark);
 type Scene = { item: Item; n: number; accent: string; ink: string; tall: boolean; wide: boolean };
 
-const DARK = "#0b1020";
 const useIn = (delay = 0, config = { damping: 16, mass: 0.7 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -161,7 +162,7 @@ const SplitScene: React.FC<Scene> = ({ item, n, accent, tall, wide }) => {
     ? { left: pad, right: pad, top: height * 0.58, bottom: 0 }
     : { left: width * 0.56 + pad, right: pad, top: 0, bottom: 0 };
   return (
-    <AbsoluteFill style={{ background: DARK, overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: useDark(), overflow: "hidden" }}>
       <div style={{ position: "absolute", overflow: "hidden", ...photo }}>
         <div style={{ width: "100%", height: "100%", transform: `scale(${zoom})` }}>
           <Photo src={item.image} />
@@ -193,7 +194,7 @@ const FullScene: React.FC<Scene> = ({ item, accent, ink, tall, wide }) => {
   const zoom = interpolate(frame, [0, durationInFrames], [1.04, 1.16]);
   const inset = Math.min(width, height) * 0.045;
   return (
-    <AbsoluteFill style={{ background: DARK, overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: useDark(), overflow: "hidden" }}>
       <AbsoluteFill style={{ transform: `scale(${zoom})` }}>
         <Photo src={item.image} />
       </AbsoluteFill>
@@ -289,7 +290,7 @@ const Outro: React.FC<{ items: Item[]; headline: string; cta: string; accent: st
   const head = useIn(16, { damping: 200, mass: 0.7 });
   const call = useIn(28, { damping: 12, mass: 0.6 });
   return (
-    <AbsoluteFill style={{ background: DARK, overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: useDark(), overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gridAutoRows: "1fr", gap: 10, padding: 10 }}>
         {items.map((it, i) => {
           const s = spring({ frame: frame - i * 3, fps, config: { damping: 14, mass: 0.7 } });
@@ -318,7 +319,7 @@ const Outro: React.FC<{ items: Item[]; headline: string; cta: string; accent: st
  * Motion Grafis: pembuka judul → tiap foto dalam adegan berbeda (kartu terbang, layar terbelah, bingkai penuh)
  * dengan sapuan warna di antaranya → penutup kolase.
  */
-export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, items = [], sound }) => {
+export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, items = [], sound, dark = DARK }) => {
   useFonts();
   const frame = useCurrentFrame();
   const out = useOutro();
@@ -329,9 +330,10 @@ export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, 
   // Lama tiap adegan; lebih panjang dari bawaan bila video dipanjangkan mengikuti narasi.
   const scene = Math.max(MG.scene, Math.floor((durationInFrames - MG.intro - MG.outro) / Math.max(1, items.length)));
   const cuts = items.map((_, i) => MG.intro + i * scene).concat(MG.intro + items.length * scene);
-  const wipeColor = accent === DARK || accent === "#111827" ? "#fff" : DARK;
+  const wipeColor = accent === dark || accent === "#111827" ? "#fff" : dark;
   return (
-    <AbsoluteFill style={{ background: DARK, fontFamily: FONT, opacity: out }}>
+    <Dark.Provider value={dark}>
+    <AbsoluteFill style={{ background: dark, fontFamily: FONT, opacity: out }}>
       <Sfx on={sound} name="rise" at={2} volume={0.45} />
       <Sequence durationInFrames={MG.intro} layout="none">
         <Intro headline={headline} accent={accent} ink={ink} tall={tall} wide={wide} />
@@ -366,5 +368,6 @@ export const Motion: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, 
         );
       })}
     </AbsoluteFill>
+    </Dark.Provider>
   );
 };

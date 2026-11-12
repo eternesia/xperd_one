@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, interpolate, Sequence, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Photo, Sfx, SLIDE, SLIDE_OUTRO, useFonts, useOutro, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, SLIDE, SLIDE_OUTRO, useFonts, useOutro, type TemplateProps, DARK } from "../shared";
 
 const FADE = 10;
 
@@ -72,7 +72,7 @@ const Slide: React.FC<{
 };
 
 /** Slideshow Katalog: 2–6 foto bergantian dengan nama + harga, judul koleksi di atas, penutup berwarna merek. */
-export const Catalog: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, items = [], sound }) => {
+export const Catalog: React.FC<TemplateProps> = ({ headline, cta, accent, ratio, items = [], sound, dark }) => {
   useFonts();
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -88,7 +88,7 @@ export const Catalog: React.FC<TemplateProps> = ({ headline, cta, accent, ratio,
   const big = spring({ frame: frame - end - 6, fps, config: { damping: 200, mass: 0.7 } });
   const call = spring({ frame: frame - end - 20, fps, config: { damping: 200, mass: 0.7 } });
   return (
-    <AbsoluteFill style={{ background: "#0b1020", fontFamily: FONT, opacity: out }}>
+    <AbsoluteFill style={{ background: dark ?? DARK, fontFamily: FONT, opacity: out }}>
       {items.map((item, i) => (
         <React.Fragment key={`s${i}`}>
           <Sfx on={sound} name="whoosh" at={i * slide} />

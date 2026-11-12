@@ -19,7 +19,28 @@ import {
   type TierConfig,
 } from "./ai-studio";
 import { PROVIDERS } from "./ai-studio-providers.server";
-import { WORKER_ONLINE_MS } from "./ai-templates";
+import {
+  DEFAULT_TEMPLATE_PRICES,
+  TEMPLATE_SECONDS,
+  templateCredits,
+  WORKER_ONLINE_MS,
+  type TemplatePrice,
+} from "./ai-templates";
+
+/** Harga Template per durasi dari JSON tersimpan; tidak valid/kosong = bawaan. */
+function parsePrices(raw: unknown): TemplatePrice[] {
+  try {
+    const v = (typeof raw === "string" ? JSON.parse(raw) : raw) as TemplatePrice[] | null;
+    const ok = Array.isArray(v)
+      ? v
+          .map((p) => ({ max_s: Number(p.max_s), credits: Math.round(Number(p.credits)) }))
+          .filter((p) => p.max_s > 0 && p.credits >= 1 && p.credits <= 100)
+      : [];
+    return ok.length ? ok.sort((a, b) => a.max_s - b.max_s) : DEFAULT_TEMPLATE_PRICES;
+  } catch {
+    return DEFAULT_TEMPLATE_PRICES;
+  }
+}
 
 export interface StudioSettings {
   enabled: boolean;
@@ -29,6 +50,7 @@ export interface StudioSettings {
   styles: StyleConfig[];
   template_enabled: boolean;
   template_credits: number;
+  template_prices: TemplatePrice[];
   worker_seen_at: string | null;
   worker_info: string | null;
   has_worker_token: boolean;
@@ -57,6 +79,7 @@ export async function getStudioSettings(): Promise<StudioSettings> {
     styles: parseStyles(r?.styles),
     template_enabled: Number(r?.template_enabled ?? 0) === 1,
     template_credits: Math.max(1, Number(r?.template_credits ?? 1)),
+    template_prices: parsePrices(r?.template_prices),
     worker_seen_at: r?.worker_seen_at ? new Date(r.worker_seen_at as string).toISOString() : null,
     worker_info: (r?.worker_info as string) || null,
     has_worker_token: Boolean(r?.worker_token_hash),
@@ -118,7 +141,7 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
       used_today: 0,
       tiers: [],
       styles: [],
-      template: { available: false, credits: 1, worker_online: false },
+      template: { available: false, credits: 1, prices: [], worker_online: false },
       can_write: false,
     };
   const tenantId = await workspaceTenant(workspaceId);
@@ -144,7 +167,8 @@ export async function studioAccess(workspaceId: string, userId: string): Promise
     // Template: Super Admin selalu bisa mencoba (mode uji), pengguna hanya bila saklarnya ON.
     template: {
       available: s.template_enabled || admin,
-      credits: s.template_credits,
+      credits: templateCredits(s.template_prices, TEMPLATE_SECONDS),
+      prices: s.template_prices,
       worker_online:
         !!s.worker_seen_at && Date.now() - new Date(s.worker_seen_at).getTime() < WORKER_ONLINE_MS,
     },

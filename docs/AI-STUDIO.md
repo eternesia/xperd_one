@@ -121,3 +121,25 @@ Uji lokal tanpa Qalling: `cd render-worker && npm ci && node sample.mjs foto.jpg
 
 Lisensi Remotion: gratis untuk perusahaan sampai 3 orang; 4 orang ke atas wajib Company License
 (remotion.dev/license) sebelum fitur dipakai secara komersial.
+
+
+## Studio Video (12 Nov 2026, mesin render v2.0.0)
+Halaman Studio sekarang hanya mode Template, bernama **Studio Video** (kode Video AI tetap ada, tidak ditampilkan).
+- **Foto:** 1–8 foto berurutan untuk semua template (Pengumuman: 0–8 sebagai latar), masing-masing dengan teks dan
+  label opsional. Template satu-foto lama (Promo, Sorotan, Cerita) diulang per foto oleh `perPhoto` di `Root.tsx`.
+- **Template baru "Langkah demi Langkah"** (`steps`): pembuka judul, tiap foto jadi langkah bernomor dengan judul dua
+  warna, foto berbingkai bersudut aksen, label melayang, garis kemajuan, penutup ajakan.
+- **Otomatis:** warna aksen + latar gelap dari foto (`render-worker/src/palette.ts`, salinan pratinjau di
+  `src/lib/image-palette.ts`), rasio dari bentuk foto pertama (tegak 9:16, persegi 1:1, mendatar ≥1,3 → 16:9).
+  `accent`/`ratio` = `auto`; MCP masih boleh mengisi warna/rasio tegas.
+- **Durasi:** 8/10/15/20/30/45/60 detik; dipanjangkan otomatis bila foto banyak (`minSeconds`) atau ada narasi.
+- **Suara:** trek latar bertema (korporat 116 BPM, energik 124 BPM, tenang 92 BPM) disintesis per video oleh
+  `makeBed` di `render-worker/sfx.mjs`, ditambah efek whoosh/pop. Tanpa berkas musik berlisensi.
+- **Harga per durasi** (`ai_studio_settings.template_prices`, migrasi 076): bawaan ≤15 dtk 2 kredit, ≤30 dtk 3,
+  ≤60 dtk 5; diatur di Super Admin → Studio AI → Template. Harga mengikuti durasi akhir.
+- **Waktu render:** ±5 detik per detik video di 2 vCPU (60 detik ≈ 5 menit).
+
+## Batas unggah video (migrasi 075)
+Bawaan 100 MB (bisa diatur Super Admin sampai 500 MB). Proxy produksi membatasi ±1 MB per permintaan, jadi:
+unggahan browser memakai potongan (`uploadFileChunked`), dan link unggah MCP (`/api/public/mcp-upload`) menerima
+`upload=<id>&part=<i>&parts=<n>`; `qalling_create_upload_link` mengembalikan `chunked_command` siap pakai.

@@ -67,6 +67,8 @@ function StudioAdmin() {
   const [tab, setTab] = useState("ringkasan");
   const [tplEnabled, setTplEnabled] = useState(false);
   const [tplCredits, setTplCredits] = useState(1);
+  // Harga Template per durasi: ≤15 dtk, ≤30 dtk, ≤60 dtk.
+  const [tplPrices, setTplPrices] = useState<number[]>([2, 3, 5]);
   const [newToken, setNewToken] = useState<{ token: string; url: string } | null>(null);
   const rotateFn = useServerFn(adminRotateWorkerToken);
   const rotate = useMutation({
@@ -100,6 +102,10 @@ function StudioAdmin() {
     setStyles(q.data.styles);
     setTplEnabled(q.data.template.enabled);
     setTplCredits(q.data.template.credits);
+    const pr = q.data.template.prices;
+    setTplPrices(
+      [15, 30, 61].map((m, i) => pr.find((p) => p.max_s === m)?.credits ?? [2, 3, 5][i]),
+    );
     setPacks(q.data.packs);
   }, [q.data]);
 
@@ -132,6 +138,7 @@ function StudioAdmin() {
           styles,
           templateEnabled: tplEnabled,
           templateCredits: tplCredits,
+          templatePrices: [15, 30, 61].map((max_s, i) => ({ max_s, credits: tplPrices[i] })),
           ...opts,
         },
       });
@@ -621,11 +628,24 @@ function StudioAdmin() {
                   Buka Template untuk pengguna
                 </label>
               </div>
-              <div className="grid gap-3 sm:grid-cols-4">
-                <Field label="Kredit per video Template">
-                  <NumInput value={tplCredits} onChange={setTplCredits} />
-                </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {["Video sampai 15 detik", "16 sampai 30 detik", "31 sampai 60 detik"].map(
+                  (label, i) => (
+                    <Field key={label} label={`${label} (kredit)`}>
+                      <NumInput
+                        value={tplPrices[i]}
+                        onChange={(v) =>
+                          setTplPrices((x) => x.map((c, j) => (j === i ? Math.max(1, v) : c)))
+                        }
+                      />
+                    </Field>
+                  ),
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Harga mengikuti durasi akhir video (bisa lebih panjang dari pilihan pengguna bila
+                fotonya banyak atau ada narasi). Render ±5 detik per detik video di VPS 2 vCPU.
+              </p>
               <p className="text-xs text-muted-foreground">
                 Template hanya tampil ke pengguna bila saklar utama Studio AI (tab Ringkasan) juga
                 aktif.
