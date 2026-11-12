@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 import {
@@ -115,6 +116,8 @@ function HealthAdmin() {
     refetchInterval: 30_000,
   });
   const h = q.data;
+  const [tab, setTab] = useState("ringkasan");
+  const serious = h?.alerts.filter((a) => a.level !== "info").length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -144,241 +147,325 @@ function HealthAdmin() {
       )}
 
       {h && (
-        <>
-          {/* Peringatan */}
-          <div className="space-y-2">
-            {h.alerts.length === 0 && (
-              <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                Semua pemeriksaan normal.
-              </p>
-            )}
-            {h.alerts.map((a, i) => {
-              const Icon =
-                a.level === "critical"
-                  ? AlertOctagon
-                  : a.level === "warning"
-                    ? AlertTriangle
-                    : Info;
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-start gap-3 rounded-2xl border p-3 sm:p-4",
-                    a.level === "critical" && "border-red-500/40 bg-red-500/5",
-                    a.level === "warning" && "border-amber-500/40 bg-amber-500/5",
-                    a.level === "info" && "border-sky-500/30 bg-sky-500/5",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "mt-0.5 h-4 w-4 shrink-0",
-                      a.level === "critical"
-                        ? "text-red-600"
-                        : a.level === "warning"
-                          ? "text-amber-600"
-                          : "text-sky-600",
-                    )}
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">{a.title}</p>
-                    <p className="text-xs text-muted-foreground">{a.detail}</p>
-                  </div>
-                </div>
-              );
-            })}
+        <Tabs value={tab} onValueChange={setTab}>
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <TabsList className="w-max">
+              <TabsTrigger value="ringkasan">
+                Ringkasan
+                {serious > 0 && (
+                  <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white">
+                    {serious}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="server">Server</TabsTrigger>
+              <TabsTrigger value="database">Database</TabsTrigger>
+              <TabsTrigger value="storage">Penyimpanan</TabsTrigger>
+              <TabsTrigger value="backup">Backup</TabsTrigger>
+              {h.render && <TabsTrigger value="render">Render video</TabsTrigger>}
+            </TabsList>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel icon={Server} title="Server aplikasi">
-              <div className="space-y-4">
-                <Meter
-                  pct={h.server.mem.pct}
-                  label="RAM"
-                  sub={`${bytes(h.server.mem.used)} dari ${bytes(h.server.mem.total)} · proses aplikasi ${bytes(h.server.process.rss)}`}
-                />
-                {h.server.disks.map((d) => (
-                  <Meter
-                    key={d.path}
-                    pct={d.pct}
-                    label={d.path === "/" ? "Disk sistem (/)" : `Disk penyimpanan (${d.path})`}
-                    sub={`${bytes(d.used)} dari ${bytes(d.total)} · sisa ${bytes(d.free)}`}
-                  />
-                ))}
-                <KV
-                  rows={[
-                    ["Host", h.server.hostname],
-                    ["CPU", `${h.server.cpuCount} inti`],
-                    ["Beban (1/5/15 mnt)", h.server.load.join(" / ")],
-                    ["Server menyala", dur(h.server.uptimeSec)],
-                    ["Aplikasi berjalan", dur(h.server.processUptimeSec)],
-                    ["Node.js", h.server.node],
-                    ["Versi", h.server.version ?? "—"],
-                    ["Penjadwal", h.server.schedulerDisabled ? "Mati" : "Aktif"],
-                  ]}
-                />
-              </div>
-            </Panel>
-
-            <Panel icon={Database} title="Database (MySQL)">
-              <div className="space-y-4">
-                {h.database.maxConnections > 0 && (
-                  <Meter
-                    pct={
-                      Math.round((h.database.threadsConnected / h.database.maxConnections) * 1000) /
-                      10
-                    }
-                    label="Koneksi"
-                    sub={`${h.database.threadsConnected} aktif dari maks ${h.database.maxConnections} · puncak ${h.database.maxUsedConnections}`}
-                  />
-                )}
-                <KV
-                  rows={[
-                    ["Host", h.database.host],
-                    ["Versi", h.database.version ?? "—"],
-                    ["Waktu respons", `${h.database.pingMs} ms`],
-                    ["Menyala", dur(h.database.uptimeSec)],
-                    [
-                      "Ukuran total",
-                      `${bytes(h.database.sizeBytes)} (${h.database.tableCount} tabel)`,
-                    ],
-                    ["Query lambat", h.database.slowQueries.toLocaleString("id-ID")],
-                    ["Buffer pool", bytes(h.database.bufferPoolBytes)],
-                    [
-                      "Migrasi terakhir",
-                      h.database.lastMigration
-                        ? `${h.database.lastMigration.name} · ${when(h.database.lastMigration.appliedAt)}`
-                        : "—",
-                    ],
-                    [
-                      "Data",
-                      h.database.counts
-                        ? `${h.database.counts.tenants} tenant · ${h.database.counts.workspaces} workspace · ${h.database.counts.users} pengguna`
-                        : "—",
-                    ],
-                  ]}
-                />
-              </div>
-            </Panel>
-
-            <Panel icon={Database} title="Tabel terbesar">
-              <table className="q-keep w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="pb-2 font-medium">Tabel</th>
-                    <th className="pb-2 text-right font-medium">Baris (perkiraan)</th>
-                    <th className="pb-2 text-right font-medium">Ukuran</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {h.database.topTables.map((t) => (
-                    <tr key={t.name} className="border-t border-border">
-                      <td className="max-w-[12rem] truncate py-1.5 font-mono text-xs">{t.name}</td>
-                      <td className="py-1.5 text-right tabular-nums">
-                        {t.rows.toLocaleString("id-ID")}
-                      </td>
-                      <td className="py-1.5 text-right tabular-nums">{bytes(t.bytes)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Panel>
-
-            <Panel icon={HardDrive} title="Penyimpanan berkas">
-              <div className="space-y-4">
-                <KV
-                  rows={[
-                    ["Lokasi", h.storage.exists ? h.storage.root : `${h.storage.root} (belum ada)`],
-                    [
-                      "Total",
-                      `${bytes(h.storage.total)} · ${h.storage.files.toLocaleString("id-ID")} berkas${h.storage.partial ? " (sebagian)" : ""}`,
-                    ],
-                    [
-                      "Object storage",
-                      h.storage.objectStorageConfigured
-                        ? `${h.storage.objectStorageProvider} diatur, belum dipakai unggahan`
-                        : "Belum diatur",
-                    ],
-                    ["Dihitung", when(new Date(h.storage.cachedAt).toISOString())],
-                  ]}
-                />
-                {h.storage.folders.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">Per folder</p>
-                    <div className="space-y-1.5">
-                      {h.storage.folders.slice(0, 8).map((f) => (
-                        <div key={f.name} className="flex items-center gap-2 text-sm">
-                          <span className="w-28 shrink-0 truncate font-mono text-xs">{f.name}</span>
-                          <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                            <span
-                              className="block h-full rounded-full bg-navy dark:bg-primary"
-                              style={{
-                                width: `${h.storage.total ? (f.bytes / h.storage.total) * 100 : 0}%`,
-                              }}
-                            />
-                          </span>
-                          <span className="w-20 shrink-0 text-right text-xs tabular-nums">
-                            {bytes(f.bytes)}
-                          </span>
-                        </div>
-                      ))}
+          <TabsContent value="ringkasan" className="mt-4 space-y-4">
+            {/* Peringatan */}
+            <div className="space-y-2">
+              {h.alerts.length === 0 && (
+                <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                  Semua pemeriksaan normal.
+                </p>
+              )}
+              {h.alerts.map((a, i) => {
+                const Icon =
+                  a.level === "critical"
+                    ? AlertOctagon
+                    : a.level === "warning"
+                      ? AlertTriangle
+                      : Info;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-start gap-3 rounded-2xl border p-3 sm:p-4",
+                      a.level === "critical" && "border-red-500/40 bg-red-500/5",
+                      a.level === "warning" && "border-amber-500/40 bg-amber-500/5",
+                      a.level === "info" && "border-sky-500/30 bg-sky-500/5",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "mt-0.5 h-4 w-4 shrink-0",
+                        a.level === "critical"
+                          ? "text-red-600"
+                          : a.level === "warning"
+                            ? "text-amber-600"
+                            : "text-sky-600",
+                      )}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{a.title}</p>
+                      <p className="text-xs text-muted-foreground">{a.detail}</p>
                     </div>
                   </div>
-                )}
-                {h.storage.perTenant.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                      Pemakaian per tenant (berkas tercatat)
-                    </p>
-                    <table className="q-keep w-full text-sm">
-                      <tbody>
-                        {h.storage.perTenant.map((r) => (
-                          <tr key={r.tenant} className="border-t border-border">
-                            <td className="max-w-[12rem] truncate py-1.5">{r.tenant}</td>
-                            <td className="py-1.5 text-right text-xs text-muted-foreground tabular-nums">
-                              {r.files.toLocaleString("id-ID")} berkas
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums">{bytes(r.bytes)}</td>
-                          </tr>
+                );
+              })}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {(
+                [
+                  ["server", Server, "RAM server", `${h.server.mem.pct}%`],
+                  [
+                    "database",
+                    Database,
+                    "Database",
+                    `${bytes(h.database.sizeBytes)} · ${h.database.pingMs} ms`,
+                  ],
+                  [
+                    "storage",
+                    HardDrive,
+                    "Berkas di disk",
+                    `${bytes(h.storage.total)}${h.storage.mediaOnR2 ? " · R2 aktif" : ""}`,
+                  ],
+                  [
+                    "backup",
+                    Archive,
+                    "Backup DB terakhir",
+                    h.backup ? when(h.backup.finishedAt) : "Belum ada",
+                  ],
+                ] as const
+              ).map(([value, Icon, label, val]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/50"
+                >
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </span>
+                  <span className="mt-1 block truncate text-base font-semibold">{val}</span>
+                </button>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="server" className="mt-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Panel icon={Server} title="Server aplikasi">
+                <div className="space-y-4">
+                  <Meter
+                    pct={h.server.mem.pct}
+                    label="RAM"
+                    sub={`${bytes(h.server.mem.used)} dari ${bytes(h.server.mem.total)} · proses aplikasi ${bytes(h.server.process.rss)}`}
+                  />
+                  {h.server.disks.map((d) => (
+                    <Meter
+                      key={d.path}
+                      pct={d.pct}
+                      label={d.path === "/" ? "Disk sistem (/)" : `Disk penyimpanan (${d.path})`}
+                      sub={`${bytes(d.used)} dari ${bytes(d.total)} · sisa ${bytes(d.free)}`}
+                    />
+                  ))}
+                  <KV
+                    rows={[
+                      ["Host", h.server.hostname],
+                      ["CPU", `${h.server.cpuCount} inti`],
+                      ["Beban (1/5/15 mnt)", h.server.load.join(" / ")],
+                      ["Server menyala", dur(h.server.uptimeSec)],
+                      ["Aplikasi berjalan", dur(h.server.processUptimeSec)],
+                      ["Node.js", h.server.node],
+                      ["Versi", h.server.version ?? "—"],
+                      ["Penjadwal", h.server.schedulerDisabled ? "Mati" : "Aktif"],
+                    ]}
+                  />
+                </div>
+              </Panel>
+              <Panel icon={Cpu} title="Proses aplikasi">
+                <div className="space-y-4">
+                  <Meter
+                    pct={
+                      Math.round(
+                        (h.server.process.heapUsed / Math.max(1, h.server.process.heapTotal)) *
+                          1000,
+                      ) / 10
+                    }
+                    label="Heap JavaScript"
+                    sub={`${bytes(h.server.process.heapUsed)} dari ${bytes(h.server.process.heapTotal)}`}
+                  />
+                  <KV
+                    rows={[
+                      ["Lingkungan", h.server.env],
+                      ["Platform", h.server.platform],
+                      ["Mulai", when(h.server.startedAt)],
+                      ["Memori proses (RSS)", bytes(h.server.process.rss)],
+                    ]}
+                  />
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <MemoryStick className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Angka server diambil dari mesin yang menjalankan aplikasi ini. Bila nanti
+                    database dipisah ke server lain, panel Database tetap membaca server database
+                    tersebut.
+                  </p>
+                </div>
+              </Panel>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="database" className="mt-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Panel icon={Database} title="Database (MySQL)">
+                <div className="space-y-4">
+                  {h.database.maxConnections > 0 && (
+                    <Meter
+                      pct={
+                        Math.round(
+                          (h.database.threadsConnected / h.database.maxConnections) * 1000,
+                        ) / 10
+                      }
+                      label="Koneksi"
+                      sub={`${h.database.threadsConnected} aktif dari maks ${h.database.maxConnections} · puncak ${h.database.maxUsedConnections}`}
+                    />
+                  )}
+                  <KV
+                    rows={[
+                      ["Host", h.database.host],
+                      ["Versi", h.database.version ?? "—"],
+                      ["Waktu respons", `${h.database.pingMs} ms`],
+                      ["Menyala", dur(h.database.uptimeSec)],
+                      [
+                        "Ukuran total",
+                        `${bytes(h.database.sizeBytes)} (${h.database.tableCount} tabel)`,
+                      ],
+                      ["Query lambat", h.database.slowQueries.toLocaleString("id-ID")],
+                      ["Buffer pool", bytes(h.database.bufferPoolBytes)],
+                      [
+                        "Migrasi terakhir",
+                        h.database.lastMigration
+                          ? `${h.database.lastMigration.name} · ${when(h.database.lastMigration.appliedAt)}`
+                          : "—",
+                      ],
+                      [
+                        "Data",
+                        h.database.counts
+                          ? `${h.database.counts.tenants} tenant · ${h.database.counts.workspaces} workspace · ${h.database.counts.users} pengguna`
+                          : "—",
+                      ],
+                    ]}
+                  />
+                </div>
+              </Panel>
+
+              <Panel icon={Database} title="Tabel terbesar">
+                <table className="q-keep w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-muted-foreground">
+                      <th className="pb-2 font-medium">Tabel</th>
+                      <th className="pb-2 text-right font-medium">Baris (perkiraan)</th>
+                      <th className="pb-2 text-right font-medium">Ukuran</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {h.database.topTables.map((t) => (
+                      <tr key={t.name} className="border-t border-border">
+                        <td className="max-w-[12rem] truncate py-1.5 font-mono text-xs">
+                          {t.name}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">
+                          {t.rows.toLocaleString("id-ID")}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">{bytes(t.bytes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="storage" className="mt-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Panel icon={HardDrive} title="Penyimpanan berkas">
+                <div className="space-y-4">
+                  <KV
+                    rows={[
+                      [
+                        "Lokasi",
+                        h.storage.exists ? h.storage.root : `${h.storage.root} (belum ada)`,
+                      ],
+                      [
+                        "Total",
+                        `${bytes(h.storage.total)} · ${h.storage.files.toLocaleString("id-ID")} berkas${h.storage.partial ? " (sebagian)" : ""}`,
+                      ],
+                      [
+                        "Object storage",
+                        !h.storage.objectStorageConfigured
+                          ? "Belum diatur"
+                          : h.storage.mediaOnR2
+                            ? `${h.storage.objectStorageProvider} — unggahan baru disimpan di bucket`
+                            : `${h.storage.objectStorageProvider} diatur, unggahan masih ke disk`,
+                      ],
+                      ["Dihitung", when(new Date(h.storage.cachedAt).toISOString())],
+                    ]}
+                  />
+                  {h.storage.folders.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">Per folder</p>
+                      <div className="space-y-1.5">
+                        {h.storage.folders.slice(0, 8).map((f) => (
+                          <div key={f.name} className="flex items-center gap-2 text-sm">
+                            <span className="w-28 shrink-0 truncate font-mono text-xs">
+                              {f.name}
+                            </span>
+                            <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                              <span
+                                className="block h-full rounded-full bg-navy dark:bg-primary"
+                                style={{
+                                  width: `${h.storage.total ? (f.bytes / h.storage.total) * 100 : 0}%`,
+                                }}
+                              />
+                            </span>
+                            <span className="w-20 shrink-0 text-right text-xs tabular-nums">
+                              {bytes(f.bytes)}
+                            </span>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </Panel>
+                      </div>
+                    </div>
+                  )}
+                  {h.storage.perTenant.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                        Pemakaian per tenant (berkas tercatat)
+                      </p>
+                      <table className="q-keep w-full text-sm">
+                        <tbody>
+                          {h.storage.perTenant.map((r) => (
+                            <tr key={r.tenant} className="border-t border-border">
+                              <td className="max-w-[12rem] truncate py-1.5">{r.tenant}</td>
+                              <td className="py-1.5 text-right text-xs text-muted-foreground tabular-nums">
+                                {r.files.toLocaleString("id-ID")} berkas
+                              </td>
+                              <td className="py-1.5 text-right tabular-nums">{bytes(r.bytes)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            </div>
+          </TabsContent>
 
+          <TabsContent value="backup" className="mt-4">
             <BackupPanel lastDb={h.backup} offsite={h.offsite} />
+          </TabsContent>
 
-            {h.render && <RenderPanel r={h.render} />}
-
-            <Panel icon={Cpu} title="Proses aplikasi">
-              <div className="space-y-4">
-                <Meter
-                  pct={
-                    Math.round(
-                      (h.server.process.heapUsed / Math.max(1, h.server.process.heapTotal)) * 1000,
-                    ) / 10
-                  }
-                  label="Heap JavaScript"
-                  sub={`${bytes(h.server.process.heapUsed)} dari ${bytes(h.server.process.heapTotal)}`}
-                />
-                <KV
-                  rows={[
-                    ["Lingkungan", h.server.env],
-                    ["Platform", h.server.platform],
-                    ["Mulai", when(h.server.startedAt)],
-                    ["Memori proses (RSS)", bytes(h.server.process.rss)],
-                  ]}
-                />
-                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <MemoryStick className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  Angka server diambil dari mesin yang menjalankan aplikasi ini. Bila nanti database
-                  dipisah ke server lain, panel Database tetap membaca server database tersebut.
-                </p>
-              </div>
-            </Panel>
-          </div>
-        </>
+          {h.render && (
+            <TabsContent value="render" className="mt-4">
+              <RenderPanel r={h.render} />
+            </TabsContent>
+          )}
+        </Tabs>
       )}
     </div>
   );

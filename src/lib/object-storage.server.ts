@@ -16,6 +16,8 @@ export interface StorageConfig {
   bucket: string;
   /** Bucket backup (boleh kosong = backup hanya di server). */
   backupBucket: string;
+  /** Unggahan baru disimpan di bucket media (sakelar Super Admin). */
+  mediaOnR2: boolean;
   accessKey: string;
   secretKey: string;
 }
@@ -35,6 +37,7 @@ export async function loadStorageConfig(): Promise<StorageConfig | null> {
     region: r.region || "auto",
     bucket: r.bucket ?? "",
     backupBucket: r.backup_bucket ?? "",
+    mediaOnR2: Number(r.media_on_r2) === 1,
     accessKey: r.access_key,
     secretKey: r.secret_key,
   };
@@ -154,6 +157,70 @@ export async function putFile(
     return { size };
   } finally {
     await fh.close();
+  }
+}
+
+/** Unggah isi buffer (unggahan pengguna); > 64 MB memakai multipart. */
+export async function putBytes(
+  cfg: StorageConfig,
+  bucket: string,
+  key: string,
+  bytes: Buffer,
+  contentType: string,
+) {
+  if (bytes.length <= SINGLE_MAX) {
+    await send(cfg, objectUrl(cfg, bucket, key), {
+      method: "PUT",
+      body: new Uint8Array(bytes),
+      headers: { "content-type": contentType },
+      timeoutMs: 10 * 60_000,
+    });
+    return;
+  }
+  // Multipart lewat berkas sementara agar logika bagian tidak diduplikasi.
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = await mkdtemp(join(tmpdir(), "xperd-put-"));
+  try {
+    const tmp = join(dir, "obj");
+    await writeFile(tmp, bytes);
+    await putFile(cfg, bucket, key, tmp, contentType);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Ambil isi objek; null bila tidak ada (404). */
+export async function getObject(
+  cfg: StorageConfig,
+  bucket: string,
+  key: string,
+): Promise<Buffer | null> {
+  try {
+    const res = await send(cfg, objectUrl(cfg, bucket, key), {
+      method: "GET",
+      timeoutMs: 10 * 60_000,
+    });
+    return Buffer.from(await res.arrayBuffer());
+  } catch (e) {
+    if (/Object storage 404/.test((e as Error).message)) return null;
+    throw e;
+  }
+}
+
+/** Ukuran objek; null bila tidak ada. */
+export async function headObject(
+  cfg: StorageConfig,
+  bucket: string,
+  key: string,
+): Promise<number | null> {
+  try {
+    const res = await send(cfg, objectUrl(cfg, bucket, key), { method: "HEAD", timeoutMs: 20_000 });
+    return Number(res.headers.get("content-length") ?? -1);
+  } catch (e) {
+    if (/Object storage 404/.test((e as Error).message)) return null;
+    throw e;
   }
 }
 

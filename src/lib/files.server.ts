@@ -46,14 +46,66 @@ function absolutePath(relPath: string): string {
   return target;
 }
 
+/*
+ * Lapisan object storage (#R2): bila Super Admin menyalakan "Simpan berkas di R2",
+ * unggahan baru ditulis ke bucket media dengan key = path relatif. Pembacaan selalu
+ * mencoba disk lokal dulu lalu bucket, sehingga berkas lama tetap terbaca selama /
+ * sesudah dipindahkan, dan mematikan sakelar tidak membuat berkas di R2 hilang.
+ */
+type MediaStore = {
+  cfg: import("./object-storage.server").StorageConfig;
+  bucket: string;
+};
+let storeCache: { at: number; value: MediaStore | null } | null = null;
+
+/** Konfigurasi bucket media (cache 30 detik). `null` = object storage belum diatur. */
+async function mediaStore(): Promise<MediaStore | null> {
+  if (storeCache && Date.now() - storeCache.at < 30_000) return storeCache.value;
+  const { loadStorageConfig } = await import("./object-storage.server");
+  const cfg = await loadStorageConfig().catch(() => null);
+  const value = cfg?.bucket ? { cfg, bucket: cfg.bucket } : null;
+  storeCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Dipanggil setelah pengaturan penyimpanan diubah. */
+export function resetMediaStoreCache() {
+  storeCache = null;
+}
+
+/** Key objek = path relatif yang sudah dinormalkan (tanpa `..`). */
+function objectKey(relPath: string): string {
+  const abs = absolutePath(relPath);
+  return abs
+    .slice(storageRoot().length + 1)
+    .split(sep)
+    .join("/");
+}
+
 export async function saveWorkspaceFile(relPath: string, bytes: Buffer): Promise<void> {
   const target = absolutePath(relPath);
+  const store = await mediaStore();
+  if (store?.cfg.mediaOnR2) {
+    const { putBytes } = await import("./object-storage.server");
+    await putBytes(store.cfg, store.bucket, objectKey(relPath), bytes, mimeFromPath(relPath));
+    return;
+  }
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, bytes);
 }
 
 export async function readWorkspaceFile(relPath: string): Promise<Buffer> {
-  return readFile(absolutePath(relPath));
+  try {
+    return await readFile(absolutePath(relPath));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    const store = await mediaStore();
+    if (!store) throw e;
+    const { getObject } = await import("./object-storage.server");
+    const bytes = await getObject(store.cfg, store.bucket, objectKey(relPath));
+    if (!bytes) throw e;
+    return bytes;
+  }
 }
 
 export async function deleteWorkspaceFile(relPath: string): Promise<void> {
@@ -61,6 +113,15 @@ export async function deleteWorkspaceFile(relPath: string): Promise<void> {
     await unlink(absolutePath(relPath));
   } catch {
     // Berkas memang sudah tidak ada — tidak perlu menggagalkan aksi pengguna.
+  }
+  try {
+    const store = await mediaStore();
+    if (store) {
+      const { deleteObject } = await import("./object-storage.server");
+      await deleteObject(store.cfg, store.bucket, objectKey(relPath));
+    }
+  } catch {
+    // Objek tidak ada / bucket tidak terjangkau — catatan di DB tetap dihapus.
   }
 }
 

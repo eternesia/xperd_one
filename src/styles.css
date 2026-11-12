@@ -497,6 +497,8 @@
     gap: 0.25rem;
     padding: 0.25rem;
     overflow-x: auto;
+    /* justify-center bawaan memotong tab pertama saat isinya melebihi lebar layar. */
+    justify-content: flex-start;
     border-radius: 9999px;
     scrollbar-width: none;
   }
