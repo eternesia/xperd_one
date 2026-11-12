@@ -408,6 +408,9 @@ export const saveXproTask = createServerFn({ method: "POST" })
       if (added.length) await srv.notifyAssigned(data.workspaceId, task, added, context.userId);
     }
     if ("status" in patch || "project_id" in patch) await srv.syncCompletion(task);
+    // Progres tahapan & proyek mengikuti tugas.
+    const { recalcAfterTaskChange } = await import("@/lib/xpro-progress.server");
+    await recalcAfterTaskChange(existing, task);
     return { id: taskId };
   });
 
@@ -426,6 +429,8 @@ export const deleteXproTask = createServerFn({ method: "POST" })
       task.id,
       data.workspaceId,
     ]);
+    const { recalcAfterTaskChange } = await import("@/lib/xpro-progress.server");
+    await recalcAfterTaskChange(task, null);
     return { ok: true };
   });
 
@@ -566,4 +571,244 @@ export const markNotificationsRead = createServerFn({ method: "POST" })
       data.ids === "all" ? "all" : (data.ids ?? []).slice(0, 100),
     );
     return { ok: true };
+  });
+
+/* ------------------------------ impor Excel ------------------------------ */
+
+export interface XproImportRow {
+  name: string;
+  description?: string | null;
+  project_code?: string | null;
+  milestone?: string | null;
+  /** Email atau nama anggota, dipisah koma/titik koma. */
+  assignees?: string | null;
+  priority?: string | null;
+  estimate_hours?: number | string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  /** Nama sprint (hanya untuk impor ke Backlog). */
+  sprint?: string | null;
+}
+
+const PRIORITY_ALIASES: Record<string, string> = {
+  low: "low",
+  rendah: "low",
+  medium: "medium",
+  sedang: "medium",
+  normal: "medium",
+  high: "high",
+  tinggi: "high",
+  urgent: "urgent",
+  mendesak: "urgent",
+  kritis: "urgent",
+};
+
+/**
+ * Impor banyak tugas sekaligus (dari Excel). Ke Backlog khusus pengelola; ke papan tim butuh hak tulis.
+ * Baris dengan proyek/tahapan/PIC/sprint yang tidak dikenali tetap dibuat; masalahnya dilaporkan sebagai peringatan.
+ */
+export const importXproTasks = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator(
+    (input: unknown) =>
+      input as {
+        workspaceId: string;
+        backlog: boolean;
+        /** Proyek bawaan bila kolom kode proyek kosong; "__none" = internal. */
+        defaultProjectId?: string | null;
+        rows: XproImportRow[];
+      },
+  )
+  .handler(async ({ data, context }) => {
+    const access = await ctx(data.workspaceId, context.userId);
+    if (data.backlog ? !access.manager : !access.writer)
+      throw new Error("Anda tidak punya hak untuk mengimpor tugas di sini.");
+    const rows = (data.rows ?? []).slice(0, 1000);
+    if (!rows.length) throw new Error("Tidak ada baris untuk diimpor.");
+    const srv = await import("@/lib/xpro-tasks.server");
+    const { execute, uuid } = await import("@/integrations/mysql/pool");
+    const { recalcMilestone, recalcProject } = await import("@/lib/xpro-progress.server");
+
+    const projects = await execute<{ id: string; code: string }>(
+      "SELECT id, code FROM prj_projects WHERE workspace_id = ?",
+      [data.workspaceId],
+    );
+    const projByCode = new Map(projects.map((p) => [p.code.trim().toLowerCase(), p.id]));
+    const projIds = new Set(projects.map((p) => p.id));
+    const milestones = await execute<{ id: string; project_id: string; name: string }>(
+      "SELECT id, project_id, name FROM prj_milestones WHERE workspace_id = ?",
+      [data.workspaceId],
+    );
+    const sprints = await execute<{
+      id: string;
+      project_id: string | null;
+      name: string;
+      status: string;
+      end_date: string | null;
+    }>(
+      "SELECT id, project_id, name, status, end_date FROM prj_sprints WHERE workspace_id = ? AND status <> 'completed'",
+      [data.workspaceId],
+    );
+    const firstCols = await execute<{ project_id: string; key: string }>(
+      `SELECT c.project_id, c.\`key\` FROM prj_board_columns c
+        WHERE c.workspace_id = ? AND c.sort_order = (SELECT MIN(c2.sort_order) FROM prj_board_columns c2 WHERE c2.project_id = c.project_id)`,
+      [data.workspaceId],
+    );
+    const firstCol = new Map(firstCols.map((c) => [c.project_id, c.key]));
+    const people = await srv.workspacePeople(data.workspaceId);
+    const findPerson = (token: string) => {
+      const k = token.trim().toLowerCase();
+      return people.find((p) => p.email.toLowerCase() === k || p.name.trim().toLowerCase() === k);
+    };
+    const defaultProject =
+      data.defaultProjectId &&
+      data.defaultProjectId !== "__none" &&
+      projIds.has(data.defaultProjectId)
+        ? data.defaultProjectId
+        : null;
+
+    const warnings: { row: number; message: string }[] = [];
+    const touchedMs = new Set<string>();
+    const touchedProj = new Set<string>();
+    let created = 0;
+    const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const n = i + 2; // baris Excel (baris 1 = judul kolom)
+      const name = String(r.name ?? "")
+        .trim()
+        .slice(0, 255);
+      if (!name) {
+        warnings.push({ row: n, message: "Nama tugas kosong — baris dilewati." });
+        continue;
+      }
+      let projectId = defaultProject;
+      const code = String(r.project_code ?? "").trim();
+      if (code) {
+        const id = projByCode.get(code.toLowerCase());
+        if (id) projectId = id;
+        else
+          warnings.push({
+            row: n,
+            message: `Kode proyek "${code}" tidak ditemukan — dipakai bawaan.`,
+          });
+      }
+      let milestoneId: string | null = null;
+      const msName = String(r.milestone ?? "").trim();
+      if (msName) {
+        const m = milestones.find(
+          (x) => x.project_id === projectId && x.name.trim().toLowerCase() === msName.toLowerCase(),
+        );
+        if (m) milestoneId = m.id;
+        else warnings.push({ row: n, message: `Tahapan "${msName}" tidak ada di proyek ini.` });
+      }
+      const prRaw = String(r.priority ?? "")
+        .trim()
+        .toLowerCase();
+      const priority = prRaw ? (PRIORITY_ALIASES[prRaw] ?? "medium") : "medium";
+      if (prRaw && !PRIORITY_ALIASES[prRaw])
+        warnings.push({
+          row: n,
+          message: `Prioritas "${r.priority}" tidak dikenal — dipakai Sedang.`,
+        });
+      const estRaw =
+        r.estimate_hours === null || r.estimate_hours === undefined || r.estimate_hours === ""
+          ? null
+          : Number(String(r.estimate_hours).replace(",", "."));
+      const estimate =
+        estRaw !== null && Number.isFinite(estRaw) && estRaw >= 0 && estRaw <= 10000
+          ? estRaw
+          : null;
+      if (estRaw !== null && estimate === null)
+        warnings.push({ row: n, message: "Estimasi jam tidak valid — dikosongkan." });
+      const date = (v: unknown, label: string) => {
+        if (v === null || v === undefined || v === "") return null;
+        const s = String(v).slice(0, 10);
+        if (DATE_RE.test(s)) return s;
+        warnings.push({
+          row: n,
+          message: `${label} "${v}" bukan tanggal (YYYY-MM-DD) — dikosongkan.`,
+        });
+        return null;
+      };
+      const start = date(r.start_date, "Tanggal mulai");
+      let due = date(r.due_date, "Tenggat");
+
+      let sprintId: string | null = null;
+      let backlog = data.backlog ? 1 : 0;
+      const spName = String(r.sprint ?? "").trim();
+      if (spName) {
+        if (!data.backlog)
+          warnings.push({ row: n, message: "Kolom sprint hanya dipakai saat impor ke Backlog." });
+        else {
+          const sp = sprints.find(
+            (x) =>
+              (x.project_id ?? null) === projectId &&
+              x.name.trim().toLowerCase() === spName.toLowerCase(),
+          );
+          if (sp) {
+            sprintId = sp.id;
+            if (sp.status === "active") {
+              backlog = 0;
+              due = due ?? (sp.end_date ? String(sp.end_date).slice(0, 10) : null);
+            }
+          } else
+            warnings.push({
+              row: n,
+              message: `Sprint "${spName}" tidak ditemukan — masuk Backlog.`,
+            });
+        }
+      }
+
+      const ids: string[] = [];
+      for (const token of String(r.assignees ?? "")
+        .split(/[,;\n]+/)
+        .map((x) => x.trim())
+        .filter(Boolean)) {
+        const p = findPerson(token);
+        if (p) ids.push(p.user_id);
+        else
+          warnings.push({ row: n, message: `PIC "${token}" bukan anggota workspace — dilewati.` });
+      }
+
+      const id = uuid();
+      await execute(
+        `INSERT INTO prj_tasks (id, workspace_id, project_id, milestone_id, name, description, start_date, due_date,
+                                progress_pct, status, backlog, sprint_id, priority, estimate_hours, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.workspaceId,
+          projectId,
+          milestoneId,
+          name,
+          r.description ? String(r.description).slice(0, 20000) : null,
+          start ?? (backlog ? null : today),
+          due,
+          (projectId && firstCol.get(projectId)) || "todo",
+          backlog,
+          sprintId,
+          priority,
+          estimate,
+          context.userId,
+        ],
+      );
+      if (ids.length) {
+        const added = await srv.setAssignees(data.workspaceId, id, ids);
+        if (!backlog && added.length)
+          await srv.notifyAssigned(
+            data.workspaceId,
+            { id, name, due_date: due },
+            added,
+            context.userId,
+          );
+      }
+      if (milestoneId) touchedMs.add(milestoneId);
+      if (projectId) touchedProj.add(projectId);
+      created += 1;
+    }
+    for (const m of touchedMs) await recalcMilestone(m);
+    for (const p of touchedProj) await recalcProject(p);
+    return { created, warnings: warnings.slice(0, 200) };
   });

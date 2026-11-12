@@ -9,25 +9,16 @@ import { toast } from "sonner";
 
 import { AdminSelect, todayISO } from "@/components/app/admin-ui";
 import { PageSkeleton } from "@/components/app/ui-states";
-import {
-  PriorityBadge,
-  XproTaskDialog,
-  dueLabel,
-  useT,
-  useXproPeople,
-  useXproTaskList,
-} from "@/components/app/XproTasks";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { XproTaskDialog, useT, useXproPeople, useXproTaskList } from "@/components/app/XproTasks";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useApp } from "@/lib/app-context";
 import { getNotificationPrefs, setNotificationPref } from "@/lib/notification-prefs.functions";
+import {
+  PersonDetailDialog,
+  WorkloadInsights,
+  currentTaskOf,
+} from "@/components/app/XproWorkloadInsights";
 import { cn } from "@/lib/utils";
 import { type LoadLevel, type PersonLoad, computeHoursLoad } from "@/lib/xpro-workload";
 import { setXproCapacity } from "@/lib/xpro-tasks.functions";
@@ -80,7 +71,8 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
   const lang = t("en", "id") as "id" | "en";
   const qc = useQueryClient();
   const peopleQ = useXproPeople(workspaceId);
-  const tasksQ = useXproTaskList(workspaceId, "all", 30);
+  // 60 hari agar grafik "selesai per minggu" (8 minggu) punya data.
+  const tasksQ = useXproTaskList(workspaceId, "all", 60);
   const [horizon, setHorizon] = useState(6);
   const [project, setProject] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -196,6 +188,8 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
         />
       </div>
 
+      <WorkloadInsights tasks={tasks} rows={load.rows} />
+
       <div className="q-filters flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3">
         <AdminSelect value={project} onChange={setProject} className="sm:w-64">
           <option value="">{t("All projects", "Semua proyek")}</option>
@@ -289,6 +283,11 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
                     <span className="truncate font-medium text-navy hover:underline dark:text-foreground">
                       {r.name}
                     </span>
+                    {currentTaskOf(r, today) && (
+                      <span className="mt-0.5 max-w-[11rem] truncate text-[11px] text-muted-foreground">
+                        ▸ {currentTaskOf(r, today)!.name}
+                      </span>
+                    )}
                     <span
                       className={cn(
                         "mt-0.5 rounded-full px-1.5 text-[10px] font-medium",
@@ -393,54 +392,13 @@ export function XproWorkloadView({ workspaceId }: { workspaceId: string }) {
         )}
       </p>
 
-      <Dialog open={Boolean(selected)} onOpenChange={(o) => !o && setSelected(null)}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{selected?.name}</DialogTitle>
-            <DialogDescription>
-              {selected &&
-                `${selected.active} ${t("active tasks", "tugas aktif")} · ${fmtH(selected.remaining)} ${t("h remaining", "jam tersisa")}`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="divide-y divide-border">
-            {(selected?.tasks ?? [])
-              .slice()
-              .sort((a, b) => String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9")))
-              .map((x) => {
-                const full = (tasksQ.data?.tasks ?? []).find((y) => y.id === x.id);
-                const due = dueLabel(x.due_date, t);
-                return (
-                  <button
-                    key={x.id}
-                    type="button"
-                    onClick={() => setOpenTask(x.id)}
-                    className="flex w-full items-start justify-between gap-3 py-2.5 text-left hover:bg-muted/40"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium">{x.name}</span>
-                      <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        {full && <PriorityBadge priority={full.priority} />}
-                        <span>{full?.project_code ?? t("Internal", "Internal")}</span>
-                        {due && (
-                          <span
-                            className={cn(due.tone === "late" && "font-medium text-destructive")}
-                          >
-                            {due.text}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {x.estimate_hours === null
-                        ? "?"
-                        : `${fmtH(x.estimate_hours)} ${t("h", "jam")}`}
-                    </span>
-                  </button>
-                );
-              })}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <PersonDetailDialog
+        person={selected}
+        allTasks={tasks}
+        weekStarts={load.weekStarts}
+        onClose={() => setSelected(null)}
+        onOpenTask={setOpenTask}
+      />
 
       <XproTaskDialog
         workspaceId={workspaceId}

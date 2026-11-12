@@ -207,8 +207,13 @@ function statusBadge(s: string) {
   );
 }
 
-/** Progres fisik proyek = Σ(bobot × progres) / Σ(bobot). */
-function projectProgress(projectId: string, milestones: XproRow[]) {
+/**
+ * Progres fisik proyek. Utamakan nilai tersimpan (prj_projects.progress_pct, dihitung server dari
+ * tahapan & tugas); cadangan: Σ(bobot × progres tahapan) / Σ(bobot).
+ */
+function projectProgress(projectId: string, milestones: XproRow[], row?: XproRow) {
+  if (row && row.progress_pct !== null && row.progress_pct !== undefined)
+    return num(row.progress_pct);
   const ms = milestones.filter((m) => m.project_id === projectId);
   const w = ms.reduce((s, m) => s + num(m.weight_pct), 0);
   if (!w) return 0;
@@ -243,7 +248,7 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
   const rab = B.reduce((s, b) => s + num(b.amount), 0);
   const billed = BL.filter((b) => b.status === "invoiced").reduce((s, b) => s + num(b.amount), 0);
   const avgProg = active.length
-    ? active.reduce((s, p) => s + projectProgress(String(p.id ?? ""), M), 0) / active.length
+    ? active.reduce((s, p) => s + projectProgress(String(p.id ?? ""), M, p), 0) / active.length
     : 0;
   const late = M.filter((m) => m.status !== "done" && m.due_date && String(m.due_date) < today);
   const chart = P.slice(0, 8).map((p) => ({
@@ -472,7 +477,7 @@ export function XproDashboard({ workspaceId }: { workspaceId: string }) {
             </p>
           )}
           {P.slice(0, 10).map((p) => {
-            const prog = projectProgress(String(p.id ?? ""), M);
+            const prog = projectProgress(String(p.id ?? ""), M, p);
             return (
               <div key={p.id}>
                 <div className="flex justify-between gap-2 text-sm">
@@ -600,7 +605,7 @@ function ProjectsView({ workspaceId }: { workspaceId: string }) {
                     <TableCell className="text-right">{fmtIDR(num(r.contract_value))}</TableCell>
                   )}
                   <TableCell>
-                    {projectProgress(String(r.id ?? ""), milestones.data ?? []).toFixed(0)}%
+                    {projectProgress(String(r.id ?? ""), milestones.data ?? [], r).toFixed(0)}%
                   </TableCell>
                   <TableCell>{statusBadge(String(r.status))}</TableCell>
                   <TableCell className="whitespace-nowrap">
@@ -744,6 +749,20 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
   const t = useT();
   const projects = useRows("prj_projects", workspaceId);
   const { data = [], isLoading } = useRows("prj_milestones", workspaceId, "due_date", "asc");
+  // Tugas per tahapan: progres tahapan dihitung otomatis dari tugasnya.
+  const tasksQ = useRows("prj_tasks", workspaceId);
+  const taskStats = useMemo(() => {
+    const m = new Map<string, { total: number; done: number }>();
+    for (const x of tasksQ.data ?? []) {
+      if (!x.milestone_id) continue;
+      const k = String(x.milestone_id);
+      const v = m.get(k) ?? { total: 0, done: 0 };
+      v.total += 1;
+      if (x.completed_at) v.done += 1;
+      m.set(k, v);
+    }
+    return m;
+  }, [tasksQ.data]);
   const save = useSave("prj_milestones", workspaceId);
   const remove = useRemove("prj_milestones", workspaceId);
   const [project, setProject] = useState("");
@@ -845,7 +864,15 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
                         style={{ width: `${Math.min(100, num(r.progress_pct))}%` }}
                       />
                     </div>
-                    <span className="text-xs">{num(r.progress_pct)}%</span>
+                    <span className="text-xs">
+                      {num(r.progress_pct)}%
+                      {taskStats.get(String(r.id)) && (
+                        <span className="ml-1 text-muted-foreground">
+                          · {taskStats.get(String(r.id))!.done}/{taskStats.get(String(r.id))!.total}{" "}
+                          {t("tasks", "tugas")}
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell>{statusBadge(String(r.status))}</TableCell>
                   <TableCell className="whitespace-nowrap">
@@ -899,11 +926,26 @@ function MilestonesView({ workspaceId }: { workspaceId: string }) {
                   onChange={(e) => setEdit({ ...edit, weight_pct: num(e.target.value) })}
                 />
               </AdminField>
-              <AdminField label={t("Progress %", "Progres %")}>
+              <AdminField
+                label={
+                  Number(edit.progress_auto) === 1
+                    ? t("Progress % (from tasks)", "Progres % (otomatis dari tugas)")
+                    : t("Progress %", "Progres %")
+                }
+              >
                 <Input
                   type="number"
                   min={0}
                   max={100}
+                  disabled={Number(edit.progress_auto) === 1}
+                  title={
+                    Number(edit.progress_auto) === 1
+                      ? t(
+                          "Calculated from this milestone's tasks (estimated hours weighted).",
+                          "Dihitung dari tugas tahapan ini (tertimbang estimasi jam).",
+                        )
+                      : undefined
+                  }
                   value={String(edit.progress_pct ?? 0)}
                   onChange={(e) => {
                     const v = Math.min(100, num(e.target.value));
