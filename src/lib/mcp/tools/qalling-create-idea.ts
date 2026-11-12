@@ -17,7 +17,7 @@ export default defineTool({
       .max(5)
       .optional()
       .describe(
-        "Public https URLs of images or videos to save (file limits set by Super Admin; default 5 MB photo, 20 MB video).",
+        "Public https URLs of images or videos to save (file limits set by Super Admin; default 5 MB photo, 100 MB video).",
       ),
   },
   annotations: {

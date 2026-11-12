@@ -2,7 +2,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
-  CATALOG,
+  PHOTOS,
   TEMPLATE_KEYS,
   TEMPLATE_LIMITS,
   TEMPLATE_RATIOS,
@@ -182,11 +182,11 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
           .array(
             z.object({
               mediaId: z.string().uuid(),
-              title: z.string().trim().max(CATALOG.title).default(""),
-              price: z.string().trim().max(CATALOG.price).default(""),
+              title: z.string().trim().max(PHOTOS.title).default(""),
+              price: z.string().trim().max(PHOTOS.label).default(""),
             }),
           )
-          .max(CATALOG.max)
+          .max(PHOTOS.max)
           .default([]),
         sound: z.boolean().default(true),
         narrationPath: z.string().max(300).nullable().default(null),
@@ -196,8 +196,11 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
         subline: z.string().trim().max(TEMPLATE_LIMITS.subline).default(""),
         badge: z.string().trim().max(TEMPLATE_LIMITS.badge).default(""),
         cta: z.string().trim().max(TEMPLATE_LIMITS.cta).default(""),
-        accent: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-        aspectRatio: z.enum(TEMPLATE_RATIOS),
+        accent: z
+          .string()
+          .regex(/^(auto|#[0-9A-Fa-f]{6})$/)
+          .default("auto"),
+        aspectRatio: z.enum(TEMPLATE_RATIOS).default("auto"),
         seconds: z.number().int().min(1).max(60).default(TEMPLATE_SECONDS),
         consent: z.literal(true),
       })
@@ -401,6 +404,7 @@ export const adminGetStudio = createServerFn({ method: "POST" })
       template: {
         enabled: s.template_enabled,
         credits: s.template_credits,
+        prices: s.template_prices,
         has_token: s.has_worker_token,
         worker_seen_at: s.worker_seen_at,
         worker_info: s.worker_info,
@@ -502,6 +506,16 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
           .refine((a) => a.some((x) => x.enabled), { message: "Minimal satu gaya aktif" }),
         templateEnabled: z.boolean().default(false),
         templateCredits: z.number().int().min(1).max(100).default(1),
+        templatePrices: z
+          .array(
+            z.object({
+              max_s: z.number().int().min(1).max(61),
+              credits: z.number().int().min(1).max(100),
+            }),
+          )
+          .min(1)
+          .max(6)
+          .optional(),
         dailyLimit: z.number().int().min(0).max(500),
         usdIdr: z.number().int().min(1000).max(100000),
         packs: z
@@ -529,7 +543,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
     const atlas = data.clearAtlas ? null : data.atlasApiKey || cur.atlas_api_key;
     await execute(
       `UPDATE ai_studio_settings SET enabled = ?, fal_api_key = ?, atlas_api_key = ?, tiers = ?, daily_limit = ?,
-              usd_idr = ?, credit_packs = ?, styles = ?, template_enabled = ?, template_credits = ?, updated_by = ?
+              usd_idr = ?, credit_packs = ?, styles = ?, template_enabled = ?, template_credits = ?, template_prices = COALESCE(?, template_prices), updated_by = ?
         WHERE id = 'platform'`,
       [
         data.enabled ? 1 : 0,
@@ -542,6 +556,7 @@ export const adminSaveStudio = createServerFn({ method: "POST" })
         JSON.stringify(data.styles),
         data.templateEnabled ? 1 : 0,
         data.templateCredits,
+        data.templatePrices ? JSON.stringify(data.templatePrices) : null,
         context.userId,
       ],
     );

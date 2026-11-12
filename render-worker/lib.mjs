@@ -4,10 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { ensureBrowser, renderMedia, selectComposition } from "@remotion/renderer";
-import { writeSfx } from "./sfx.mjs";
+import { MOOD_OF, writeBed, writeSfx } from "./sfx.mjs";
+import fs from "node:fs";
+import crypto from "node:crypto";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-export const TEMPLATE_IDS = ["promo", "showcase", "story", "catalog", "announce", "motion"];
+export const TEMPLATE_IDS = ["promo", "showcase", "story", "catalog", "announce", "motion", "steps"];
 const browserExecutable = process.env.BROWSER_EXECUTABLE || undefined;
 
 let serveUrl;
@@ -33,19 +35,34 @@ export async function renderTemplate({ template, props, output, onProgress }) {
   if (!TEMPLATE_IDS.includes(template)) throw new Error(`Template tidak dikenal: ${template}`);
   const url = await prepare();
   const composition = await selectComposition({ serveUrl: url, id: template, inputProps: props, browserExecutable });
+  // Hasil calculateMetadata (rasio, warna dari foto) dipakai sebagai props render.
+  let inputProps = { ...props, ...(composition.props || {}) };
+  // Suara latar bertema, disintesis sepanjang durasi video (kecuali efek suara dimatikan).
+  let bedFile;
+  if (props.sound !== false && !props.bed) {
+    const rel = `bed/${crypto.randomUUID()}.wav`;
+    bedFile = path.join(await publicDir(), rel);
+    writeBed(bedFile, composition.durationInFrames / composition.fps, MOOD_OF[template]);
+    inputProps = { ...inputProps, bed: rel };
+  }
+  try {
   await renderMedia({
-    composition,
+    // Props hasil calculateMetadata + suara latar; komponen menerima `composition.props`.
+    composition: { ...composition, props: inputProps },
     serveUrl: url,
     codec: "h264",
     crf: 20,
     pixelFormat: "yuv420p",
     outputLocation: output,
-    inputProps: props,
+    inputProps,
     browserExecutable,
     concurrency: Number(process.env.RENDER_CONCURRENCY) || null,
     chromiumOptions: { gl: process.env.RENDER_GL || "swangle" },
     onProgress: onProgress ? ({ progress }) => onProgress(progress) : undefined,
     logLevel: "warn",
   });
+  } finally {
+    if (bedFile) fs.rmSync(bedFile, { force: true });
+  }
   return output;
 }

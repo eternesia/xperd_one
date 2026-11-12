@@ -40,7 +40,7 @@ function MediaForm({ initial }: { initial: MediaUploadPolicy }) {
   });
   const numbers = [
     ["photo_mb", "Batas foto (MB)", 1, 50],
-    ["video_mb", "Batas video (MB)", 1, 50],
+    ["video_mb", "Batas video (MB)", 1, 500],
     ["image_quality", "Kualitas foto (%)", 85, 100],
     ["image_max_edge", "Sisi terpanjang foto (px)", 1920, 4096],
     ["video_mbps", "Kualitas video (Mbps)", 8, 30],

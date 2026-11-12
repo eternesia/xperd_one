@@ -390,7 +390,7 @@ function QallingShell() {
           g.key,
           g.label,
           g.key === "content" && studioOn
-            ? [...g.ids, link("/qalling/app/studio", Wand2, "Studio AI")]
+            ? [...g.ids, link("/qalling/app/studio", Wand2, "Studio Video")]
             : g.ids,
         ),
       )}
@@ -438,7 +438,7 @@ function QallingShell() {
                         );
                       });
                     if (g.key === "content" && studioOn)
-                      rows.push(sheetRow("/qalling/app/studio", Wand2, "Studio AI"));
+                      rows.push(sheetRow("/qalling/app/studio", Wand2, "Studio Video"));
                     if (!rows.length) return null;
                     return (
                       <div key={g.key} className="pt-3">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   Audio,
   continueRender,
@@ -16,7 +16,13 @@ import {
 
 export const FPS = 30;
 export const DURATION = 180; // 6 detik (bawaan)
-export const SECONDS = [6, 10, 15];
+export const SECONDS = [8, 10, 15, 20, 30, 45, 60];
+/** Gelap bawaan bila foto tidak memberi warna. */
+export const DARK = "#0b1020";
+/** Langkah demi Langkah: frame pembuka, minimum per foto, penutup. */
+export const STEPS = { intro: 60, scene: 75, outro: 75 };
+/** Template satu-foto yang diulang per foto: minimum frame per foto. */
+export const PER_PHOTO = 75;
 /** Slideshow Katalog: frame per foto dan frame penutup. */
 export const SLIDE = 75;
 export const SLIDE_OUTRO = 60;
@@ -32,8 +38,13 @@ export interface TemplateProps {
   badge: string;
   cta: string;
   accent: string;
-  ratio: "9:16" | "1:1" | "16:9";
-  /** Durasi video: 6, 10, atau 15 detik (bawaan 6). */
+  /** "auto" ditentukan dari bentuk foto pertama. */
+  ratio: "9:16" | "1:1" | "16:9" | "auto";
+  /** Warna latar gelap (otomatis dari foto). */
+  dark?: string;
+  /** Trek suara latar yang disintesis mesin render (folder publik bundel). */
+  bed?: string;
+  /** Durasi video yang diminta (detik); bisa dipanjangkan oleh jumlah foto atau narasi. */
   seconds?: number;
   /** Slideshow Katalog: foto + nama + harga per slide. */
   items?: { image: string; title: string; price: string }[];
@@ -69,7 +80,18 @@ export const sizeOf = (ratio: string) =>
       ? { width: 1920, height: 1080 }
       : { width: 1080, height: 1920 };
 
-/** Durasi dalam frame; 3–61 detik (narasi bisa memanjangkan video di luar pilihan 6/10/15). */
+/**
+ * Panjang adegan saat ini. Template satu-foto yang diulang per foto dibungkus `SceneLength`, sehingga
+ * animasinya mengikuti panjang adegan, bukan panjang seluruh video.
+ */
+export const SceneLength = createContext<number | null>(null);
+export function useLength() {
+  const own = useContext(SceneLength);
+  const { durationInFrames } = useVideoConfig();
+  return own ?? durationInFrames;
+}
+
+/** Durasi dalam frame; 3–61 detik (narasi bisa memanjangkan video di luar pilihan yang ada). */
 export const framesOf = (seconds?: number) => {
   const s = Number(seconds);
   return Math.round((Number.isFinite(s) && s >= 3 ? Math.min(61, s) : 6) * FPS);
@@ -80,7 +102,7 @@ export const framesOf = (seconds?: number) => {
  * sisanya dipakai untuk menahan tampilan akhir supaya terbaca.
  */
 export function usePace() {
-  const { durationInFrames } = useVideoConfig();
+  const durationInFrames = useLength();
   const k = Math.min(1.5, Math.max(1, durationInFrames / DURATION));
   return (frame: number) => Math.round(frame * k);
 }
@@ -124,14 +146,14 @@ export function usePop(at: number) {
 /** Zoom pelan sepanjang video (efek Ken Burns). */
 export function useKenBurns(from = 1.04, to = 1.16) {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const durationInFrames = useLength();
   return interpolate(frame, [0, durationInFrames], [from, to], { easing: Easing.inOut(Easing.quad) });
 }
 
 /** Pudar keluar di akhir supaya enak diputar berulang. */
 export function useOutro(frames = 12) {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const durationInFrames = useLength();
   return interpolate(frame, [durationInFrames - frames, durationInFrames], [1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",

@@ -1,9 +1,9 @@
 import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
 
 /** Pengumuman Teks: tanpa foto. Judul muncul kata demi kata di atas warna merek dengan bentuk yang bergerak pelan. */
-export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, cta, accent, ratio, sound }) => {
+export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, cta, accent, ratio, sound, items = [] }) => {
   useFonts();
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -27,6 +27,21 @@ export const Announce: React.FC<TemplateProps> = ({ headline, subline, badge, ct
   const size = wide ? fit(headline, 150, 22) : tall ? fit(headline, 150, 20) : fit(headline, 128, 24);
   return (
     <AbsoluteFill style={{ background: accent, fontFamily: FONT, opacity: out, overflow: "hidden" }}>
+      {/* Foto (opsional) bergantian pelan di belakang lapisan warna merek. */}
+      {items.map((it, i) => {
+        const span = durationInFrames / items.length;
+        const o = interpolate(frame, [i * span - 15, i * span + 15, (i + 1) * span - 15, (i + 1) * span + 15], [0, 1, 1, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+        const z = interpolate(frame, [i * span, (i + 1) * span], [1.04, 1.14]);
+        return (
+          <AbsoluteFill key={i} style={{ opacity: i === 0 ? Math.max(o, frame < 15 ? 1 : 0) : o, transform: `scale(${z})` }}>
+            <Photo src={it.image} />
+          </AbsoluteFill>
+        );
+      })}
+      {items.length ? <AbsoluteFill style={{ background: accent, opacity: 0.8 }} /> : null}
       {badge ? <Sfx on={sound} name="pop" at={at(6)} /> : null}
       {words.map((_, i) => (
         <Sfx key={i} on={sound} name="tick" at={start + i * step} volume={0.45} />

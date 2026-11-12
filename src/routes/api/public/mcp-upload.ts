@@ -1,4 +1,8 @@
-/** Terima satu berkas media (biner mentah atau multipart `file`) ke pustaka workspace lewat token dari qalling_create_upload_link. */
+/**
+ * Terima satu berkas media (biner mentah atau multipart `file`) ke pustaka workspace lewat token dari
+ * qalling_create_upload_link. Berkas besar boleh dikirim berpotongan (`upload=<id>&part=<i>&parts=<n>`, biner mentah)
+ * karena proxy produksi membatasi body ±1 MB per permintaan.
+ */
 import { createFileRoute } from "@tanstack/react-router";
 
 const json = (status: number, body: unknown) =>
@@ -41,6 +45,53 @@ export const Route = createFileRoute("/api/public/mcp-upload")({
         } catch {
           return json(400, { error: "Isi permintaan tidak dapat dibaca." });
         }
+
+        if (url.searchParams.has("part")) {
+          const part = Number(url.searchParams.get("part"));
+          const parts = Number(url.searchParams.get("parts"));
+          const id = (url.searchParams.get("upload") ?? "")
+            .replace(/[^A-Za-z0-9_-]/g, "")
+            .slice(0, 40);
+          if (
+            !id ||
+            !Number.isInteger(part) ||
+            !Number.isInteger(parts) ||
+            parts < 1 ||
+            parts > 2000 ||
+            part < 0 ||
+            part >= parts
+          )
+            return json(400, { error: "Parameter upload/part/parts tidak valid." });
+          const fs = await import("node:fs/promises");
+          const nodePath = await import("node:path");
+          const { createHash } = await import("node:crypto");
+          const { storageRoot } = await import("@/lib/files.server");
+          const key = createHash("sha256")
+            .update(`${t.workspaceId}:${t.userId}:${id}`)
+            .digest("hex")
+            .slice(0, 32);
+          const dir = nodePath.join(storageRoot(), ".chunk-uploads", `mcp-${key}`);
+          if (part === 0) await fs.rm(dir, { recursive: true, force: true });
+          await fs.mkdir(dir, { recursive: true });
+          await fs.writeFile(nodePath.join(dir, String(part)), bytes);
+          if (part < parts - 1) return json(200, { ok: true, received: part, parts });
+          try {
+            const all: Buffer[] = [];
+            let total = 0;
+            for (let i = 0; i < parts; i++) {
+              const b = await fs.readFile(nodePath.join(dir, String(i)));
+              total += b.length;
+              if (total > max) return json(413, { error: "Berkas melebihi batas unggah." });
+              all.push(b);
+            }
+            bytes = Buffer.concat(all);
+          } catch {
+            return json(400, { error: "Ada potongan yang hilang; kirim ulang dari potongan 0." });
+          } finally {
+            await fs.rm(dir, { recursive: true, force: true });
+          }
+        }
+
         if (!bytes.length) return json(400, { error: "Berkas kosong." });
         if (bytes.length > max) return json(413, { error: "Berkas melebihi batas unggah." });
 

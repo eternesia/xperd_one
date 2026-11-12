@@ -219,6 +219,11 @@ export interface StudioAccess {
   tiers: { tier: AiTier; credits_5s: number; credits_10s: number }[];
   styles: StyleView[];
   /** Tingkat Template (tanpa AI): tersedia?, harga kredit, mesin render terhubung? */
-  template: { available: boolean; credits: number; worker_online: boolean };
+  template: {
+    available: boolean;
+    credits: number;
+    prices: { max_s: number; credits: number }[];
+    worker_online: boolean;
+  };
   can_write: boolean;
 }

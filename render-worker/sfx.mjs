@@ -80,3 +80,112 @@ export function writeSfx(publicDir) {
     fs.writeFileSync(path.join(dir, `${name}.wav`), wav(make()));
   return dir;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Suara latar bertema: ketukan + pad + arpeggio + bas, disintesis per video sepanjang durasinya.
+// Bukan musik berlisensi: semua nada dibuat dari gelombang sinus/derau di sini.
+
+const MOODS = {
+  // Korporat/teknologi (Langkah demi Langkah, Motion Grafis, Sorotan Produk).
+  corporate: { bpm: 116, chords: [[62, 65, 69], [58, 62, 65], [65, 69, 72], [60, 64, 67]], bass: [38, 34, 41, 36], kick: [0, 2], snare: [1, 3], hat: true, pluck: 2 },
+  // Promo energik (Promo Harga, Slideshow Katalog).
+  energetic: { bpm: 124, chords: [[67, 71, 74], [62, 66, 69], [64, 67, 71], [60, 64, 67]], bass: [43, 38, 40, 36], kick: [0, 1, 2, 3], snare: [1, 3], hat: true, pluck: 2 },
+  // Tenang/hangat (Cerita Bertahap, Pengumuman).
+  calm: { bpm: 92, chords: [[60, 64, 67, 71], [57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 65]], bass: [36, 33, 29, 31], kick: [0], snare: [], hat: false, pluck: 1 },
+};
+
+export const MOOD_OF = {
+  steps: "corporate",
+  motion: "corporate",
+  showcase: "corporate",
+  promo: "energetic",
+  catalog: "energetic",
+  story: "calm",
+  announce: "calm",
+};
+
+const midi = (m) => 440 * 2 ** ((m - 69) / 12);
+
+/** Tambah satu peristiwa suara (fungsi waktu-lokal) ke buffer mulai detik `at`. */
+function add(buf, at, seconds, fn) {
+  const start = Math.round(at * SR);
+  const n = Math.min(Math.round(seconds * SR), buf.length - start);
+  for (let i = 0; i < n; i++) buf[start + i] += fn(i / SR, i);
+}
+
+export function makeBed(seconds, moodName = "corporate") {
+  const m = MOODS[moodName] || MOODS.corporate;
+  const total = Math.max(1, Math.ceil(seconds * SR));
+  const buf = new Float32Array(total);
+  const beat = 60 / m.bpm;
+  const bar = beat * 4;
+  const bars = Math.ceil(seconds / bar);
+  for (let b = 0; b < bars; b++) {
+    const t0 = b * bar;
+    const ci = b % m.chords.length;
+    const chord = m.chords[ci];
+    const first = b === 0;
+    // Pad: tiga harmoni lembut per nada, naik turun pelan sepanjang satu bar.
+    for (const note of chord) {
+      const f = midi(note);
+      add(buf, t0, bar + 0.4, (t) => {
+        const env = Math.min(1, t / 0.35) * Math.min(1, Math.max(0, (bar + 0.4 - t) / 0.45));
+        return env * 0.035 * (Math.sin(2 * Math.PI * f * t) + 0.45 * Math.sin(2 * Math.PI * f * 2.003 * t) + 0.2 * Math.sin(2 * Math.PI * f * 0.997 * t));
+      });
+    }
+    // Bas mengikuti akar akor, per ketukan.
+    for (let k = 0; k < 4; k++) {
+      const f = midi(m.bass[ci]);
+      add(buf, t0 + k * beat, beat, (t) => Math.exp(-t * 3.2) * Math.min(1, t / 0.01) * 0.16 * Math.sin(2 * Math.PI * f * t));
+    }
+    // Arpeggio "pluck" (1/8 atau 1/4), satu oktaf di atas akor.
+    const steps = 4 * m.pluck;
+    for (let k = 0; k < steps; k++) {
+      const f = midi(chord[k % chord.length] + 12 + (k % (chord.length * 2) >= chord.length ? 12 : 0));
+      add(buf, t0 + (k * beat) / m.pluck, 0.5, (t) => Math.exp(-t * 9) * Math.min(1, t / 0.004) * 0.05 * (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)));
+    }
+    if (first) continue; // bar pertama tanpa drum: pembuka yang lebih lembut
+    for (const k of m.kick) {
+      let ph = 0;
+      add(buf, t0 + k * beat, 0.32, (t) => {
+        ph += (2 * Math.PI * (48 + 90 * Math.exp(-t * 28))) / SR;
+        return Math.exp(-t * 11) * 0.42 * Math.sin(ph);
+      });
+    }
+    for (const k of m.snare) {
+      let lp = 0;
+      add(buf, t0 + k * beat, 0.18, (t) => {
+        lp += 0.35 * (rnd() - lp);
+        return Math.exp(-t * 22) * 0.1 * (rnd() - lp);
+      });
+    }
+    if (m.hat)
+      for (let k = 0; k < 8; k++) {
+        let prev = 0;
+        add(buf, t0 + (k * beat) / 2, 0.05, (t) => {
+          const x = rnd();
+          const hp = x - prev;
+          prev = x;
+          return Math.exp(-t * 70) * (k % 2 ? 0.05 : 0.03) * hp;
+        });
+      }
+  }
+  // Penutup: akor akhir yang menggantung, lalu normalisasi dengan pembatas lembut.
+  const end = Math.max(0, seconds - 1.6);
+  for (const note of m.chords[0]) {
+    const f = midi(note);
+    add(buf, end, 1.6, (t) => Math.exp(-t * 1.6) * 0.05 * Math.sin(2 * Math.PI * f * t));
+  }
+  let peak = 0;
+  for (let i = 0; i < total; i++) peak = Math.max(peak, Math.abs(buf[i]));
+  const g = peak > 0 ? 0.9 / peak : 1;
+  for (let i = 0; i < total; i++) buf[i] = Math.tanh(buf[i] * g * 1.2) * 0.85;
+  return buf;
+}
+
+/** Tulis suara latar sebagai WAV ke `file` (dipakai lib.mjs per render). */
+export function writeBed(file, seconds, moodName) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, wav(makeBed(seconds, moodName)));
+  return file;
+}

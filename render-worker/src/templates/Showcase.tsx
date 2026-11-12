@@ -1,13 +1,13 @@
 import React from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { FONT, fit, onAccent, Photo, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
+import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import { FONT, fit, onAccent, Photo, Sfx, useFonts, useOutro, usePace, usePop, useRise, type TemplateProps, useLength } from "../shared";
 
 /** Sorotan Produk: latar warna merek, foto dalam kartu yang melayang pelan, judul di atas, harga & ajakan di bawah. */
 export const Showcase: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio, sound }) => {
   useFonts();
   const frame = useCurrentFrame();
   const out = useOutro();
-  const { durationInFrames } = useVideoConfig();
+  const durationInFrames = useLength();
   const at = usePace();
   const head = useRise(at(8), 50);
   const sub = useRise(at(18), 50);

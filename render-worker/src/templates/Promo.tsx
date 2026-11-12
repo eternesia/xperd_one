@@ -1,9 +1,9 @@
 import React from "react";
 import { AbsoluteFill } from "remotion";
-import { FONT, fit, onAccent, Photo, Sfx, useFonts, useKenBurns, useOutro, usePace, usePop, useRise, type TemplateProps } from "../shared";
+import { FONT, fit, onAccent, Photo, Sfx, useFonts, useKenBurns, useOutro, usePace, usePop, useRise, type TemplateProps, DARK } from "../shared";
 
 /** Promo Harga: foto penuh dengan zoom pelan, judul naik dari bawah, lencana harga membal, ajakan di akhir. */
-export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio, sound }) => {
+export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge, cta, accent, ratio, sound, dark }) => {
   useFonts();
   const zoom = useKenBurns();
   const out = useOutro();
@@ -18,7 +18,7 @@ export const Promo: React.FC<TemplateProps> = ({ image, headline, subline, badge
   const pad = square ? 64 : 80;
   const ink = onAccent(accent);
   return (
-    <AbsoluteFill style={{ background: "#0b1020", fontFamily: FONT, opacity: out }}>
+    <AbsoluteFill style={{ background: dark ?? DARK, fontFamily: FONT, opacity: out }}>
       <Sfx on={sound} name="whoosh" at={at(10)} />
       {badge ? <Sfx on={sound} name="pop" at={at(48)} /> : null}
       {cta ? <Sfx on={sound} name="tick" at={at(96)} /> : null}
