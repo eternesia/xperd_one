@@ -31,6 +31,7 @@ function StoragePage() {
     provider: "r2" as "r2" | "s3" | "wasabi" | "spaces" | "b2",
     endpoint: "",
     bucket: "",
+    backup_bucket: "",
     region: "auto",
     cdn_url: "",
     access_key: "",
@@ -42,6 +43,7 @@ function StoragePage() {
       setForm({
         ...data,
         provider: data.provider as typeof form.provider,
+        backup_bucket: data.backup_bucket ?? "",
         access_key: "",
         secret_key: "",
       });
@@ -69,8 +71,9 @@ function StoragePage() {
       <MediaUploadSettings />
       <h1 className="text-2xl font-semibold">Object Storage</h1>
       <p className="text-sm text-muted-foreground">
-        Media saat ini tetap di penyimpanan Cloud. Pengaturan ini menyiapkan dan menguji tujuan
-        eksternal; belum memindahkan file atau mengalihkan unggahan.
+        <b>Bucket backup</b>: backup otomatis (database harian, berkas mingguan) disalin ke sini —
+        lihat Kesehatan Sistem. <b>Bucket berkas</b> disiapkan untuk memindahkan unggahan pengguna;
+        saat ini unggahan masih disimpan di disk server.
       </p>
       {isLoading ? (
         <p>Memuat…</p>
@@ -95,23 +98,40 @@ function StoragePage() {
             </AdminSelect>
           </AdminField>
           <div className="grid gap-4 sm:grid-cols-2">
-            {(["endpoint", "bucket", "region", "cdn_url", "access_key", "secret_key"] as const).map(
-              (k) => (
-                <AdminField key={k} label={k.replaceAll("_", " ")}>
-                  <Input
-                    value={form[k]}
-                    type={k.includes("key") ? "password" : "text"}
-                    autoComplete="off"
-                    placeholder={
-                      k.includes("key") && data?.has_secret_key
-                        ? "Tersimpan — kosongkan untuk mempertahankan"
-                        : ""
-                    }
-                    onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                  />
-                </AdminField>
-              ),
-            )}
+            {(
+              [
+                "endpoint",
+                "bucket",
+                "backup_bucket",
+                "region",
+                "cdn_url",
+                "access_key",
+                "secret_key",
+              ] as const
+            ).map((k) => (
+              <AdminField
+                key={k}
+                label={
+                  k === "bucket"
+                    ? "bucket berkas (media)"
+                    : k === "backup_bucket"
+                      ? "bucket backup (opsional)"
+                      : k.replaceAll("_", " ")
+                }
+              >
+                <Input
+                  value={form[k]}
+                  type={k.includes("key") ? "password" : "text"}
+                  autoComplete="off"
+                  placeholder={
+                    k.includes("key") && data?.has_secret_key
+                      ? "Tersimpan — kosongkan untuk mempertahankan"
+                      : ""
+                  }
+                  onChange={(e) => setForm({ ...form, [k]: e.target.value })}
+                />
+              </AdminField>
+            ))}
           </div>
           <div className="flex gap-2">
             <Button variant="gold" disabled={busy}>

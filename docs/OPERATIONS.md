@@ -109,6 +109,11 @@ tidak berubah menjadi spec yang ter-skip tanpa disadari. Workflow lain
   Super Admin → **Kesehatan Sistem**: Backup sekarang, **Unduh** (simpan salinan di luar server), Hapus.
   Pulihkan DB: `gunzip -c db-….sql.gz | mysql -u USER -p NAMA_DB` · berkas: `tar -xzf files-….tar.gz -C /app/storage`.
   Dump dibuat lewat koneksi MySQL aplikasi (tanpa mysqldump), jadi tetap jalan bila DB dipindah ke server lain.
+- **Salinan di luar server (R2/S3)**: isi *Bucket backup* di Super Admin → Pengaturan → Object Storage
+  (token R2: Object Read & Write untuk bucket backup & berkas). Setiap backup diunggah ke `db/…` atau `files/…`
+  (multipart untuk > 64 MB), dihapus mengikuti aturan simpanan, dan gagal unggah dicoba ulang tiap jam.
+  Kesehatan Sistem menampilkan isi bucket & perkiraan biaya (R2: $0,015/GB-bulan di atas 10 GB gratis;
+  kurs bisa diatur lewat env `USD_IDR_RATE`).
 - **Kesehatan Sistem** (Super Admin): RAM/disk/CPU server aplikasi, koneksi & ukuran database, pemakaian berkas
   per tenant, backup, dan server render video (status + metrik dari mesin render v2.1.0).
 - `db_apply_log` mencatat migration/seed yang sudah diterapkan; jangan dihapus

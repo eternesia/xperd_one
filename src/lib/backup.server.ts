@@ -4,7 +4,7 @@
  *    dikompres gzip. Tidak butuh mysqldump di kontainer dan tetap jalan bila DB di server lain.
  *    Pulihkan: gunzip -c db-*.sql.gz | mysql -u USER -p NAMA_DB
  *  - Berkas: arsip .tar.gz folder penyimpanan (tanpa _backups). Pulihkan: tar -xzf files-*.tar.gz -C /app/storage
- * File disimpan di <STORAGE_DIR>/_backups; riwayat di tabel system_backups.
+ * File disimpan di <STORAGE_DIR>/_backups dan (bila diatur) disalin ke bucket backup R2/S3; riwayat di system_backups.
  * Jadwal (scheduler per jam): DB tiap hari ≥ 02.00 WIB (simpan 14), berkas tiap 7 hari (simpan 4).
  */
 import { createReadStream, createWriteStream } from "node:fs";
@@ -247,7 +247,8 @@ export async function runBackup(kind: BackupKind, triggeredBy: string | null) {
       [size, detail, id],
     );
     await prune(kind);
-    return { id, fileName, size, detail };
+    const remote = await uploadOffsite(id, kind, fileName, path);
+    return { id, fileName, size, detail, remote };
   } catch (e) {
     await rm(path, { force: true }).catch(() => {});
     await execute(
@@ -278,6 +279,56 @@ async function estimateStorage() {
   return { scanBytes: bytes };
 }
 
+/* ------------------------------ salinan di object storage (R2/S3) ------------------------------ */
+
+/** Unggah backup ke bucket backup (bila diatur). Gagal unggah tidak menggagalkan backup lokal. */
+export async function uploadOffsite(id: string, kind: BackupKind, fileName: string, path: string) {
+  const { loadStorageConfig, putFile } = await import("@/lib/object-storage.server");
+  const cfg = await loadStorageConfig();
+  if (!cfg?.backupBucket) return "skipped" as const;
+  const key = `${kind}/${fileName}`;
+  try {
+    await putFile(
+      cfg,
+      cfg.backupBucket,
+      key,
+      path,
+      kind === "db" ? "application/gzip" : "application/x-gtar",
+    );
+    await execute(
+      "UPDATE system_backups SET remote_status = 'success', remote_key = ?, remote_error = NULL, remote_at = UTC_TIMESTAMP(6), target = 'server+r2' WHERE id = ?",
+      [key, id],
+    );
+    return "success" as const;
+  } catch (e) {
+    await execute(
+      "UPDATE system_backups SET remote_status = 'failed', remote_key = ?, remote_error = ?, remote_at = UTC_TIMESTAMP(6) WHERE id = ?",
+      [key, String(e instanceof Error ? e.message : e).slice(0, 500), id],
+    );
+    console.error("[backup] unggah ke object storage gagal", e);
+    return "failed" as const;
+  }
+}
+
+/** Ulangi unggah backup yang gagal / belum terunggah (mis. bucket baru diatur). */
+export async function retryOffsite(limit = 3) {
+  const { loadStorageConfig } = await import("@/lib/object-storage.server");
+  const cfg = await loadStorageConfig();
+  if (!cfg?.backupBucket) return 0;
+  const rows = await execute<{ id: string; kind: BackupKind; file_name: string }>(
+    `SELECT id, kind, file_name FROM system_backups
+      WHERE status = 'success' AND file_name IS NOT NULL AND (remote_status IS NULL OR remote_status = 'failed')
+      ORDER BY started_at DESC LIMIT ${Math.max(1, Math.min(20, limit))}`,
+  );
+  let ok = 0;
+  for (const b of rows) {
+    const path = join(backupDir(), b.file_name);
+    if (!(await stat(path).catch(() => null))) continue;
+    if ((await uploadOffsite(b.id, b.kind, b.file_name, path)) === "success") ok += 1;
+  }
+  return ok;
+}
+
 /** Hapus backup lama di luar jumlah simpanan. */
 async function prune(kind: BackupKind) {
   const old = await execute<{ id: string; file_name: string | null }>(
@@ -293,11 +344,21 @@ async function prune(kind: BackupKind) {
 }
 
 export async function deleteBackup(id: string) {
-  const b = await executeOne<{ file_name: string | null }>(
-    "SELECT file_name FROM system_backups WHERE id = ?",
-    [id],
-  );
+  const b = await executeOne<{
+    file_name: string | null;
+    remote_key: string | null;
+    remote_status: string | null;
+  }>("SELECT file_name, remote_key, remote_status FROM system_backups WHERE id = ?", [id]);
   if (!b) return;
+  // Salinan di object storage ikut dihapus (aturan simpanan sama dengan di server).
+  if (b.remote_key && b.remote_status === "success") {
+    const { loadStorageConfig, deleteObject } = await import("@/lib/object-storage.server");
+    const cfg = await loadStorageConfig();
+    if (cfg?.backupBucket)
+      await deleteObject(cfg, cfg.backupBucket, b.remote_key).catch((e) =>
+        console.error("[backup] hapus salinan object storage gagal", e),
+      );
+  }
   if (b.file_name && !b.file_name.includes("/") && !b.file_name.includes("..")) {
     await rm(join(backupDir(), b.file_name), { force: true });
   }
@@ -329,8 +390,10 @@ export async function listBackups() {
     detail: string | null;
     started_at: string;
     finished_at: string | null;
+    remote_status: string | null;
+    remote_error: string | null;
   }>(
-    `SELECT id, kind, status, file_name, size_bytes, detail, started_at, finished_at
+    `SELECT id, kind, status, file_name, size_bytes, detail, started_at, finished_at, remote_status, remote_error
        FROM system_backups ORDER BY started_at DESC LIMIT 40`,
   );
   return rows.map((r) => ({ ...r, size_bytes: Number(r.size_bytes ?? 0) }));
@@ -358,5 +421,7 @@ export async function runScheduledBackups() {
     await runBackup("files", null).catch((e) => console.error("[backup] files failed", e));
     out.files = true;
   }
+  // Backup yang belum/gagal terunggah ke object storage dicoba lagi (mis. bucket baru diatur).
+  await retryOffsite(3).catch((e) => console.error("[backup] retry offsite failed", e));
   return out;
 }
