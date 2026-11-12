@@ -1,3 +1,4 @@
+import { captionWarnings } from "../../caption-limits";
 import { defineTool, ToolError } from "../framework";
 import { z } from "zod/v4";
 import { assertQallingSection, getTokenUser, requireAuth } from "../db";
@@ -180,6 +181,14 @@ export default defineTool({
         status: publish_mode,
         scheduled_at: when.toISOString(),
         media_ids: media.map((m) => m.id),
+        caption_warnings: captionWarnings(
+          owned.map((o) => o.platform),
+          caption,
+          {
+            hasMedia: media.length > 0,
+            threadsCustomParts: !!input.platform_options?.threads?.thread?.length,
+          },
+        ),
         message:
           publish_mode === "scheduled"
             ? "Scheduled in Qalling; sent to the provider when due."

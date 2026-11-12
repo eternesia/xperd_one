@@ -77,6 +77,7 @@ import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$s
 import { Route as ApiAdminBackupDownloadRouteImport } from './routes/api/admin/backup-download'
 import { Route as ApiPublicCrmMediaRouteImport } from './routes/api/public/crm-media'
 import { Route as ApiPublicMcpUploadRouteImport } from './routes/api/public/mcp-upload'
+import { Route as ApiPublicTemplateSampleRouteImport } from './routes/api/public/template-sample'
 import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
 import { Route as AppWWorkspaceIdRouteImport } from './routes/app/w.$workspaceId'
 import { Route as ProductionWorkspaceIdSectionRouteImport } from './routes/production.$workspaceId.$section'
@@ -466,6 +467,11 @@ const ApiPublicMcpUploadRoute = ApiPublicMcpUploadRouteImport.update({
   path: '/api/public/mcp-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicTemplateSampleRoute = ApiPublicTemplateSampleRouteImport.update({
+  id: '/api/public/template-sample',
+  path: '/api/public/template-sample',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVisitRoute = ApiPublicVisitRouteImport.update({
   id: '/api/public/visit',
   path: '/api/public/visit',
@@ -781,6 +787,7 @@ export interface FileRoutesByFullPath {
   '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
+  '/api/public/template-sample': typeof ApiPublicTemplateSampleRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
@@ -893,6 +900,7 @@ export interface FileRoutesByTo {
   '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
+  '/api/public/template-sample': typeof ApiPublicTemplateSampleRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
   '/qalling/app/$submoduleId': typeof QallingAppSubmoduleIdRoute
@@ -1008,6 +1016,7 @@ export interface FileRoutesById {
   '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
+  '/api/public/template-sample': typeof ApiPublicTemplateSampleRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
   '/app/w/$workspaceId': typeof AppWWorkspaceIdRouteWithChildren
   '/production/$workspaceId/$section': typeof ProductionWorkspaceIdSectionRoute
@@ -1125,6 +1134,7 @@ export interface FileRouteTypes {
     | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
+    | '/api/public/template-sample'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/production/$workspaceId/$section'
@@ -1237,6 +1247,7 @@ export interface FileRouteTypes {
     | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
+    | '/api/public/template-sample'
     | '/api/public/visit'
     | '/production/$workspaceId/$section'
     | '/qalling/app/$submoduleId'
@@ -1351,6 +1362,7 @@ export interface FileRouteTypes {
     | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
+    | '/api/public/template-sample'
     | '/api/public/visit'
     | '/app/w/$workspaceId'
     | '/production/$workspaceId/$section'
@@ -1430,6 +1442,7 @@ export interface RootRouteChildren {
   ApiAdminBackupDownloadRoute: typeof ApiAdminBackupDownloadRoute
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
   ApiPublicMcpUploadRoute: typeof ApiPublicMcpUploadRoute
+  ApiPublicTemplateSampleRoute: typeof ApiPublicTemplateSampleRoute
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
   ProductionWorkspaceIdSectionRoute: typeof ProductionWorkspaceIdSectionRoute
   QallingApproveTokenRoute: typeof QallingApproveTokenRoute
@@ -1932,6 +1945,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/mcp-upload'
       fullPath: '/api/public/mcp-upload'
       preLoaderRoute: typeof ApiPublicMcpUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/template-sample': {
+      id: '/api/public/template-sample'
+      path: '/api/public/template-sample'
+      fullPath: '/api/public/template-sample'
+      preLoaderRoute: typeof ApiPublicTemplateSampleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/visit': {
@@ -2486,6 +2506,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAdminBackupDownloadRoute: ApiAdminBackupDownloadRoute,
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,
   ApiPublicMcpUploadRoute: ApiPublicMcpUploadRoute,
+  ApiPublicTemplateSampleRoute: ApiPublicTemplateSampleRoute,
   ApiPublicVisitRoute: ApiPublicVisitRoute,
   ProductionWorkspaceIdSectionRoute: ProductionWorkspaceIdSectionRoute,
   QallingApproveTokenRoute: QallingApproveTokenRoute,

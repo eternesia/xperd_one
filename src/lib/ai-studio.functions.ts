@@ -706,3 +706,38 @@ export const adminSetSignupBonus = createServerFn({ method: "POST" })
     );
     return { ok: true };
   });
+
+/* --------------------------- contoh video template --------------------------- */
+
+/** Contoh video per tipe template (untuk popup pratinjau di Studio). */
+export const getTemplateSamples = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async () => {
+    const { publicSamples } = await import("./template-samples.server");
+    return publicSamples();
+  });
+
+export const adminTemplateSamples = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { publicSamples, sampleCandidates } = await import("./template-samples.server");
+    return { samples: await publicSamples(), candidates: await sampleCandidates() };
+  });
+
+export const adminSetTemplateSample = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({ key: z.string().min(1).max(20), jobId: z.string().min(1).max(64).nullable() })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { setSampleFromJob, removeSample } = await import("./template-samples.server");
+    if (data.jobId) await setSampleFromJob(data.key, data.jobId);
+    else await removeSample(data.key);
+    return { ok: true };
+  });

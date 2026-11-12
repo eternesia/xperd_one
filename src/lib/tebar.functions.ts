@@ -328,7 +328,13 @@ export const syncTebarPosts = createServerFn({ method: "POST" })
         }
       }
       for (const r of (Array.isArray(results) ? results : []) as { id?: string }[])
-        if (r?.id) knownIds.add(String(r.id));
+        if (r?.id) {
+          knownIds.add(String(r.id));
+          // Satu post lokal bisa menjadi beberapa post Tebar (mis. Threads dikirim terpisah sebagai
+          // utas): status post Tebar tambahan juga digabung ke post lokal yang sama.
+          if (e.source !== "tebar" && e.external_id && !byExt.has(String(r.id)))
+            byExt.set(String(r.id), byExt.get(e.external_id)!);
+        }
     }
     const dt = (v: string | null) =>
       v && Number.isFinite(Date.parse(v)) ? sqlDateTime(new Date(v)) : null;
@@ -379,6 +385,9 @@ export const syncTebarPosts = createServerFn({ method: "POST" })
               hit.status,
             ],
           );
+          // Objek dipakai bersama oleh beberapa post Tebar milik post lokal ini: perbarui di tempat.
+          hit.status = merged.status;
+          hit.results = merged.results;
         }
         updated++;
       } else if (!knownIds.has(m.external_id)) {
