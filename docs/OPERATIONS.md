@@ -103,6 +103,14 @@ tidak berubah menjadi spec yang ter-skip tanpa disadari. Workflow lain
   kop surat) disimpan di `STORAGE_DIR` — dev `./storage`, produksi volume
   `local-storage` di `/app/storage`. **Backup volume ini bersama DB.**
 - Backup DB: `docker compose exec mysql mysqldump -uxperd -pxperd xperd > backup.sql`.
+- **Backup otomatis** (sejak 12 Nov 2026, `src/lib/backup.server.ts`, dijalankan scheduler):
+  database tiap hari ≥ 02.00 WIB (`db-YYYYMMDD-HHmm.sql.gz`, simpan 14) dan seluruh folder berkas tiap 7 hari
+  (`files-….tar.gz`, simpan 4) ke `<STORAGE_DIR>/_backups`. Riwayat di tabel `system_backups`.
+  Super Admin → **Kesehatan Sistem**: Backup sekarang, **Unduh** (simpan salinan di luar server), Hapus.
+  Pulihkan DB: `gunzip -c db-….sql.gz | mysql -u USER -p NAMA_DB` · berkas: `tar -xzf files-….tar.gz -C /app/storage`.
+  Dump dibuat lewat koneksi MySQL aplikasi (tanpa mysqldump), jadi tetap jalan bila DB dipindah ke server lain.
+- **Kesehatan Sistem** (Super Admin): RAM/disk/CPU server aplikasi, koneksi & ukuran database, pemakaian berkas
+  per tenant, backup, dan server render video (status + metrik dari mesin render v2.1.0).
 - `db_apply_log` mencatat migration/seed yang sudah diterapkan; jangan dihapus
   sembarangan atau `migrate` akan mencoba menerapkan ulang file lama.
 

@@ -11,7 +11,13 @@ export const Route = createFileRoute("/api/public/render-worker/claim")({
         const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
         const info = `${String(body.host ?? "?")} · v${String(body.version ?? "?")} · ${String(body.cpus ?? "?")} CPU`;
         const { securePublicOrigin } = await import("@/lib/crm-media.server");
-        return Response.json({ job: await claimRenderJob(securePublicOrigin(request.url), info) });
+        const metrics =
+          body.metrics && typeof body.metrics === "object"
+            ? (body.metrics as Record<string, unknown>)
+            : null;
+        return Response.json({
+          job: await claimRenderJob(securePublicOrigin(request.url), info, metrics),
+        });
       },
     },
   },

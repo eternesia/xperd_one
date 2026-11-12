@@ -14,7 +14,7 @@ const BASE = (process.env.QALLING_URL || "")
   .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
-const VERSION = "2.0.0";
+const VERSION = "2.1.0";
 if (!/^https?:\/\//.test(BASE) || TOKEN.length < 20) {
   console.error("QALLING_URL dan WORKER_TOKEN wajib diisi.");
   process.exit(1);
@@ -24,6 +24,26 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 let stopping = false;
 for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => ((stopping = true), log("berhenti setelah pekerjaan ini…")));
+
+// Metrik server untuk halaman Kesehatan Sistem di superadmin (dikirim bersama laporan aktif).
+const STARTED = Date.now();
+const stats = { rendered: 0, failed: 0, lastRenderMs: null };
+function metrics() {
+  let disk = null;
+  try {
+    const s = fs.statfsSync(os.tmpdir());
+    disk = { total: s.blocks * s.bsize, free: s.bavail * s.bsize };
+  } catch {}
+  return {
+    load: os.loadavg().map((x) => Math.round(x * 100) / 100),
+    mem: { total: os.totalmem(), free: os.freemem() },
+    disk,
+    uptimeSec: Math.round(os.uptime()),
+    workerUptimeSec: Math.round((Date.now() - STARTED) / 1000),
+    node: process.version,
+    ...stats,
+  };
+}
 
 async function api(pathname, init = {}) {
   const res = await fetch(`${BASE}/api/public/render-worker/${pathname}`, {
@@ -81,7 +101,10 @@ async function run(job) {
       });
     }
     log(`selesai ${job.id} ${job.template} ${((Date.now() - t0) / 1000).toFixed(1)}s ${(bytes.length / 1e6).toFixed(2)}MB`);
+    stats.rendered += 1;
+    stats.lastRenderMs = Date.now() - t0;
   } catch (e) {
+    stats.failed += 1;
     log(`gagal ${job.id}: ${e.message}`);
     await api("fail", {
       body: JSON.stringify({ job: job.id, error: String(e.message).slice(0, 500) }),
@@ -100,7 +123,7 @@ let errors = 0;
 while (!stopping) {
   try {
     const { job } = await api("claim", {
-      body: JSON.stringify({ version: VERSION, host: os.hostname(), cpus: os.cpus().length }),
+      body: JSON.stringify({ version: VERSION, host: os.hostname(), cpus: os.cpus().length, metrics: metrics() }),
       headers: { "Content-Type": "application/json" },
     });
     errors = 0;

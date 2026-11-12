@@ -188,10 +188,16 @@ export async function authenticateWorker(request: Request): Promise<boolean> {
 }
 
 /** Catat mesin render aktif, lalu serahkan pekerjaan Template tertua yang masih antre (bila ada). */
-export async function claimRenderJob(origin: string, info: string) {
+export async function claimRenderJob(
+  origin: string,
+  info: string,
+  metrics?: Record<string, unknown> | null,
+) {
+  // Metrik server render (v2.1.0+) untuk halaman Kesehatan Sistem; dibatasi ukurannya.
+  const m = metrics && typeof metrics === "object" ? JSON.stringify(metrics).slice(0, 4000) : null;
   await execute(
-    "UPDATE ai_studio_settings SET worker_seen_at = NOW(6), worker_info = ? WHERE id = 'platform'",
-    [info.slice(0, 255)],
+    "UPDATE ai_studio_settings SET worker_seen_at = NOW(6), worker_info = ?, worker_metrics = COALESCE(?, worker_metrics) WHERE id = 'platform'",
+    [info.slice(0, 255), m && m.length < 4000 ? m : null],
   );
   for (let attempt = 0; attempt < 3; attempt++) {
     const j = await executeOne<Record<string, unknown>>(
