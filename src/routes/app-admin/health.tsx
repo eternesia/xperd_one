@@ -20,6 +20,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HealthCharts } from "@/components/app/HealthCharts";
 import { toast } from "sonner";
 
 import {
@@ -246,6 +247,7 @@ function HealthAdmin() {
                 </button>
               ))}
             </div>
+            <HealthCharts />
           </TabsContent>
 
           <TabsContent value="server" className="mt-4">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { SignupBonusBanner } from "@/components/qalling/SignupBonusBanner";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Area,
@@ -223,6 +224,8 @@ export function QallingHome() {
           )}
         </div>
       </div>
+
+      {workspaceId && <SignupBonusBanner workspaceId={workspaceId} />}
 
       {workspaceId && (
         <OnboardingWizard

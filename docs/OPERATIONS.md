@@ -8,6 +8,7 @@ Semua nama variabel di bawah **diambil langsung dari kode**, bukan asumsi.
 | Variabel | Wajib | Dipakai di | Keterangan |
 |---|---|---|---|
 | `APP_JWT_SECRET` | **ya** (produksi) | `src/lib/auth-jwt.server.ts` | Kunci tanda tangan JWT sesi. Tanpa ini login gagal (`APP_JWT_SECRET is not configured`). Ganti bila pernah bocor → semua sesi lama gugur |
+| `VAULT_ENCRYPTION_KEY` | disarankan | `src/lib/xpro-vault.server.ts` | Kunci enkripsi rahasia XPro "Teknis & serah terima" (password/token). Bila kosong diturunkan dari `APP_JWT_SECRET` — jadi mengganti `APP_JWT_SECRET` membuat rahasia lama tidak bisa dibuka. Set sekali (string acak panjang) dan jangan diubah |
 | `MYSQL_HOST` | ya | `src/integrations/mysql/pool.ts`, `scripts/*` | Dev: `127.0.0.1`. Di compose di-override ke `mysql` |
 | `MYSQL_PORT` | ya | idem | Dev: `3307` (port host), di dalam container `3306` |
 | `MYSQL_USER` / `MYSQL_PASSWORD` | ya | idem | Dev: `xperd` / `xperd` |

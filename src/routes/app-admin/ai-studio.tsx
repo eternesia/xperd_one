@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { SignupBonusAdmin } from "@/components/app/SignupBonusAdmin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -248,6 +249,7 @@ function StudioAdmin() {
               </label>
             </CardContent>
           </Card>
+          <SignupBonusAdmin studioOpen={d.enabled && d.template.enabled} />
         </TabsContent>
 
         <TabsContent value="umum" className="space-y-6">

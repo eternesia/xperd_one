@@ -95,6 +95,9 @@ export async function provisionRegistrationCore(
     .slice(0, 6)
     .toUpperCase()}-${String(stamp.getTime()).slice(-4)}`;
 
+  const { grantSignupBonusOn, signupBonusCredits } = await import("./ai-credits.server");
+  const bonusCredits = await signupBonusCredits();
+
   await transaction(async (conn) => {
     if (generatedPassword) {
       await conn.execute(
@@ -187,6 +190,8 @@ export async function provisionRegistrationCore(
         ],
       );
     }
+    // Bonus kredit Studio AI (mis. 5 kredit = video promo gratis); diumumkan di dasbor.
+    await grantSignupBonusOn(conn, tenantId, bonusCredits);
     await conn.execute(
       "UPDATE registrations SET status = 'provisioned', tenant_id = ? WHERE id = ?",
       [tenantId, reg.id],

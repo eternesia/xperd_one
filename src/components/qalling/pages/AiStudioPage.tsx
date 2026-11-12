@@ -440,7 +440,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const onUpload = async (files: File[]) => {
     if (!files.length) return;
     try {
-      const paths = await upload.mutateAsync(files);
+      const { paths } = await upload.mutateAsync(files);
       await qc.refetchQueries({ queryKey: ["crm-media", workspaceId] });
       const fresh = qc.getQueryData<Media[]>(["crm-media", workspaceId]) ?? [];
       // Semua foto yang diunggah masuk daftar, sesuai urutan unggah.

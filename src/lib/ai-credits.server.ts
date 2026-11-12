@@ -221,6 +221,31 @@ export async function grantBonusCredits(p: {
   );
 }
 
+/** Jumlah bonus kredit pendaftaran dari pengaturan Super Admin (0 = mati). */
+export async function signupBonusCredits(): Promise<number> {
+  const r = await executeOne<{ n: number }>(
+    "SELECT signup_bonus_credits AS n FROM ai_studio_settings WHERE id = 'platform'",
+  ).catch(() => null);
+  // Baris pengaturan belum ada → bawaan 5 (sama dengan DEFAULT kolom).
+  const n = r ? Number(r.n ?? 0) : 5;
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 1000) : 0;
+}
+
+export const signupBonusKey = (tenantId: string) => `signup-bonus:${tenantId}`;
+
+/** Bonus kredit untuk tenant baru, di dalam transaksi pendaftaran. Idempoten per tenant. */
+export async function grantSignupBonusOn(conn: PoolConnection, tenantId: string, credits: number) {
+  if (credits <= 0) return;
+  await creditPostOn(conn, {
+    tenantId,
+    delta: credits,
+    kind: "bonus",
+    ref: null,
+    idem: signupBonusKey(tenantId),
+    description: `Bonus pendaftaran: ${credits} kredit gratis`,
+  });
+}
+
 /** Riwayat kredit + pembayaran langsung yang masih menunggu (untuk halaman Studio). */
 export async function creditActivity(tenantId: string) {
   const ledger = await execute<Record<string, unknown>>(

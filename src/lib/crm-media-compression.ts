@@ -1,5 +1,13 @@
 import { scaledDimensions, type MediaUploadPolicy } from "./media-upload-policy";
 
+/** Semua piksel tidak transparan? (sampel maks ±250 ribu piksel agar cepat). */
+function isOpaque(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const step = Math.max(1, Math.floor((width * height) / 250_000)) * 4;
+  for (let i = 3; i < data.length; i += step) if (data[i] < 255) return false;
+  return true;
+}
+
 /** Called only after upload submission. Never replaces a file with a larger result. */
 export async function compressCrmMedia(file: File, policy: MediaUploadPolicy): Promise<File> {
   if (
@@ -25,12 +33,17 @@ export async function compressCrmMedia(file: File, policy: MediaUploadPolicy): P
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = "high";
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      // Retain PNG transparency and JPG/PNG compatibility for custom covers.
+      // PNG tanpa transparansi (mis. tangkapan layar) jauh lebih kecil sebagai JPG; PNG transparan tetap PNG.
+      let type = file.type;
+      if (type === "image/png" && isOpaque(context, canvas.width, canvas.height)) {
+        type = "image/jpeg";
+      }
       const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, file.type, policy.image_quality / 100),
+        canvas.toBlob(resolve, type, policy.image_quality / 100),
       );
       if (!blob || blob.size >= file.size) return file;
-      return new File([blob], file.name, { type: blob.type, lastModified: file.lastModified });
+      const name = type !== file.type ? file.name.replace(/\.[^.]+$/, "") + ".jpg" : file.name;
+      return new File([blob], name, { type: blob.type, lastModified: file.lastModified });
     } catch {
       return file;
     } finally {

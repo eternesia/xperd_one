@@ -19,6 +19,7 @@ import { useI18n } from "@/lib/i18n";
 import { nextDocNumber } from "@/lib/procurement";
 import { useServerFn } from "@tanstack/react-start";
 import type { XproRow } from "@/components/app/XproViews";
+import { XproTech } from "@/components/app/XproTech";
 
 /**
  * Ronde 33 — **detail proyek XPro** (diporting apa adanya dari BS New 10
@@ -1145,6 +1146,7 @@ export function XproProjectDetail({
             <TabsTrigger value="team">{t("Team", "Tim")}</TabsTrigger>
             {canSeeValue && <TabsTrigger value="expenses">{t("Expenses", "Biaya")}</TabsTrigger>}
             <TabsTrigger value="docs">{t("Documents", "Dokumen")}</TabsTrigger>
+            <TabsTrigger value="tech">{t("Tech & handover", "Teknis & serah terima")}</TabsTrigger>
             <TabsTrigger value="reports">{t("Progress reports", "Laporan progres")}</TabsTrigger>
             {canSeeValue && <TabsTrigger value="invoices">{t("Invoices & payments", "Tagihan & pembayaran")}</TabsTrigger>}
           </TabsList>
@@ -1163,6 +1165,9 @@ export function XproProjectDetail({
         </TabsContent>
         <TabsContent value="docs">
           <DocumentsTab workspaceId={workspaceId} project={project} />
+        </TabsContent>
+        <TabsContent value="tech">
+          <XproTech workspaceId={workspaceId} projectId={project.id} />
         </TabsContent>
         <TabsContent value="reports">
           <ReportsTab workspaceId={workspaceId} project={project} physical={physical} wsName={wsName} />
