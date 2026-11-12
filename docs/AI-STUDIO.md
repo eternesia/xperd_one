@@ -111,10 +111,36 @@ Kebutuhan: Ubuntu + Docker, ±2 vCPU / 4 GB RAM, internet keluar. Tidak perlu do
    (GitHub → Packages → Package settings → Change visibility; image tidak berisi rahasia), atau `docker login ghcr.io`
    di VPS dengan token GitHub berizin `read:packages`.
 2. Pasang Docker di VPS: `curl -fsSL https://get.docker.com | sh`
-3. Super Admin → Studio AI → Template → **Buat token mesin render**, salin perintah `docker run …` yang muncul
-   (token hanya tampil sekali) dan jalankan di VPS.
-4. Status "Terhubung" muncul di tab Template dalam beberapa detik. Log: `docker logs -f qalling-render`.
-   Pembaruan: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan lagi perintahnya.
+3. Super Admin → Studio AI → Template → **Buat token mesin render** (token hanya tampil sekali). Simpan URL dan
+   token dari perintah yang muncul ke berkas di folder home (bukan `/root` bila login sebagai `ubuntu`), agar
+   pembaruan berikutnya tidak perlu token lagi:
+   ```bash
+   cat > ~/qalling-render.env <<'ENV'
+   QALLING_URL=https://alamat-dari-super-admin
+   WORKER_TOKEN=token-dari-super-admin
+   ENV
+   chmod 600 ~/qalling-render.env
+   docker run -d --name qalling-render --restart=always \
+     --env-file ~/qalling-render.env \
+     ghcr.io/eternesia/xperd_one-render-worker:latest
+   ```
+   Ganti kedua nilai contoh dengan nilai asli (tanpa `-e`, tanpa spasi di sekitar `=`).
+4. Status "Terhubung" muncul di tab Template dalam beberapa detik. Log: `docker logs -f qalling-render`
+   (harus `siap. Menunggu pekerjaan dari https://…` tanpa `fetch failed`; `HTTP 401` = token salah → buat token baru).
+
+### Memperbarui mesin render
+```bash
+docker pull ghcr.io/eternesia/xperd_one-render-worker:latest
+docker rm -f qalling-render
+docker run -d --name qalling-render --restart=always \
+  --env-file ~/qalling-render.env \
+  ghcr.io/eternesia/xperd_one-render-worker:latest
+docker logs --tail 20 qalling-render   # cek versi: "menyiapkan Remotion (vX.Y.Z)…"
+```
+Kontainer lama yang dibuat dengan `-e QALLING_URL=… -e WORKER_TOKEN=…` (tanpa berkas env): simpan dulu nilainya
+**sebelum** menghapus kontainer —
+`docker inspect qalling-render --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(QALLING_URL|WORKER_TOKEN)=' > ~/qalling-render.env`
+lalu periksa isinya (`cut -c1-30 ~/qalling-render.env`). Bila token hilang, buat token baru di Super Admin.
 
 Menambah kapasitas: jalankan perintah yang sama di VPS lain (satu token dipakai bersama; tiap pekerjaan hanya diambil satu mesin).
 Uji lokal tanpa Qalling: `cd render-worker && npm ci && node sample.mjs foto.jpg out/`.
@@ -148,7 +174,7 @@ unggahan browser memakai potongan (`uploadFileChunked`), dan link unggah MCP (`/
 Laporan `claim` kini membawa metrik server (beban CPU, RAM, disk, uptime, jumlah render/gagal) yang disimpan di
 `ai_studio_settings.worker_metrics` dan tampil di Super Admin → Kesehatan Sistem → Server render video, beserta
 antrean, selesai/gagal 24 jam, dan rata-rata durasi render. Mesin versi lama tetap jalan (tanpa metrik).
-Perbarui: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan lagi perintahnya.
+Perbarui: lihat "Memperbarui mesin render" di atas.
 
 ### Mesin render v2.2.0 (12 Nov 2026)
 - Lapor kemajuan render ke `/api/public/render-worker/progress` (`ai_jobs.progress`, migrasi 087) → progres %
@@ -156,7 +182,7 @@ Perbarui: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan 
 - Musik latar bervariasi per video: suasana `mood` (energetic/upbeat/corporate/calm/cinematic/chill, dipilih
   pengguna atau dari "mode perintah") + benih `seed` dari id pekerjaan (nada dasar, tempo, urutan akor, pola).
   Semua disintesis → bebas lisensi.
-Perbarui seperti v2.1.0 (`docker pull …:latest`, jalankan ulang kontainer).
+Perbarui: lihat "Memperbarui mesin render" di atas.
 
 ### Mode perintah & format (migrasi 086, 088)
 - Pengguna menulis perintah → `draftTemplateTextFn` menyusun judul/keterangan/lencana/ajakan + suasana musik.
