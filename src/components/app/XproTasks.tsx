@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { AdminSelect, todayISO } from "@/components/app/admin-ui";
+import { XproImportButton } from "@/components/app/XproImport";
 import { PageSkeleton, SearchInput } from "@/components/app/ui-states";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -896,7 +897,15 @@ export function XproMyTasksView({ workspaceId }: { workspaceId: string }) {
   const peopleQ = useXproPeople(workspaceId);
   const manager = Boolean(peopleQ.data?.manager);
   const [scope, setScope] = useState<"mine" | "all">("mine");
-  const tasksQ = useXproTaskList(workspaceId, manager ? scope : "mine");
+  // Rentang tanggal: berdasarkan tenggat, tanggal mulai, atau tanggal selesai.
+  const [dateField, setDateField] = useState<"due" | "start" | "done">("due");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  // Tugas selesai lama ikut dimuat bila rentang mundur lebih dari 30 hari.
+  const doneDays = from
+    ? Math.min(365, Math.max(30, Math.ceil((Date.now() - Date.parse(from)) / 86_400_000) + 1))
+    : 30;
+  const tasksQ = useXproTaskList(workspaceId, manager ? scope : "mine", doneDays);
   const allCols = useAllBoardColumns(workspaceId).data;
   const projects = useWsTable("prj_projects", workspaceId).data ?? [];
 
@@ -960,6 +969,21 @@ export function XproMyTasksView({ workspaceId }: { workspaceId: string }) {
     tasks = tasks.filter((x) => (project === "__none" ? !x.project_id : x.project_id === project));
   if (person)
     tasks = tasks.filter((x) => x.assignees.some((a) => (a.user_id ?? a.name) === person));
+  if (from || to) {
+    const pick = (x: XproTask) =>
+      dateField === "due"
+        ? x.due_date
+        : dateField === "start"
+          ? x.start_date
+          : x.completed_at
+            ? String(x.completed_at).slice(0, 10)
+            : null;
+    tasks = tasks.filter((x) => {
+      const d = pick(x);
+      if (!d) return false;
+      return (!from || d >= from) && (!to || d <= to);
+    });
+  }
 
   const groups = new Map<Bucket, XproTask[]>();
   for (const x of tasks) {
@@ -1012,9 +1036,16 @@ export function XproMyTasksView({ workspaceId }: { workspaceId: string }) {
           </p>
         </div>
         {peopleQ.data?.writer && (
-          <Button variant="navy" onClick={() => setCreating(true)}>
-            <Plus /> {t("New task", "Tugas baru")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <XproImportButton
+              workspaceId={workspaceId}
+              backlog={false}
+              defaultProjectId={project && project !== "__none" ? project : null}
+            />
+            <Button variant="navy" onClick={() => setCreating(true)}>
+              <Plus /> {t("New task", "Tugas baru")}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -1084,6 +1115,85 @@ export function XproMyTasksView({ workspaceId }: { workspaceId: string }) {
             </option>
           ))}
         </AdminSelect>
+        <div className="col-span-2 flex flex-wrap items-center gap-2">
+          <AdminSelect
+            value={dateField}
+            onChange={(v) => setDateField(v as "due" | "start" | "done")}
+            className="w-full sm:w-36"
+          >
+            <option value="due">{t("Due date", "Tenggat")}</option>
+            <option value="start">{t("Start date", "Tanggal mulai")}</option>
+            <option value="done">{t("Completed on", "Tanggal selesai")}</option>
+          </AdminSelect>
+          <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
+            <Input
+              type="date"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label={t("From", "Dari")}
+              className="min-w-0 sm:w-40"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <Input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label={t("To", "Sampai")}
+              className="min-w-0 sm:w-40"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                ["week", t("This week", "Minggu ini")],
+                ["month", t("This month", "Bulan ini")],
+                ["next30", t("Next 30 days", "30 hari ke depan")],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  const d = new Date(`${todayISO()}T00:00:00Z`);
+                  const iso = (x: Date) => x.toISOString().slice(0, 10);
+                  if (k === "week") {
+                    const mon = new Date(d);
+                    mon.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+                    const sun = new Date(mon);
+                    sun.setUTCDate(mon.getUTCDate() + 6);
+                    setFrom(iso(mon));
+                    setTo(iso(sun));
+                  } else if (k === "month") {
+                    setFrom(iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))));
+                    setTo(iso(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))));
+                  } else {
+                    const end = new Date(d);
+                    end.setUTCDate(d.getUTCDate() + 30);
+                    setFrom(iso(d));
+                    setTo(iso(end));
+                  }
+                }}
+                className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+              >
+                {label}
+              </button>
+            ))}
+            {(from || to) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+                className="rounded-full px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/10"
+              >
+                {t("Clear dates", "Hapus tanggal")}
+              </button>
+            )}
+          </div>
+        </div>
         {manager && scope === "all" && (
           <AdminSelect value={person} onChange={setPerson} className="sm:w-48">
             <option value="">{t("All people", "Semua orang")}</option>

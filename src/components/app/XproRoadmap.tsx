@@ -157,14 +157,22 @@ export function XproRoadmapView({ workspaceId }: { workspaceId: string }) {
       ].flat();
       const own = Boolean(p.start_date || p.end_date);
       const msWeight = ms.reduce((s, m) => s + Number(m.weight_pct ?? 0), 0);
-      const progress = ms.length
-        ? msWeight > 0
-          ? ms.reduce((s, m) => s + Number(m.weight_pct ?? 0) * Number(m.progress_pct ?? 0), 0) /
-            msWeight
-          : ms.reduce((s, m) => s + Number(m.progress_pct ?? 0), 0) / ms.length
-        : pt.length
-          ? pt.reduce((s, x) => s + (x.is_done ? 100 : Number(x.progress_pct ?? 0)), 0) / pt.length
-          : 0;
+      // Progres tersimpan di server (tahapan & tugas); cadangan dihitung di sini.
+      const stored = (p as { progress_pct?: unknown }).progress_pct;
+      const progress =
+        stored !== null && stored !== undefined
+          ? Number(stored)
+          : ms.length
+            ? msWeight > 0
+              ? ms.reduce(
+                  (s, m) => s + Number(m.weight_pct ?? 0) * Number(m.progress_pct ?? 0),
+                  0,
+                ) / msWeight
+              : ms.reduce((s, m) => s + Number(m.progress_pct ?? 0), 0) / ms.length
+            : pt.length
+              ? pt.reduce((s, x) => s + (x.is_done ? 100 : Number(x.progress_pct ?? 0)), 0) /
+                pt.length
+              : 0;
       const pItem: Item = {
         key: `p:${p.id}`,
         kind: "project",

@@ -1401,6 +1401,13 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
             [data.id, data.workspaceId],
           )) ?? null)
         : null;
+      // XPro: tahapan/proyek lama perlu dihitung ulang bila tugas/tahapan berpindah.
+      const progressBefore = XPRO_PROGRESS_TABLES.has(table)
+        ? ((await executeOne<Record<string, unknown>>(
+            `SELECT id, project_id${table === "prj_tasks" ? ", milestone_id" : ""} FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`,
+            [data.id, data.workspaceId],
+          )) ?? null)
+        : null;
       // Postingan sosial yang sudah diproses/diterbitkan/milik Tebar tidak boleh diubah (anti kirim dobel).
       const postGuard =
         table === "crm_scheduled_posts"
@@ -1428,6 +1435,9 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
           context.userId,
           false,
         );
+      }
+      if (XPRO_PROGRESS_TABLES.has(table)) {
+        await recalcXproProgress(table, data.workspaceId, data.id, progressBefore);
       }
       return { id: data.id };
     }
@@ -1460,8 +1470,39 @@ export const saveWorkspaceRow = createServerFn({ method: "POST" })
         true,
       );
     }
+    if (XPRO_PROGRESS_TABLES.has(table)) {
+      await recalcXproProgress(table, data.workspaceId, payload.id as string, null);
+    }
     return { id: payload.id as string };
   });
+
+const XPRO_PROGRESS_TABLES = new Set(["prj_tasks", "prj_milestones"]);
+
+/** XPro: progres tahapan & proyek mengikuti tugas (lihat xpro-progress.server.ts). */
+async function recalcXproProgress(
+  table: string,
+  workspaceId: string,
+  id: string,
+  before: Record<string, unknown> | null,
+) {
+  const { executeOne } = await import("@/integrations/mysql/pool");
+  const prog = await import("@/lib/xpro-progress.server");
+  const after = id
+    ? ((await executeOne<Record<string, unknown>>(
+        `SELECT id, project_id${table === "prj_tasks" ? ", milestone_id" : ""} FROM \`${table}\` WHERE id = ? AND workspace_id = ?`,
+        [id, workspaceId],
+      )) ?? null)
+    : null;
+  if (table === "prj_tasks") await prog.recalcAfterTaskChange(before, after);
+  else {
+    await prog.recalcAfterMilestoneChange(
+      after ? id : null,
+      after?.project_id ?? before?.project_id,
+    );
+    if (before?.project_id && before.project_id !== after?.project_id)
+      await prog.recalcProject(String(before.project_id));
+  }
+}
 
 export interface DeleteRowInput {
   table: string;
@@ -1495,6 +1536,12 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
           [data.id, data.workspaceId],
         )) ?? null)
       : null;
+    const progressBefore = XPRO_PROGRESS_TABLES.has(table)
+      ? ((await executeOne<Record<string, unknown>>(
+          `SELECT id, project_id${table === "prj_tasks" ? ", milestone_id" : ""} FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ?`,
+          [data.id, data.workspaceId],
+        )) ?? null)
+      : null;
     if (data.forbidStatus) {
       const r = await result(
         `DELETE FROM \`${table}\` WHERE \`id\` = ? AND \`workspace_id\` = ? AND \`status\` <> ?`,
@@ -1519,6 +1566,9 @@ export const deleteWorkspaceRow = createServerFn({ method: "POST" })
     }
     if (before && res.affectedRows > 0) {
       await logAudit(execute, context, table, "DELETE", before, null);
+    }
+    if (progressBefore && res.affectedRows > 0) {
+      await recalcXproProgress(table, data.workspaceId, "", progressBefore);
     }
     return { ok: true };
   });

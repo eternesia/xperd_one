@@ -1092,7 +1092,13 @@ export function XproProjectDetail({
   const expenses = useProjRows("prj_expenses", workspaceId, project.id).data ?? [];
   const billings = useProjRows("prj_billings", workspaceId, project.id, "bast_date").data ?? [];
   const w = milestones.reduce((s, m) => s + num(m.weight_pct), 0);
-  const physical = w ? milestones.reduce((s, m) => s + num(m.weight_pct) * num(m.progress_pct), 0) / w : 0;
+  // Progres fisik tersimpan (dihitung server dari tahapan & tugas); cadangan dari bobot tahapan.
+  const physical =
+    project.progress_pct !== null && project.progress_pct !== undefined
+      ? num(project.progress_pct)
+      : w
+        ? milestones.reduce((s, m) => s + num(m.weight_pct) * num(m.progress_pct), 0) / w
+        : 0;
   const rab = budget.reduce((s, b) => s + num(b.amount), 0);
   const cost = expenses.reduce((s, e) => s + num(e.amount), 0);
   const billed = billings.reduce((s, b) => s + num(b.amount), 0);

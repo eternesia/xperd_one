@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { AdminSelect, todayISO } from "@/components/app/admin-ui";
+import { XproImportButton } from "@/components/app/XproImport";
 import { PageSkeleton } from "@/components/app/ui-states";
 import {
   AssigneeStack,
@@ -441,6 +442,11 @@ export function XproBacklogView({ workspaceId }: { workspaceId: string }) {
               {t("Internal (no project)", "Internal (tanpa proyek)")}
             </option>
           </AdminSelect>
+          <XproImportButton
+            workspaceId={workspaceId}
+            backlog
+            defaultProjectId={project === INTERNAL ? null : project}
+          />
           <Button variant="navy" onClick={() => setSprintForm({ name: nextName })}>
             <Plus /> {t("Create sprint", "Buat sprint")}
           </Button>
