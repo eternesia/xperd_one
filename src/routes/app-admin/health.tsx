@@ -347,7 +347,7 @@ function HealthAdmin() {
               </div>
             </Panel>
 
-            <BackupPanel lastDb={h.backup} />
+            <BackupPanel lastDb={h.backup} offsite={h.offsite} />
 
             {h.render && <RenderPanel r={h.render} />}
 
@@ -386,7 +386,13 @@ function HealthAdmin() {
 
 type Health = Awaited<ReturnType<typeof adminSystemHealth>>;
 
-function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
+function BackupPanel({
+  lastDb,
+  offsite,
+}: {
+  lastDb: Health["backup"];
+  offsite: Health["offsite"];
+}) {
   const qc = useQueryClient();
   const list = useQuery({
     queryKey: ["admin-backups"],
@@ -419,9 +425,10 @@ function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
           </h2>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
             Otomatis: database tiap malam (≥ 02.00 WIB, simpan 14 terakhir) dan semua berkas
-            unggahan tiap 7 hari (simpan 4 terakhir). File ada di server ini —{" "}
-            <b>unduh dan simpan di komputer/drive Anda</b> secara rutin agar tetap aman bila server
-            rusak.
+            unggahan tiap 7 hari (simpan 4 terakhir).{" "}
+            {offsite?.backup
+              ? "Setiap backup juga disalin ke object storage (R2) di luar server ini."
+              : "Atur bucket backup di Pengaturan → Object Storage agar salinan tersimpan di luar server; sementara itu unduh dan simpan di komputer Anda secara rutin."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -453,6 +460,46 @@ function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
           </Button>
         </div>
       </div>
+      {offsite && (
+        <div className="mb-3 grid gap-2 sm:grid-cols-3">
+          {(
+            [
+              ["Bucket backup", offsite.backup],
+              ["Bucket berkas", offsite.media],
+            ] as const
+          ).map(([label, v]) => (
+            <div key={label} className="rounded-xl bg-muted/50 px-3 py-2 text-sm">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              {v ? (
+                v.error ? (
+                  <p className="text-red-600">
+                    {v.bucket}: {v.error}
+                  </p>
+                ) : (
+                  <p className="font-medium">
+                    {v.bucket} · {v.count.toLocaleString("id-ID")} file · {bytes(v.bytes)}
+                  </p>
+                )
+              ) : (
+                <p className="text-muted-foreground">Belum diatur</p>
+              )}
+            </div>
+          ))}
+          <div className="rounded-xl bg-muted/50 px-3 py-2 text-sm">
+            <p className="text-xs text-muted-foreground">
+              Perkiraan biaya {offsite.provider.toUpperCase()} / bulan
+            </p>
+            <p className={cn("font-medium", offsite.cost.usd > 0 && "text-amber-600")}>
+              {offsite.cost.usd > 0
+                ? `$${offsite.cost.usd.toFixed(2)} ≈ Rp${offsite.cost.idr.toLocaleString("id-ID")}`
+                : "Gratis"}{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                ({offsite.cost.gb.toFixed(2)} dari {offsite.cost.freeGb} GB gratis)
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
       {!lastDb && (
         <p className="mb-3 rounded-xl bg-red-500/5 p-3 text-sm text-red-600">
           Belum ada backup database yang berhasil. Tekan “Backup database sekarang” atau tunggu
@@ -468,6 +515,7 @@ function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
               <th className="pb-2 font-medium">Status</th>
               <th className="pb-2 font-medium">Isi</th>
               <th className="pb-2 text-right font-medium">Ukuran</th>
+              <th className="pb-2 pl-3 font-medium">Salinan R2</th>
               <th className="pb-2" />
             </tr>
           </thead>
@@ -475,7 +523,7 @@ function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
             {!rows.length && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="border-t border-border py-6 text-center text-muted-foreground"
                 >
                   Belum ada riwayat backup.
@@ -511,6 +559,15 @@ function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
                 </td>
                 <td className="whitespace-nowrap py-2 text-right tabular-nums">
                   {b.status === "success" ? bytes(b.size_bytes) : "—"}
+                </td>
+                <td className="whitespace-nowrap py-2 pl-3 text-xs" title={b.remote_error ?? ""}>
+                  {b.remote_status === "success" ? (
+                    <span className="text-emerald-600">✓ Tersalin</span>
+                  ) : b.remote_status === "failed" ? (
+                    <span className="text-red-600">Gagal (dicoba ulang)</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className="whitespace-nowrap py-2 text-right">
                   {b.status === "success" && (

@@ -66,6 +66,40 @@ async function folderSize(
   return { bytes, files, partial };
 }
 
+let offsiteCache: { at: number; data: Awaited<ReturnType<typeof scanOffsite>> } | null = null;
+
+/** Isi bucket backup & berkas di object storage + perkiraan biaya (cache 10 menit). */
+async function scanOffsite() {
+  const os = await import("@/lib/object-storage.server");
+  const cfg = await os.loadStorageConfig();
+  if (!cfg) return null;
+  const one = async (bucket: string) => {
+    if (!bucket) return null;
+    try {
+      return { bucket, ...(await os.bucketUsage(cfg, bucket)), error: null as string | null };
+    } catch (e) {
+      return {
+        bucket,
+        count: 0,
+        bytes: 0,
+        partial: false,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+  };
+  const [backup, media] = await Promise.all([one(cfg.backupBucket), one(cfg.bucket)]);
+  const total = (backup?.bytes ?? 0) + (media?.bytes ?? 0);
+  return { provider: cfg.provider, backup, media, cost: os.estimateR2Cost(total) };
+}
+
+async function offsiteUsage(force: boolean) {
+  if (!force && offsiteCache && Date.now() - offsiteCache.at < 10 * 60_000)
+    return offsiteCache.data;
+  const data = await scanOffsite().catch(() => null);
+  offsiteCache = { at: Date.now(), data };
+  return data;
+}
+
 let storageCache: { at: number; data: Awaited<ReturnType<typeof scanStorage>> } | null = null;
 
 async function scanStorage() {
@@ -390,6 +424,16 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
       }
     : null;
 
+  const offsite = await offsiteUsage(Boolean(opts.rescanStorage));
+  const lastRemoteFail = await safe(
+    () =>
+      executeOne<{ remote_error: string | null }>(
+        `SELECT remote_error FROM system_backups WHERE remote_status = 'failed'
+          AND started_at > UTC_TIMESTAMP() - INTERVAL 2 DAY ORDER BY started_at DESC LIMIT 1`,
+      ),
+    null,
+  );
+
   /* ---------- peringatan ---------- */
   type Level = "critical" | "warning" | "info";
   const alerts: { level: Level; title: string; detail: string }[] = [];
@@ -453,7 +497,26 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
       title: `Backup ${lastFailed.kind === "db" ? "database" : "berkas"} gagal`,
       detail: lastFailed.detail ?? "Lihat riwayat backup.",
     });
-  if (lastBackup)
+  if (lastRemoteFail)
+    alerts.push({
+      level: "warning",
+      title: "Backup gagal disalin ke object storage",
+      detail: `${lastRemoteFail.remote_error ?? "Periksa kunci & bucket backup"} — akan dicoba ulang otomatis tiap jam.`,
+    });
+  for (const b of [offsite?.backup, offsite?.media])
+    if (b?.error)
+      alerts.push({
+        level: "warning",
+        title: `Bucket "${b.bucket}" tidak bisa dibaca`,
+        detail: b.error,
+      });
+  if (offsite && offsite.cost.gb >= 8)
+    alerts.push({
+      level: offsite.cost.gb >= 10 ? "warning" : "info",
+      title: `Object storage terisi ${offsite.cost.gb.toFixed(1)} GB dari 10 GB gratis`,
+      detail: `Perkiraan biaya: $${offsite.cost.usd.toFixed(2)} (≈ Rp${offsite.cost.idr.toLocaleString("id-ID")}) per bulan.`,
+    });
+  if (lastBackup && !offsite?.backup)
     alerts.push({
       level: "info",
       title: "Backup tersimpan di server yang sama",
@@ -530,6 +593,7 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
         }
       : null,
     render,
+    offsite,
     alerts,
   };
 }

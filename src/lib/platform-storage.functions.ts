@@ -7,6 +7,11 @@ const schema = z.object({
   provider: z.enum(["r2", "s3", "wasabi", "spaces", "b2"]),
   endpoint: z.string(),
   bucket: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/),
+  /** Bucket khusus backup otomatis (kosong = backup hanya di server). */
+  backup_bucket: z
+    .string()
+    .regex(/^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$/)
+    .default(""),
   region: z.string().min(1),
   access_key: z.string().optional(),
   secret_key: z.string().optional(),
@@ -27,12 +32,13 @@ export const getPlatformStorage = createServerFn({ method: "POST" })
       provider: string;
       endpoint: string;
       bucket: string;
+      backup_bucket: string;
       region: string;
       cdn_url: string;
       access_key: string;
       secret_key: string;
     }>(
-      "SELECT provider, endpoint, bucket, region, cdn_url, access_key, secret_key FROM platform_storage_settings WHERE singleton = 1",
+      "SELECT provider, endpoint, bucket, backup_bucket, region, cdn_url, access_key, secret_key FROM platform_storage_settings WHERE singleton = 1",
     );
     if (!data) return null;
     const { access_key, secret_key, ...safe } = data;
@@ -49,9 +55,10 @@ export const savePlatformStorage = createServerFn({ method: "POST" })
       throw new Error("CDN harus HTTPS");
     const { execute } = await import("@/integrations/mysql/pool");
     await execute(
-      `INSERT INTO platform_storage_settings (singleton, provider, endpoint, bucket, region, cdn_url, access_key, secret_key)
-       VALUES (1, ?, ?, ?, ?, ?, COALESCE(?, ''), COALESCE(?, ''))
+      `INSERT INTO platform_storage_settings (singleton, provider, endpoint, bucket, backup_bucket, region, cdn_url, access_key, secret_key)
+       VALUES (1, ?, ?, ?, ?, ?, ?, COALESCE(?, ''), COALESCE(?, ''))
        ON DUPLICATE KEY UPDATE provider = VALUES(provider), endpoint = VALUES(endpoint), bucket = VALUES(bucket),
+         backup_bucket = VALUES(backup_bucket),
          region = VALUES(region), cdn_url = VALUES(cdn_url),
          access_key = IF(? IS NULL OR ? = '', access_key, VALUES(access_key)),
          secret_key = IF(? IS NULL OR ? = '', secret_key, VALUES(secret_key))`,
@@ -59,6 +66,7 @@ export const savePlatformStorage = createServerFn({ method: "POST" })
         data.provider,
         endpoint,
         data.bucket,
+        data.backup_bucket,
         data.region,
         data.cdn_url,
         data.access_key ?? null,
@@ -90,16 +98,20 @@ export const testPlatformStorage = createServerFn({ method: "POST" })
       service: "s3",
       region: r.region,
     });
-    const request = await client.sign(`${endpoint}/${encodeURIComponent(r.bucket)}`, {
-      method: "HEAD",
-    });
-    const response = await fetch(request, {
-      redirect: "error",
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok)
-      throw new Error(
-        `Penyimpanan menolak akses (${response.status}). Periksa bucket dan izin kunci.`,
-      );
-    return { ok: true };
+    // Uji bucket berkas dan (bila diisi) bucket backup.
+    const buckets = [r.bucket, r.backup_bucket].filter(Boolean);
+    for (const b of buckets) {
+      const request = await client.sign(`${endpoint}/${encodeURIComponent(b)}`, {
+        method: "HEAD",
+      });
+      const response = await fetch(request, {
+        redirect: "error",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok)
+        throw new Error(
+          `Bucket "${b}" menolak akses (${response.status}). Periksa nama bucket dan izin kunci.`,
+        );
+    }
+    return { ok: true, buckets };
   });
