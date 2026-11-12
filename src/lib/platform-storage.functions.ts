@@ -37,12 +37,18 @@ export const getPlatformStorage = createServerFn({ method: "POST" })
       cdn_url: string;
       access_key: string;
       secret_key: string;
+      media_on_r2: number;
     }>(
-      "SELECT provider, endpoint, bucket, backup_bucket, region, cdn_url, access_key, secret_key FROM platform_storage_settings WHERE singleton = 1",
+      "SELECT provider, endpoint, bucket, backup_bucket, region, cdn_url, access_key, secret_key, media_on_r2 FROM platform_storage_settings WHERE singleton = 1",
     );
     if (!data) return null;
-    const { access_key, secret_key, ...safe } = data;
-    return { ...safe, has_access_key: Boolean(access_key), has_secret_key: Boolean(secret_key) };
+    const { access_key, secret_key, media_on_r2, ...safe } = data;
+    return {
+      ...safe,
+      media_on_r2: Number(media_on_r2) === 1,
+      has_access_key: Boolean(access_key),
+      has_secret_key: Boolean(secret_key),
+    };
   });
 
 export const savePlatformStorage = createServerFn({ method: "POST" })
@@ -77,6 +83,8 @@ export const savePlatformStorage = createServerFn({ method: "POST" })
         data.secret_key ?? null,
       ],
     );
+    const { resetMediaStoreCache } = await import("@/lib/files.server");
+    resetMediaStoreCache();
     return { ok: true };
   });
 
@@ -114,4 +122,61 @@ export const testPlatformStorage = createServerFn({ method: "POST" })
         );
     }
     return { ok: true, buckets };
+  });
+
+/** Status penyimpanan berkas unggahan: sakelar R2, berkas yang masih di disk, progres pemindahan. */
+export const getMediaStorageStatus = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const { getMediaMigrationState, localFilesSummary } =
+      await import("@/lib/media-migration.server");
+    const { loadStorageConfig, bucketUsage } = await import("@/lib/object-storage.server");
+    const cfg = await loadStorageConfig().catch(() => null);
+    const [migration, local, remote] = await Promise.all([
+      getMediaMigrationState(),
+      localFilesSummary(),
+      cfg?.bucket
+        ? bucketUsage(cfg, cfg.bucket, 20).catch((e: Error) => ({ error: e.message }))
+        : Promise.resolve(null),
+    ]);
+    return {
+      configured: Boolean(cfg?.bucket),
+      bucket: cfg?.bucket ?? "",
+      mediaOnR2: Boolean(cfg?.mediaOnR2),
+      local,
+      remote,
+      migration,
+    };
+  });
+
+/** Sakelar: unggahan baru langsung ke bucket media. */
+export const setMediaOnR2 = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((d: unknown) => z.object({ enabled: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    if (data.enabled) {
+      const { loadStorageConfig, headBucket } = await import("@/lib/object-storage.server");
+      const cfg = await loadStorageConfig();
+      if (!cfg?.bucket) throw new Error("Atur dan uji object storage terlebih dahulu");
+      await headBucket(cfg, cfg.bucket);
+    }
+    const { execute } = await import("@/integrations/mysql/pool");
+    await execute("UPDATE platform_storage_settings SET media_on_r2 = ? WHERE singleton = 1", [
+      data.enabled ? 1 : 0,
+    ]);
+    const { resetMediaStoreCache } = await import("@/lib/files.server");
+    resetMediaStoreCache();
+    return { ok: true };
+  });
+
+/** Pindahkan berkas lama dari disk server ke bucket media (latar belakang). */
+export const startMediaMigrationFn = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((d: unknown) => z.object({ deleteLocal: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { startMediaMigration } = await import("@/lib/media-migration.server");
+    return startMediaMigration(data.deleteLocal);
   });

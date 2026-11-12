@@ -13,6 +13,7 @@ import {
 } from "@/lib/platform-storage.functions";
 import { seo } from "@/components/qalling/QallingSite";
 import { MediaUploadSettings } from "@/components/app/MediaUploadSettings";
+import { MediaStoragePanel } from "@/components/app/MediaStoragePanel";
 export const Route = createFileRoute("/app-admin/storage")({
   head: () =>
     seo(
@@ -72,8 +73,8 @@ function StoragePage() {
       <h1 className="text-2xl font-semibold">Object Storage</h1>
       <p className="text-sm text-muted-foreground">
         <b>Bucket backup</b>: backup otomatis (database harian, berkas mingguan) disalin ke sini —
-        lihat Kesehatan Sistem. <b>Bucket berkas</b> disiapkan untuk memindahkan unggahan pengguna;
-        saat ini unggahan masih disimpan di disk server.
+        lihat Kesehatan Sistem. <b>Bucket berkas</b>: unggahan pengguna (media, dokumen) — nyalakan
+        di bagian "Berkas unggahan di R2" di bawah.
       </p>
       {isLoading ? (
         <p>Memuat…</p>
@@ -148,6 +149,7 @@ function StoragePage() {
           </div>
         </form>
       )}
+      {data && <MediaStoragePanel />}
     </div>
   );
 }

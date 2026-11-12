@@ -281,8 +281,8 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
   );
   const objectStorage = await safe(
     () =>
-      executeOne<{ provider: string | null; bucket: string | null }>(
-        "SELECT provider, bucket FROM platform_storage_settings LIMIT 1",
+      executeOne<{ provider: string | null; bucket: string | null; media_on_r2: number | null }>(
+        "SELECT provider, bucket, media_on_r2 FROM platform_storage_settings LIMIT 1",
       ),
     null,
   );
@@ -302,6 +302,7 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
     })),
     objectStorageConfigured: Boolean(objectStorage?.bucket),
     objectStorageProvider: objectStorage?.provider ?? null,
+    mediaOnR2: Number(objectStorage?.media_on_r2 ?? 0) === 1,
   };
 
   /* ---------- backup ---------- */
@@ -556,11 +557,11 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
       title: "Unggahan berkas masih di disk server",
       detail: "Object storage (R2/S3) belum dipakai; berkas ikut hilang bila server rusak.",
     });
-  else
+  else if (!storage.mediaOnR2)
     alerts.push({
       level: "info",
       title: "Object storage sudah diatur, tetapi unggahan masih ke disk lokal",
-      detail: "Kode unggahan belum memakai R2/S3; berkas baru tetap disimpan di server.",
+      detail: 'Nyalakan "Berkas unggahan di R2" di Super Admin → Object Storage.',
     });
   if (server.schedulerDisabled)
     alerts.push({
