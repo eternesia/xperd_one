@@ -5,6 +5,7 @@ import {
   PHOTOS,
   TEMPLATE_KEYS,
   TEMPLATE_LIMITS,
+  MUSIC_MOOD_KEYS,
   TEMPLATE_RATIOS,
   TEMPLATE_SECONDS,
   TEMPLATES,
@@ -108,7 +109,11 @@ export const listAiJobs = createServerFn({ method: "POST" })
     }
     const rows = await execute<Record<string, unknown>>(
       `SELECT j.id, j.status, j.tier, j.style, j.duration_s, j.aspect_ratio, j.credits, j.refunded, j.error,
-              j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.finished_at,
+              j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.finished_at, j.progress,
+              TIMESTAMPDIFF(SECOND, j.claimed_at, NOW(6)) AS render_elapsed,
+              CASE WHEN j.status = 'queued' AND j.provider = 'render' THEN
+                (SELECT COUNT(*) FROM ai_jobs q WHERE q.provider = 'render' AND q.status IN ('queued', 'processing')
+                    AND q.created_at < j.created_at) END AS queue_ahead,
               r.file_path AS result_path, r.name AS result_name, s.file_path AS source_path, s.name AS source_name
          FROM ai_jobs j
          LEFT JOIN crm_media r ON r.id = j.result_media_id
@@ -151,6 +156,9 @@ export const listAiJobs = createServerFn({ method: "POST" })
           ),
         ),
         duration_s: Number(r.duration_s),
+        progress: r.progress == null ? null : Number(r.progress),
+        render_elapsed: r.render_elapsed == null ? null : Math.max(0, Number(r.render_elapsed)),
+        queue_ahead: r.queue_ahead == null ? null : Number(r.queue_ahead),
         credits: Number(r.credits),
         refunded: Number(r.refunded) === 1,
         // Pesan teknis penyedia hanya untuk Super Admin; pengguna melihat pesan umum.
@@ -202,6 +210,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
           .default("auto"),
         aspectRatio: z.enum(TEMPLATE_RATIOS).default("auto"),
         seconds: z.number().int().min(1).max(60).default(TEMPLATE_SECONDS),
+        mood: z.enum(MUSIC_MOOD_KEYS).default("auto"),
         consent: z.literal(true),
       })
       .parse(v),
@@ -219,6 +228,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
       template: data.template,
       aspectRatio: data.aspectRatio,
       seconds: data.seconds,
+      mood: data.mood,
       text: {
         headline: data.headline,
         subline: data.subline,
@@ -740,4 +750,117 @@ export const adminSetTemplateSample = createServerFn({ method: "POST" })
     if (data.jobId) await setSampleFromJob(data.key, data.jobId);
     else await removeSample(data.key);
     return { ok: true };
+  });
+
+/* --------------------------- ringkasan & kredit pengguna --------------------------- */
+
+export const adminStudioDashboard = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => z.object({ days: z.number().int().min(7).max(365) }).parse(v))
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { studioDashboard } = await import("./ai-studio-admin.server");
+    return studioDashboard(data.days);
+  });
+
+export const adminCreditUsers = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        q: z.string().max(100).default(""),
+        page: z.number().int().min(1).max(10000).default(1),
+        pageSize: z.number().int().min(5).max(100).default(20),
+        sort: z.enum(["balance", "used", "purchased", "recent", "name"]).default("recent"),
+        filter: z.enum(["all", "has_credits", "buyers", "zero"]).default("all"),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { creditUsers } = await import("./ai-studio-admin.server");
+    return creditUsers(data);
+  });
+
+export const adminCreditUserDetail = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        tenantId: z.string().min(1).max(64),
+        page: z.number().int().min(1).max(10000).default(1),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { creditUserDetail } = await import("./ai-studio-admin.server");
+    return creditUserDetail(data.tenantId, data.page, 25);
+  });
+
+/* --------------------------- mode perintah (teks otomatis) --------------------------- */
+
+/** Perintah pengguna → judul, keterangan, lencana, ajakan + suasana musik. Gratis. */
+export const draftTemplateTextFn = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z
+      .object({
+        workspaceId: z.string().uuid(),
+        prompt: z.string().trim().min(3).max(600),
+        template: z.enum(TEMPLATE_KEYS),
+      })
+      .parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { canWriteWorkspace } = await import("./auth-context.server");
+    if (!(await canWriteWorkspace(data.workspaceId, context.userId)))
+      throw new Error("Akses ditolak");
+    const { draftTemplateText } = await import("./template-prompt.server");
+    return draftTemplateText(data.workspaceId, data.prompt, data.template);
+  });
+
+const llmSchema = z.object({
+  base_url: z
+    .string()
+    .trim()
+    .url()
+    .refine((u) => u.startsWith("https://"), "Harus https://"),
+  model: z.string().trim().min(2).max(120),
+  api_key: z.string().trim().max(400),
+});
+
+export const adminGetTextLlm = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { loadTextLlm } = await import("./template-prompt.server");
+    const c = await loadTextLlm();
+    return c ? { base_url: c.base_url, model: c.model, key_hint: hint(c.api_key) } : null;
+  });
+
+export const adminSaveTextLlm = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) =>
+    z.object({ config: llmSchema.nullable(), test: z.boolean().default(false) }).parse(v),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { loadTextLlm, saveTextLlm, testTextLlm } = await import("./template-prompt.server");
+    if (!data.config) {
+      await saveTextLlm(null, false);
+      return { ok: true, test: null };
+    }
+    const keepKey = !data.config.api_key;
+    const cur = await loadTextLlm();
+    const cfg = { ...data.config, api_key: keepKey ? (cur?.api_key ?? "") : data.config.api_key };
+    if (!cfg.api_key) throw new Error("Isi API key");
+    const test = data.test ? await testTextLlm(cfg) : null;
+    await saveTextLlm(cfg, false);
+    return { ok: true, test };
   });

@@ -53,6 +53,7 @@ import {
   AI_RATIOS,
   NOTE_MAX,
   TIER_LABELS,
+  jobPercent,
   perCredit,
   type AiJobView,
   type AiTier,
@@ -63,6 +64,7 @@ import {
   buyCreditPack,
   createAiVideo,
   createTemplateVideo,
+  draftTemplateTextFn,
   deleteUserStyle,
   getCreditActivity,
   getStudioAccess,
@@ -72,6 +74,7 @@ import {
 } from "@/lib/ai-studio.functions";
 import {
   finalSeconds,
+  MUSIC_MOODS,
   PHOTOS,
   templateCredits,
   NARRATION,
@@ -244,6 +247,13 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const [sampleOpen, setSampleOpen] = useState(false);
   const { data: samples = {} } = useTemplateSamples();
   const [tpl, setTpl] = useState({ headline: "", subline: "", badge: "", cta: "" });
+  // Mode perintah: pengguna menulis perintah; teks disusun otomatis (bisa disunting).
+  const [prompt, setPrompt] = useState("");
+  const [draftedFor, setDraftedFor] = useState<string | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [mood, setMood] = useState<string>("auto");
+  // Format video: pilihan eksplisit (Reels/Shorts/TikTok, Feed, YouTube) atau ikuti foto.
+  const [fmt, setFmt] = useState<"auto" | "9:16" | "1:1" | "16:9">("9:16");
   // Warna & rasio otomatis dari foto pertama (pratinjau); hasil akhir dihitung ulang oleh mesin render.
   const [accent, setAccent] = useState<string>("#F5B301");
   const [dark, setDark] = useState<string>("#0B1020");
@@ -294,6 +304,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     }
   };
   const isTpl = mode === "template" && access.template.available;
+  const isTplMode = isTpl;
   const tplDef = TEMPLATES.find((t) => t.key === tplKey) ?? TEMPLATES[0];
   const tplPhotos = tplDef.photos;
   // Foto terpilih, berurutan (1–8), masing-masing dengan teks dan label opsional.
@@ -339,7 +350,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   const recent = useQuery({
     queryKey: ["ai-jobs", workspaceId, "recent"],
     queryFn: () => listAiJobs({ data: { workspaceId, status: "active", limit: 6 } }),
-    refetchInterval: (q) => ((q.state.data?.items ?? []).some(running) ? 5000 : false),
+    refetchInterval: (q) => ((q.state.data?.items ?? []).some(running) ? 3000 : false),
   });
   const list = useMemo(() => recent.data?.items ?? [], [recent.data]);
   const counts = recent.data?.counts ?? { done: 0, failed: 0, running: 0, total: 0 };
@@ -378,6 +389,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   });
 
   const cur = access.tiers.find((t) => t.tier === tier);
+  const shownRatio = fmt === "auto" ? tplRatio : fmt;
   const tplFinal = finalSeconds(tplKey, items.length, tplSeconds, narr?.seconds ?? 0);
   const cost = isTpl
     ? templateCredits(access.template.prices, tplFinal)
@@ -388,13 +400,37 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
       : 0;
   const tierLabel = (t: AiJobView["tier"]) => (t === "template" ? "Template" : L(TIER_LABELS[t]));
   const enough = access.credits >= cost;
+  // Video yang sedang dibuat: tombol dikunci sampai selesai agar tidak terkirim dua kali.
+  const busyJob = list.find(running) ?? null;
+  const busyPct = busyJob ? jobPercent(busyJob) : 0;
   const limitHit = access.used_today >= access.daily_limit;
   const selected = photos.find((p) => p.id === source) ?? null;
   const curStyle = access.styles.find((s) => s.key === style) ?? access.styles[0];
 
+  const draft = useMutation({
+    mutationFn: (text: string) =>
+      draftTemplateTextFn({ data: { workspaceId, prompt: text, template: tplKey } }),
+    onSuccess: (d, text) => {
+      setTpl({ headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta });
+      if (d.mood !== "auto") setMood(d.mood);
+      setDraftedFor(text);
+      setManualOpen(true);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  /** Perintah berubah sejak terakhir disusun → susun ulang sebelum membuat video. */
+  const needsDraft = isTplMode && !!prompt.trim() && draftedFor !== prompt.trim();
+
   const create = useMutation({
-    mutationFn: (): Promise<unknown> =>
-      isTpl
+    mutationFn: async (): Promise<unknown> => {
+      let text = tpl;
+      if (isTpl && needsDraft) {
+        const d = await draft.mutateAsync(prompt.trim());
+        text = { headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta };
+      }
+      if (isTpl && !text.headline.trim())
+        throw new Error(pick("Write a prompt or a title first", "Tulis perintah atau judul dulu"));
+      return isTpl
         ? createTemplateVideo({
             data: {
               workspaceId,
@@ -408,13 +444,14 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               narrationPath: narr?.path ?? null,
               narrationSeconds: narr?.seconds ?? 0,
               template: tplKey,
-              headline: tpl.headline.trim(),
-              subline: tpl.subline.trim(),
-              badge: tpl.badge.trim(),
-              cta: tpl.cta.trim(),
+              headline: text.headline.trim(),
+              subline: text.subline.trim(),
+              badge: text.badge.trim(),
+              cta: text.cta.trim(),
               accent: "auto",
-              aspectRatio: "auto",
+              aspectRatio: fmt,
               seconds: tplSeconds,
+              mood: mood as "auto",
               consent: true,
             },
           })
@@ -429,7 +466,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               aspectRatio: ratio,
               consent: true,
             },
-          }),
+          });
+    },
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ["ai-studio-access", workspaceId] });
       qc.invalidateQueries({ queryKey: ["ai-credit-activity", workspaceId] });
@@ -462,8 +500,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     ? pick("Studio Video is not available yet", "Studio Video belum tersedia")
     : tplPhotos === "required" && !items.length
       ? pick("Add at least one photo", "Tambahkan minimal 1 foto")
-      : isTpl && !tpl.headline.trim()
-        ? pick("Write a title first", "Isi judul dulu")
+      : isTpl && !tpl.headline.trim() && !prompt.trim()
+        ? pick("Write a prompt or a title first", "Tulis perintah atau judul dulu")
         : !isTpl && !curStyle
           ? pick("Choose a style", "Pilih gaya")
           : !consent
@@ -571,7 +609,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     <div
       ref={rootRef}
       style={{ "--studio-top": `${top}px` } as React.CSSProperties}
-      className="space-y-4 lg:-mt-5 lg:flex lg:h-[calc(100dvh-var(--studio-top)-2.5rem)] lg:min-h-[560px] lg:flex-col lg:gap-3 lg:space-y-0"
+      className="space-y-4 lg:-mt-5 lg:flex lg:h-[calc(100dvh-var(--studio-top)-1rem)] lg:min-h-[560px] lg:flex-col lg:gap-3 lg:space-y-0"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 lg:gap-5">
@@ -838,48 +876,150 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                   </section>
 
                   <section className="space-y-3">
-                    <h2 className="text-sm font-semibold">
-                      {pick("Text on the video", "Teks di video")}
-                    </h2>
-                    {(
-                      [
-                        ["headline", pick("Title", "Judul"), "Production Management"],
+                    <h2 className="text-sm font-semibold">{pick("Format", "Format video")}</h2>
+                    <div className="grid grid-cols-2 gap-2 2xl:grid-cols-4">
+                      {(
                         [
-                          "subline",
-                          pick("Description (optional)", "Keterangan (opsional)"),
-                          pick("From raw material to report", "Dari bahan baku sampai laporan"),
-                        ],
-                        [
-                          "badge",
-                          pick("Badge (optional)", "Lencana (opsional)"),
-                          pick("Brand, price or promo", "Merek, harga, atau promo"),
-                        ],
-                        [
-                          "cta",
-                          pick("Call to action (optional)", "Ajakan (opsional)"),
-                          pick("Try it at xperd.id", "Coba di xperd.id"),
-                        ],
-                      ] as const
-                    ).map(([k, label, ph]) => (
-                      <div key={k}>
-                        <div className="mb-1 flex items-baseline justify-between">
-                          <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
-                            {label}
-                          </label>
-                          <span className="text-[11px] tabular-nums text-muted-foreground">
-                            {tpl[k].length}/{TEMPLATE_LIMITS[k]}
+                          [
+                            "9:16",
+                            "Reels · TikTok · Shorts",
+                            pick("Vertical 9:16", "Vertikal 9:16"),
+                            "h-7 w-4",
+                          ],
+                          ["1:1", "Feed", pick("Square 1:1", "Persegi 1:1"), "h-5 w-5"],
+                          ["16:9", "YouTube", pick("Landscape 16:9", "Mendatar 16:9"), "h-4 w-7"],
+                          [
+                            "auto",
+                            pick("Follow photo", "Ikuti foto"),
+                            pick("Automatic", "Otomatis"),
+                            "h-5 w-5 border-dashed",
+                          ],
+                        ] as const
+                      ).map(([v, label, sub, box]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          aria-pressed={fmt === v}
+                          onClick={() => setFmt(v)}
+                          className={cn(
+                            pill(fmt === v),
+                            "flex min-h-16 w-full items-center gap-2.5 px-3 py-2 text-left text-[12px]",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-[3px] border-2 border-current opacity-70",
+                              box,
+                            )}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 leading-tight">
+                            <span className="block font-medium">{label}</span>
+                            <span className="block text-[11px] opacity-70">{sub}</span>
                           </span>
-                        </div>
-                        <Input
-                          id={`tpl-${k}`}
-                          className="h-11"
-                          maxLength={TEMPLATE_LIMITS[k]}
-                          value={tpl[k]}
-                          placeholder={`${pick("e.g.", "mis.")} ${ph}`}
-                          onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
-                        />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h2 className="text-sm font-semibold">
+                        {pick("What should the video say?", "Mau videonya bilang apa?")}
+                      </h2>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {prompt.length}/600
+                      </span>
+                    </div>
+                    <Textarea
+                      rows={3}
+                      maxLength={600}
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder={pick(
+                        "e.g. Promo iced palm-sugar coffee, 20% off until Sunday, invite people to order on WhatsApp",
+                        "mis. Promo kopi susu gula aren, diskon 20% sampai Minggu, ajak pesan lewat WhatsApp",
+                      )}
+                      className="resize-none text-[15px]"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {pick(
+                          "Title, description, badge, call to action and music are arranged for you. Free.",
+                          "Judul, keterangan, lencana, ajakan, dan musik disusun otomatis. Gratis.",
+                        )}
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        disabled={!prompt.trim() || prompt.trim().length < 3 || draft.isPending}
+                        onClick={() => draft.mutate(prompt.trim())}
+                      >
+                        {draft.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                        {draftedFor
+                          ? pick("Rewrite", "Susun ulang")
+                          : pick("Arrange text", "Susun teks")}
+                      </Button>
+                    </div>
+                    <details
+                      open={manualOpen}
+                      onToggle={(e) => setManualOpen((e.target as HTMLDetailsElement).open)}
+                      className="rounded-xl border p-3"
+                    >
+                      <summary className="cursor-pointer text-sm">
+                        {tpl.headline
+                          ? pick("Text used (editable)", "Teks yang dipakai (bisa diedit)")
+                          : pick("Or fill in the text yourself", "Atau isi teks sendiri")}
+                        {tpl.headline && !manualOpen && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            “{tpl.headline}”
+                          </span>
+                        )}
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        {(
+                          [
+                            ["headline", pick("Title", "Judul"), "Production Management"],
+                            [
+                              "subline",
+                              pick("Description (optional)", "Keterangan (opsional)"),
+                              pick("From raw material to report", "Dari bahan baku sampai laporan"),
+                            ],
+                            [
+                              "badge",
+                              pick("Badge (optional)", "Lencana (opsional)"),
+                              pick("Brand, price or promo", "Merek, harga, atau promo"),
+                            ],
+                            [
+                              "cta",
+                              pick("Call to action (optional)", "Ajakan (opsional)"),
+                              pick("Try it at xperd.id", "Coba di xperd.id"),
+                            ],
+                          ] as const
+                        ).map(([k, label, ph]) => (
+                          <div key={k}>
+                            <div className="mb-1 flex items-baseline justify-between">
+                              <label htmlFor={`tpl-${k}`} className="text-xs text-muted-foreground">
+                                {label}
+                              </label>
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {tpl[k].length}/{TEMPLATE_LIMITS[k]}
+                              </span>
+                            </div>
+                            <Input
+                              id={`tpl-${k}`}
+                              className="h-11"
+                              maxLength={TEMPLATE_LIMITS[k]}
+                              value={tpl[k]}
+                              placeholder={`${pick("e.g.", "mis.")} ${ph}`}
+                              onChange={(e) => setTpl((x) => ({ ...x, [k]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </details>
                   </section>
 
                   <section className="space-y-3">
@@ -919,13 +1059,32 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         {pick("Music and sound effects", "Musik dan efek suara")}
                         <span className="block text-[11px] text-muted-foreground">
                           {pick(
-                            "A beat that suits the template, plus whoosh and pop on every transition",
-                            "Ketukan latar sesuai tema template, plus whoosh dan pop di setiap pergantian",
+                            "Royalty-free background music, different in every video, plus whoosh and pop on transitions",
+                            "Musik latar bebas royalti, berbeda di tiap video, plus whoosh dan pop di setiap pergantian",
                           )}
                         </span>
                       </span>
                       <Switch checked={tplSound} onCheckedChange={setTplSound} />
                     </label>
+                    {tplSound && (
+                      <div
+                        className="flex flex-wrap gap-1.5"
+                        role="group"
+                        aria-label={pick("Music mood", "Suasana musik")}
+                      >
+                        {MUSIC_MOODS.map((m) => (
+                          <button
+                            key={m.key}
+                            type="button"
+                            aria-pressed={mood === m.key}
+                            onClick={() => setMood(m.key)}
+                            className={cn(pill(mood === m.key), "min-h-9 px-3 text-xs")}
+                          >
+                            {lang === "id" ? m.name : m.name_en}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <div className="space-y-2 rounded-xl border p-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm">
@@ -1218,12 +1377,40 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               {enough ? (
                 <Button
                   size="xl"
-                  className="w-full rounded-full bg-violet-600 text-white hover:bg-violet-700"
-                  disabled={!!blocker || create.isPending}
-                  onClick={() => create.mutate()}
+                  className={cn(
+                    "relative w-full overflow-hidden rounded-full bg-violet-600 text-white hover:bg-violet-700",
+                    busyJob && "disabled:opacity-100",
+                  )}
+                  disabled={!!blocker || create.isPending || draft.isPending || !!busyJob}
+                  aria-busy={create.isPending || !!busyJob}
+                  onClick={() => {
+                    if (create.isPending || busyJob) return;
+                    create.mutate();
+                  }}
                 >
-                  {create.isPending ? <Loader2 className="animate-spin" /> : <Wand2 />}
-                  {pick(`Create video, ${cost} credits`, `Buat video, ${cost} kredit`)}
+                  {busyJob && (
+                    <span
+                      className="absolute inset-y-0 left-0 bg-violet-400/60 transition-[width] duration-700"
+                      style={{ width: `${busyPct}%` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="relative flex items-center gap-2">
+                    {create.isPending || draft.isPending || busyJob ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Wand2 />
+                    )}
+                    {busyJob
+                      ? busyJob.status === "queued"
+                        ? pick("Waiting in queue…", "Menunggu antrean…")
+                        : pick(`Creating video… ${busyPct}%`, `Membuat video… ${busyPct}%`)
+                      : draft.isPending
+                        ? pick("Arranging text…", "Menyusun teks…")
+                        : create.isPending
+                          ? pick("Sending…", "Mengirim…")
+                          : pick(`Create video, ${cost} credits`, `Buat video, ${cost} kredit`)}
+                  </span>
                 </Button>
               ) : (
                 <Button
@@ -1252,14 +1439,14 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
 
           <div className="-order-1 min-w-0 space-y-5 lg:order-none lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:gap-4 lg:space-y-0">
             <Stage
-              ratio={view ? view.aspect_ratio : isTpl ? tplRatio : ratio}
+              ratio={view ? view.aspect_ratio : isTpl ? shownRatio : ratio}
               job={view}
               photoUrl={view?.source_path ? fileUrl(view.source_path) : firstUrl}
               caption={
                 view
                   ? `${jobStyle(view)}, ${tierLabel(view.tier)}, ${view.duration_s} ${pick("sec", "detik")}`
                   : isTpl
-                    ? `${lang === "id" ? tplDef.name : tplDef.name_en}, ${tplFinal} ${pick("sec", "detik")}, ${tplRatio}, ${items.length} ${pick("photos", "foto")}${narr ? `, ${pick("voice-over", "narasi")}` : ""}`
+                    ? `${lang === "id" ? tplDef.name : tplDef.name_en}, ${tplFinal} ${pick("sec", "detik")}, ${shownRatio}, ${items.length} ${pick("photos", "foto")}${narr ? `, ${pick("voice-over", "narasi")}` : ""}`
                     : `${curStyle ? styleName(curStyle) : ""}, ${L(TIER_LABELS[tier])}, ${duration} ${pick("sec", "detik")}, ${ratio}`
               }
               onBack={view ? () => setView(null) : undefined}
@@ -1291,7 +1478,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                     }
                     accent={accent}
                     dark={dark}
-                    ratio={tplRatio}
+                    ratio={shownRatio}
                     photoUrl={firstUrl}
                   />
                 ) : null
@@ -1941,15 +2128,24 @@ function Stage({
               <p className="text-sm font-medium">
                 {pick("Creating your video", "Membuat video Anda")}
               </p>
-              {/* Perkiraan kemajuan: kebanyakan video selesai dalam ±3 menit. */}
-              <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-white/20">
+              {/* Kemajuan dari mesin render (atau perkiraan bila mesin versi lama). */}
+              <p className="text-3xl font-semibold tabular-nums">{jobPercent(job)}%</p>
+              <div className="h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-white/20">
                 <div
-                  className="h-full rounded-full bg-violet-400 transition-[width] duration-1000"
-                  style={{
-                    width: `${Math.min(95, Math.round((job.seconds_elapsed / (quick ? 45 : 180)) * 100))}%`,
-                  }}
+                  className="h-full rounded-full bg-violet-400 transition-[width] duration-700"
+                  style={{ width: `${jobPercent(job)}%` }}
                 />
               </div>
+              {job.status === "queued" && (
+                <p className="text-xs text-white/80">
+                  {job.queue_ahead
+                    ? pick(
+                        `Waiting in queue, ${job.queue_ahead} video(s) ahead`,
+                        `Menunggu antrean, ${job.queue_ahead} video di depan`,
+                      )
+                    : pick("Starting…", "Memulai…")}
+                </p>
+              )}
               <p className="text-xs tabular-nums text-white/80">
                 {clock(job.seconds_elapsed)},{" "}
                 {quick
@@ -1974,6 +2170,24 @@ function Stage({
           )}
         </div>
       </div>
+      {job && running(job) && (
+        <div className="mx-auto mt-4 w-full max-w-sm shrink-0">
+          <div className="mb-1 flex justify-between text-[12px] text-white/80">
+            <span>
+              {job.status === "queued"
+                ? pick("In queue", "Dalam antrean")
+                : pick("Rendering video", "Merender video")}
+            </span>
+            <span className="tabular-nums">{jobPercent(job)}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
+            <div
+              className="h-full rounded-full bg-violet-400 transition-[width] duration-700"
+              style={{ width: `${jobPercent(job)}%` }}
+            />
+          </div>
+        </div>
+      )}
       <p className="mt-4 shrink-0 text-center text-[13px] text-white/75">{caption}</p>
       {job?.status === "done" && job.result_path && (
         <div className="mt-4 flex shrink-0 flex-wrap justify-center gap-2">

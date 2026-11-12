@@ -149,3 +149,19 @@ Laporan `claim` kini membawa metrik server (beban CPU, RAM, disk, uptime, jumlah
 `ai_studio_settings.worker_metrics` dan tampil di Super Admin → Kesehatan Sistem → Server render video, beserta
 antrean, selesai/gagal 24 jam, dan rata-rata durasi render. Mesin versi lama tetap jalan (tanpa metrik).
 Perbarui: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan lagi perintahnya.
+
+### Mesin render v2.2.0 (12 Nov 2026)
+- Lapor kemajuan render ke `/api/public/render-worker/progress` (`ai_jobs.progress`, migrasi 087) → progres %
+  di tombol & di bawah video. Mesin lama tetap jalan; Studio memakai perkiraan waktu.
+- Musik latar bervariasi per video: suasana `mood` (energetic/upbeat/corporate/calm/cinematic/chill, dipilih
+  pengguna atau dari "mode perintah") + benih `seed` dari id pekerjaan (nada dasar, tempo, urutan akor, pola).
+  Semua disintesis → bebas lisensi.
+Perbarui seperti v2.1.0 (`docker pull …:latest`, jalankan ulang kontainer).
+
+### Mode perintah & format (migrasi 086, 088)
+- Pengguna menulis perintah → `draftTemplateTextFn` menyusun judul/keterangan/lencana/ajakan + suasana musik.
+  Pakai LLM kompatibel OpenAI yang diatur di Super Admin → Studio AI → Umum (Anthropic/OpenRouter/OpenAI),
+  `ai_studio_settings.text_llm`; tanpa itu memakai pengurai aturan (`src/lib/template-prompt.ts`). Gratis.
+- Pilihan format: Reels/TikTok/Shorts 9:16, Feed 1:1, YouTube 16:9, atau ikuti foto.
+- Harga Template per durasi: 8–10 dtk, 11–15, 16–30, 31–60 (Super Admin → Template). Migrasi 086 menambah
+  tingkat 10 dtk = 1 kredit.

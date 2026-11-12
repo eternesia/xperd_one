@@ -108,6 +108,7 @@ import { Route as ApiPublicRenderWorkerAudioRouteImport } from './routes/api/pub
 import { Route as ApiPublicRenderWorkerClaimRouteImport } from './routes/api/public/render-worker/claim'
 import { Route as ApiPublicRenderWorkerCompleteRouteImport } from './routes/api/public/render-worker/complete'
 import { Route as ApiPublicRenderWorkerFailRouteImport } from './routes/api/public/render-worker/fail'
+import { Route as ApiPublicRenderWorkerProgressRouteImport } from './routes/api/public/render-worker/progress'
 import { Route as ApiPublicSiteAssetKeyRouteImport } from './routes/api/public/site-asset/$key'
 import { Route as ApiPublicWebhooksMidtransRouteImport } from './routes/api/public/webhooks/midtrans'
 import { Route as ApiPublicWebhooksWalletDokuRouteImport } from './routes/api/public/webhooks/wallet-doku'
@@ -630,6 +631,12 @@ const ApiPublicRenderWorkerFailRoute =
     path: '/api/public/render-worker/fail',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicRenderWorkerProgressRoute =
+  ApiPublicRenderWorkerProgressRouteImport.update({
+    id: '/api/public/render-worker/progress',
+    path: '/api/public/render-worker/progress',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSiteAssetKeyRoute = ApiPublicSiteAssetKeyRouteImport.update({
   id: '/api/public/site-asset/$key',
   path: '/api/public/site-asset/$key',
@@ -819,6 +826,7 @@ export interface FileRoutesByFullPath {
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
+  '/api/public/render-worker/progress': typeof ApiPublicRenderWorkerProgressRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -931,6 +939,7 @@ export interface FileRoutesByTo {
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
+  '/api/public/render-worker/progress': typeof ApiPublicRenderWorkerProgressRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -1048,6 +1057,7 @@ export interface FileRoutesById {
   '/api/public/render-worker/claim': typeof ApiPublicRenderWorkerClaimRoute
   '/api/public/render-worker/complete': typeof ApiPublicRenderWorkerCompleteRoute
   '/api/public/render-worker/fail': typeof ApiPublicRenderWorkerFailRoute
+  '/api/public/render-worker/progress': typeof ApiPublicRenderWorkerProgressRoute
   '/api/public/site-asset/$key': typeof ApiPublicSiteAssetKeyRoute
   '/api/public/webhooks/midtrans': typeof ApiPublicWebhooksMidtransRoute
   '/api/public/webhooks/wallet-doku': typeof ApiPublicWebhooksWalletDokuRoute
@@ -1166,6 +1176,7 @@ export interface FileRouteTypes {
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
+    | '/api/public/render-worker/progress'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1278,6 +1289,7 @@ export interface FileRouteTypes {
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
+    | '/api/public/render-worker/progress'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1394,6 +1406,7 @@ export interface FileRouteTypes {
     | '/api/public/render-worker/claim'
     | '/api/public/render-worker/complete'
     | '/api/public/render-worker/fail'
+    | '/api/public/render-worker/progress'
     | '/api/public/site-asset/$key'
     | '/api/public/webhooks/midtrans'
     | '/api/public/webhooks/wallet-doku'
@@ -1461,6 +1474,7 @@ export interface RootRouteChildren {
   ApiPublicRenderWorkerClaimRoute: typeof ApiPublicRenderWorkerClaimRoute
   ApiPublicRenderWorkerCompleteRoute: typeof ApiPublicRenderWorkerCompleteRoute
   ApiPublicRenderWorkerFailRoute: typeof ApiPublicRenderWorkerFailRoute
+  ApiPublicRenderWorkerProgressRoute: typeof ApiPublicRenderWorkerProgressRoute
   ApiPublicSiteAssetKeyRoute: typeof ApiPublicSiteAssetKeyRoute
   ApiPublicWebhooksMidtransRoute: typeof ApiPublicWebhooksMidtransRoute
   ApiPublicWebhooksWalletDokuRoute: typeof ApiPublicWebhooksWalletDokuRoute
@@ -2164,6 +2178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicRenderWorkerFailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/render-worker/progress': {
+      id: '/api/public/render-worker/progress'
+      path: '/api/public/render-worker/progress'
+      fullPath: '/api/public/render-worker/progress'
+      preLoaderRoute: typeof ApiPublicRenderWorkerProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/site-asset/$key': {
       id: '/api/public/site-asset/$key'
       path: '/api/public/site-asset/$key'
@@ -2526,6 +2547,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicRenderWorkerClaimRoute: ApiPublicRenderWorkerClaimRoute,
   ApiPublicRenderWorkerCompleteRoute: ApiPublicRenderWorkerCompleteRoute,
   ApiPublicRenderWorkerFailRoute: ApiPublicRenderWorkerFailRoute,
+  ApiPublicRenderWorkerProgressRoute: ApiPublicRenderWorkerProgressRoute,
   ApiPublicSiteAssetKeyRoute: ApiPublicSiteAssetKeyRoute,
   ApiPublicWebhooksMidtransRoute: ApiPublicWebhooksMidtransRoute,
   ApiPublicWebhooksWalletDokuRoute: ApiPublicWebhooksWalletDokuRoute,

@@ -6,6 +6,9 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { SignupBonusAdmin } from "@/components/app/SignupBonusAdmin";
+import { StudioAdminDashboard } from "@/components/app/StudioAdminDashboard";
+import { StudioCreditUsers } from "@/components/app/StudioCreditUsers";
+import { StudioTextLlmAdmin } from "@/components/app/StudioTextLlmAdmin";
 import { TemplateSamplesAdmin } from "@/components/app/TemplateSamplesAdmin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +43,14 @@ import {
   adminSaveStudio,
 } from "@/lib/ai-studio.functions";
 
+/** Tingkat harga Template per durasi (detik maksimum); 61 = sampai 60 detik + pembulatan. */
+const PRICE_TIERS = [
+  { max_s: 10, label: "Video 8–10 detik", fallback: 1 },
+  { max_s: 15, label: "11–15 detik", fallback: 2 },
+  { max_s: 30, label: "16–30 detik", fallback: 3 },
+  { max_s: 61, label: "31–60 detik", fallback: 5 },
+] as const;
+
 export const Route = createFileRoute("/app-admin/ai-studio")({
   head: () => ({ meta: [{ title: "Studio AI | XPERD Admin" }] }),
   component: StudioAdmin,
@@ -70,7 +81,7 @@ function StudioAdmin() {
   const [tplEnabled, setTplEnabled] = useState(false);
   const [tplCredits, setTplCredits] = useState(1);
   // Harga Template per durasi: ≤15 dtk, ≤30 dtk, ≤60 dtk.
-  const [tplPrices, setTplPrices] = useState<number[]>([2, 3, 5]);
+  const [tplPrices, setTplPrices] = useState<number[]>(PRICE_TIERS.map((t) => t.fallback));
   const [newToken, setNewToken] = useState<{ token: string; url: string } | null>(null);
   const rotateFn = useServerFn(adminRotateWorkerToken);
   const rotate = useMutation({
@@ -106,7 +117,7 @@ function StudioAdmin() {
     setTplCredits(q.data.template.credits);
     const pr = q.data.template.prices;
     setTplPrices(
-      [15, 30, 61].map((m, i) => pr.find((p) => p.max_s === m)?.credits ?? [2, 3, 5][i]),
+      PRICE_TIERS.map((t) => pr.find((p) => p.max_s === t.max_s)?.credits ?? t.fallback),
     );
     setPacks(q.data.packs);
   }, [q.data]);
@@ -140,7 +151,7 @@ function StudioAdmin() {
           styles,
           templateEnabled: tplEnabled,
           templateCredits: tplCredits,
-          templatePrices: [15, 30, 61].map((max_s, i) => ({ max_s, credits: tplPrices[i] })),
+          templatePrices: PRICE_TIERS.map((t, i) => ({ max_s: t.max_s, credits: tplPrices[i] })),
           ...opts,
         },
       });
@@ -202,6 +213,7 @@ function StudioAdmin() {
       <Tabs value={tab} onValueChange={setTab} className="space-y-5">
         <TabsList className="sticky top-0 z-10 h-auto flex-wrap justify-start gap-1 bg-muted p-1">
           <TabsTrigger value="ringkasan">Ringkasan</TabsTrigger>
+          <TabsTrigger value="kredit">Kredit user</TabsTrigger>
           <TabsTrigger value="umum">Umum & penyedia</TabsTrigger>
           <TabsTrigger value="paket">Paket kredit</TabsTrigger>
           <TabsTrigger value="tingkat">Tingkat & harga</TabsTrigger>
@@ -210,21 +222,15 @@ function StudioAdmin() {
           <TabsTrigger value="pekerjaan">Pekerjaan</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="kredit" className="space-y-6">
+          <StudioCreditUsers />
+        </TabsContent>
+
         <TabsContent value="ringkasan" className="space-y-6">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Stat label="Video (30 hari)" value={String(d.totals30d.jobs)} />
-            <Stat label="Berhasil / gagal" value={`${d.totals30d.done} / ${d.totals30d.failed}`} />
-            <Stat
-              label="Penjualan paket"
-              value={`${rp(d.totals30d.sales_idr)} · ${d.totals30d.packs_sold}×`}
-            />
-            <Stat label="Penjualan − biaya penyedia" value={rp(margin)} />
-          </div>
-          <p className="-mt-3 text-xs text-muted-foreground">
-            30 hari, tanpa video uji dan pembelian Super Admin. Kredit terpakai{" "}
-            {d.totals30d.credits_used} dari {d.totals30d.credits_sold} terjual; kredit beredar di
-            semua tenant {d.credits_outstanding}. Biaya = perkiraan dari tarif per detik, cocokkan
-            dengan tagihan penyedia.
+          <StudioAdminDashboard />
+          <p className="text-xs text-muted-foreground">
+            Tanpa video uji dan pembelian Super Admin. Video AI (30 hari): penjualan − perkiraan
+            biaya penyedia {rp(margin)}.
           </p>
           <Card>
             <CardContent className="flex flex-wrap items-start justify-between gap-4 p-4">
@@ -254,6 +260,7 @@ function StudioAdmin() {
         </TabsContent>
 
         <TabsContent value="umum" className="space-y-6">
+          <StudioTextLlmAdmin />
           <Card>
             <CardContent className="space-y-4 p-4">
               <p className="font-semibold">API key penyedia</p>
@@ -632,23 +639,23 @@ function StudioAdmin() {
                   Buka Template untuk pengguna
                 </label>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {["Video sampai 15 detik", "16 sampai 30 detik", "31 sampai 60 detik"].map(
-                  (label, i) => (
-                    <Field key={label} label={`${label} (kredit)`}>
-                      <NumInput
-                        value={tplPrices[i]}
-                        onChange={(v) =>
-                          setTplPrices((x) => x.map((c, j) => (j === i ? Math.max(1, v) : c)))
-                        }
-                      />
-                    </Field>
-                  ),
-                )}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {PRICE_TIERS.map((t) => t.label).map((label, i) => (
+                  <Field key={label} label={`${label} (kredit)`}>
+                    <NumInput
+                      value={tplPrices[i]}
+                      onChange={(v) =>
+                        setTplPrices((x) => x.map((c, j) => (j === i ? Math.max(1, v) : c)))
+                      }
+                    />
+                  </Field>
+                ))}
               </div>
               <p className="text-xs text-muted-foreground">
-                Harga mengikuti durasi akhir video (bisa lebih panjang dari pilihan pengguna bila
-                fotonya banyak atau ada narasi). Render ±5 detik per detik video di VPS 2 vCPU.
+                Harga per video menurut durasi akhir. Harga ini juga yang tampil di tombol “Buat
+                video” dan “Lihat harga” pengguna. Harga mengikuti durasi akhir video (bisa lebih
+                panjang dari pilihan pengguna bila fotonya banyak atau ada narasi). Render ±5 detik
+                per detik video di VPS 2 vCPU.
               </p>
               <p className="text-xs text-muted-foreground">
                 Template hanya tampil ke pengguna bila saklar utama Studio AI (tab Ringkasan) juga

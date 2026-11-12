@@ -14,7 +14,7 @@ const BASE = (process.env.QALLING_URL || "")
   .replace(/^http:\/\/(?!localhost|127\.0\.0\.1)/, "https://");
 const TOKEN = process.env.WORKER_TOKEN || "";
 const POLL = Math.max(2, Number(process.env.POLL_SECONDS) || 5) * 1000;
-const VERSION = "2.1.0";
+const VERSION = "2.2.0";
 if (!/^https?:\/\//.test(BASE) || TOKEN.length < 20) {
   console.error("QALLING_URL dan WORKER_TOKEN wajib diisi.");
   process.exit(1);
@@ -88,7 +88,19 @@ async function run(job) {
       fs.mkdirSync(path.dirname(audioFile), { recursive: true });
       fs.writeFileSync(audioFile, Buffer.from(await res.arrayBuffer()));
     }
-    await renderTemplate({ template: job.template, props: { ...job.props, image, items, narration }, output });
+    // Laporkan kemajuan render (maks. tiap 2 detik) → progres % di Studio pengguna.
+    let lastSent = 0;
+    const onProgress = (p) => {
+      const now = Date.now();
+      if (now - lastSent < 2000 && p < 1) return;
+      lastSent = now;
+      api("progress", {
+        body: JSON.stringify({ job: job.id, progress: Math.round(p * 100) }),
+        headers: { "Content-Type": "application/json" },
+        timeout: 10_000,
+      }).catch(() => {});
+    };
+    await renderTemplate({ template: job.template, props: { ...job.props, image, items, narration }, output, onProgress });
     const bytes = fs.readFileSync(output);
     // Berpotongan 512 KB: proxy (nginx) bawaan menolak body > 1 MB.
     const CHUNK = 512 * 1024;

@@ -199,7 +199,28 @@ export interface AiJobView {
   source_path: string | null;
   note: string | null;
   seconds_elapsed: number;
+  /** Kemajuan render 0–100 dari mesin render (null = belum dilaporkan / mesin versi lama). */
+  progress?: number | null;
+  /** Detik sejak diambil mesin render. */
+  render_elapsed?: number | null;
+  /** Jumlah video di depan dalam antrean render (hanya saat menunggu). */
+  queue_ahead?: number | null;
   created_at: string;
+}
+
+/**
+ * Persen kemajuan untuk ditampilkan (0–100). Pakai laporan mesin render bila ada; bila tidak,
+ * perkiraan dari lama render (±4 detik per detik video + unggah).
+ */
+export function jobPercent(j: AiJobView): number {
+  if (j.status === "done") return 100;
+  if (j.status === "failed") return 0;
+  if (j.tier !== "template") return Math.min(95, Math.round((j.seconds_elapsed / 180) * 100));
+  if (j.status === "queued") return 3;
+  if (j.progress != null) return Math.min(99, Math.round(8 + j.progress * 0.9));
+  const expected = Math.max(25, j.duration_s * 4 + 15);
+  const t = j.render_elapsed ?? j.seconds_elapsed;
+  return Math.min(95, Math.round(8 + 87 * Math.min(1, t / expected)));
 }
 
 export interface StudioAccess {

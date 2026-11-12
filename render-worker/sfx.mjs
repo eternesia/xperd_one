@@ -92,8 +92,15 @@ const MOODS = {
   energetic: { bpm: 124, chords: [[67, 71, 74], [62, 66, 69], [64, 67, 71], [60, 64, 67]], bass: [43, 38, 40, 36], kick: [0, 1, 2, 3], snare: [1, 3], hat: true, pluck: 2 },
   // Tenang/hangat (Cerita Bertahap, Pengumuman).
   calm: { bpm: 92, chords: [[60, 64, 67, 71], [57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 65]], bass: [36, 33, 29, 31], kick: [0], snare: [], hat: false, pluck: 1 },
+  // Ceria: mayor terang, pluck rapat.
+  upbeat: { bpm: 128, chords: [[60, 64, 67], [65, 69, 72], [67, 71, 74], [65, 69, 72]], bass: [36, 41, 43, 41], kick: [0, 1, 2, 3], snare: [1, 3], hat: true, pluck: 3 },
+  // Elegan/sinematik: minor lambat, pad tebal.
+  cinematic: { bpm: 84, chords: [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], bass: [33, 29, 24, 31], kick: [0], snare: [2], hat: false, pluck: 1 },
+  // Santai (lo-fi): akor jazzy, ketukan longgar.
+  chill: { bpm: 88, chords: [[62, 65, 69, 72], [55, 59, 62, 65], [60, 64, 67, 71], [57, 60, 64, 67]], bass: [38, 31, 36, 33], kick: [0, 2.5], snare: [1, 3], hat: true, pluck: 1 },
 };
 
+export const MOOD_NAMES = ["corporate", "energetic", "calm", "upbeat", "cinematic", "chill"];
 export const MOOD_OF = {
   steps: "corporate",
   motion: "corporate",
@@ -113,8 +120,44 @@ function add(buf, at, seconds, fn) {
   for (let i = 0; i < n; i++) buf[start + i] += fn(i / SR, i);
 }
 
-export function makeBed(seconds, moodName = "corporate") {
-  const m = MOODS[moodName] || MOODS.corporate;
+/** RNG deterministik (mulberry32) — benih sama = musik sama; benih beda = variasi. */
+function rng(seed) {
+  let a = seed >>> 0 || 1;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Variasi per video dari satu suasana: nada dasar digeser (−5…+6 semiton), tempo ±8%,
+ * urutan akor diputar/dibalik, pola arpeggio & hi-hat berganti. Tetap bebas lisensi.
+ */
+export function varyMood(base, seed) {
+  if (!seed) return base;
+  const r = rng(seed);
+  const shift = Math.floor(r() * 12) - 5;
+  const rot = Math.floor(r() * base.chords.length);
+  const reverse = r() < 0.35;
+  const order = base.chords.map((_, i) => (i + rot) % base.chords.length);
+  if (reverse) order.reverse();
+  return {
+    ...base,
+    bpm: Math.round(base.bpm * (0.92 + r() * 0.16)),
+    chords: order.map((i) => base.chords[i].map((n) => n + shift)),
+    bass: order.map((i) => base.bass[i] + shift),
+    pluck: Math.max(1, Math.min(3, base.pluck + (r() < 0.3 ? 1 : r() < 0.2 ? -1 : 0))),
+    hat: base.hat ? r() > 0.15 : r() < 0.2,
+    arpUp: r() < 0.5,
+  };
+}
+
+export function makeBed(seconds, moodName = "corporate", variant = 0) {
+  const m = varyMood(MOODS[moodName] || MOODS.corporate, variant);
+  seed = (variant || 22222) >>> 0; // derau drum ikut benih → hasil bisa diulang
   const total = Math.max(1, Math.ceil(seconds * SR));
   const buf = new Float32Array(total);
   const beat = 60 / m.bpm;
@@ -141,7 +184,8 @@ export function makeBed(seconds, moodName = "corporate") {
     // Arpeggio "pluck" (1/8 atau 1/4), satu oktaf di atas akor.
     const steps = 4 * m.pluck;
     for (let k = 0; k < steps; k++) {
-      const f = midi(chord[k % chord.length] + 12 + (k % (chord.length * 2) >= chord.length ? 12 : 0));
+      const idx = m.arpUp === false ? chord.length - 1 - (k % chord.length) : k % chord.length;
+      const f = midi(chord[idx] + 12 + (k % (chord.length * 2) >= chord.length ? 12 : 0));
       add(buf, t0 + (k * beat) / m.pluck, 0.5, (t) => Math.exp(-t * 9) * Math.min(1, t / 0.004) * 0.05 * (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)));
     }
     if (first) continue; // bar pertama tanpa drum: pembuka yang lebih lembut
@@ -184,8 +228,8 @@ export function makeBed(seconds, moodName = "corporate") {
 }
 
 /** Tulis suara latar sebagai WAV ke `file` (dipakai lib.mjs per render). */
-export function writeBed(file, seconds, moodName) {
+export function writeBed(file, seconds, moodName, variant = 0) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, wav(makeBed(seconds, moodName)));
+  fs.writeFileSync(file, wav(makeBed(seconds, moodName, variant)));
   return file;
 }
