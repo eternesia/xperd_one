@@ -80,7 +80,7 @@ async function scanStorage() {
     return { root, exists: false, total: 0, files: 0, folders, partial };
   }
   for (const e of entries) {
-    if (!e.isDirectory()) continue;
+    if (!e.isDirectory() || e.name === "_backups") continue;
     const r = await folderSize(join(root, e.name), budget);
     folders.push({ name: e.name, bytes: r.bytes, files: r.files });
     partial ||= r.partial;
@@ -274,10 +274,121 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
   const lastBackup = await safe(
     () =>
       executeOne<{ finished_at: string; status: string; size_bytes: number; target: string }>(
-        "SELECT finished_at, status, size_bytes, target FROM system_backups ORDER BY finished_at DESC LIMIT 1",
+        "SELECT finished_at, status, size_bytes, target FROM system_backups WHERE kind = 'db' AND status = 'success' ORDER BY finished_at DESC LIMIT 1",
       ),
     null,
   );
+  const lastFilesBackup = await safe(
+    () =>
+      executeOne<{ finished_at: string }>(
+        "SELECT finished_at FROM system_backups WHERE kind = 'files' AND status = 'success' ORDER BY finished_at DESC LIMIT 1",
+      ),
+    null,
+  );
+  const lastFailed = await safe(
+    () =>
+      executeOne<{ kind: string; detail: string | null; started_at: string }>(
+        `SELECT kind, detail, started_at FROM system_backups WHERE status = 'failed'
+          AND started_at > UTC_TIMESTAMP() - INTERVAL 2 DAY ORDER BY started_at DESC LIMIT 1`,
+      ),
+    null,
+  );
+
+  /* ---------- server render video (Studio AI) ---------- */
+  const rw = await safe(
+    () =>
+      executeOne<{
+        enabled: number;
+        template_enabled: number;
+        has_token: number;
+        seen_at: string | null;
+        age_sec: number | null;
+        info: string | null;
+        metrics: unknown;
+      }>(
+        `SELECT enabled, template_enabled, worker_token_hash IS NOT NULL AS has_token,
+                worker_seen_at AS seen_at, TIMESTAMPDIFF(SECOND, worker_seen_at, NOW(6)) AS age_sec,
+                worker_info AS info, worker_metrics AS metrics
+           FROM ai_studio_settings WHERE id = 'platform'`,
+      ),
+    null,
+  );
+  const rq = await safe(
+    () =>
+      executeOne<{
+        queued: number | null;
+        processing: number | null;
+        done24: number | null;
+        failed24: number | null;
+        avg_sec: number | null;
+        oldest_min: number | null;
+      }>(
+        `SELECT SUM(status = 'queued') AS queued,
+                SUM(status IN ('processing','saving')) AS processing,
+                SUM(status = 'done' AND finished_at > NOW(6) - INTERVAL 1 DAY) AS done24,
+                SUM(status = 'failed' AND updated_at > NOW(6) - INTERVAL 1 DAY) AS failed24,
+                AVG(CASE WHEN status = 'done' AND finished_at > NOW(6) - INTERVAL 7 DAY AND claimed_at IS NOT NULL
+                         THEN TIMESTAMPDIFF(SECOND, claimed_at, finished_at) END) AS avg_sec,
+                TIMESTAMPDIFF(MINUTE, MIN(CASE WHEN status = 'queued' THEN created_at END), NOW(6)) AS oldest_min
+           FROM ai_jobs WHERE provider = 'render'`,
+      ),
+    null,
+  );
+  type RenderMetrics = {
+    load?: number[];
+    mem?: { total: number; free: number };
+    disk?: { total: number; free: number } | null;
+    uptimeSec?: number;
+    workerUptimeSec?: number;
+    node?: string;
+    rendered?: number;
+    failed?: number;
+    lastRenderMs?: number | null;
+  };
+  let rMetrics: RenderMetrics | null = null;
+  try {
+    rMetrics = rw?.metrics
+      ? ((typeof rw.metrics === "string" ? JSON.parse(rw.metrics) : rw.metrics) as RenderMetrics)
+      : null;
+  } catch {
+    rMetrics = null;
+  }
+  const age = rw?.age_sec === null || rw?.age_sec === undefined ? null : Number(rw.age_sec);
+  const processing = Number(rq?.processing ?? 0);
+  const renderState: "never" | "online" | "rendering" | "offline" = !rw?.seen_at
+    ? "never"
+    : age !== null && age <= 90
+      ? "online"
+      : processing > 0 && age !== null && age <= 15 * 60
+        ? "rendering"
+        : "offline";
+  const pctOf = (x?: { total: number; free: number } | null) =>
+    x?.total ? Math.round(((x.total - x.free) / x.total) * 1000) / 10 : null;
+  const render = rw
+    ? {
+        configured: Boolean(Number(rw.has_token)) || Boolean(rw.seen_at),
+        enabled: Boolean(Number(rw.enabled)) && Boolean(Number(rw.template_enabled)),
+        state: renderState,
+        seenAt: rw.seen_at ? String(rw.seen_at) : null,
+        ageSec: age,
+        info: rw.info,
+        metrics: rMetrics
+          ? { ...rMetrics, memPct: pctOf(rMetrics.mem), diskPct: pctOf(rMetrics.disk) }
+          : null,
+        queue: {
+          queued: Number(rq?.queued ?? 0),
+          processing,
+          done24: Number(rq?.done24 ?? 0),
+          failed24: Number(rq?.failed24 ?? 0),
+          avgSec:
+            rq?.avg_sec === null || rq?.avg_sec === undefined
+              ? null
+              : Math.round(Number(rq.avg_sec)),
+          oldestQueuedMin:
+            rq?.oldest_min === null || rq?.oldest_min === undefined ? null : Number(rq.oldest_min),
+        },
+      }
+    : null;
 
   /* ---------- peringatan ---------- */
   type Level = "critical" | "warning" | "info";
@@ -336,6 +447,46 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
       title: "Backup terakhir lebih dari 36 jam lalu",
       detail: "Periksa tugas backup.",
     });
+  if (lastFailed)
+    alerts.push({
+      level: "warning",
+      title: `Backup ${lastFailed.kind === "db" ? "database" : "berkas"} gagal`,
+      detail: lastFailed.detail ?? "Lihat riwayat backup.",
+    });
+  if (lastBackup)
+    alerts.push({
+      level: "info",
+      title: "Backup tersimpan di server yang sama",
+      detail:
+        "Unduh backup terbaru secara rutin dan simpan di komputer/drive lain agar aman bila server rusak.",
+    });
+  if (render?.configured) {
+    if ((render.state === "offline" || render.state === "never") && render.queue.queued > 0)
+      alerts.push({
+        level: "critical",
+        title: `Server render video tidak aktif, ${render.queue.queued} video antre`,
+        detail:
+          "Periksa VPS render (docker logs -f qalling-render). Antre > 20 menit akan gagal dan kredit dikembalikan.",
+      });
+    else if (render.state === "offline" && render.enabled)
+      alerts.push({
+        level: "warning",
+        title: "Server render video tidak melapor",
+        detail: `Terakhir aktif ${render.ageSec !== null ? Math.round(render.ageSec / 60) : "?"} menit lalu.`,
+      });
+    if (render.queue.failed24 >= 3)
+      alerts.push({
+        level: "warning",
+        title: `${render.queue.failed24} video gagal dirender dalam 24 jam`,
+        detail: "Lihat Studio AI → riwayat pekerjaan.",
+      });
+    if (render.metrics?.diskPct != null && render.metrics.diskPct >= 85)
+      alerts.push({
+        level: "warning",
+        title: `Disk server render ${render.metrics.diskPct}% terpakai`,
+        detail: "Bersihkan image Docker lama: docker image prune.",
+      });
+  }
   if (!storage.objectStorageConfigured)
     alerts.push({
       level: "info",
@@ -375,8 +526,10 @@ export async function collectSystemHealth(opts: { rescanStorage?: boolean } = {}
           status: lastBackup.status,
           sizeBytes: Number(lastBackup.size_bytes ?? 0),
           target: lastBackup.target,
+          filesFinishedAt: lastFilesBackup ? String(lastFilesBackup.finished_at) : null,
         }
       : null,
+    render,
     alerts,
   };
 }

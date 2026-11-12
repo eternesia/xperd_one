@@ -74,6 +74,7 @@ import { Route as QallingTestimoniRouteImport } from './routes/qalling.testimoni
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceMcpRouteImport } from './routes/[.well-known]/oauth-protected-resource/mcp'
 import { Route as SiteProductsIndexRouteImport } from './routes/_site/products.index'
 import { Route as SiteProductsSlugRouteImport } from './routes/_site/products.$slug'
+import { Route as ApiAdminBackupDownloadRouteImport } from './routes/api/admin/backup-download'
 import { Route as ApiPublicCrmMediaRouteImport } from './routes/api/public/crm-media'
 import { Route as ApiPublicMcpUploadRouteImport } from './routes/api/public/mcp-upload'
 import { Route as ApiPublicVisitRouteImport } from './routes/api/public/visit'
@@ -450,6 +451,11 @@ const SiteProductsSlugRoute = SiteProductsSlugRouteImport.update({
   path: '/products/$slug',
   getParentRoute: () => SiteRoute,
 } as any)
+const ApiAdminBackupDownloadRoute = ApiAdminBackupDownloadRouteImport.update({
+  id: '/api/admin/backup-download',
+  path: '/api/admin/backup-download',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicCrmMediaRoute = ApiPublicCrmMediaRouteImport.update({
   id: '/api/public/crm-media',
   path: '/api/public/crm-media',
@@ -772,6 +778,7 @@ export interface FileRoutesByFullPath {
   '/qalling/': typeof QallingIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
+  '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
@@ -883,6 +890,7 @@ export interface FileRoutesByTo {
   '/qalling': typeof QallingIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/products/$slug': typeof SiteProductsSlugRoute
+  '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
@@ -997,6 +1005,7 @@ export interface FileRoutesById {
   '/qalling/': typeof QallingIndexRoute
   '/.well-known/oauth-protected-resource/mcp': typeof Char91DotwellKnownChar93OauthProtectedResourceMcpRoute
   '/_site/products/$slug': typeof SiteProductsSlugRoute
+  '/api/admin/backup-download': typeof ApiAdminBackupDownloadRoute
   '/api/public/crm-media': typeof ApiPublicCrmMediaRoute
   '/api/public/mcp-upload': typeof ApiPublicMcpUploadRoute
   '/api/public/visit': typeof ApiPublicVisitRoute
@@ -1113,6 +1122,7 @@ export interface FileRouteTypes {
     | '/qalling/'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
+    | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
     | '/api/public/visit'
@@ -1224,6 +1234,7 @@ export interface FileRouteTypes {
     | '/qalling'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/products/$slug'
+    | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
     | '/api/public/visit'
@@ -1337,6 +1348,7 @@ export interface FileRouteTypes {
     | '/qalling/'
     | '/.well-known/oauth-protected-resource/mcp'
     | '/_site/products/$slug'
+    | '/api/admin/backup-download'
     | '/api/public/crm-media'
     | '/api/public/mcp-upload'
     | '/api/public/visit'
@@ -1415,6 +1427,7 @@ export interface RootRouteChildren {
   QallingSyaratRoute: typeof QallingSyaratRoute
   QallingTestimoniRoute: typeof QallingTestimoniRoute
   QallingIndexRoute: typeof QallingIndexRoute
+  ApiAdminBackupDownloadRoute: typeof ApiAdminBackupDownloadRoute
   ApiPublicCrmMediaRoute: typeof ApiPublicCrmMediaRoute
   ApiPublicMcpUploadRoute: typeof ApiPublicMcpUploadRoute
   ApiPublicVisitRoute: typeof ApiPublicVisitRoute
@@ -1899,6 +1912,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/products/$slug'
       preLoaderRoute: typeof SiteProductsSlugRouteImport
       parentRoute: typeof SiteRoute
+    }
+    '/api/admin/backup-download': {
+      id: '/api/admin/backup-download'
+      path: '/api/admin/backup-download'
+      fullPath: '/api/admin/backup-download'
+      preLoaderRoute: typeof ApiAdminBackupDownloadRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/crm-media': {
       id: '/api/public/crm-media'
@@ -2463,6 +2483,7 @@ const rootRouteChildren: RootRouteChildren = {
   QallingSyaratRoute: QallingSyaratRoute,
   QallingTestimoniRoute: QallingTestimoniRoute,
   QallingIndexRoute: QallingIndexRoute,
+  ApiAdminBackupDownloadRoute: ApiAdminBackupDownloadRoute,
   ApiPublicCrmMediaRoute: ApiPublicCrmMediaRoute,
   ApiPublicMcpUploadRoute: ApiPublicMcpUploadRoute,
   ApiPublicVisitRoute: ApiPublicVisitRoute,

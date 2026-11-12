@@ -48,6 +48,14 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
       console.error("[scheduler] notifications failed", e);
     }
     try {
+      // Backup otomatis: database harian (≥ 02.00 WIB), berkas mingguan. Aman diulang tiap jam.
+      const { runScheduledBackups } = await import("./backup.server");
+      const b = await runScheduledBackups();
+      if (b.db || b.files) console.log("[scheduler] backup", b);
+    } catch (e) {
+      console.error("[scheduler] backup failed", e);
+    }
+    try {
       // Pengingat tugas XPro (in-app selalu; email bila gateway aktif). Aman diulang (dedupe).
       const { runXproTaskReminders } = await import("./xpro-reminders.server");
       const r = await runXproTaskReminders();

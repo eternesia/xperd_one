@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   AlertOctagon,
   AlertTriangle,
   Archive,
+  Clapperboard,
+  Download,
+  Trash2,
   Cpu,
   Database,
   HardDrive,
@@ -16,7 +19,14 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { adminSystemHealth } from "@/lib/system-health.functions";
+import { toast } from "sonner";
+
+import {
+  adminDeleteBackup,
+  adminListBackups,
+  adminRunBackup,
+  adminSystemHealth,
+} from "@/lib/system-health.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app-admin/health")({
@@ -337,27 +347,9 @@ function HealthAdmin() {
               </div>
             </Panel>
 
-            <Panel icon={Archive} title="Backup">
-              {h.backup ? (
-                <KV
-                  rows={[
-                    ["Terakhir", when(h.backup.finishedAt)],
-                    ["Status", h.backup.status],
-                    ["Ukuran", bytes(h.backup.sizeBytes)],
-                    ["Tujuan", h.backup.target],
-                  ]}
-                />
-              ) : (
-                <div className="space-y-2 text-sm">
-                  <p className="font-medium text-red-600">Belum ada backup otomatis.</p>
-                  <p className="text-muted-foreground">
-                    Database, berkas unggahan, dan aplikasi saat ini berada di satu server. Bila
-                    server rusak, semuanya hilang bersamaan. Disarankan backup harian database +
-                    folder berkas ke lokasi lain (mis. Cloudflare R2/S3) dengan retensi 14 hari.
-                  </p>
-                </div>
-              )}
-            </Panel>
+            <BackupPanel lastDb={h.backup} />
+
+            {h.render && <RenderPanel r={h.render} />}
 
             <Panel icon={Cpu} title="Proses aplikasi">
               <div className="space-y-4">
@@ -389,5 +381,253 @@ function HealthAdmin() {
         </>
       )}
     </div>
+  );
+}
+
+type Health = Awaited<ReturnType<typeof adminSystemHealth>>;
+
+function BackupPanel({ lastDb }: { lastDb: Health["backup"] }) {
+  const qc = useQueryClient();
+  const list = useQuery({
+    queryKey: ["admin-backups"],
+    queryFn: () => adminListBackups(),
+    refetchInterval: 30_000,
+  });
+  const run = useMutation({
+    mutationFn: (kind: "db" | "files") => adminRunBackup({ data: { kind } }),
+    onSuccess: (r) => {
+      toast.success(`Backup selesai: ${r.fileName} (${bytes(r.size)})`);
+      qc.invalidateQueries({ queryKey: ["admin-backups"] });
+      qc.invalidateQueries({ queryKey: ["admin-health"] });
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : String(e));
+      qc.invalidateQueries({ queryKey: ["admin-backups"] });
+    },
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => adminDeleteBackup({ data: { id } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-backups"] }),
+  });
+  const rows = list.data ?? [];
+  return (
+    <section className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5 lg:col-span-2">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Archive className="h-4 w-4 text-gold" /> Backup
+          </h2>
+          <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+            Otomatis: database tiap malam (≥ 02.00 WIB, simpan 14 terakhir) dan semua berkas
+            unggahan tiap 7 hari (simpan 4 terakhir). File ada di server ini —{" "}
+            <b>unduh dan simpan di komputer/drive Anda</b> secara rutin agar tetap aman bila server
+            rusak.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="navy"
+            disabled={run.isPending}
+            onClick={() => run.mutate("db")}
+          >
+            {run.isPending && run.variables === "db" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Database />
+            )}
+            Backup database sekarang
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={run.isPending}
+            onClick={() => run.mutate("files")}
+          >
+            {run.isPending && run.variables === "files" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <HardDrive />
+            )}
+            Backup berkas
+          </Button>
+        </div>
+      </div>
+      {!lastDb && (
+        <p className="mb-3 rounded-xl bg-red-500/5 p-3 text-sm text-red-600">
+          Belum ada backup database yang berhasil. Tekan “Backup database sekarang” atau tunggu
+          jadwal malam ini.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="q-keep w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="text-left text-xs text-muted-foreground">
+              <th className="pb-2 font-medium">Waktu</th>
+              <th className="pb-2 font-medium">Jenis</th>
+              <th className="pb-2 font-medium">Status</th>
+              <th className="pb-2 font-medium">Isi</th>
+              <th className="pb-2 text-right font-medium">Ukuran</th>
+              <th className="pb-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {!rows.length && (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="border-t border-border py-6 text-center text-muted-foreground"
+                >
+                  Belum ada riwayat backup.
+                </td>
+              </tr>
+            )}
+            {rows.map((b) => (
+              <tr key={b.id} className="border-t border-border">
+                <td className="whitespace-nowrap py-2">{when(b.started_at)}</td>
+                <td className="py-2">{b.kind === "db" ? "Database" : "Berkas"}</td>
+                <td className="py-2">
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      b.status === "success" &&
+                        "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+                      b.status === "failed" && "bg-red-500/15 text-red-700 dark:text-red-300",
+                      b.status === "running" && "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+                    )}
+                  >
+                    {b.status === "success"
+                      ? "Berhasil"
+                      : b.status === "failed"
+                        ? "Gagal"
+                        : "Berjalan"}
+                  </span>
+                </td>
+                <td
+                  className="max-w-[16rem] truncate py-2 text-xs text-muted-foreground"
+                  title={b.detail ?? ""}
+                >
+                  {b.detail ?? "—"}
+                </td>
+                <td className="whitespace-nowrap py-2 text-right tabular-nums">
+                  {b.status === "success" ? bytes(b.size_bytes) : "—"}
+                </td>
+                <td className="whitespace-nowrap py-2 text-right">
+                  {b.status === "success" && (
+                    <Button asChild size="sm" variant="outline" className="h-8">
+                      <a
+                        href={`/api/admin/backup-download?id=${encodeURIComponent(b.id)}`}
+                        download
+                      >
+                        <Download /> Unduh
+                      </a>
+                    </Button>
+                  )}
+                  {b.status !== "running" && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      aria-label="Hapus backup"
+                      onClick={() => confirm("Hapus backup ini?") && del.mutate(b.id)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <details className="mt-3 text-xs text-muted-foreground">
+        <summary className="cursor-pointer font-medium">Cara memulihkan</summary>
+        <div className="mt-2 space-y-1">
+          <p>
+            Database:{" "}
+            <code className="rounded bg-muted px-1">
+              gunzip -c db-….sql.gz | mysql -u USER -p NAMA_DB
+            </code>
+          </p>
+          <p>
+            Berkas:{" "}
+            <code className="rounded bg-muted px-1">tar -xzf files-….tar.gz -C /app/storage</code>
+          </p>
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function RenderPanel({ r }: { r: NonNullable<Health["render"]> }) {
+  const label = {
+    online: ["Terhubung", "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"],
+    rendering: ["Sedang merender", "bg-sky-500/15 text-sky-700 dark:text-sky-300"],
+    offline: ["Tidak aktif", "bg-red-500/15 text-red-700 dark:text-red-300"],
+    never: ["Belum pernah terhubung", "bg-muted text-muted-foreground"],
+  }[r.state];
+  const m = r.metrics;
+  return (
+    <section className="min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <h2 className="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold">
+        <Clapperboard className="h-4 w-4 text-gold" /> Server render video
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", label[1])}>
+          {label[0]}
+        </span>
+      </h2>
+      {!r.configured ? (
+        <p className="text-sm text-muted-foreground">
+          Mesin render belum dipasang. Buat token di Studio AI → Template, lalu jalankan perintah
+          docker di VPS render.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {m?.memPct != null && m.mem && (
+            <Meter
+              pct={m.memPct}
+              label="RAM"
+              sub={`${bytes(m.mem.total - m.mem.free)} dari ${bytes(m.mem.total)}`}
+            />
+          )}
+          {m?.diskPct != null && m.disk && (
+            <Meter
+              pct={m.diskPct}
+              label="Disk"
+              sub={`sisa ${bytes(m.disk.free)} dari ${bytes(m.disk.total)}`}
+            />
+          )}
+          <KV
+            rows={[
+              ["Mesin", r.info ?? "—"],
+              [
+                "Terakhir melapor",
+                r.seenAt
+                  ? `${when(r.seenAt)}${r.ageSec !== null ? ` (${r.ageSec < 120 ? `${r.ageSec} dtk` : dur(r.ageSec)} lalu)` : ""}`
+                  : "—",
+              ],
+              ...(m?.load
+                ? ([["Beban (1/5/15 mnt)", m.load.join(" / ")]] as [string, string][])
+                : []),
+              ...(m?.uptimeSec != null
+                ? ([["Server menyala", dur(m.uptimeSec)]] as [string, string][])
+                : []),
+              [
+                "Antrean",
+                `${r.queue.queued} antre · ${r.queue.processing} diproses${r.queue.oldestQueuedMin != null ? ` · terlama ${r.queue.oldestQueuedMin} mnt` : ""}`,
+              ],
+              ["24 jam terakhir", `${r.queue.done24} selesai · ${r.queue.failed24} gagal`],
+              ["Rata-rata render (7 hari)", r.queue.avgSec != null ? `${r.queue.avgSec} dtk` : "—"],
+              ["Studio Template", r.enabled ? "Aktif untuk pengguna" : "Nonaktif"],
+            ]}
+          />
+          {!m && (
+            <p className="text-xs text-muted-foreground">
+              Metrik CPU/RAM/disk muncul setelah mesin render diperbarui ke v2.1.0 (docker pull
+              …:latest, lalu jalankan ulang).
+            </p>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

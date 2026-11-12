@@ -143,3 +143,9 @@ Halaman Studio sekarang hanya mode Template, bernama **Studio Video** (kode Vide
 Bawaan 100 MB (bisa diatur Super Admin sampai 500 MB). Proxy produksi membatasi ±1 MB per permintaan, jadi:
 unggahan browser memakai potongan (`uploadFileChunked`), dan link unggah MCP (`/api/public/mcp-upload`) menerima
 `upload=<id>&part=<i>&parts=<n>`; `qalling_create_upload_link` mengembalikan `chunked_command` siap pakai.
+
+### Mesin render v2.1.0 (12 Nov 2026)
+Laporan `claim` kini membawa metrik server (beban CPU, RAM, disk, uptime, jumlah render/gagal) yang disimpan di
+`ai_studio_settings.worker_metrics` dan tampil di Super Admin → Kesehatan Sistem → Server render video, beserta
+antrean, selesai/gagal 24 jam, dan rata-rata durasi render. Mesin versi lama tetap jalan (tanpa metrik).
+Perbarui: `docker pull …:latest && docker rm -f qalling-render` lalu jalankan lagi perintahnya.
