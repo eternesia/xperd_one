@@ -11,6 +11,7 @@ import {
   finalSeconds,
   NARRATION,
   PHOTOS,
+  MUSIC_MOOD_KEYS,
   TEMPLATE_DURATIONS,
   TEMPLATE_LIMITS,
   TEMPLATE_RATIOS,
@@ -35,6 +36,8 @@ export interface CreateTemplateInput {
   text: TemplateText;
   aspectRatio: string;
   seconds?: number;
+  /** Suasana musik; "auto"/kosong = sesuai template. */
+  mood?: string;
 }
 
 export async function createTemplateJob(i: CreateTemplateInput) {
@@ -60,6 +63,8 @@ export async function createTemplateJob(i: CreateTemplateInput) {
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
   text.sound = i.sound !== false;
+  if (i.mood && i.mood !== "auto" && MUSIC_MOOD_KEYS.includes(i.mood))
+    text.mood = i.mood as TemplateText["mood"];
   if (!(TEMPLATE_RATIOS as readonly string[]).includes(i.aspectRatio))
     throw new Error("Rasio tidak didukung");
   const chosen = (TEMPLATE_DURATIONS as readonly number[]).includes(i.seconds ?? 0)
@@ -208,7 +213,7 @@ export async function claimRenderJob(
     );
     if (!j) return null;
     const r = await result(
-      "UPDATE ai_jobs SET status = 'processing', claimed_at = NOW(6), submitted_at = NOW(6) WHERE id = ? AND status = 'queued'",
+      "UPDATE ai_jobs SET status = 'processing', progress = NULL, claimed_at = NOW(6), submitted_at = NOW(6) WHERE id = ? AND status = 'queued'",
       [String(j.id)],
     );
     if (!r.affectedRows) continue; // diambil mesin lain — coba pekerjaan berikutnya
@@ -238,6 +243,8 @@ export async function claimRenderJob(
       audio_ext: narration ? (narration.split(".").pop() ?? "mp3").toLowerCase() : null,
       props: {
         ...text,
+        // Benih variasi musik: tiap video beda nada/tempo/pola walau template sama.
+        seed: parseInt(String(j.id).replace(/-/g, "").slice(0, 8), 16) || 1,
         ratio: String(j.aspect_ratio),
         seconds: Number(j.duration_s) || TEMPLATE_SECONDS,
       },

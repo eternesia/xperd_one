@@ -117,6 +117,7 @@ export interface TemplatePrice {
   credits: number;
 }
 export const DEFAULT_TEMPLATE_PRICES: TemplatePrice[] = [
+  { max_s: 10, credits: 1 },
   { max_s: 15, credits: 2 },
   { max_s: 30, credits: 3 },
   { max_s: 61, credits: 5 },
@@ -153,7 +154,22 @@ export interface TemplateText {
   sound?: boolean;
   /** Path rekaman narasi (folder `ai/narration`). */
   narration?: string;
+  /** Suasana musik latar (kosong = sesuai template). */
+  mood?: MusicMood;
 }
+
+/** Suasana musik latar (disintesis mesin render, bebas lisensi). */
+export const MUSIC_MOODS = [
+  { key: "auto", name: "Otomatis", name_en: "Automatic" },
+  { key: "energetic", name: "Energik", name_en: "Energetic" },
+  { key: "upbeat", name: "Ceria", name_en: "Upbeat" },
+  { key: "corporate", name: "Profesional", name_en: "Corporate" },
+  { key: "calm", name: "Tenang", name_en: "Calm" },
+  { key: "cinematic", name: "Elegan", name_en: "Cinematic" },
+  { key: "chill", name: "Santai", name_en: "Chill" },
+] as const;
+export type MusicMood = Exclude<(typeof MUSIC_MOODS)[number]["key"], "auto">;
+export const MUSIC_MOOD_KEYS = MUSIC_MOODS.map((m) => m.key) as [string, ...string[]];
 
 /** Mesin render dianggap terhubung bila menghubungi dalam 2 menit terakhir. */
 export const WORKER_ONLINE_MS = 120_000;

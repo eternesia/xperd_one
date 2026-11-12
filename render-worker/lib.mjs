@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { ensureBrowser, renderMedia, selectComposition } from "@remotion/renderer";
-import { MOOD_OF, writeBed, writeSfx } from "./sfx.mjs";
+import { MOOD_NAMES, MOOD_OF, writeBed, writeSfx } from "./sfx.mjs";
 import fs from "node:fs";
 import crypto from "node:crypto";
 
@@ -42,7 +42,10 @@ export async function renderTemplate({ template, props, output, onProgress }) {
   if (props.sound !== false && !props.bed) {
     const rel = `bed/${crypto.randomUUID()}.wav`;
     bedFile = path.join(await publicDir(), rel);
-    writeBed(bedFile, composition.durationInFrames / composition.fps, MOOD_OF[template]);
+    // Suasana: pilihan pengguna/perintah, atau bawaan template; benih per video → musik bervariasi.
+    const mood = MOOD_NAMES.includes(props.mood) ? props.mood : MOOD_OF[template];
+    const seed = Number(props.seed) || crypto.randomInt(1, 2 ** 31);
+    writeBed(bedFile, composition.durationInFrames / composition.fps, mood, seed);
     inputProps = { ...inputProps, bed: rel };
   }
   try {
