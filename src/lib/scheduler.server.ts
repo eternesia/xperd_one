@@ -97,6 +97,18 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
   };
   setInterval(aiTick, PUBLISH_EVERY_MS).unref?.();
 
+  // Riwayat metrik server untuk grafik Kesehatan Sistem (tiap 5 menit).
+  const metricsTick = async () => {
+    try {
+      const { recordMetricsSample } = await import("./system-metrics.server");
+      await recordMetricsSample();
+    } catch (e) {
+      console.error("[scheduler] metrics failed", e);
+    }
+  };
+  setInterval(metricsTick, 5 * 60_000).unref?.();
+  setTimeout(metricsTick, 30_000).unref?.();
+
   setInterval(publishTick, PUBLISH_EVERY_MS).unref?.();
   setInterval(notifyTick, NOTIFY_EVERY_MS).unref?.();
   setInterval(renewTick, NOTIFY_EVERY_MS).unref?.();

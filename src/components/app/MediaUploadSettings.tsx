@@ -41,9 +41,9 @@ function MediaForm({ initial }: { initial: MediaUploadPolicy }) {
   const numbers = [
     ["photo_mb", "Batas foto (MB)", 1, 50],
     ["video_mb", "Batas video (MB)", 1, 500],
-    ["image_quality", "Kualitas foto (%)", 85, 100],
+    ["image_quality", "Kualitas foto (%)", 70, 100],
     ["image_max_edge", "Sisi terpanjang foto (px)", 1920, 4096],
-    ["video_mbps", "Kualitas video (Mbps)", 8, 30],
+    ["video_mbps", "Kualitas video (Mbps)", 4, 30],
   ] as const;
   return (
     <section className="space-y-4 border-b border-border pb-6">
@@ -87,8 +87,11 @@ function MediaForm({ initial }: { initial: MediaUploadPolicy }) {
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          Video maksimal Full HD, suara dipertahankan. File asli digunakan jika kompresi tidak
-          didukung atau tidak lebih kecil. Batas per file hingga 50 MB; kuota paket tetap berlaku.
+          Kompresi berjalan di browser saat pengguna mengunggah ke Pustaka Media. Foto diperkecil ke
+          sisi terpanjang di atas lalu disimpan ulang dengan kualitas tersebut; PNG tanpa latar
+          transparan diubah ke JPG. Video maksimal Full HD, suara dipertahankan. File asli dipakai
+          bila hasil kompresi tidak lebih kecil (mis. foto yang sudah kecil/teroptimasi). Batas
+          ukuran dicek setelah kompresi. Saran: kualitas foto 80–85%, video 6–8 Mbps.
         </p>
         <Button disabled={save.isPending} variant="gold">
           {save.isPending ? "Menyimpan…" : "Simpan pengaturan media"}

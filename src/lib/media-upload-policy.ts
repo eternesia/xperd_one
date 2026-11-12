@@ -3,11 +3,11 @@ import { z } from "zod";
 export const mediaUploadSchema = z.object({
   photo_mb: z.number().int().min(1).max(50),
   video_mb: z.number().int().min(1).max(500),
-  image_quality: z.number().int().min(85).max(100),
+  image_quality: z.number().int().min(70).max(100),
   image_max_edge: z.number().int().min(1920).max(4096),
   compress_images: z.boolean(),
   compress_videos: z.boolean(),
-  video_mbps: z.number().int().min(8).max(30),
+  video_mbps: z.number().int().min(4).max(30),
 });
 export type MediaUploadPolicy = z.infer<typeof mediaUploadSchema>;
 export const DEFAULT_MEDIA_POLICY: MediaUploadPolicy = {

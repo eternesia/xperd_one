@@ -12,6 +12,22 @@ export const adminSystemHealth = createServerFn({ method: "POST" })
     return collectSystemHealth({ rescanStorage: data.rescanStorage });
   });
 
+/** Riwayat metrik untuk grafik (24 jam per 5 menit, 7 hari per jam). */
+export const adminHealthHistory = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((input: unknown) => {
+    const r = (input as { range?: string } | null)?.range;
+    return { range: r === "7d" ? ("7d" as const) : ("24h" as const) };
+  })
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("@/lib/auth-context.server");
+    await requireAdmin(context.userId);
+    const { metricsHistory, recordMetricsSample } = await import("@/lib/system-metrics.server");
+    // Pastikan ada titik terbaru walau penjadwal mati / baru menyala.
+    await recordMetricsSample().catch(() => false);
+    return metricsHistory(data.range);
+  });
+
 /* ------------------------------ backup ------------------------------ */
 
 export const adminListBackups = createServerFn({ method: "POST" })

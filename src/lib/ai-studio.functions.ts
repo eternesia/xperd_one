@@ -639,3 +639,70 @@ export const adminRotateWorkerToken = createServerFn({ method: "POST" })
       url: securePublicOrigin(getRequest().url),
     };
   });
+
+/* --------------------------- bonus pendaftaran --------------------------- */
+
+/** Pemberitahuan dasbor: tenant ini mendapat bonus kredit pendaftaran (≤ 30 hari lalu). */
+export const getSignupBonusNotice = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => z.object({ workspaceId: z.string().uuid() }).parse(v))
+  .handler(async ({ data, context }) => {
+    const { isWorkspaceMember } = await import("./auth-context.server");
+    if (!(await isWorkspaceMember(data.workspaceId, context.userId))) return null;
+    const { workspaceTenant, getStudioSettings } = await import("./ai-studio.server");
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const { signupBonusKey, getCredits } = await import("./ai-credits.server");
+    const tenantId = await workspaceTenant(data.workspaceId);
+    const bonus = await executeOne<{ delta: number; created_at: string }>(
+      `SELECT delta, created_at FROM ai_credit_ledger
+        WHERE idempotency_key = ? AND created_at >= NOW(6) - INTERVAL 30 DAY LIMIT 1`,
+      [signupBonusKey(tenantId)],
+    );
+    if (!bonus) return null;
+    const s = await getStudioSettings();
+    // Kredit hanya berguna bila Studio (video template) sudah dibuka untuk pengguna.
+    if (!s.enabled || !s.template_enabled) return null;
+    const cheapest = Math.max(
+      1,
+      Math.min(...s.template_prices.map((p) => p.credits), s.template_credits),
+    );
+    return {
+      credits: Number(bonus.delta),
+      balance: await getCredits(tenantId),
+      perVideo: cheapest,
+      grantedAt: String(bonus.created_at),
+    };
+  });
+
+export const adminGetSignupBonus = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .handler(async ({ context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { signupBonusCredits } = await import("./ai-credits.server");
+    const { executeOne } = await import("@/integrations/mysql/pool");
+    const n = await executeOne<{ n: number; c: number }>(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(delta), 0) AS c FROM ai_credit_ledger
+        WHERE idempotency_key LIKE 'signup-bonus:%'`,
+    );
+    return {
+      credits: await signupBonusCredits(),
+      grantedTenants: Number(n?.n ?? 0),
+      grantedCredits: Number(n?.c ?? 0),
+    };
+  });
+
+export const adminSetSignupBonus = createServerFn({ method: "POST" })
+  .middleware([requireAppAuth])
+  .validator((v: unknown) => z.object({ credits: z.number().int().min(0).max(1000) }).parse(v))
+  .handler(async ({ data, context }) => {
+    const { requireAdmin } = await import("./auth-context.server");
+    await requireAdmin(context.userId);
+    const { execute } = await import("@/integrations/mysql/pool");
+    await execute("INSERT IGNORE INTO ai_studio_settings (id, enabled) VALUES ('platform', 0)");
+    await execute(
+      "UPDATE ai_studio_settings SET signup_bonus_credits = ?, updated_by = ? WHERE id = 'platform'",
+      [data.credits, context.userId],
+    );
+    return { ok: true };
+  });

@@ -108,17 +108,29 @@ export function useUpload(workspaceId: string) {
       const files = Array.isArray(input) ? input : input.files;
       const folder = Array.isArray(input) ? null : input.folder;
       const policy = await getMediaPolicy();
+      // Foto diperiksa batasnya SETELAH kompresi (foto HP 8 MB bisa jadi < 1 MB); sebelum itu hanya
+      // batas keras 50 MB agar browser tidak memproses berkas raksasa. Video tetap dicek di awal.
+      const precheck = { ...policy, photo_mb: Math.max(policy.photo_mb, 50) };
       for (const file of files) {
         try {
-          validateMediaFile(file, policy, lang);
+          validateMediaFile(file, precheck, lang);
         } catch (e) {
           throw new Error(`${file.name}: ${(e as Error).message}`);
         }
       }
       const out: string[] = [];
+      let before = 0;
+      let after = 0;
       for (const original of files) {
         // Kompresi hanya setelah unggah dikirim dan tidak pernah menggantikan berkas dengan hasil yang lebih besar.
         const f = await compressCrmMedia(original, policy);
+        try {
+          validateMediaFile(f, policy, lang);
+        } catch (e) {
+          throw new Error(`${original.name}: ${(e as Error).message}`);
+        }
+        before += original.size;
+        after += f.size;
         // Berpotongan kecil agar tidak terkena batas body proxy (±1 MB) pada gambar/video yang lebih besar.
         const { path } = await uploadFileChunked({
           workspaceId,
@@ -146,11 +158,23 @@ export function useUpload(workspaceId: string) {
         }
         out.push(path);
       }
-      return out;
+      return { paths: out, before, after };
     },
-    onSuccess: (paths) => {
+    onSuccess: ({ paths, before, after }) => {
       qc.invalidateQueries({ queryKey: ["crm-media", workspaceId] });
-      toast.success(id ? `${paths.length} file diunggah` : `${paths.length} files uploaded`);
+      const mb = (n: number) => `${(n / 1048576).toFixed(n < 1048576 ? 2 : 1)} MB`;
+      const saved = before - after;
+      const detail =
+        saved > 0
+          ? id
+            ? `dikompres ${mb(before)} → ${mb(after)} (hemat ${Math.round((saved / before) * 100)}%)`
+            : `compressed ${mb(before)} → ${mb(after)} (${Math.round((saved / before) * 100)}% smaller)`
+          : id
+            ? "sudah optimal, disimpan tanpa perubahan"
+            : "already optimal, stored as is";
+      toast.success(id ? `${paths.length} file diunggah` : `${paths.length} files uploaded`, {
+        description: detail,
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -755,7 +779,7 @@ export function MediaPickerDialog({
               return;
             }
             upload.mutate(f.slice(0, maxSelection), {
-              onSuccess: (paths) =>
+              onSuccess: ({ paths }) =>
                 setPick((cur) =>
                   maxSelection === 1
                     ? paths.slice(0, 1)
