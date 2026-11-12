@@ -60,7 +60,6 @@ async function draftWithLlm(cfg: TextLlmConfig, prompt: string, template: string
     prompt: `Template: ${tpl?.name ?? template} (${tpl?.hint ?? ""}).\nPerintah: ${prompt}`,
     maxOutputTokens: 300,
     maxRetries: 0,
-    temperature: 0.7,
     abortSignal: AbortSignal.timeout(15_000),
   });
   const json = /\{[\s\S]*\}/.exec(text)?.[0];
