@@ -90,11 +90,11 @@ async function callAnthropic(
     },
     body: JSON.stringify({
       model: cfg.model,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: SYSTEM,
       messages: [{ role: "user", content }],
     }),
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(45_000),
   });
   const body = (await res.json().catch(() => ({}))) as {
     content?: { type: string; text?: string }[];
@@ -119,9 +119,9 @@ async function callOpenAiCompatible(cfg: TextLlmConfig, user: string): Promise<s
     model: provider(cfg.model),
     system: SYSTEM,
     prompt: user,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 2048,
     maxRetries: 0,
-    abortSignal: AbortSignal.timeout(20_000),
+    abortSignal: AbortSignal.timeout(45_000),
   });
   return text;
 }
@@ -151,18 +151,21 @@ async function draftWithLlm(
   photos = imageUrls.length,
 ) {
   const user = userMessage(prompt, template, photos);
-  let text: string;
+  let raw: Record<string, unknown>;
   if (isAnthropic(cfg.base_url)) {
     try {
-      text = await callAnthropic(cfg, user, imageUrls);
+      raw = parseJson(await callAnthropic(cfg, user, imageUrls));
     } catch (e) {
-      // Foto tidak bisa diambil penyedia (mis. URL lokal) → ulangi tanpa foto.
+      // Foto tidak bisa diambil/diproses penyedia (mis. > 5 MB, URL lokal) → ulangi tanpa foto.
       if (!imageUrls.length) throw e;
-      console.warn("[studio] kirim foto ke AI gagal, ulang tanpa foto:", (e as Error).message);
-      text = await callAnthropic(cfg, user);
+      console.warn("[studio] AI dengan foto gagal, ulang tanpa foto:", (e as Error).message);
+      try {
+        raw = parseJson(await callAnthropic(cfg, user));
+      } catch (e2) {
+        throw new Error(`${(e2 as Error).message} (dengan foto: ${(e as Error).message})`);
+      }
     }
-  } else text = await callOpenAiCompatible(cfg, user);
-  const raw = parseJson(text);
+  } else raw = parseJson(await callOpenAiCompatible(cfg, user));
   return { ...normalizeDraft(raw, prompt, photos), accent: raw.accent };
 }
 
@@ -203,8 +206,9 @@ export async function draftTemplateText(
       }
       notice = "AI tidak memberi judul; teks disusun dengan aturan sederhana.";
     } catch (e) {
-      console.warn("[studio] asisten teks gagal, pakai aturan:", (e as Error).message);
-      notice = "Asisten AI sedang tidak bisa dihubungi; teks disusun dengan aturan sederhana.";
+      const reason = (e as Error).message;
+      console.warn("[studio] asisten teks gagal, pakai aturan:", reason);
+      notice = `Asisten AI gagal (${reason.slice(0, 200)}); teks disusun dengan aturan sederhana.`;
     }
   }
   return { ...draftFromRules(prompt, photos), accent: null, source: "rules", notice };
