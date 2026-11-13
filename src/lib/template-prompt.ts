@@ -58,7 +58,8 @@ export const TEMPLATE_TEXT_USE: Record<
 };
 
 /** Pecah perintah berisi daftar (baris / nomor / poin) menjadi teks per foto bila jumlahnya pas. */
-const DIRECTIVE = /^(gunakan|pakai|tambahkan|tambah|buat|bikin|dominasi|warna|musik|transisi|durasi|font|gaya|tone|nuansa)\b/i;
+const DIRECTIVE =
+  /^(gunakan|pakai|tambahkan|tambah|buat|bikin|dominasi|warna|musik|transisi|durasi|font|gaya|tone|nuansa|format|urutkan|jangan|animasikan|tampilkan|pastikan|hindari|setiap|semua|resolusi|rasio|konsep|ketentuan|opening|closing|scene|adegan)\b/i;
 
 export function itemsFromList(prompt: string, n: number): DraftText["items"] {
   if (n < 1) return [];

@@ -62,6 +62,7 @@ export async function createTemplateJob(i: CreateTemplateInput) {
     accent: /^#[0-9A-Fa-f]{6}$/.test(i.text.accent) ? i.text.accent : "auto",
   };
   if (!text.headline) throw new Error("Judul wajib diisi");
+  if (i.text.brief?.trim()) text.brief = i.text.brief.trim().slice(0, 2000);
   text.sound = i.sound !== false;
   if (i.mood && i.mood !== "auto" && MUSIC_MOOD_KEYS.includes(i.mood))
     text.mood = i.mood as TemplateText["mood"];

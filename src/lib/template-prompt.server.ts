@@ -53,18 +53,33 @@ Aturan: pakai bahasa pengguna; teks pendek, padat, enak dibaca di layar HP; jang
 alamat, atau kontak yang tidak disebut. Instruksi yang tidak bisa dipenuhi template (gaya transisi, kamera)
 abaikan saja.`;
 
-/** Ambil objek JSON pertama dari jawaban model (boleh dibungkus ```json … ```). */
-function parseJson(text: string) {
-  const json = /\{[\s\S]*\}/.exec(text)?.[0];
-  if (!json) {
-    const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120);
-    throw new Error(
-      snippet
-        ? `Jawaban AI tidak berformat JSON: “${snippet}”`
-        : "Jawaban AI kosong (coba model lain atau naikkan batas token)",
-    );
+/** Ambil objek JSON pertama yang utuh dari jawaban model (boleh dibungkus ```json … ``` / ada teks lain). */
+export function parseJson(text: string) {
+  for (let start = text.indexOf("{"); start >= 0; start = text.indexOf("{", start + 1)) {
+    let depth = 0;
+    let inStr = false;
+    for (let k = start; k < text.length; k++) {
+      const ch = text[k];
+      if (inStr) {
+        if (ch === "\\") k++;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) {
+        try {
+          return JSON.parse(text.slice(start, k + 1)) as Record<string, unknown>;
+        } catch {
+          break;
+        }
+      }
+    }
   }
-  return JSON.parse(json) as Record<string, unknown>;
+  const snippet = text.replace(/\s+/g, " ").trim().slice(0, 120);
+  throw new Error(
+    snippet
+      ? `Jawaban AI tidak berformat JSON: “${snippet}”`
+      : "Jawaban AI kosong (coba model lain atau naikkan batas token)",
+  );
 }
 
 /** Anthropic: pakai Messages API asli (lebih andal daripada lapisan kompatibel OpenAI). */
