@@ -327,6 +327,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
     addItem(id);
   };
   const [view, setView] = useState<AiJobView | null>(null);
+  /** Video yang baru dikirim: saat selesai, form dikosongkan untuk video berikutnya. */
+  const [watchId, setWatchId] = useState<string | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -408,6 +410,65 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
   // Video yang sedang dibuat: tombol dikunci sampai selesai agar tidak terkirim dua kali.
   const busyJob = list.find(running) ?? null;
   const busyPct = busyJob ? jobPercent(busyJob) : 0;
+
+  /** Kosongkan form (foto, perintah, teks) untuk video berikutnya. */
+  const resetForm = () => {
+    setItems([]);
+    setPrompt("");
+    setTpl({ headline: "", subline: "", badge: "", cta: "" });
+    setDraftedFor(null);
+    setDraftInfo(null);
+    setNarr(null);
+    setMood("auto");
+    setConsent(false);
+  };
+  useEffect(() => {
+    if (!watchId) return;
+    const j = list.find((x) => x.id === watchId);
+    if (!j || running(j)) return;
+    setWatchId(null);
+    if (j.status === "done") {
+      resetForm();
+      setView(j);
+      toast.success(pick("Video ready", "Video selesai"), {
+        description: pick(
+          "The form is cleared for your next video. Open this video to make another version.",
+          "Form dikosongkan untuk video berikutnya. Buka video ini untuk membuat versi lain.",
+        ),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, watchId]);
+
+  /** Muat ulang pengaturan video Template lama ke form (ganti template/format/perintah lalu buat lagi). */
+  const remix = (j: AiJobView) => {
+    const r = j.recipe;
+    if (!r) return;
+    if (TEMPLATES.some((t) => t.key === r.template)) setTplKey(r.template);
+    setItems(r.items.map((i) => ({ id: i.mediaId, title: i.title, price: i.price })));
+    setPrompt(r.brief);
+    setTpl({ headline: r.headline, subline: r.subline, badge: r.badge, cta: r.cta });
+    setDraftInfo(
+      r.brief
+        ? { source: "ai", notice: null, accent: /^#/.test(r.accent) ? r.accent : null }
+        : null,
+    );
+    setDraftedFor(
+      r.brief ? `${r.template}|${r.items.map((i) => i.mediaId).join(",")}|${r.brief}` : null,
+    );
+    if (["9:16", "1:1", "16:9"].includes(j.aspect_ratio)) setFmt(j.aspect_ratio as "9:16");
+    setMood(r.mood || "auto");
+    setTplSound(r.sound);
+    if (TEMPLATE_DURATIONS.includes(j.duration_s as never)) setTplSeconds(j.duration_s);
+    setNarr(null);
+    setView(null);
+    toast.info(
+      pick(
+        "Settings loaded. Change the template, format or prompt, then create again.",
+        "Pengaturan dimuat. Ganti template, format, atau perintah, lalu buat lagi.",
+      ),
+    );
+  };
   const limitHit = access.used_today >= access.daily_limit;
   const selected = photos.find((p) => p.id === source) ?? null;
   const curStyle = access.styles.find((s) => s.key === style) ?? access.styles[0];
@@ -447,6 +508,9 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
       let text = tpl;
       let photoText = items;
       let accentPick = draftInfo?.accent ?? null;
+      // AI sudah diatur tetapi gagal → jangan render teks hasil aturan (sering keliru), minta coba lagi.
+      let aiFailed =
+        draftInfo?.source === "rules" && !!draftInfo.notice?.startsWith("Asisten AI gagal");
       if (isTpl && needsDraft) {
         const { d } = await draft.mutateAsync(draftKey);
         text = { headline: d.headline, subline: d.subline, badge: d.badge, cta: d.cta };
@@ -454,7 +518,15 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
           d.items[i] ? { ...it, title: d.items[i].title, price: d.items[i].label } : it,
         );
         accentPick = d.accent;
+        aiFailed = d.source === "rules" && !!d.notice?.startsWith("Asisten AI gagal");
       }
+      if (isTpl && aiFailed)
+        throw new Error(
+          pick(
+            "The AI assistant failed, so the video was not created (no credits used). Tap Rearrange to try again.",
+            "Asisten AI gagal, video belum dibuat (kredit tidak terpakai). Klik Susun ulang untuk mencoba lagi.",
+          ),
+        );
       if (isTpl && !text.headline.trim())
         throw new Error(pick("Write what the video should say first", "Tulis perintah dulu"));
       return isTpl
@@ -479,6 +551,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               aspectRatio: fmt,
               seconds: tplSeconds,
               mood: mood as "auto",
+              brief: prompt.trim(),
               consent: true,
             },
           })
@@ -495,7 +568,9 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
             },
           });
     },
-    onSuccess: async () => {
+    onSuccess: async (res) => {
+      const createdId = (res as { id?: string } | undefined)?.id;
+      if (createdId) setWatchId(createdId);
       qc.invalidateQueries({ queryKey: ["ai-studio-access", workspaceId] });
       qc.invalidateQueries({ queryKey: ["ai-credit-activity", workspaceId] });
       qc.invalidateQueries({ queryKey: ["ai-jobs", workspaceId, "history"] });
@@ -756,34 +831,21 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                           src={photos.find((m) => m.id === it.id)?.url ?? null}
                           className="size-12 shrink-0 rounded-[10px]"
                         />
-                        <Input
-                          className="h-11 min-w-0 flex-[2]"
-                          aria-label={pick(`Text for photo ${n + 1}`, `Teks foto ${n + 1}`)}
-                          placeholder={pick("Text (optional)", "Teks (opsional)")}
-                          maxLength={PHOTOS.title}
-                          value={it.title}
-                          onChange={(e) =>
-                            setItems((x) =>
-                              x.map((i) => (i.id === it.id ? { ...i, title: e.target.value } : i)),
-                            )
-                          }
-                        />
-                        <Input
-                          className="h-11 min-w-0 flex-1"
-                          aria-label={pick(`Label for photo ${n + 1}`, `Label foto ${n + 1}`)}
-                          placeholder={
-                            tplKey === "catalog" || tplKey === "promo"
-                              ? pick("Price", "Harga")
-                              : pick("Label", "Label")
-                          }
-                          maxLength={PHOTOS.label}
-                          value={it.price}
-                          onChange={(e) =>
-                            setItems((x) =>
-                              x.map((i) => (i.id === it.id ? { ...i, price: e.target.value } : i)),
-                            )
-                          }
-                        />
+                        {/* Teks tiap foto disusun AI dari perintah + isi foto (hanya ditampilkan). */}
+                        <p className="min-w-0 flex-1 truncate text-sm">
+                          {it.title || it.price ? (
+                            <>
+                              {it.title}
+                              {it.price && (
+                                <span className="text-muted-foreground"> · {it.price}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {pick("Text arranged by AI", "Teks disusun AI")}
+                            </span>
+                          )}
+                        </p>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1062,8 +1124,8 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
                         {items.some((it) => it.title || it.price) && (
                           <p className="text-xs text-muted-foreground">
                             {pick(
-                              "Text for each photo is shown (and editable) in the photo list above.",
-                              "Teks tiap foto tampil (dan bisa diedit) di daftar foto di atas.",
+                              "Text for each photo is shown in the photo list above.",
+                              "Teks tiap foto tampil di daftar foto di atas.",
                             )}
                           </p>
                         )}
@@ -1500,6 +1562,7 @@ function Studio({ workspaceId, access }: { workspaceId: string; access: Access }
               }
               onBack={view ? () => setView(null) : undefined}
               onPost={setPostJob}
+              onRemix={remix}
               overlay={
                 isTpl && !view ? (
                   <TemplatePreview
@@ -2098,6 +2161,7 @@ function Stage({
   caption,
   onBack,
   onPost,
+  onRemix,
   overlay,
 }: {
   ratio: string;
@@ -2106,6 +2170,7 @@ function Stage({
   caption: string;
   onBack?: () => void;
   onPost: (j: AiJobView) => void;
+  onRemix?: (j: AiJobView) => void;
   /** Pratinjau teks template di atas foto (mode Template, sebelum dibuat). */
   overlay?: React.ReactNode;
 }) {
@@ -2251,6 +2316,11 @@ function Stage({
           >
             <Send /> {pick("Post", "Posting")}
           </Button>
+          {job.recipe && onRemix && (
+            <Button variant="onDark" className="min-h-11 rounded-full" onClick={() => onRemix(job)}>
+              <Wand2 /> {pick("Make another version", "Buat versi lain")}
+            </Button>
+          )}
         </div>
       )}
     </div>

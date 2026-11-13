@@ -205,6 +205,19 @@ export interface AiJobView {
   render_elapsed?: number | null;
   /** Jumlah video di depan dalam antrean render (hanya saat menunggu). */
   queue_ahead?: number | null;
+  /** Resep video Template untuk membuat versi lain (null untuk video AI). */
+  recipe?: {
+    template: string;
+    brief: string;
+    headline: string;
+    subline: string;
+    badge: string;
+    cta: string;
+    accent: string;
+    mood: string;
+    sound: boolean;
+    items: { mediaId: string; title: string; price: string }[];
+  } | null;
   created_at: string;
 }
 

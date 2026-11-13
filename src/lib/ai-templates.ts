@@ -156,6 +156,8 @@ export interface TemplateText {
   narration?: string;
   /** Suasana musik latar (kosong = sesuai template). */
   mood?: MusicMood;
+  /** Perintah/brief pengguna (tidak dirender; untuk "Buat versi lain"). */
+  brief?: string;
 }
 
 /** Suasana musik latar (disintesis mesin render, bebas lisensi). */

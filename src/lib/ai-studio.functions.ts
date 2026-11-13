@@ -11,6 +11,7 @@ import {
   TEMPLATES,
   WORKER_ONLINE_MS,
 } from "./ai-templates";
+import type { TemplateText } from "./ai-templates";
 import { requireAppAuth } from "@/integrations/mysql/auth-middleware";
 import {
   AI_DURATIONS,
@@ -110,6 +111,7 @@ export const listAiJobs = createServerFn({ method: "POST" })
     const rows = await execute<Record<string, unknown>>(
       `SELECT j.id, j.status, j.tier, j.style, j.duration_s, j.aspect_ratio, j.credits, j.refunded, j.error,
               j.result_media_id, j.source_media_id, j.user_note, j.created_at, j.finished_at, j.progress,
+              CASE WHEN j.tier = 'template' THEN j.prompt END AS recipe_json, j.model AS template_key,
               TIMESTAMPDIFF(SECOND, j.claimed_at, NOW(6)) AS render_elapsed,
               CASE WHEN j.status = 'queued' AND j.provider = 'render' THEN
                 (SELECT COUNT(*) FROM ai_jobs q WHERE q.provider = 'render' AND q.status IN ('queued', 'processing')
@@ -157,6 +159,7 @@ export const listAiJobs = createServerFn({ method: "POST" })
         ),
         duration_s: Number(r.duration_s),
         progress: r.progress == null ? null : Number(r.progress),
+        recipe: templateRecipe(r.recipe_json, r.template_key),
         render_elapsed: r.render_elapsed == null ? null : Math.max(0, Number(r.render_elapsed)),
         queue_ahead: r.queue_ahead == null ? null : Number(r.queue_ahead),
         credits: Number(r.credits),
@@ -211,6 +214,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
         aspectRatio: z.enum(TEMPLATE_RATIOS).default("auto"),
         seconds: z.number().int().min(1).max(60).default(TEMPLATE_SECONDS),
         mood: z.enum(MUSIC_MOOD_KEYS).default("auto"),
+        brief: z.string().trim().max(2000).default(""),
         consent: z.literal(true),
       })
       .parse(v),
@@ -235,6 +239,7 @@ export const createTemplateVideo = createServerFn({ method: "POST" })
         badge: data.badge,
         cta: data.cta,
         accent: data.accent,
+        ...(data.brief ? { brief: data.brief } : {}),
       },
     });
   });
@@ -751,6 +756,28 @@ export const adminSetTemplateSample = createServerFn({ method: "POST" })
     else await removeSample(data.key);
     return { ok: true };
   });
+
+/** Resep video Template (untuk "Buat versi lain"): template, brief, foto, teks, musik. */
+function templateRecipe(raw: unknown, key: unknown): AiJobView["recipe"] {
+  if (!raw) return null;
+  try {
+    const t = (typeof raw === "string" ? JSON.parse(raw) : raw) as TemplateText;
+    return {
+      template: String(key ?? ""),
+      brief: t.brief ?? "",
+      headline: t.headline ?? "",
+      subline: t.subline ?? "",
+      badge: t.badge ?? "",
+      cta: t.cta ?? "",
+      accent: t.accent ?? "auto",
+      mood: t.mood ?? "auto",
+      sound: t.sound !== false,
+      items: (t.items ?? []).map((i) => ({ mediaId: i.media_id, title: i.title, price: i.price })),
+    };
+  } catch {
+    return null;
+  }
+}
 
 /* --------------------------- ringkasan & kredit pengguna --------------------------- */
 
