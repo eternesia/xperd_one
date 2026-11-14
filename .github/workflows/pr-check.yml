@@ -17,18 +17,6 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: read
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: xperd
-          MYSQL_USER: xperd
-          MYSQL_PASSWORD: xperd
-        ports: ["3306:3306"]
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=5s --health-timeout=5s --health-retries=30
     env:
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: "3306"
@@ -44,6 +32,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # MySQL 8.4 dengan flag yang sama dengan docker-compose.prod.yml (service container tidak bisa diberi argumen).
+      - name: MySQL 8.4
+        run: |
+          docker run -d --name mysql -p 3306:3306 \
+            -e TZ=UTC -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=xperd -e MYSQL_USER=xperd -e MYSQL_PASSWORD=xperd \
+            mysql:8.4 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
       - run: npm ci --no-audit --no-fund
       - name: Berkas yang diubah
         id: changed
@@ -63,7 +57,10 @@ jobs:
       - name: Build
         run: npx vite build
       - name: Migrasi + seed
-        run: npm run migrate && npm run seed
+        run: |
+          for i in $(seq 1 60); do docker exec mysql mysqladmin ping -h 127.0.0.1 -uxperd -pxperd --silent && break; sleep 2; done
+          sleep 3
+          npm run migrate && npm run seed
       - name: E2E (spec yang diubah)
         if: steps.changed.outputs.specs != ''
         run: |
