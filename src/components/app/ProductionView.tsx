@@ -15,6 +15,7 @@ import { ProductionComplianceView } from "@/components/app/ProductionComplianceV
 import { ProductionBomView } from "@/components/app/ProductionBomView";
 import { ProductionQualityView } from "@/components/app/ProductionQualityView";
 import { ProductionOrdersView } from "@/components/app/ProductionOrdersView";
+import { ProductionMrpView } from "@/components/app/ProductionMrpView";
 import { ProductionAccountingView } from "@/components/app/ProductionAccountingView";
 import { ProductionLotsView } from "@/components/app/ProductionLotsView";
 import { ProductionDashboard } from "@/components/app/ProductionDashboard";
@@ -37,6 +38,7 @@ export function ProductionView({ workspaceId, section = "settings" }: { workspac
   if (section === "lots") return <ProductionLotsView workspaceId={workspaceId} />;
   if (section === "quality") return <ProductionQualityView workspaceId={workspaceId} />;
   if (section === "orders") return <ProductionOrdersView workspaceId={workspaceId} />;
+  if (section === "mrp") return <ProductionMrpView workspaceId={workspaceId} />;
   if (section === "accounting") return <ProductionAccountingView workspaceId={workspaceId} />;
   if (section === "traceability" || section === "reports" || section === "waste") return <ProductionTraceView workspaceId={workspaceId} section={section} />;
   if (section === "profiles" || section === "registrations") return <ProductionComplianceView workspaceId={workspaceId} section={section} />;

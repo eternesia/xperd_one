@@ -133,9 +133,19 @@ export async function saveOrder(
   input: { id: string | null; values: Row; reason: string },
 ) {
   await mfgAction(ws, userId, "orders", ["production_planner", "production_supervisor"]);
+  return transaction((conn) => saveOrderTx(conn, ws, userId, input));
+}
+
+/** Isi `saveOrder` di dalam transaksi pemanggil (dipakai juga oleh MRP). Pemanggil wajib sudah memeriksa akses. */
+export async function saveOrderTx(
+  conn: PoolConnection,
+  ws: string,
+  userId: string,
+  input: { id: string | null; values: Row; reason: string },
+) {
   const reason = needReason(input.reason);
   const v = input.values;
-  return transaction(async (conn) => {
+  {
     const ver = await row(conn, "SELECT * FROM mfg_bom_versions WHERE workspace_id = ? AND id = ?", [ws, v.bom_version_id]);
     const bom = ver ? await row(conn, "SELECT * FROM mfg_boms WHERE workspace_id = ? AND id = ?", [ws, ver.bom_id]) : null;
     if (!ver || !bom || bom.item_id !== v.item_id) throw bad("Versi BOM bukan milik item ini.");
@@ -189,8 +199,8 @@ export async function saveOrder(
     }
     const after = await row(conn, "SELECT * FROM mfg_orders WHERE id = ?", [id]);
     await mfgAudit(conn, { workspaceId: ws, userId, table: "mfg_orders", entityId: id!, action: before ? "UPDATE" : "INSERT", oldValue: before, newValue: after, reason });
-    return { id: id! };
-  });
+    return { id: id!, order_no: String(after?.order_no ?? "") };
+  }
 }
 
 /** Padanan `mfg_release_order`: kunci versi BOM, hitung material terkoreksi potensi, buat langkah eBMR, nomor batch. */

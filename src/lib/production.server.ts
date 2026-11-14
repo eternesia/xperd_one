@@ -6,7 +6,8 @@ import { execute, executeOne, uuid } from "@/integrations/mysql/pool";
 
 export const MFG_MODULE = "manufacturing";
 export const MFG_ROLE_SECTIONS: Record<string, string[]> = {
-  production_supervisor: ["settings", "work-centers", "formulation-codes", "routings", "profiles", "registrations"],
+  production_supervisor: ["settings", "work-centers", "formulation-codes", "routings", "profiles", "registrations", "mrp"],
+  production_planner: ["mrp"],
   qa_manager: ["settings", "work-centers", "formulation-codes", "routings", "profiles", "registrations"],
   cost_accountant: ["rates"],
 };
