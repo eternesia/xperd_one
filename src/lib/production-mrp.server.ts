@@ -26,7 +26,8 @@ const num = (v: unknown) => {
 };
 /** SELECT di dalam transaksi → baris. */
 async function sel(conn: PoolConnection, sql: string, params: unknown[]): Promise<Row[]> {
-  const [r] = await conn.execute<RowDataPacket[]>(sql, params);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tipe nilai mysql2 terlalu sempit untuk unknown[] (pola sama dengan production-orders)
+  const [r] = await conn.execute<RowDataPacket[]>(sql, params as any);
   return r as Row[];
 }
 const bad = (m: string, status = 400) => new ProductionError(m, status);
