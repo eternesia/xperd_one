@@ -83,6 +83,7 @@ export const GOOGLE_ERRORS: Record<string, string> = {
   unverified: "Email Google belum terverifikasi.",
   disposable: "Email sementara tidak diizinkan. Gunakan email pribadi atau perusahaan yang aktif.",
   inactive: "Akun ini dinonaktifkan.",
+  closed: "Pendaftaran baru tidak tersedia di instalasi ini.",
 };
 
 export function GoogleButton({

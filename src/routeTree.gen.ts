@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as AppAdminRouteImport } from './routes/app-admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as Char91DotwellKnownChar93OauthAuthorizationServerRouteImport } from './routes/[.well-known]/oauth-authorization-server'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as SiteIndexRouteImport } from './routes/_site/index'
@@ -36,6 +37,7 @@ import { Route as AppAdminContentRouteImport } from './routes/app-admin/content'
 import { Route as AppAdminEmailRouteImport } from './routes/app-admin/email'
 import { Route as AppAdminGrantsRouteImport } from './routes/app-admin/grants'
 import { Route as AppAdminHealthRouteImport } from './routes/app-admin/health'
+import { Route as AppAdminInstancesRouteImport } from './routes/app-admin/instances'
 import { Route as AppAdminInterestRouteImport } from './routes/app-admin/interest'
 import { Route as AppAdminInvoicesRouteImport } from './routes/app-admin/invoices'
 import { Route as AppAdminKirimdevRouteImport } from './routes/app-admin/kirimdev'
@@ -99,6 +101,7 @@ import { Route as QallingInvoiceTokenRouteImport } from './routes/qalling.invoic
 import { Route as QallingReportTokenRouteImport } from './routes/qalling.report.$token'
 import { Route as ApiPublicDocsMcpToolsRouteImport } from './routes/api/public/docs/mcp-tools'
 import { Route as ApiPublicHooksSocialPublishRouteImport } from './routes/api/public/hooks/social-publish'
+import { Route as ApiPublicInstanceHeartbeatRouteImport } from './routes/api/public/instance/heartbeat'
 import { Route as ApiPublicJobsAiStudioRouteImport } from './routes/api/public/jobs/ai-studio'
 import { Route as ApiPublicJobsBillingNotificationsRouteImport } from './routes/api/public/jobs/billing-notifications'
 import { Route as ApiPublicJobsSubscriptionRenewalRouteImport } from './routes/api/public/jobs/subscription-renewal'
@@ -148,6 +151,11 @@ const AuthRoute = AuthRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Char91DotwellKnownChar93OauthAuthorizationServerRoute =
@@ -260,6 +268,11 @@ const AppAdminGrantsRoute = AppAdminGrantsRouteImport.update({
 const AppAdminHealthRoute = AppAdminHealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminInstancesRoute = AppAdminInstancesRouteImport.update({
+  id: '/instances',
+  path: '/instances',
   getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAdminInterestRoute = AppAdminInterestRouteImport.update({
@@ -580,6 +593,12 @@ const ApiPublicHooksSocialPublishRoute =
     path: '/api/public/hooks/social-publish',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicInstanceHeartbeatRoute =
+  ApiPublicInstanceHeartbeatRouteImport.update({
+    id: '/api/public/instance/heartbeat',
+    path: '/api/public/instance/heartbeat',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicJobsAiStudioRoute = ApiPublicJobsAiStudioRouteImport.update({
   id: '/api/public/jobs/ai-studio',
   path: '/api/public/jobs/ai-studio',
@@ -733,6 +752,7 @@ export interface FileRoutesByFullPath {
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/mcp': typeof McpRoute
+  '/setup': typeof SetupRoute
   '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/about': typeof SiteAboutRoute
@@ -753,6 +773,7 @@ export interface FileRoutesByFullPath {
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
   '/app-admin/health': typeof AppAdminHealthRoute
+  '/app-admin/instances': typeof AppAdminInstancesRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -817,6 +838,7 @@ export interface FileRoutesByFullPath {
   '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/instance/heartbeat': typeof ApiPublicInstanceHeartbeatRoute
   '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -847,6 +869,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/mcp': typeof McpRoute
+  '/setup': typeof SetupRoute
   '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/about': typeof SiteAboutRoute
@@ -867,6 +890,7 @@ export interface FileRoutesByTo {
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
   '/app-admin/health': typeof AppAdminHealthRoute
+  '/app-admin/instances': typeof AppAdminInstancesRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -930,6 +954,7 @@ export interface FileRoutesByTo {
   '/qalling/docs': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/instance/heartbeat': typeof ApiPublicInstanceHeartbeatRoute
   '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -963,6 +988,7 @@ export interface FileRoutesById {
   '/app-admin': typeof AppAdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/mcp': typeof McpRoute
+  '/setup': typeof SetupRoute
   '/.well-known/oauth-authorization-server': typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   '/_site/about': typeof SiteAboutRoute
@@ -983,6 +1009,7 @@ export interface FileRoutesById {
   '/app-admin/email': typeof AppAdminEmailRoute
   '/app-admin/grants': typeof AppAdminGrantsRoute
   '/app-admin/health': typeof AppAdminHealthRoute
+  '/app-admin/instances': typeof AppAdminInstancesRoute
   '/app-admin/interest': typeof AppAdminInterestRoute
   '/app-admin/invoices': typeof AppAdminInvoicesRoute
   '/app-admin/kirimdev': typeof AppAdminKirimdevRoute
@@ -1048,6 +1075,7 @@ export interface FileRoutesById {
   '/qalling/docs/': typeof QallingDocsIndexRoute
   '/api/public/docs/mcp-tools': typeof ApiPublicDocsMcpToolsRoute
   '/api/public/hooks/social-publish': typeof ApiPublicHooksSocialPublishRoute
+  '/api/public/instance/heartbeat': typeof ApiPublicInstanceHeartbeatRoute
   '/api/public/jobs/ai-studio': typeof ApiPublicJobsAiStudioRoute
   '/api/public/jobs/billing-notifications': typeof ApiPublicJobsBillingNotificationsRoute
   '/api/public/jobs/subscription-renewal': typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -1083,6 +1111,7 @@ export interface FileRouteTypes {
     | '/app-admin'
     | '/auth'
     | '/mcp'
+    | '/setup'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/about'
@@ -1103,6 +1132,7 @@ export interface FileRouteTypes {
     | '/app-admin/email'
     | '/app-admin/grants'
     | '/app-admin/health'
+    | '/app-admin/instances'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1167,6 +1197,7 @@ export interface FileRouteTypes {
     | '/qalling/docs/'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/instance/heartbeat'
     | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1197,6 +1228,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/mcp'
+    | '/setup'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/about'
@@ -1217,6 +1249,7 @@ export interface FileRouteTypes {
     | '/app-admin/email'
     | '/app-admin/grants'
     | '/app-admin/health'
+    | '/app-admin/instances'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1280,6 +1313,7 @@ export interface FileRouteTypes {
     | '/qalling/docs'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/instance/heartbeat'
     | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1312,6 +1346,7 @@ export interface FileRouteTypes {
     | '/app-admin'
     | '/auth'
     | '/mcp'
+    | '/setup'
     | '/.well-known/oauth-authorization-server'
     | '/.well-known/oauth-protected-resource'
     | '/_site/about'
@@ -1332,6 +1367,7 @@ export interface FileRouteTypes {
     | '/app-admin/email'
     | '/app-admin/grants'
     | '/app-admin/health'
+    | '/app-admin/instances'
     | '/app-admin/interest'
     | '/app-admin/invoices'
     | '/app-admin/kirimdev'
@@ -1397,6 +1433,7 @@ export interface FileRouteTypes {
     | '/qalling/docs/'
     | '/api/public/docs/mcp-tools'
     | '/api/public/hooks/social-publish'
+    | '/api/public/instance/heartbeat'
     | '/api/public/jobs/ai-studio'
     | '/api/public/jobs/billing-notifications'
     | '/api/public/jobs/subscription-renewal'
@@ -1431,6 +1468,7 @@ export interface RootRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren
   AuthRoute: typeof AuthRoute
   McpRoute: typeof McpRoute
+  SetupRoute: typeof SetupRoute
   Char91DotwellKnownChar93OauthAuthorizationServerRoute: typeof Char91DotwellKnownChar93OauthAuthorizationServerRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteWithChildren
   ApiProductionDocumentRoute: typeof ApiProductionDocumentRoute
@@ -1465,6 +1503,7 @@ export interface RootRouteChildren {
   QallingDocsIndexRoute: typeof QallingDocsIndexRoute
   ApiPublicDocsMcpToolsRoute: typeof ApiPublicDocsMcpToolsRoute
   ApiPublicHooksSocialPublishRoute: typeof ApiPublicHooksSocialPublishRoute
+  ApiPublicInstanceHeartbeatRoute: typeof ApiPublicInstanceHeartbeatRoute
   ApiPublicJobsAiStudioRoute: typeof ApiPublicJobsAiStudioRoute
   ApiPublicJobsBillingNotificationsRoute: typeof ApiPublicJobsBillingNotificationsRoute
   ApiPublicJobsSubscriptionRenewalRoute: typeof ApiPublicJobsSubscriptionRenewalRoute
@@ -1518,6 +1557,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/oauth-authorization-server': {
@@ -1672,6 +1718,13 @@ declare module '@tanstack/react-router' {
       path: '/health'
       fullPath: '/app-admin/health'
       preLoaderRoute: typeof AppAdminHealthRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/app-admin/instances': {
+      id: '/app-admin/instances'
+      path: '/instances'
+      fullPath: '/app-admin/instances'
+      preLoaderRoute: typeof AppAdminInstancesRouteImport
       parentRoute: typeof AppAdminRoute
     }
     '/app-admin/interest': {
@@ -2115,6 +2168,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSocialPublishRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/instance/heartbeat': {
+      id: '/api/public/instance/heartbeat'
+      path: '/api/public/instance/heartbeat'
+      fullPath: '/api/public/instance/heartbeat'
+      preLoaderRoute: typeof ApiPublicInstanceHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/jobs/ai-studio': {
       id: '/api/public/jobs/ai-studio'
       path: '/api/public/jobs/ai-studio'
@@ -2397,6 +2457,7 @@ interface AppAdminRouteChildren {
   AppAdminEmailRoute: typeof AppAdminEmailRoute
   AppAdminGrantsRoute: typeof AppAdminGrantsRoute
   AppAdminHealthRoute: typeof AppAdminHealthRoute
+  AppAdminInstancesRoute: typeof AppAdminInstancesRoute
   AppAdminInterestRoute: typeof AppAdminInterestRoute
   AppAdminInvoicesRoute: typeof AppAdminInvoicesRoute
   AppAdminKirimdevRoute: typeof AppAdminKirimdevRoute
@@ -2425,6 +2486,7 @@ const AppAdminRouteChildren: AppAdminRouteChildren = {
   AppAdminEmailRoute: AppAdminEmailRoute,
   AppAdminGrantsRoute: AppAdminGrantsRoute,
   AppAdminHealthRoute: AppAdminHealthRoute,
+  AppAdminInstancesRoute: AppAdminInstancesRoute,
   AppAdminInterestRoute: AppAdminInterestRoute,
   AppAdminInvoicesRoute: AppAdminInvoicesRoute,
   AppAdminKirimdevRoute: AppAdminKirimdevRoute,
@@ -2501,6 +2563,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AuthRoute: AuthRoute,
   McpRoute: McpRoute,
+  SetupRoute: SetupRoute,
   Char91DotwellKnownChar93OauthAuthorizationServerRoute:
     Char91DotwellKnownChar93OauthAuthorizationServerRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
@@ -2537,6 +2600,7 @@ const rootRouteChildren: RootRouteChildren = {
   QallingDocsIndexRoute: QallingDocsIndexRoute,
   ApiPublicDocsMcpToolsRoute: ApiPublicDocsMcpToolsRoute,
   ApiPublicHooksSocialPublishRoute: ApiPublicHooksSocialPublishRoute,
+  ApiPublicInstanceHeartbeatRoute: ApiPublicInstanceHeartbeatRoute,
   ApiPublicJobsAiStudioRoute: ApiPublicJobsAiStudioRoute,
   ApiPublicJobsBillingNotificationsRoute:
     ApiPublicJobsBillingNotificationsRoute,

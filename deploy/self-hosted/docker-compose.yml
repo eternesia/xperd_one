@@ -1,0 +1,77 @@
+# XPERD — paket instalasi mandiri (self-hosted) di server klien
+# ---------------------------------------------------------------------------
+# Dipasang oleh install.sh. Isi .env (lihat .env.example) sebelum menjalankan.
+#   docker compose up -d                 # jalankan MySQL + aplikasi
+#   docker compose run --rm db           # terapkan skema + data katalog (idempoten)
+# Aplikasi hanya mendengarkan di 127.0.0.1:${WEB_PORT}; pasang nginx/Caddy (HTTPS) di depannya.
+# ---------------------------------------------------------------------------
+
+name: xperd
+
+x-app-env: &app-env
+  env_file:
+    - .env
+  environment:
+    NODE_ENV: production
+    MYSQL_HOST: mysql
+    MYSQL_PORT: "3306"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: xperd-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?isi MYSQL_ROOT_PASSWORD di .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-xperd}
+      MYSQL_USER: ${MYSQL_USER:-xperd}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?isi MYSQL_PASSWORD di .env}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    image: ${APP_IMAGE:-ghcr.io/eternesia/xperd_one:latest}
+    container_name: xperd-web
+    restart: unless-stopped
+    <<: *app-env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NITRO_PORT: "3000"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    volumes:
+      - storage:/app/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  db:
+    image: ${APP_IMAGE:-ghcr.io/eternesia/xperd_one:latest}
+    container_name: xperd-db
+    restart: "no"
+    <<: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs && node scripts/self-hosted-cleanup.mjs"]
+    profiles: ["jobs"]
+
+volumes:
+  mysql-data:
+    name: xperd-mysql-data
+  storage:
+    name: xperd-storage

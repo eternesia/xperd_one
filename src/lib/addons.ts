@@ -6,6 +6,7 @@ import { useApp } from "@/lib/app-context";
 import { listAddonCatalog, listTenantAddons } from "@/lib/addons.functions";
 import type { AddonRow, TenantAddonRow } from "@/lib/addons.functions";
 import { isLiveAddon } from "@/lib/entitlements";
+import { APP_MODULES } from "@/lib/modules";
 
 export type AddonRecord = AddonRow;
 export type TenantAddonRecord = TenantAddonRow;
@@ -17,7 +18,7 @@ function isLive(row: TenantAddonRow) {
 
 /** Add-on codes currently unlocked for the signed-in user's tenant. */
 export function useTenantAddons() {
-  const { tenant } = useApp();
+  const { tenant, instance } = useApp();
   const tenantId = tenant?.id;
 
   const query = useQuery({
@@ -40,7 +41,15 @@ export function useTenantAddons() {
     rows,
     activeCodes,
     loading: query.isLoading,
-    hasAddon: (code?: string) => (code ? activeCodes.includes(code) : true),
+    hasAddon: (code?: string) => {
+      if (!code) return true;
+      // Instalasi mandiri: add-on modul (mis. Production) mengikuti lisensi pusat, bukan langganan.
+      if (instance?.selfHosted) {
+        const mod = APP_MODULES.find((m) => m.addon === code);
+        return Boolean(mod && instance.modules.includes(mod.id));
+      }
+      return activeCodes.includes(code);
+    },
   };
 }
 

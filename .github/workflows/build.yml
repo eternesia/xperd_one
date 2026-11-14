@@ -70,7 +70,7 @@ jobs:
           ARGS=()
           for T in "${ARR[@]}"; do ARGS+=(-t "$T"); done
           echo ">>> Building ${TAGS}"
-          docker build "${ARGS[@]}" -f Dockerfile.prod .
+          docker build "${ARGS[@]}" --build-arg APP_VERSION="sha-${GITHUB_SHA::7}" -f Dockerfile.prod .
           for T in "${ARR[@]}"; do
             echo ">>> Pushing ${T}"
             docker push "$T"

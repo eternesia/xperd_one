@@ -36,6 +36,8 @@ async function count(sql: string, params: unknown[]): Promise<number> {
 }
 
 export async function hasRole(userId: string, role: string): Promise<boolean> {
+  // Instalasi mandiri: tidak ada Super Admin lokal — semua kendali platform dari pusat.
+  if (role === "admin" && process.env.XPERD_INSTANCE_MODE === "self_hosted") return false;
   return (await count("SELECT COUNT(*) AS c FROM user_roles WHERE user_id = ? AND role = ?", [userId, role])) > 0;
 }
 
@@ -123,6 +125,8 @@ export async function requireAdmin(userId: string): Promise<void> {
 // Replaces Postgres claim_superadmin: grants admin only to the designated email
 // and only while no admin exists yet.
 export async function claimSuperadminIfAllowed(userId: string, email: string): Promise<boolean> {
+  // Instalasi mandiri dikendalikan dari Super Admin pusat; tidak ada klaim superadmin lokal.
+  if (process.env.XPERD_INSTANCE_MODE === "self_hosted") return false;
   const adminCount = await count("SELECT COUNT(*) AS c FROM user_roles WHERE role = 'admin'", []);
   if (adminCount > 0) return false;
   const allowed = (process.env.SUPERADMIN_EMAIL ?? "dnicorp.id@gmail.com").toLowerCase();

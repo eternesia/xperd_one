@@ -25,6 +25,7 @@ import {
   Wand2,
   Inbox,
   Activity,
+  Server,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -174,6 +175,9 @@ function AdminLayout() {
         <Group>Sistem</Group>
         <NavItem to="/app-admin/health" icon={<Activity className="h-4 w-4" />}>
           Kesehatan Sistem
+        </NavItem>
+        <NavItem to="/app-admin/instances" icon={<Server className="h-4 w-4" />}>
+          Instalasi klien
         </NavItem>
         <Link
           to="/app-admin/auth-settings"

@@ -39,12 +39,23 @@ import { useApp } from "@/lib/app-context";
 import { logoutAppUser } from "@/lib/auth.functions";
 import { emitAuthChange } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
-import { APP_MODULES, LAUNCHER_UTILITIES } from "@/lib/modules";
+import { APP_MODULES, launcherUtilities } from "@/lib/modules";
 import { useTheme } from "@/lib/theme";
 import appLogo from "@/assets/xperd-one.png";
 
 export function AppTopbar({ workspaceId }: { workspaceId: string }) {
-  const { workspaces, activeWorkspace, tenant, email, setActiveWorkspaceId, canViewModule, canViewSubmodule, isWorkspaceManager } = useApp();
+  const {
+    workspaces,
+    activeWorkspace,
+    tenant,
+    email,
+    setActiveWorkspaceId,
+    canViewModule,
+    canViewSubmodule,
+    isWorkspaceManager,
+    instance,
+  } = useApp();
+  const utilities = isWorkspaceManager ? launcherUtilities(instance?.selfHosted) : [];
   const { lang, setLang } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -64,13 +75,13 @@ export function AppTopbar({ workspaceId }: { workspaceId: string }) {
             group: lang === "id" ? "Sub modul" : "Sub modules",
           })),
       ]),
-      ...LAUNCHER_UTILITIES.filter(() => isWorkspaceManager).map((u) => ({
+      ...utilities.map((u) => ({
         label: lang === "id" ? u.id_ : u.en,
         to: `/app/w/${workspaceId}/${u.id}`,
         group: lang === "id" ? "Pengaturan" : "Workspace",
       })),
     ],
-    [lang, workspaceId, canViewModule, canViewSubmodule, isWorkspaceManager],
+    [lang, workspaceId, canViewModule, canViewSubmodule, isWorkspaceManager, utilities],
   );
 
   const groups = useMemo(() => {

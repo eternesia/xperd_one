@@ -23,6 +23,8 @@ export interface ProvisionOptions {
   ownerId?: string;
   /** Pendaftaran khusus Qalling: beri tier ini sebagai add-on trial dan lewati invoice ERP. */
   qallingTierCode?: string;
+  /** Instalasi mandiri (self-hosted): tenant langsung aktif tanpa trial, invoice, maupun bonus kredit. */
+  selfHosted?: boolean;
 }
 
 export async function loadTrialDays(): Promise<number> {
@@ -96,7 +98,9 @@ export async function provisionRegistrationCore(
     .toUpperCase()}-${String(stamp.getTime()).slice(-4)}`;
 
   const { grantSignupBonusOn, signupBonusCredits } = await import("./ai-credits.server");
-  const bonusCredits = await signupBonusCredits();
+  const bonusCredits = opts.selfHosted ? 0 : await signupBonusCredits();
+  const tenantStatus = opts.selfHosted ? "active" : "trial";
+  const tenantTrialEnds = opts.selfHosted ? null : trialEnds;
 
   await transaction(async (conn) => {
     if (generatedPassword) {
@@ -117,20 +121,21 @@ export async function provisionRegistrationCore(
     await conn.execute(
       `INSERT INTO tenants
          (id, name, subdomain, owner_id, package_id, status, industry, city, pic_name, pic_email, pic_phone, user_count, workspace_count, started_at, trial_ends_at, notes, signup_source)
-       VALUES (?, ?, ?, ?, ?, 'trial', ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?)`,
       [
         tenantId,
         reg.company_name,
         subdomain,
         ownerId,
         pkg?.id ?? null,
+        tenantStatus,
         reg.industry,
         reg.city,
         reg.contact_name,
         email,
         reg.phone,
         today,
-        trialEnds,
+        tenantTrialEnds,
         reg.notes,
         registrationSource(opts.signupSource, reg.notes),
       ],
@@ -138,8 +143,18 @@ export async function provisionRegistrationCore(
     await conn.execute(
       `INSERT INTO subscriptions
          (id, tenant_id, package_id, status, billing_cycle, seats, unit_price, current_period_start, current_period_end, auto_renew)
-       VALUES (?, ?, ?, 'trialing', ?, 1, ?, ?, ?, 1)`,
-      [subId, tenantId, pkg?.id ?? null, reg.billing_cycle, unitPrice, today, periodEnd],
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      [
+        subId,
+        tenantId,
+        pkg?.id ?? null,
+        opts.selfHosted ? "active" : "trialing",
+        reg.billing_cycle,
+        opts.selfHosted ? 0 : unitPrice,
+        today,
+        opts.selfHosted ? addDays(3650) : periodEnd,
+        opts.selfHosted ? 0 : 1,
+      ],
     );
     await conn.execute(
       `INSERT INTO workspaces
@@ -172,7 +187,7 @@ export async function provisionRegistrationCore(
           `Trial ${TRIAL_DAYS} hari dari pendaftaran`,
         ],
       );
-    } else {
+    } else if (!opts.selfHosted) {
       await conn.execute(
         `INSERT INTO invoices
            (id, invoice_number, tenant_id, subscription_id, status, issue_date, due_date, subtotal, tax_amount, total, auto_reminder, notes)
@@ -191,7 +206,7 @@ export async function provisionRegistrationCore(
       );
     }
     // Bonus kredit Studio AI (mis. 5 kredit = video promo gratis); diumumkan di dasbor.
-    await grantSignupBonusOn(conn, tenantId, bonusCredits);
+    if (bonusCredits > 0) await grantSignupBonusOn(conn, tenantId, bonusCredits);
     await conn.execute(
       "UPDATE registrations SET status = 'provisioned', tenant_id = ? WHERE id = ?",
       [tenantId, reg.id],

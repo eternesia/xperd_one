@@ -109,6 +109,21 @@ export function ensureScheduler(requestUrl: string, headers?: Headers) {
   setInterval(metricsTick, 5 * 60_000).unref?.();
   setTimeout(metricsTick, 30_000).unref?.();
 
+  // Instalasi klien (self-hosted): lapor kesehatan ke pusat & ambil lisensi terbaru tiap 5 menit.
+  if (process.env.XPERD_INSTANCE_MODE === "self_hosted") {
+    const instanceTick = async () => {
+      try {
+        const { syncWithControl } = await import("./instance.server");
+        const r = await syncWithControl();
+        if (!r.ok) console.warn("[scheduler] sinkron pusat gagal:", r.error);
+      } catch (e) {
+        console.error("[scheduler] sinkron pusat gagal", e);
+      }
+    };
+    setInterval(instanceTick, 5 * 60_000).unref?.();
+    setTimeout(instanceTick, 15_000).unref?.();
+  }
+
   setInterval(publishTick, PUBLISH_EVERY_MS).unref?.();
   setInterval(notifyTick, NOTIFY_EVERY_MS).unref?.();
   setInterval(renewTick, NOTIFY_EVERY_MS).unref?.();

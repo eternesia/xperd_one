@@ -180,6 +180,8 @@ export const startQallingSignup = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
     const { assertRegistrationEmail } = await import("@/lib/disposable-email.server");
     assertRegistrationEmail(data.email);
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
@@ -247,6 +249,8 @@ export const verifyQallingSignup = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data }) => {
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
     const { execute, executeOne } = await import("@/integrations/mysql/pool");
     const { sha256 } = await import("@/lib/email-gateway.server");
     const reg = await executeOne<{
@@ -365,6 +369,8 @@ export const provisionGoogleSignup = createServerFn({ method: "POST" })
     return { tier: resolveSignupTier(d?.tier) };
   })
   .handler(async ({ data, context }) => {
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     if (
       await executeOne("SELECT 1 AS ok FROM workspace_members WHERE user_id = ? LIMIT 1", [

@@ -75,6 +75,8 @@ export const Route = createFileRoute("/api/public/auth/google/callback")({
           await import("@/lib/auth-jwt.server");
         let user = await findAppUserByEmail(email);
         if (!user) {
+          const { isSelfHosted } = await import("@/lib/instance.server");
+          if (isSelfHosted()) return fail("closed");
           try {
             const { assertRegistrationEmail } = await import("@/lib/disposable-email.server");
             assertRegistrationEmail(email);

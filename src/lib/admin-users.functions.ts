@@ -202,6 +202,8 @@ export const adminCreateUser = createServerFn({ method: "POST" })
     const newUserId = existing?.id ?? uuid();
 
     if (!existing) {
+      const { assertUserSeat } = await import("@/lib/instance.server");
+      await assertUserSeat();
       await execute(
         "INSERT INTO app_users (id, email, full_name, password_hash, is_active) VALUES (?, ?, ?, ?, 1)",
         [newUserId, email, data.fullName, await hashPassword(data.password)],
