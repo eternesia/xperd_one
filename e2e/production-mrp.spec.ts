@@ -51,7 +51,7 @@ test.afterAll(async () => {
   }
 });
 
-const call = (page: Page, fn: string, data: Record<string, unknown>) =>
+const evaluate = (page: Page, fn: string, data: Record<string, unknown>) =>
   page.evaluate(
     async ({ fn, data }) => {
       const m = await import(/* @vite-ignore */ "/src/lib/production-mrp.functions.ts");
@@ -63,6 +63,17 @@ const call = (page: Page, fn: string, data: Record<string, unknown>) =>
     },
     { fn, data: { workspaceId: ws, ...data } },
   ) as Promise<{ ok: boolean; v?: any; error?: string }>;
+/** Server dev dingin (CI) bisa memuat ulang halaman saat optimasi dependensi Vite: ulangi bila konteks hilang. */
+async function call(page: Page, fn: string, data: Record<string, unknown>) {
+  for (let i = 0; ; i++) {
+    try {
+      return await evaluate(page, fn, data);
+    } catch (e) {
+      if (i >= 4 || !/Execution context was destroyed|navigation/i.test(String(e))) throw e;
+      await page.waitForLoadState("networkidle").catch(() => {});
+    }
+  }
+}
 
 test("PRODUCTION MRP: SO → explosion → saran beli/produksi → PR & order draf → tercukupi", async ({
   page,
@@ -185,6 +196,7 @@ test("PRODUCTION MRP: SO → explosion → saran beli/produksi → PR & order dr
   await so(`SO-C-${TAG}`, "draft", 999, 0);
 
   await page.goto(`/app/w/${ws}`);
+  await page.waitForLoadState("networkidle");
 
   /* ---------- saklar OFF bawaan ---------- */
   const st = await call(page, "getMrpSettings", {});
