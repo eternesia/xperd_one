@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { getInstanceInfo } from "@/lib/instances.functions";
+import type { InstanceInfo } from "@/lib/instance.server";
 import { useSession } from "@/hooks/use-session";
 import { findModule } from "@/lib/modules";
 import { getAppShellData } from "@/lib/app-shell.functions";
@@ -82,6 +84,8 @@ interface AppContextValue {
   canEditSubmodule: (moduleId: string, submoduleId: string) => boolean;
   setActiveWorkspaceId: (id: string) => void;
   refresh: () => Promise<void>;
+  /** Instalasi klien (self-hosted): lisensi & modul yang diizinkan; null = memuat / SaaS biasa. */
+  instance: InstanceInfo | null;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -104,6 +108,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [accessLoading, setAccessLoading] = useState(true);
   const [entitlements, setEntitlements] = useState<Entitlements>({});
   const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+  const [instance, setInstance] = useState<InstanceInfo | null>(null);
+  useEffect(() => {
+    getInstanceInfo()
+      .then(setInstance)
+      .catch(() => setInstance(null));
+  }, [userId]);
 
   const refreshEntitlements = useCallback(async () => {
     if (!userId || !activeId) {
@@ -233,8 +243,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       entitlements,
       refreshEntitlements,
       canViewModule: (moduleId) =>
-        Boolean(workspaceRole) && (isOwner || (modulePermission(moduleId)?.canView ?? true)),
+        // Instalasi klien: hanya modul yang ada di lisensi.
+        (!instance?.selfHosted || instance.modules.includes(moduleId)) &&
+        Boolean(workspaceRole) &&
+        (isOwner || (modulePermission(moduleId)?.canView ?? true)),
       canViewSubmodule: (moduleId, submoduleId) =>
+        (!instance?.selfHosted || instance.modules.includes(moduleId)) &&
         hasCatalogFeature(entitlements, moduleId, submoduleId) &&
         Boolean(workspaceRole) &&
         (isManager || !managerOnly(moduleId, submoduleId)) &&
@@ -242,6 +256,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ((modulePermission(moduleId)?.canView ?? true) &&
             (submodulePermission(moduleId, submoduleId)?.canView ?? true))),
       canEditSubmodule: (moduleId, submoduleId) =>
+        (!instance?.selfHosted ||
+          (instance.modules.includes(moduleId) && instance.status !== "expired")) &&
         hasCatalogFeature(entitlements, moduleId, submoduleId) &&
         Boolean(workspaceRole) &&
         (isManager || !managerOnly(moduleId, submoduleId)) &&
@@ -250,8 +266,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             (submodulePermission(moduleId, submoduleId)?.canEdit ?? workspaceRole !== "viewer"))),
       setActiveWorkspaceId,
       refresh: load,
+      instance,
     };
   }, [
+    instance,
     sessionLoading,
     loading,
     userId,

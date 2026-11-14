@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Logo } from "@/components/site/Logo";
 import { useSession, emitAuthChange } from "@/hooks/use-session";
 import { loginAppUser } from "@/lib/auth.functions";
+import { getSetupState } from "@/lib/instances.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -47,6 +48,15 @@ function AuthPage() {
     if (to.startsWith("/oauth/")) window.location.replace(to);
     else navigate({ to, replace: true });
   };
+
+  // Instalasi mandiri yang belum disiapkan: arahkan ke penyiapan pertama.
+  useEffect(() => {
+    getSetupState()
+      .then((st) => {
+        if (st.needed) navigate({ to: "/setup", replace: true });
+      })
+      .catch(() => {});
+  }, [navigate]);
 
   useEffect(() => {
     if (!loading && session) go(next ?? "/app");

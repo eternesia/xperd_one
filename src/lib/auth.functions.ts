@@ -11,6 +11,8 @@ const credentialsSchema = z.object({
 export const registerAppUser = createServerFn({ method: "POST" })
   .validator((input: unknown) => credentialsSchema.parse(input))
   .handler(async ({ data }) => {
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
     const { hashPassword, findAppUserByEmail } = await import("@/lib/auth-jwt.server");
     const { execute, uuid } = await import("@/integrations/mysql/pool");
 

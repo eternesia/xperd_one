@@ -35,6 +35,11 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       [email],
     );
     const newUserId = existing?.id ?? uuid();
+    if (!existing) {
+      // Instalasi mandiri: jumlah pengguna dibatasi lisensi.
+      const { assertUserSeat } = await import("@/lib/instance.server");
+      await assertUserSeat();
+    }
 
     await transaction(async (conn) => {
       if (!existing) {

@@ -58,6 +58,8 @@ export const createOrganisation = createServerFn({ method: "POST" })
     const { requireUser } = await import("@/lib/auth-context.server");
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
     const user = await requireUser();
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
 
     const slug = data.subdomain.trim().toLowerCase();
     const dupe = await executeOne<{ id: string }>(
@@ -156,6 +158,8 @@ export const createWorkspace = createServerFn({ method: "POST" })
 export const submitRegistration = createServerFn({ method: "POST" })
   .validator((input: unknown) => registrationSchema.parse(input))
   .handler(async ({ data }) => {
+    const { assertPublicSignupAllowed } = await import("@/lib/instance.server");
+    assertPublicSignupAllowed();
     const { execute, executeOne, uuid } = await import("@/integrations/mysql/pool");
 
     const email = data.email.trim().toLowerCase();

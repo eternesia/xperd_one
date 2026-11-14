@@ -21,7 +21,7 @@ INSERT IGNORE INTO site_content (id, section, `key`, title_en, title_id, body_en
 --   "superadmin"               = a user_roles row with role='admin'
 -- ===========================================================================
 
--- Platform superadmin: dnicorp.id@gmail.com / @DNIIPO2032
+-- Platform superadmin (kata sandi awal tidak dicatat di repo; ganti setelah pemasangan).
 -- Password hash is PBKDF2-SHA256 (100k iterations, 16-byte salt, 256-bit key) —
 -- the same format produced by src/lib/auth-jwt.server.ts hashPassword().
 INSERT INTO app_users (id, email, full_name, password_hash, is_active)
@@ -38,7 +38,7 @@ INSERT INTO user_roles (id, user_id, role)
 SELECT UUID(), id, 'admin' FROM app_users WHERE email = 'dnicorp.id@gmail.com'
 ON DUPLICATE KEY UPDATE role = VALUES(role);
 
--- Second admin account: hakimtop.id@gmail.com / @Indonesia2026
+-- Second admin account (kata sandi awal tidak dicatat di repo).
 -- (PBKDF2-SHA256, 100k iterations — same format as auth-jwt.server.ts)
 INSERT INTO app_users (id, email, full_name, password_hash, is_active)
 VALUES ('00000000-0000-0000-0000-000000000002', 'hakimtop.id@gmail.com', 'Hakim Top',

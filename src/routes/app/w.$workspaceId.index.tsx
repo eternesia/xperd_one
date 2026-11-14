@@ -8,7 +8,7 @@ import { GettingStartedChecklist } from "@/components/app/GettingStartedChecklis
 import { useTenantAddons } from "@/lib/addons";
 import { useApp } from "@/lib/app-context";
 import { useI18n } from "@/lib/i18n";
-import { APP_MODULES, LAUNCHER_UTILITIES, TONE_CLASS } from "@/lib/modules";
+import { APP_MODULES, launcherUtilities, TONE_CLASS } from "@/lib/modules";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/w/$workspaceId/")({
@@ -17,10 +17,12 @@ export const Route = createFileRoute("/app/w/$workspaceId/")({
 
 function Launcher() {
   const { workspaceId } = Route.useParams();
-  const { activeWorkspace, isWorkspaceManager, canViewModule, canViewSubmodule } = useApp();
+  const { activeWorkspace, isWorkspaceManager, canViewModule, canViewSubmodule, instance } =
+    useApp();
   // Kartu utilitas (Tim, Pengaturan, Tagihan, Backup) hanya untuk owner/admin bawaan; peran kustom
   // (walau berdasar admin) dan staff/viewer tidak melihat menu pengelolaan workspace.
   const isManager = isWorkspaceManager;
+  const utilities = isManager ? launcherUtilities(instance?.selfHosted) : [];
   const { lang } = useI18n();
   const { hasAddon, loading: addonsLoading } = useTenantAddons();
 
@@ -131,7 +133,7 @@ function Launcher() {
         </div>
 
         <div className="mt-6 hidden gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-4">
-          {LAUNCHER_UTILITIES.filter(() => isManager).map((u) => (
+          {utilities.map((u) => (
             <Link
               key={u.id}
               to={u.to}

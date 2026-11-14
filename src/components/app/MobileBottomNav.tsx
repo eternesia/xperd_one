@@ -21,7 +21,7 @@ import { useApp } from "@/lib/app-context";
 import { logoutAppUser } from "@/lib/auth.functions";
 import { emitAuthChange } from "@/hooks/use-session";
 import { useI18n } from "@/lib/i18n";
-import { APP_MODULES, LAUNCHER_UTILITIES } from "@/lib/modules";
+import { APP_MODULES, launcherUtilities } from "@/lib/modules";
 import { NEW_DOC_EVENT } from "@/lib/new-doc-event";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export function MobileBottomNav({ workspaceId }: { workspaceId: string }) {
     canEditSubmodule,
     workspaceRole,
     isWorkspaceManager,
+    instance,
   } = useApp();
   const [moreOpen, setMoreOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
@@ -284,7 +285,7 @@ export function MobileBottomNav({ workspaceId }: { workspaceId: string }) {
                 <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
                   {id ? "Akun & pengaturan" : "Account & settings"}
                 </p>
-                {LAUNCHER_UTILITIES.map((u) => (
+                {launcherUtilities(instance?.selfHosted).map((u) => (
                   <Link
                     key={u.id}
                     to={u.to}

@@ -619,6 +619,11 @@ export const LAUNCHER_UTILITIES = [
   },
 ];
 
+/** Instalasi mandiri (self-hosted) tidak memakai tagihan Qalling — menu Tagihan disembunyikan. */
+export function launcherUtilities(selfHosted: boolean | undefined) {
+  return selfHosted ? LAUNCHER_UTILITIES.filter((u) => u.id !== "billing") : LAUNCHER_UTILITIES;
+}
+
 export const TONE_CLASS: Record<AppModule["tone"], string> = {
   navy: "bg-navy/10 text-navy dark:bg-navy/40 dark:text-primary-foreground",
   gold: "bg-gold/20 text-gold-foreground dark:bg-gold/25 dark:text-gold",

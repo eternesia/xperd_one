@@ -45,6 +45,9 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+const SELF_HOSTED_ALLOWED =
+  /^\/(app|app-admin|auth|setup|api|production|_serverFn|_server|assets|mcp|oauth|\.well-known)(\/|$)|\.[a-z0-9]{2,5}$/i;
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     // ---------------------------------------------------------------------
@@ -58,6 +61,10 @@ export default {
     void import("./lib/scheduler.server")
       .then((m) => m.ensureScheduler(request.url, request.headers))
       .catch(() => {});
+    // Instalasi klien (self-hosted): hanya aplikasi ERP — halaman pemasaran, pendaftaran, dan
+    // Qalling dialihkan ke /app.
+    if (process.env.XPERD_INSTANCE_MODE === "self_hosted" && !SELF_HOSTED_ALLOWED.test(path))
+      return Response.redirect(new URL("/app", request.url), 302);
     if (path === "/api/public/leads") return handlePublicLeadRequest(request);
     if (path === "/api/cron/reminders") return handleReminderCronRequest(request);
 

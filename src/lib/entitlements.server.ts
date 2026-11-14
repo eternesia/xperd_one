@@ -84,7 +84,23 @@ export async function tenantEntitlements(tenantId: string): Promise<Entitlements
     if (e) out[r.code] = e;
   }
   await applyGrants(tenantId, today, out);
+  await applyInstanceLicense(out);
   return out;
+}
+
+/**
+ * Instalasi mandiri (self-hosted): add-on Production mengikuti lisensi dari server pusat,
+ * bukan langganan — modul `production` di lisensi = semua fitur produksi; tanpa itu dicabut.
+ */
+async function applyInstanceLicense(out: Entitlements) {
+  const { isSelfHosted, instanceInfo } = await import("./instance.server");
+  if (!isSelfHosted()) return;
+  const info = await instanceInfo();
+  if (info.modules.includes("manufacturing")) {
+    out.manufacturing = { tier: "license", features: { legacy: true }, limits: {} };
+  } else {
+    delete out.manufacturing;
+  }
 }
 
 /** Gabungkan hibah akses sementara (feature_grants): fitur di-OR, batas diambil yang terbesar. */
