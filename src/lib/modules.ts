@@ -43,7 +43,6 @@ import {
   Sparkles,
   Share2,
   FlaskConical,
-  PackagePlus,
   PackageSearch,
   ShieldCheck,
   ClipboardList,
