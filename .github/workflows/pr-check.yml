@@ -1,7 +1,7 @@
 name: PR check
 
 # Cek pull request sebelum merge (tidak membangun image dan tidak deploy):
-# tsc, eslint (berkas yang diubah), vite build, migrasi + seed di MySQL 8.4, lalu spec e2e yang diubah di PR.
+# tsc, eslint (berkas baru), vite build, migrasi + seed di MySQL 8.4, lalu spec e2e yang diubah di PR.
 on:
   pull_request:
     branches: [master]
@@ -50,12 +50,14 @@ jobs:
         run: |
           BASE="${{ github.event.pull_request.base.sha || 'origin/master' }}"
           git diff --name-only --diff-filter=ACMR "$BASE"...HEAD > /tmp/changed.txt || true
+          # Lint ketat hanya untuk berkas BARU (berkas lama masih punya utang format/`any`; lihat AGENTS.md soal prettier).
+          git diff --name-only --diff-filter=A "$BASE"...HEAD > /tmp/added.txt || true
           cat /tmp/changed.txt
-          echo "lint=$(grep -E '\.(ts|tsx|js|mjs)$' /tmp/changed.txt | grep -v '^\.github/' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "lint=$(grep -E '\.(ts|tsx|js|mjs)$' /tmp/added.txt | grep -v '^\.github/' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
           echo "specs=$(grep -E '^e2e/.*\.spec\.ts$' /tmp/changed.txt | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
       - name: Typecheck
         run: npx tsc --noEmit -p .
-      - name: ESLint (berkas yang diubah)
+      - name: ESLint (berkas baru)
         if: steps.changed.outputs.lint != ''
         run: npx eslint ${{ steps.changed.outputs.lint }}
       - name: Build

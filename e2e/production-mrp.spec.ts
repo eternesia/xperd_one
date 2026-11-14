@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- hasil server function dibaca dinamis di uji */
 import { expect, test, type Page } from "@playwright/test";
 import crypto from "node:crypto";
 import type mysql from "mysql2/promise";

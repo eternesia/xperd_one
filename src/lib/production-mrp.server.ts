@@ -1,7 +1,7 @@
 // Production · MRP — pemuatan data & aksi (server-only). Perhitungan murni ada di `production-mrp.ts`.
 // Alur: Sales Order terbuka → kebutuhan barang jadi → netting stok/order produksi → saran produksi → explosion BOM →
 // netting bahan terhadap stok lot rilis, PO/PR terbuka → saran beli (PR draf) atau order produksi draf.
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { execute, executeOne, transaction, uuid } from "@/integrations/mysql/pool";
 import { ProductionError, d10, mfgAssert, mfgAudit, mfgHasFeature } from "./production.server";
 import {
@@ -18,11 +18,17 @@ import {
   type MrpSupply,
 } from "./production-mrp";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- baris SQL dibaca dinamis (pola sama dengan modul Production lain)
 type Row = Record<string, any>;
 const num = (v: unknown) => {
   const n = Number(v ?? 0);
   return Number.isFinite(n) ? n : 0;
 };
+/** SELECT di dalam transaksi → baris. */
+async function sel(conn: PoolConnection, sql: string, params: unknown[]): Promise<Row[]> {
+  const [r] = await conn.execute<RowDataPacket[]>(sql, params);
+  return r as Row[];
+}
 const bad = (m: string, status = 400) => new ProductionError(m, status);
 const ph = (n: number) => Array.from({ length: n }, () => "?").join(",");
 /** Batas item per perhitungan agar daftar IN (…) tetap wajar. */
@@ -48,8 +54,8 @@ export async function loadMrpSettings(
   let r: Row | null = null;
   try {
     r = await executeOne<Row>("SELECT * FROM mfg_mrp_settings WHERE workspace_id = ?", [ws]);
-  } catch (e: any) {
-    if (e?.code !== "ER_NO_SUCH_TABLE") throw e;
+  } catch (e) {
+    if ((e as { code?: string })?.code !== "ER_NO_SUCH_TABLE") throw e;
   }
   if (!r) return { ...defaultMrpSettings, updated_at: null };
   return {
@@ -65,7 +71,8 @@ export async function saveMrpSettings(ws: string, userId: string, v: MrpSettings
   // Saklar & parameter global MRP mengikuti hak tulis seksi `settings` (admin/pemilik/supervisor/QA).
   await mfgAssert(ws, userId, "settings", true);
   return transaction(async (conn) => {
-    const [cur] = await conn.execute<any[]>(
+    const cur = await sel(
+      conn,
       "SELECT * FROM mfg_mrp_settings WHERE workspace_id = ? FOR UPDATE",
       [ws],
     );
@@ -89,7 +96,7 @@ export async function saveMrpSettings(ws: string, userId: string, v: MrpSettings
         [...vals, id],
       );
     }
-    const [after] = await conn.execute<any[]>("SELECT * FROM mfg_mrp_settings WHERE id = ?", [id]);
+    const after = await sel(conn, "SELECT * FROM mfg_mrp_settings WHERE id = ?", [id]);
     await mfgAudit(conn, {
       workspaceId: ws,
       userId,
@@ -259,13 +266,11 @@ export async function computeMrp(
     );
     const byVer = new Map(Object.values(boms).map((b) => [b.versionId, b]));
     for (const l of bl)
-      byVer
-        .get(String(l.bom_version_id))
-        ?.lines.push({
-          itemId: String(l.item_id),
-          qtyPerBase: num(l.qty_per_base),
-          uom: String(l.uom),
-        });
+      byVer.get(String(l.bom_version_id))?.lines.push({
+        itemId: String(l.item_id),
+        qtyPerBase: num(l.qty_per_base),
+        uom: String(l.uom),
+      });
   }
 
   // 4) Himpunan item yang terjangkau (kebutuhan + turunan BOM), lalu master, pasokan, dan parameter.
@@ -428,12 +433,13 @@ export async function saveMrpItemParams(
   await mrpGate(ws, userId);
   await mfgAction(ws, userId, "mrp", ["production_planner", "production_supervisor"]);
   return transaction(async (conn) => {
-    const [it] = await conn.execute<any[]>(
-      "SELECT id FROM md_items WHERE workspace_id = ? AND id = ?",
-      [ws, itemId],
-    );
+    const it = await sel(conn, "SELECT id FROM md_items WHERE workspace_id = ? AND id = ?", [
+      ws,
+      itemId,
+    ]);
     if (!it[0]) throw bad("Item tidak tersedia.");
-    const [cur] = await conn.execute<any[]>(
+    const cur = await sel(
+      conn,
       "SELECT * FROM mfg_mrp_item_params WHERE workspace_id = ? AND item_id = ? FOR UPDATE",
       [ws, itemId],
     );
@@ -452,9 +458,7 @@ export async function saveMrpItemParams(
         [...vals, userId, id],
       );
     }
-    const [after] = await conn.execute<any[]>("SELECT * FROM mfg_mrp_item_params WHERE id = ?", [
-      id,
-    ]);
+    const after = await sel(conn, "SELECT * FROM mfg_mrp_item_params WHERE id = ?", [id]);
     await mfgAudit(conn, {
       workspaceId: ws,
       userId,
@@ -472,7 +476,8 @@ export async function saveMrpItemParams(
 /* ------------------------------------------------------------- aksi: PR & MO */
 
 async function existingLinks(conn: PoolConnection, ws: string, key: string, kind: "pr" | "mo") {
-  const [r] = await conn.execute<any[]>(
+  const r = await sel(
+    conn,
     "SELECT item_id, target_id, doc_number FROM mfg_mrp_links WHERE workspace_id = ? AND run_key = ? AND kind = ?",
     [ws, key, kind],
   );
@@ -503,27 +508,31 @@ export async function createMrpPurchaseRequest(
       return { id: String(dup[0].target_id), doc_number: String(dup[0].doc_number), replay: true };
     const ids = [...new Set(input.lines.map((l) => l.itemId))];
     if (ids.length !== input.lines.length) throw bad("Item PR tidak boleh ganda.");
-    const [its] = await conn.execute<any[]>(
+    const its = await sel(
+      conn,
       `SELECT id, code, name, uom_code, cost_price, item_type, is_active FROM md_items WHERE workspace_id = ? AND id IN (${ph(ids.length)})`,
       [ws, ...ids],
     );
     const byId = new Map((its as Row[]).map((i) => [String(i.id), i]));
     if (input.warehouseCode) {
-      const [w] = await conn.execute<any[]>(
+      const w = await sel(
+        conn,
         "SELECT 1 FROM md_warehouses WHERE workspace_id = ? AND code = ? AND is_active = 1",
         [ws, input.warehouseCode],
       );
       if (!w[0]) throw bad("Gudang tidak tersedia.");
     }
     // Nomor PR bebas berikutnya (format sama dengan modul Pembelian: PR/YYYYMM/0001).
-    const [c] = await conn.execute<any[]>(
+    const c = await sel(
+      conn,
       "SELECT COUNT(*) AS c FROM prc_documents WHERE workspace_id = ? AND doc_type = 'purchase_request'",
       [ws],
     );
     let number = "";
     for (let seq = num(c[0]?.c) + 1; seq < num(c[0]?.c) + 1000 && !number; seq++) {
       const no = nextDocNumber("PR", seq, new Date(`${today}T00:00:00Z`));
-      const [x] = await conn.execute<any[]>(
+      const x = await sel(
+        conn,
         "SELECT 1 FROM prc_documents WHERE workspace_id = ? AND doc_type = 'purchase_request' AND doc_number = ?",
         [ws, no],
       );
