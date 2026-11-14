@@ -17,6 +17,7 @@ tautan lama `/production/<ws>/<seksi>` diarahkan ke sana. Halaman muka modul (`/
 | `lots` | Lot & stok, FEFO, karantina | M4 |
 | `quality` | Spesifikasi QC, inspeksi, deviasi/CAPA, tanda tangan elektronik | M5 |
 | `orders` | Perintah produksi, issue bahan, langkah batch (eBMR), hasil | M6–M10 |
+| `mrp` | MRP: Sales Order → kebutuhan bahan → saran beli (PR draf) / produksi (order draf) | MRP |
 | `accounting` | Biaya & jurnal (outbox idempoten), pemetaan akun | M9–M10 |
 | `traceability` | Penelusuran lot maju/mundur + simulasi recall | M11 |
 | `reports` | Laporan produksi (rencana vs hasil, yield, biaya) — CSV/PDF/Excel | M12 |
@@ -26,7 +27,7 @@ tautan lama `/production/<ws>/<seksi>` diarahkan ke sana. Halaman muka modul (`/
 ## 3. Akses
 
 1. **Entitlement**: add-on `manufacturing` aktif untuk tenant dengan fitur `mfg_basic` atau `legacy` (tier kosong = semua fitur). Tanpa itu semua fungsi server menolak ("Akses Production tidak tersedia…") dan menu tersembunyi.
-2. **Fitur per tier** (editor tier add-on di Super Admin → Add-on → Tier memakai `PRODUCTION_FEATURE_LABELS`): `mfg_basic` (dasar), `mfg_qc`, `mfg_trace` (Traceability & Recall — bila mati, penelusuran/recall ditolak), `mfg_mrp`, `mfg_subcontract` (disiapkan, belum dipakai).
+2. **Fitur per tier** (editor tier add-on di Super Admin → Add-on → Tier memakai `PRODUCTION_FEATURE_LABELS`): `mfg_basic` (dasar), `mfg_qc`, `mfg_trace` (Traceability & Recall — bila mati, penelusuran/recall ditolak), `mfg_mrp` (MRP — bila mati, seksi `mrp` ditolak), `mfg_subcontract` (disiapkan, belum dipakai).
 3. **Matriks Role Access** workspace: kunci `manufacturing` dan `manufacturing/<seksi>` (View/Edit); peran kustom ikut. Pemilik tenant/`owner` selalu penuh.
 4. **Peran produksi** (`mfg_workspace_roles`): `production_planner`, `production_supervisor`, `operator`, `warehouse`, `qc_analyst`, `qa_manager`, `cost_accountant`, `viewer`. Tulis pada seksi master (`settings`, `work-centers`, `formulation-codes`, `routings`, `profiles`, `registrations`) hanya untuk admin/pemilik atau `production_supervisor`/`qa_manager`; `rates` untuk `cost_accountant`; seksi `roles` hanya admin. `waste` ditulis admin/pemilik. Anggota `viewer`/staf tanpa peran hanya membaca.
 
@@ -44,6 +45,17 @@ M11–M12 (046): `mfg_waste_logs`; indeks penelusuran `mfg_lot_genealogy(workspa
 - **Simulasi recall**: lot + seluruh turunan; sisa stok dari `inv_movements` bertanda lot (tanpa `transfer`; kuantitas bertanda +/−), penjualan dari baris DO/faktur AR bertanda lot (status bukan draft/cancelled/void), dikelompokkan per pelanggan.
 - **Laporan produksi** (M12): order per `planned_start` dengan biaya dari `mfg_order_costs`; ekspor CSV (sel berawalan `= + - @` dinetralkan), PDF (kop workspace), Excel.
 - **Log limbah B3**: pencatatan baru; setelahnya hanya uraian/lokasi/pengangkut/manifest/status yang berubah (nilai lama masuk audit); tanggal, kode, jumlah, satuan terkunci (koreksi = arsipkan + catat ulang). "Hapus" = arsip.
+- **MRP** (migrasi 090, `src/lib/production-mrp*.ts`, saklar `mfg_mrp_settings.enabled` OFF bawaan per workspace; diatur oleh penulis seksi `settings`):
+  - Kebutuhan: baris Sales Order `approved`/`partial` (sisa = qty − terkirim, tanggal = jatuh tempo atau tanggal SO, maks. horizon) +
+    order produksi (draf/planned = BOM × qty; released/in_progress = sisa material terkoreksi − ter-issue). Order draf bisa dikecualikan.
+  - Pasokan: stok tanpa lot + lot `released` yang belum kedaluwarsa/retest (sisa umur ≥ pengaturan; karantina/hold ditampilkan terpisah, tidak dihitung),
+    PO terbuka, PR terbuka (opsional, mencegah PR dobel), order produksi terbuka item tsb. (rencana − hasil jadi).
+  - Netting per level (low-level code, maks. 20 level, siklus BOM dihentikan): kurang = kebutuhan + stok pengaman − pasokan.
+    Item ber-BOM approved & berlaku → saran **produksi** dan bahannya meledak ke level berikutnya; tanpa BOM → saran **beli**.
+    Ukuran pesan: MOQ lalu kelipatan; tanggal pesan/mulai = tanggal butuh − lead time (parameter per item `mfg_mrp_item_params`).
+  - Aksi (peran PPIC/supervisor/admin): **PR draf** lewat `erpSaveDocumentTx` (nomor PR/YYYYMM/NNNN, harga = harga pokok item) dan
+    **order produksi draf** lewat `saveOrderTx` (rilis tetap di seksi Orders). Idempoten per kunci klik (`mfg_mrp_links`).
+  - Satuan BOM ≠ satuan item hanya diberi peringatan (belum ada konversi otomatis).
 - **Dasbor**: kartu BOM, order, barang jadi 6 bulan, lot karantina/kedaluwarsa ≤ 30 hari, inspeksi tertunda, deviasi terbuka, pusat kerja, biaya & selisih + grafik.
 
 ## 6. Cara memberi add-on

@@ -43,6 +43,7 @@ import {
   Sparkles,
   Share2,
   FlaskConical,
+  PackagePlus,
   PackageSearch,
   ShieldCheck,
   ClipboardList,
@@ -328,6 +329,7 @@ const MODULE_DEFS: AppModule[] = [
         ...s("orders", "Planning & Production Orders", "Perencanaan & Perintah Produksi"),
         icon: ClipboardList,
       },
+      { ...s("mrp", "MRP · Material Planning", "MRP · Perencanaan Bahan"), icon: PackagePlus },
       {
         ...s("accounting", "Costing (COGM) & Journals", "Biaya (HPP Produksi) & Jurnal"),
         icon: Calculator,

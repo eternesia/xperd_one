@@ -1,0 +1,74 @@
+name: PR check
+
+# Cek pull request sebelum merge (tidak membangun image dan tidak deploy):
+# tsc, eslint (berkas yang diubah), vite build, migrasi + seed di MySQL 8.4, lalu spec e2e yang diubah di PR.
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: xperd
+          MYSQL_USER: xperd
+          MYSQL_PASSWORD: xperd
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_USER: xperd
+      MYSQL_PASSWORD: xperd
+      MYSQL_DATABASE: xperd
+      APP_JWT_SECRET: pr-check-only-not-a-secret-0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Berkas yang diubah
+        id: changed
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || 'origin/master' }}"
+          git diff --name-only --diff-filter=ACMR "$BASE"...HEAD > /tmp/changed.txt || true
+          cat /tmp/changed.txt
+          echo "lint=$(grep -E '\.(ts|tsx|js|mjs)$' /tmp/changed.txt | grep -v '^\.github/' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "specs=$(grep -E '^e2e/.*\.spec\.ts$' /tmp/changed.txt | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+      - name: Typecheck
+        run: npx tsc --noEmit -p .
+      - name: ESLint (berkas yang diubah)
+        if: steps.changed.outputs.lint != ''
+        run: npx eslint ${{ steps.changed.outputs.lint }}
+      - name: Build
+        run: npx vite build
+      - name: Migrasi + seed
+        run: npm run migrate && npm run seed
+      - name: E2E (spec yang diubah)
+        if: steps.changed.outputs.specs != ''
+        run: |
+          npx playwright install chromium >/dev/null
+          npx vite dev --host 127.0.0.1 --port 3999 > /tmp/dev.log 2>&1 &
+          for i in $(seq 1 90); do curl -sf -o /dev/null http://127.0.0.1:3999/ && break; sleep 2; done
+          npx playwright test ${{ steps.changed.outputs.specs }}
+      - name: Log dev server
+        if: failure()
+        run: tail -200 /tmp/dev.log || true
